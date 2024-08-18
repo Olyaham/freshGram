@@ -146,8 +146,17 @@ base::options::toggle ShowPeerIdBelowAbout({
 				+ addToLink;
 		}
 		if (!link.isEmpty()) {
-			if (const auto strong = weak.get()) {
-				FastShareLink(strong, link);
+			if (addToLink.isEmpty()) {
+				link = '@' + link.replace("https://t.me/", "");
+			}
+
+			QGuiApplication::clipboard()->setText(link);
+
+			const auto isLink = link.startsWith(u"https://t.me/"_q);
+			if (const auto window = weak.get()) {
+				window->showToast(isLink
+									  ? tr::lng_username_copied(tr::now) // "Link copied to clipboard."
+									  : tr::lng_text_copied(tr::now)); // "Text copied to clipboard."
 			}
 		}
 	};
