@@ -43,6 +43,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/grouped_layout.h"
 #include "ui/cached_round_corners.h"
 #include "ui/power_saving.h"
+#include "ui/ui_utility.h"
 #include "ui/effects/path_shift_gradient.h"
 #include "ui/effects/spoiler_mess.h"
 #include "data/data_session.h"
@@ -67,9 +68,12 @@ constexpr auto kMaxGifForwardedBarLines = 4;
 constexpr auto kUseNonBlurredThreshold = 240;
 constexpr auto kMaxInlineArea = 1920 * 1080;
 
-int gifMaxStatusWidth(DocumentData *document) {
-	auto result = st::normalFont->width(Ui::FormatDownloadText(document->size, document->size));
-	accumulate_max(result, st::normalFont->width(Ui::FormatGifAndSizeText(document->size)));
+[[nodiscard]] int GifMaxStatusWidth(not_null<DocumentData*> document) {
+	auto result = st::normalFont->width(
+		Ui::FormatDownloadText(document->size, document->size));
+	accumulate_max(
+		result,
+		st::normalFont->width(Ui::FormatGifAndSizeText(document->size)));
 	return result;
 }
 
@@ -267,7 +271,10 @@ QSize Gif::countOptimalSize() {
 		thumbMaxWidth);
 	auto minHeight = qMax(scaled.height(), st::minPhotoSize);
 	if (!activeCurrentStreamed()) {
-		accumulate_max(maxWidth, gifMaxStatusWidth(_data) + 2 * (st::msgDateImgDelta + st::msgDateImgPadding.x()));
+		accumulate_max(
+			maxWidth,
+			GifMaxStatusWidth(_data)
+				+ 2 * (st::msgDateImgDelta + st::msgDateImgPadding.x()));
 	}
 	if (_parent->hasBubble()) {
 		maxWidth = qMax(maxWidth, _parent->textualMaxWidth());
@@ -301,7 +308,10 @@ QSize Gif::countCurrentSize(int newWidth) {
 		thumbMaxWidth);
 	auto newHeight = qMax(scaled.height(), st::minPhotoSize);
 	if (!activeCurrentStreamed()) {
-		accumulate_max(newWidth, gifMaxStatusWidth(_data) + 2 * (st::msgDateImgDelta + st::msgDateImgPadding.x()));
+		accumulate_max(
+			newWidth,
+			GifMaxStatusWidth(_data)
+				+ 2 * (st::msgDateImgDelta + st::msgDateImgPadding.x()));
 	}
 	if (_parent->hasBubble()) {
 		accumulate_max(newWidth, _parent->minWidthForMedia());

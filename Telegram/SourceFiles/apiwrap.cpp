@@ -4237,8 +4237,10 @@ void ApiWrap::sendMediaWithRandomId(
 			Data::Histories::ReplyToPlaceholder(),
 			(options.price
 				? MTPInputMedia(MTP_inputMediaPaidMedia(
+					MTP_flags(0),
 					MTP_long(options.price),
-					MTP_vector<MTPInputMedia>(1, media)))
+					MTP_vector<MTPInputMedia>(1, media),
+					MTPstring()))
 				: media),
 			MTP_string(caption.text),
 			MTP_long(randomId),
@@ -4311,8 +4313,10 @@ void ApiWrap::sendMultiPaidMedia(
 			peer->input,
 			Data::Histories::ReplyToPlaceholder(),
 			MTP_inputMediaPaidMedia(
+				MTP_flags(0),
 				MTP_long(options.price),
-				MTP_vector<MTPInputMedia>(std::move(medias))),
+				MTP_vector<MTPInputMedia>(std::move(medias)),
+				MTPstring()),
 			MTP_string(caption.text),
 			MTP_long(randomId),
 			MTPReplyMarkup(),
