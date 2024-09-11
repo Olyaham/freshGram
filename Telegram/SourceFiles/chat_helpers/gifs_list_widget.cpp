@@ -535,6 +535,7 @@ void GifsListWidget::selectInlineResult(
 						.document = document,
 						.options = options,
 						.messageSendingFrom = from,
+						.caption = std::move(caption),
 					});
 				});
 
@@ -546,7 +547,6 @@ void GifsListWidget::selectInlineResult(
 				}));
 			} else {
 				sendGIFCallback();
-				.caption = std::move(caption),
 			}
 		} else if (!preview.usingThumbnail()) {
 			if (preview.loading()) {
