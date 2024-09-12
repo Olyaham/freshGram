@@ -659,6 +659,7 @@ void Updates::getDifferenceAfterFail() {
 			wait = wait ? std::min(wait, i->second - now) : (i->second - now);
 			++i;
 		} else {
+			i->first->ptsSetRequesting(false);
 			getChannelDifference(i->first, ChannelDifferenceRequest::AfterFail);
 			i = _whenGetDiffAfterFail.erase(i);
 		}
@@ -707,7 +708,9 @@ void Updates::getChannelDifference(
 		_whenGetDiffByPts.remove(channel);
 	}
 
-	if (!channel->ptsInited() || channel->ptsRequesting()) return;
+	if (!channel->ptsInited() || channel->ptsRequesting()) {
+		return;
+	}
 
 	if (from != ChannelDifferenceRequest::AfterFail) {
 		_whenGetDiffAfterFail.remove(channel);
@@ -1562,6 +1565,7 @@ void Updates::feedUpdate(const MTPUpdate &update) {
 		}
 		if (channel && !_handlingChannelDifference) {
 			if (channel->ptsRequesting()) { // skip global updates while getting channel difference
+				MTP_LOG(0, ("Skipping new channel message because getting the difference."));
 				return;
 			}
 			channel->ptsUpdateAndApply(d.vpts().v, d.vpts_count().v, update);
@@ -1654,6 +1658,7 @@ void Updates::feedUpdate(const MTPUpdate &update) {
 
 		if (channel && !_handlingChannelDifference) {
 			if (channel->ptsRequesting()) { // skip global updates while getting channel difference
+				MTP_LOG(0, ("Skipping channel message edit because getting the difference."));
 				return;
 			} else {
 				channel->ptsUpdateAndApply(d.vpts().v, d.vpts_count().v, update);
@@ -1669,6 +1674,7 @@ void Updates::feedUpdate(const MTPUpdate &update) {
 
 		if (channel && !_handlingChannelDifference) {
 			if (channel->ptsRequesting()) { // skip global updates while getting channel difference
+				MTP_LOG(0, ("Skipping pinned channel messages because getting the difference."));
 				return;
 			} else {
 				channel->ptsUpdateAndApply(d.vpts().v, d.vpts_count().v, update);
@@ -1783,6 +1789,7 @@ void Updates::feedUpdate(const MTPUpdate &update) {
 
 		if (channel && !_handlingChannelDifference) {
 			if (channel->ptsRequesting()) { // skip global updates while getting channel difference
+				MTP_LOG(0, ("Skipping delete channel messages because getting the difference."));
 				return;
 			}
 			channel->ptsUpdateAndApply(d.vpts().v, d.vpts_count().v, update);
@@ -1846,6 +1853,7 @@ void Updates::feedUpdate(const MTPUpdate &update) {
 		auto channel = session().data().channelLoaded(d.vchannel_id());
 		if (channel && !_handlingChannelDifference) {
 			if (channel->ptsRequesting()) { // skip global updates while getting channel difference
+				MTP_LOG(0, ("Skipping channel web page update because getting the difference."));
 				return;
 			} else {
 				channel->ptsUpdateAndApply(d.vpts().v, d.vpts_count().v, update);
