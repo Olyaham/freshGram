@@ -2549,23 +2549,25 @@ void Session::processMessagesDeleted(
 		return;
 	}
 
+	const auto settings = &AyuSettings::getInstance();
+
 	auto historiesToCheck = base::flat_set<not_null<History*>>();
 	for (const auto &messageId : data) {
 		const auto i = list ? list->find(messageId.v) : Messages::iterator();
 		if (list && i != list->end()) {
 			const auto history = i->second->history();
 
-			const auto settings = &AyuSettings::getInstance();
 			if (!settings->saveDeletedMessages) {
 				i->second->destroy();
 			} else {
 				i->second->setAyuHint(settings->deletedMark);
+				AyuMessages::addDeletedMessage(i->second);
 			}
 
-			if (!history->chatListMessageKnown()) {
+			if (!history->chatListMessageKnown() && !settings->saveDeletedMessages) {
 				historiesToCheck.emplace(history);
 			}
-		} else if (affected) {
+		} else if (affected && !settings->saveDeletedMessages) {
 			affected->unknownMessageDeleted(messageId.v);
 		}
 	}
@@ -2575,19 +2577,21 @@ void Session::processMessagesDeleted(
 }
 
 void Session::processNonChannelMessagesDeleted(const QVector<MTPint> &data) {
+	const auto settings = &AyuSettings::getInstance();
+
 	auto historiesToCheck = base::flat_set<not_null<History*>>();
 	for (const auto &messageId : data) {
 		if (const auto item = nonChannelMessage(messageId.v)) {
 			const auto history = item->history();
 
-			const auto settings = &AyuSettings::getInstance();
 			if (!settings->saveDeletedMessages) {
 				item->destroy();
 			} else {
 				item->setAyuHint(settings->deletedMark);
+				AyuMessages::addDeletedMessage(item);
 			}
 
-			if (!history->chatListMessageKnown()) {
+			if (!history->chatListMessageKnown() && !settings->saveDeletedMessages) {
 				historiesToCheck.emplace(history);
 			}
 		}
