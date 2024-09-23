@@ -131,6 +131,10 @@ int BinarySearchBlocksOrItems(const T &list, int edge) {
 }
 
 [[nodiscard]] bool CanSendReply(not_null<const HistoryItem*> item) {
+	if (item->isDeleted()) {
+		return false;
+	}
+
 	const auto peer = item->history()->peer;
 	const auto topic = item->topic();
 	return topic
@@ -664,7 +668,7 @@ void HistoryInner::setupSwipeReply() {
 			}
 			const auto item = view->data();
 			const auto canSendReply = CanSendReply(item);
-			const auto canReply = (canSendReply || item->allowsForward());
+			const auto canReply = (canSendReply || item->allowsForward() && !item->isDeleted());
 			if (!canReply) {
 				return true;
 			}
@@ -2188,7 +2192,9 @@ void HistoryInner::mouseDoubleClickEvent(QMouseEvent *e) {
 			mouseActionCancel();
 			switch (HistoryView::CurrentQuickAction()) {
 			case HistoryView::DoubleClickQuickAction::Reply: {
-				_widget->replyToMessage(view->data());
+				if (!view->data()->isDeleted()) {
+					_widget->replyToMessage(view->data());
+				}
 			} break;
 			case HistoryView::DoubleClickQuickAction::React: {
 				toggleFavoriteReaction(view);
@@ -2635,7 +2641,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			return;
 		}
 		const auto canSendReply = CanSendReply(item);
-		const auto canReply = canSendReply || item->allowsForward();
+		const auto canReply = canSendReply || item->allowsForward() && !item->isDeleted();
 		if (canReply) {
 			const auto selected = selectedQuote(item);
 			auto text = selected
@@ -2742,7 +2748,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			const auto itemId = item->fullId();
 			const auto blockSender = item->history()->peer->isRepliesChat();
 			if (isUponSelected != -2) {
-				if (item->allowsForward()) {
+				if (item->allowsForward() && !item->isDeleted()) {
 					_menu->addAction(tr::lng_context_forward_msg(tr::now), [=] {
 						forwardItem(itemId);
 					}, &st::menuIconForward);
@@ -2942,7 +2948,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			}, &st::menuIconSelect);
 		} else if (item && ((isUponSelected != -2 && (canForward || canDelete)) || item->isRegular())) {
 			if (isUponSelected != -2) {
-				if (canForward) {
+				if (canForward && !item->isDeleted()) {
 					_menu->addAction(tr::lng_context_forward_msg(tr::now), [=] {
 						forwardAsGroup(itemId);
 					}, &st::menuIconForward);
@@ -3828,7 +3834,7 @@ auto HistoryInner::getSelectionState() const
 			if (selected.first->canDelete()) {
 				++result.canDeleteCount;
 			}
-			if (selected.first->allowsForward()) {
+			if (selected.first->allowsForward() && !selected.first->isDeleted()) {
 				++result.canForwardCount;
 			}
 		} else if (selected.second.from != selected.second.to) {

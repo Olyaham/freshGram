@@ -2530,7 +2530,7 @@ void Session::checkTTLs() {
 				return pair.second;
 			}) | ranges::views::join;
 		for (auto &item : toBeRemoved) {
-			item->setAyuHint(settings->deletedMark);
+			item->setDeleted();
 		}
 	} else {
 		while (!_ttlMessages.empty() && _ttlMessages.begin()->first <= now) {
@@ -2560,7 +2560,7 @@ void Session::processMessagesDeleted(
 			if (!settings->saveDeletedMessages) {
 				i->second->destroy();
 			} else {
-				i->second->setAyuHint(settings->deletedMark);
+				i->second->setDeleted();
 				AyuMessages::addDeletedMessage(i->second);
 			}
 
@@ -2587,7 +2587,7 @@ void Session::processNonChannelMessagesDeleted(const QVector<MTPint> &data) {
 			if (!settings->saveDeletedMessages) {
 				item->destroy();
 			} else {
-				item->setAyuHint(settings->deletedMark);
+				item->setDeleted();
 				AyuMessages::addDeletedMessage(item);
 			}
 
