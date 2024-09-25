@@ -2378,7 +2378,7 @@ void Session::updateEditedMessage(const MTPMessage &data) {
 			goto proceed;
 		}
 
-		AyuMessages::addEditedMessage(edit, existing);
+		AyuMessages::addEditedMessage(existing);
 	}
 
 proceed:
