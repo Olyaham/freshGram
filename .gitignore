@@ -51,3 +51,6 @@ stage
 *.*~
 .idea/
 cmake-build-debug/
+
+# Project specific
+Telegram/SourceFiles/_other/packer_private.h
