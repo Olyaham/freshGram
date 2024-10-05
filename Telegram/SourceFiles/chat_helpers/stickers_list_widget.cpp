@@ -1903,7 +1903,7 @@ void StickersListWidget::mouseReleaseEvent(QMouseEvent *e) {
 					document
 				);
 				auto options = Api::SendOptions();
-				if (settings->useScheduledMessages) {
+				if (AyuSettings::isUseScheduledMessages()) {
 					auto current = base::unixtime::now();
 					options.scheduled = current + 12;
 				}

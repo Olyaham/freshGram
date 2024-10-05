@@ -109,7 +109,7 @@ void Tray::rebuildMenu() {
 		) | rpl::map(
 			[=]
 			{
-				bool ghostModeEnabled = AyuSettings::get_ghostModeEnabled();
+				bool ghostModeEnabled = AyuSettings::isGhostModeActive();
 
 				return ghostModeEnabled
 						   ? tr::ayu_DisableGhostModeTray(tr::now)
@@ -119,7 +119,7 @@ void Tray::rebuildMenu() {
 			std::move(turnGhostModeText),
 			[=]
 			{
-				bool ghostMode = AyuSettings::get_ghostModeEnabled();
+				bool ghostMode = AyuSettings::isGhostModeActive();
 
 				settings->set_ghostModeEnabled(!ghostMode);
 

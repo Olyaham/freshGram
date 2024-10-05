@@ -490,7 +490,7 @@ void GifsListWidget::selectInlineResult(
 	}
 
 	auto settings = &AyuSettings::getInstance();
-	if (settings->useScheduledMessages) {
+	if (AyuSettings::isUseScheduledMessages()) {
 		auto current = base::unixtime::now();
 		options.scheduled = current + 12;
 	}
