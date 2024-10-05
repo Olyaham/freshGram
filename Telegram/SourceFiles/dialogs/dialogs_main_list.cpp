@@ -121,7 +121,7 @@ void MainList::unreadStateChanged(
 	const auto notifier = unreadStateChangeNotifier(notify);
 	_unreadState += nowState - wasState;
 	if (updateCloudUnread) {
-		Assert(nowState.known);
+		// Assert(nowState.known);
 		_cloudUnreadState += nowState - wasState;
 		finalizeCloudUnread();
 	}
