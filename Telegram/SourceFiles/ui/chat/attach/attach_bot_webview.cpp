@@ -383,7 +383,7 @@ Panel::Panel(
 	_widget->setWindowFlag(Qt::WindowStaysOnTopHint, false);
 
 	const auto settings = &AyuSettings::getInstance();
-	auto size = QSize(st::botWebViewPanelSize, true);
+	auto size = QSize(st::botWebViewPanelSize);
 	if (settings->increaseWebviewHeight) {
 		size.setHeight(st::botWebViewPanelHeightIncreased);
 	}
