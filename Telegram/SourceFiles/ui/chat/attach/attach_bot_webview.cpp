@@ -371,6 +371,7 @@ Panel::Progress::Progress(QWidget *parent, Fn<QRect()> rect)
 Panel::Panel(
 	const Webview::StorageId &storageId,
 	rpl::producer<QString> title,
+	object_ptr<Ui::RpWidget> titleBadge,
 	not_null<Delegate*> delegate,
 	MenuButtons menuButtons,
 	bool allowClipboardRead)
@@ -382,7 +383,7 @@ Panel::Panel(
 	_widget->setWindowFlag(Qt::WindowStaysOnTopHint, false);
 
 	const auto settings = &AyuSettings::getInstance();
-	auto size = QSize(st::botWebViewPanelSize);
+	auto size = QSize(st::botWebViewPanelSize, true);
 	if (settings->increaseWebviewHeight) {
 		size.setHeight(st::botWebViewPanelHeightIncreased);
 	}
@@ -427,6 +428,7 @@ Panel::Panel(
 	}, _widget->lifetime());
 
 	setTitle(std::move(title));
+	_widget->setTitleBadge(std::move(titleBadge));
 }
 
 Panel::~Panel() {
@@ -723,6 +725,9 @@ bool Panel::createWebview(const Webview::ThemeParams &params) {
 	) | rpl::start_with_next([=](QRect geometry, int footer) {
 		if (const auto view = raw->widget()) {
 			view->setGeometry(geometry.marginsRemoved({ 0, 0, 0, footer }));
+			crl::on_main(view, [=] {
+				sendViewport();
+			});
 		}
 	}, _webview->lifetime);
 
@@ -1273,7 +1278,11 @@ void Panel::processButtonMessage(
 		.text = args["text"].toString(),
 	});
 	if (button.get() == _secondaryButton.get()) {
-		_secondaryPosition = ParsePosition(args["position"].toString());
+		const auto position = ParsePosition(args["position"].toString());
+		if (_secondaryPosition != position) {
+			_secondaryPosition = position;
+			layoutButtons();
+		}
 	}
 }
 
@@ -1632,6 +1641,7 @@ std::unique_ptr<Panel> Show(Args &&args) {
 	auto result = std::make_unique<Panel>(
 		args.storageId,
 		std::move(args.title),
+		std::move(args.titleBadge),
 		args.delegate,
 		args.menuButtons,
 		args.allowClipboardRead);

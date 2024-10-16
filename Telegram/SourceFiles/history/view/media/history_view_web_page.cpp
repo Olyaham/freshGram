@@ -301,9 +301,10 @@ void WebPage::setupAdditionalData() {
 	if (_flags & MediaWebPageFlag::Sponsored) {
 		_additionalData = std::make_unique<AdditionalData>(SponsoredData());
 		const auto raw = sponsoredData();
-		const auto &session = _parent->data()->history()->session();
-		const auto details = session.sponsoredMessages().lookupDetails(
-			_parent->data()->fullId());
+		const auto session = &_data->session();
+		const auto id = _parent->data()->fullId();
+		const auto details = session->sponsoredMessages().lookupDetails(id);
+		const auto link = details.link;
 		raw->buttonText = details.buttonText;
 		raw->isLinkInternal = details.isLinkInternal ? 1 : 0;
 		raw->backgroundEmojiId = details.backgroundEmojiId;
@@ -312,12 +313,16 @@ void WebPage::setupAdditionalData() {
 		raw->hasMedia = (details.mediaPhotoId || details.mediaDocumentId)
 			? 1
 			: 0;
+		raw->link = std::make_shared<LambdaClickHandler>([=] {
+			session->sponsoredMessages().clicked(id, false, false);
+			UrlClickHandler::Open(link);
+		});
 		if (!_attach) {
 			const auto maybePhoto = details.mediaPhotoId
-				? _data->session().data().photo(details.mediaPhotoId).get()
+				? session->data().photo(details.mediaPhotoId).get()
 				: nullptr;
 			const auto maybeDocument = details.mediaDocumentId
-				? _data->session().data().document(
+				? session->data().document(
 					details.mediaDocumentId).get()
 				: nullptr;
 			_attach = CreateAttach(
@@ -326,6 +331,25 @@ void WebPage::setupAdditionalData() {
 				maybePhoto,
 				_collage,
 				_data->url);
+		}
+		if (_attach) {
+			if (_attach->getPhoto()) {
+				raw->mediaLink = std::make_shared<LambdaClickHandler>([=] {
+					session->sponsoredMessages().clicked(id, true, false);
+					UrlClickHandler::Open(link);
+				});
+			} else if (const auto document = _attach->getDocument()) {
+				const auto delegate = _parent->delegate();
+				raw->mediaLink = document->isVideoFile()
+					? std::make_shared<LambdaClickHandler>([=] {
+						session->sponsoredMessages().clicked(id, true, false);
+						delegate->elementOpenDocument(document, id, true);
+					})
+					: std::make_shared<LambdaClickHandler>([=] {
+						session->sponsoredMessages().clicked(id, true, false);
+						UrlClickHandler::Open(link);
+					});
+			}
 		}
 	} else if (_data->stickerSet) {
 		_additionalData = std::make_unique<AdditionalData>(StickerSetData());
@@ -1345,6 +1369,7 @@ TextState WebPage::textState(QPoint point, StateRequest request) const {
 		}
 		tshift += descriptionHeight;
 	}
+	auto isWithinSponsoredMedia = false;
 	if (inThumb) {
 		result.link = _openl;
 	} else if (_attach) {
@@ -1379,6 +1404,7 @@ TextState WebPage::textState(QPoint point, StateRequest request) const {
 				point - QPoint(attachLeft, attachTop),
 				request);
 			if (hasSponsoredMedia) {
+				isWithinSponsoredMedia = true;
 			} else if (result.cursor == CursorState::Enlarge) {
 				result.cursor = CursorState::None;
 			} else {
@@ -1389,8 +1415,12 @@ TextState WebPage::textState(QPoint point, StateRequest request) const {
 			tshift += _attach->height();
 		}
 	}
-	if ((!result.link || (sponsored && !hasSponsoredMedia))
-		&& outer.contains(point)) {
+	if (isWithinSponsoredMedia) {
+		result.link = sponsored->mediaLink;
+	} else if (sponsored && outer.contains(point)) {
+		result.link = sponsored->link;
+	}
+	if (!result.link && outer.contains(point)) {
 		result.link = _openl;
 	}
 	if (const auto hint = hintData()) {

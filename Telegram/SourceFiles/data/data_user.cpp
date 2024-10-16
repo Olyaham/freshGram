@@ -135,6 +135,17 @@ void UserData::setCommonChatsCount(int count) {
 	}
 }
 
+int UserData::peerGiftsCount() const {
+	return _peerGiftsCount;
+}
+
+void UserData::setPeerGiftsCount(int count) {
+	if (_peerGiftsCount != count) {
+		_peerGiftsCount = count;
+		session().changes().peerUpdated(this, UpdateFlag::PeerGifts);
+	}
+}
+
 bool UserData::hasPrivateForwardName() const {
 	return !_privateForwardName.isEmpty();
 }
@@ -455,7 +466,7 @@ bool UserData::requirePremiumToWriteKnown() const {
 }
 
 bool UserData::canSendIgnoreRequirePremium() const {
-	return !isInaccessible() && !isRepliesChat();
+	return !isInaccessible() && !isRepliesChat() && !isVerifyCodes();
 }
 
 bool UserData::readDatesPrivate() const {
@@ -464,10 +475,6 @@ bool UserData::readDatesPrivate() const {
 
 bool UserData::canAddContact() const {
 	return canShareThisContact() && !isContact();
-}
-
-bool UserData::canReceiveGifts() const {
-	return flags() & UserDataFlag::CanReceiveGifts;
 }
 
 bool UserData::canShareThisContactFast() const {
@@ -587,14 +594,10 @@ void ApplyUserUpdate(not_null<UserData*> user, const MTPDuserFull &update) {
 	if (const auto pinned = update.vpinned_msg_id()) {
 		SetTopPinnedMessageId(user, pinned->v);
 	}
-	const auto canReceiveGifts = (update.vflags().v
-			& MTPDuserFull::Flag::f_premium_gifts)
-		&& update.vpremium_gifts();
 	using Flag = UserDataFlag;
 	const auto mask = Flag::Blocked
 		| Flag::HasPhoneCalls
 		| Flag::PhoneCallsPrivate
-		| Flag::CanReceiveGifts
 		| Flag::CanPinMessages
 		| Flag::VoiceMessagesForbidden
 		| Flag::ReadDatesPrivate
@@ -605,7 +608,6 @@ void ApplyUserUpdate(not_null<UserData*> user, const MTPDuserFull &update) {
 			? Flag::PhoneCallsPrivate
 			: Flag())
 		| (update.is_phone_calls_available() ? Flag::HasPhoneCalls : Flag())
-		| (canReceiveGifts ? Flag::CanReceiveGifts : Flag())
 		| (update.is_can_pin_message() ? Flag::CanPinMessages : Flag())
 		| (update.is_blocked() ? Flag::Blocked : Flag())
 		| (update.is_voice_messages_forbidden()
@@ -624,6 +626,7 @@ void ApplyUserUpdate(not_null<UserData*> user, const MTPDuserFull &update) {
 		: UserData::CallsStatus::Disabled);
 	user->setAbout(qs(update.vabout().value_or_empty()));
 	user->setCommonChatsCount(update.vcommon_chats_count().v);
+	user->setPeerGiftsCount(update.vstargifts_count().value_or_empty());
 	user->checkFolder(update.vfolder_id().value_or_empty());
 	user->setThemeEmoji(qs(update.vtheme_emoticon().value_or_empty()));
 	user->setTranslationDisabled(update.is_translations_disabled());
