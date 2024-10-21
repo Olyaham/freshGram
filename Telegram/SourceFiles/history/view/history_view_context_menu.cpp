@@ -1289,7 +1289,7 @@ base::unique_qptr<Ui::PopupMenu> FillContextMenu(
 	AddCopyLinkAction(result, link);
 	AddMessageActions(result, request, list);
 
-	const auto wasAmount = result->actions().size();
+	/*const auto wasAmount = result->actions().size();*/
 	if (const auto textItem = view ? view->textItem() : item) {
 		AddEmojiPacksAction(
 			result,
@@ -1297,13 +1297,13 @@ base::unique_qptr<Ui::PopupMenu> FillContextMenu(
 			HistoryView::EmojiPacksSource::Message,
 			list->controller());
 	}
-	{
+	/*{
 		const auto added = (result->actions().size() > wasAmount);
 		if (!added) {
 			result->addSeparator();
 		}
 		AddSelectRestrictionAction(result, item, !added);
-	}
+	}*/
 	if (hasWhoReactedItem) {
 		AddWhoReactedAction(result, list, item, list->controller());
 	}
