@@ -8221,9 +8221,8 @@ void HistoryWidget::handlePeerUpdate() {
 	if (!_showAnimation) {
 		const auto blockChanged = (_unblock->isHidden() == isBlocked());
 		if (blockChanged
-			|| (!isBlocked()
-				&& (_joinChannel->isHidden() == isJoinChannel())
-			|| (isMuteUnmute() && _discuss->isHidden() == hasDiscussionGroup()))) {
+			|| ((!isBlocked() && _joinChannel->isHidden() == isJoinChannel())
+				|| (isMuteUnmute() && _discuss->isHidden() == hasDiscussionGroup()))) {
 			resize = true;
 		}
 		if (updateCanSendMessage()) {
