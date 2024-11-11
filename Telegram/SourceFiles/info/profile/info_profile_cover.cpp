@@ -369,7 +369,7 @@ Cover::Cover(
 				Window::GifPauseReason::Layer);
 		},
 		0,
-		BadgeType::None | BadgeType::AyuGram | BadgeType::Extera))
+		BadgeType::None | BadgeType::Extera | BadgeType::ExteraSupporter))
 , _userpic(topic
 	? nullptr
 	: object_ptr<Ui::UserpicButton>(
@@ -418,10 +418,10 @@ Cover::Cover(
 		refreshNameGeometry(width());
 	}, _name->lifetime());
 
-	if (isAyuGramRelated(getBareID(_peer))) {
-		_devBadge->setContent(Info::Profile::Badge::Content{BadgeType::AyuGram});
-	} else if (isExteraRelated(getBareID(_peer))) {
+	if (isExteraRelated(getBareID(_peer)) || isAyuGramRelated(getBareID(_peer))) {
 		_devBadge->setContent(Info::Profile::Badge::Content{BadgeType::Extera});
+	} else if (false) {
+		_devBadge->setContent(Info::Profile::Badge::Content{BadgeType::ExteraSupporter});
 	} else {
 		_devBadge->setContent(Info::Profile::Badge::Content{BadgeType::None});
 	}
@@ -770,7 +770,12 @@ void Cover::refreshNameGeometry(int newWidth) {
 		nameWidth -= st::infoVerifiedCheckPosition.x() + widget->width();
 	}
 	if (const auto widget = _devBadge->widget()) {
-		nameWidth -= st::infoVerifiedCheckPosition.x() + widget->width();
+		nameWidth -= st::infoVerifiedCheckPosition.x()
+			+ widget->width()
+			+ (_badge->widget()
+				   ? (_badge->widget()->width() +
+					   st::infoVerifiedCheckPosition.x())
+				   : 0);
 	}
 	auto nameLeft = _st.nameLeft;
 	const auto badgeTop = _st.nameTop;
@@ -789,7 +794,10 @@ void Cover::refreshNameGeometry(int newWidth) {
 	const auto badgeLeft = nameLeft + _name->width();
 	_badge->move(badgeLeft, badgeTop, badgeBottom);
 
-	const auto devBadgeLeft = badgeLeft + (_badge->widget() ? (_badge->widget()->width() + 2) : 0) + 4;
+	const auto devBadgeLeft = badgeLeft
+		+ (_badge->widget()
+			   ? (_badge->widget()->width() + st::infoVerifiedCheckPosition.x())
+			   : 0);
 	const auto devBadgeTop = _st.nameTop;
 	const auto devBadgeBottom = _st.nameTop + _name->height();
 	_devBadge->move(devBadgeLeft, devBadgeTop, devBadgeBottom);
