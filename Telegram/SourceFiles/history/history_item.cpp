@@ -304,10 +304,12 @@ std::unique_ptr<Data::Media> HistoryItem::CreateMedia(
 			return nullptr;
 		}
 		return document->match([&](const MTPDdocument &document) -> Result {
+			const auto list = media.valt_documents();
 			return std::make_unique<Data::MediaFile>(
 				item,
-				item->history()->owner().processDocument(document),
+				item->history()->owner().processDocument(document, list),
 				media.is_nopremium(),
+				list && !list->v.isEmpty(),
 				media.is_spoiler(),
 				media.vttl_seconds().value_or_empty());
 		}, [](const MTPDdocumentEmpty &) -> Result {
@@ -666,11 +668,13 @@ HistoryItem::HistoryItem(
 	createComponentsHelper(std::move(fields));
 
 	const auto skipPremiumEffect = !history->session().premium();
+	const auto video = document->video();
 	const auto spoiler = false;
 	_media = std::make_unique<Data::MediaFile>(
 		this,
 		document,
 		skipPremiumEffect,
+		video && !video->qualities.empty(),
 		spoiler,
 		/*ttlSeconds = */0);
 	setText(caption);
@@ -797,6 +801,10 @@ HistoryItem::~HistoryItem() {
 
 TimeId HistoryItem::date() const {
 	return _date;
+}
+
+bool HistoryItem::awaitingVideoProcessing() const {
+	return (_flags & MessageFlag::EstimatedDate);
 }
 
 HistoryServiceDependentData *HistoryItem::GetServiceDependentData() {
@@ -1525,12 +1533,10 @@ void HistoryItem::returnSavedMedia() {
 }
 
 void HistoryItem::savePreviousMedia() {
-	Expects(_media != nullptr);
-
 	AddComponents(HistoryMessageSavedMediaData::Bit());
 	const auto data = Get<HistoryMessageSavedMediaData>();
 	data->text = originalText();
-	data->media = _media->clone(this);
+	data->media = _media ? _media->clone(this) : nullptr;
 }
 
 bool HistoryItem::isEditingMedia() const {
@@ -1840,6 +1846,7 @@ void HistoryItem::setStoryFields(not_null<Data::Story*> story) {
 			this,
 			document,
 			/*skipPremiumEffect=*/false,
+			/*hasQualitiesList=*/false,
 			spoiler,
 			/*ttlSeconds = */0);
 	}
@@ -2267,6 +2274,10 @@ bool HistoryItem::allowsSendNow() const {
 		&& !isEditingMedia();
 }
 
+bool HistoryItem::allowsReschedule() const {
+	return allowsSendNow() && !awaitingVideoProcessing();
+}
+
 bool HistoryItem::allowsForward() const {
 	return !isService()
 		&& isRegular()
@@ -2292,6 +2303,11 @@ bool HistoryItem::allowsEdit(TimeId now) const {
 		&& (!_media || _media->allowsEdit())
 		&& !isLegacyMessage()
 		&& !isEditingMedia();
+}
+
+bool HistoryItem::allowsEditMedia() const {
+	return !awaitingVideoProcessing()
+		&& (!_media || _media->allowsEditMedia());
 }
 
 bool HistoryItem::canBeEdited() const {
@@ -5657,7 +5673,7 @@ void HistoryItem::applyAction(const MTPMessageAction &action) {
 						data.vmessage()->data().ventities().v),
 				}
 				: TextWithEntities()),
-			.convertStars = int(data.vconvert_stars().v),
+			.starsConverted = int(data.vconvert_stars().value_or_empty()),
 			.limitedCount = gift.vavailability_total().value_or_empty(),
 			.limitedLeft = gift.vavailability_remains().value_or_empty(),
 			.count = int(gift.vstars().v),

@@ -1,3 +1,68 @@
+5.8.2 (19.11.24)
+
+- Improve bottom label color in mini apps.
+- Fix some fullscreen issues in mini apps.
+- Fix miss-order of archived chats in forward box.
+- Fix file dialog for Windows on ARM.
+- Fix emoji status pack view from profile regression.
+
+5.8.1 (17.11.24)
+
+- Fix several possible crashes.
+
+5.8 (17.11.24)
+
+- Updates in Mini Apps platform.
+- Chat folders in forward and share boxes.
+- Horizontal strip mode for chat folders.
+
+5.7.4 beta (15.11.24)
+
+- Enable auto night mode by default.
+- Use muted chats folder badge in horizontal strip.
+- Fix custom userpic context menu in comments and topics.
+- Fix scrolling of chats folders together with the list.
+- Fix chats folders list disappearing in some cases.
+- Fix topic groups in share box with chats folders.
+- Fix bot commands list in some groups.
+- Fix crash in channel short info box display.
+- Fix crash in bot monetization section opening.
+- Fix crash in bot sponsored messages destruction.
+
+5.7.3 beta (13.11.24)
+
+- Option to show folders above the chats list.
+- Folders on top of recipients list box.
+
+5.7.2 (05.11.24)
+
+- Fix recompressed video playback cutoff.
+- Fix video message recroding on macOS.
+
+5.7.1 (01.11.24)
+
+- Fix occasional redundant newlines before message timestamp.
+- Remove playback speed change on settings button click.
+- Fix video playback settings button on hidpi screens.
+- Fix return from Picture-in-Picture to media viewer.
+- Fix video quality auto-switching in Picture-in-Picture.
+- Add message link to channel stars transaction information.
+- Fix GIF playback in media viewer.
+- Fix several possible crashes.
+
+5.7 (31.10.24)
+
+- Sending video messages.
+- New video quality selection in channels.
+- Adding media to sent text messages via Edit.
+- Ads in bots with revenue sharing with bot developers.
+- Chat-specific hashtags.
+
+5.6.4 beta (24.10.24)
+
+- Add recording of video messages in case a camera is available.
+- Add "Respect the Focus settings" for custom notifications on Windows.
+
 5.6.3 (15.10.24)
 
 - Add ability to change page scale in Instant View pages.

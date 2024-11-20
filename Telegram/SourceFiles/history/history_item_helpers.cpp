@@ -418,10 +418,20 @@ ClickHandlerPtr ReportSponsoredClickHandler(not_null<HistoryItem*> item) {
 			Menu::ShowSponsored(
 				controller->widget(),
 				controller->uiShow(),
-				item);
+				item->fullId());
 		}
 	});
 }
+
+ClickHandlerPtr AboutSponsoredClickHandler() {
+	return std::make_shared<LambdaClickHandler>([=](ClickContext context) {
+		const auto my = context.other.value<ClickHandlerContext>();
+		if (const auto controller = my.sessionWindow.get()) {
+			Menu::ShowSponsoredAbout(controller->uiShow(), my.itemId);
+		}
+	});
+}
+
 
 MessageFlags FlagsFromMTP(
 		MsgId id,
@@ -451,7 +461,10 @@ MessageFlags FlagsFromMTP(
 		| ((flags & MTP::f_views) ? Flag::HasViews : Flag())
 		// AyuGram: removed
 		// | ((flags & MTP::f_noforwards) ? Flag::NoForwards : Flag())
-		| ((flags & MTP::f_invert_media) ? Flag::InvertMedia : Flag());
+		| ((flags & MTP::f_invert_media) ? Flag::InvertMedia : Flag())
+		| ((flags & MTP::f_video_processing_pending)
+			? Flag::EstimatedDate
+			: Flag());
 }
 
 MessageFlags FlagsFromMTP(

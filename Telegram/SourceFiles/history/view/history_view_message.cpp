@@ -1132,7 +1132,7 @@ void Message::draw(Painter &p, const PaintContext &context) const {
 	if (hasGesture) {
 		p.translate(context.gestureHorizontal.translation, 0);
 	}
-	const auto selectionModeResult = delegate()->elementInSelectionMode();
+	const auto selectionModeResult = delegate()->elementInSelectionMode(this);
 	const auto selectionTranslation = (selectionModeResult.progress > 0)
 		? (selectionModeResult.progress
 			* AdditionalSpaceForSelectionCheckbox(this, g))
@@ -1647,18 +1647,20 @@ void Message::draw(Painter &p, const PaintContext &context) const {
 			const auto o = ScopedPainterOpacity(p, progress);
 			const auto &st = st::msgSelectionCheck;
 			const auto right = delegate()->elementIsChatWide()
-				? (st::msgMaxWidth
-					+ st::msgPhotoSkip
-					+ st::msgSelectionOffset
-					+ st::msgPadding.left()
-					+ st.size)
+				? std::min(
+					int(_bubbleWidthLimit
+						+ st::msgPhotoSkip
+						+ st::msgSelectionOffset
+						+ st::msgPadding.left()
+						+ st.size),
+					width())
 				: width();
 			const auto pos = QPoint(
 				(right
 					- (st::msgSelectionOffset * progress - st.size) / 2
 					- st::msgPadding.right() / 2
 					- st.size),
-				g.y() + (g.height() - st.size) / 2);
+				rect::bottom(g) - st.size - st::msgSelectionBottomSkip);
 			{
 				p.setPen(QPen(st.border, st.width));
 				p.setBrush(context.st->msgServiceBg());
@@ -2163,6 +2165,7 @@ PointState Message::pointState(QPoint point) const {
 
 			// Entry page is always a bubble bottom.
 			auto mediaOnBottom = (mediaDisplayed && media->isBubbleBottom()) || check || (entry/* && entry->isBubbleBottom()*/);
+			auto mediaOnTop = (mediaDisplayed && media->isBubbleTop()) || (entry && entry->isBubbleTop());
 
 			if (item->repliesAreComments() || item->externalReply()) {
 				g.setHeight(g.height() - st::historyCommentsButtonHeight);
@@ -2203,11 +2206,18 @@ PointState Message::pointState(QPoint point) const {
 				trect.setHeight(trect.height() - entryHeight);
 			}
 
-			auto mediaHeight = media->height();
-			auto mediaLeft = trect.x() - st::msgPadding.left();
-			auto mediaTop = (trect.y() + trect.height() - mediaHeight);
-
-			if (point.y() >= mediaTop && point.y() < mediaTop + mediaHeight) {
+			const auto mediaHeight = mediaDisplayed ? media->height() : 0;
+			const auto mediaLeft = trect.x() - st::msgPadding.left();
+			const auto mediaTop = (!mediaDisplayed || _invertMedia)
+				? (trect.y() + (mediaOnTop ? 0 : st::mediaInBubbleSkip))
+				: (trect.y() + trect.height() - mediaHeight);
+			if (mediaDisplayed && _invertMedia) {
+				trect.setY(mediaTop
+					+ mediaHeight
+					+ (mediaOnBottom ? 0 : st::mediaInBubbleSkip));
+			}
+			if (point.y() >= mediaTop
+				&& point.y() < mediaTop + mediaHeight) {
 				return media->pointState(point - QPoint(mediaLeft, mediaTop));
 			}
 		}
@@ -3909,7 +3919,7 @@ bool Message::displayFastReply() const {
 	return hasFastReply()
 		&& data()->isRegular()
 		&& canSendAnything()
-		&& !delegate()->elementInSelectionMode().inSelectionMode;
+		&& !delegate()->elementInSelectionMode(this).inSelectionMode;
 }
 
 bool Message::displayRightActionComments() const {
@@ -4077,7 +4087,7 @@ void Message::drawRightAction(
 
 ClickHandlerPtr Message::rightActionLink(
 		std::optional<QPoint> pressPoint) const {
-	if (delegate()->elementInSelectionMode().progress > 0) {
+	if (delegate()->elementInSelectionMode(this).progress > 0) {
 		return nullptr;
 	}
 	ensureRightAction();

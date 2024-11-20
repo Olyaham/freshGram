@@ -192,6 +192,8 @@ PRIVATE
     api/api_bot.h
     api/api_chat_filters.cpp
     api/api_chat_filters.h
+    api/api_chat_filters_remove_manager.cpp
+    api/api_chat_filters_remove_manager.h
     api/api_chat_invite.cpp
     api/api_chat_invite.h
     api/api_chat_links.cpp
@@ -716,6 +718,8 @@ PRIVATE
     data/data_thread.h
     data/data_types.cpp
     data/data_types.h
+    data/data_unread_value.cpp
+    data/data_unread_value.h
     data/data_user.cpp
     data/data_user.h
     data/data_user_photos.cpp
@@ -1062,6 +1066,10 @@ PRIVATE
     info/profile/info_profile_values.h
     info/profile/info_profile_widget.cpp
     info/profile/info_profile_widget.h
+    info/reactions_list/info_reactions_list_widget.cpp
+    info/reactions_list/info_reactions_list_widget.h
+    info/requests_list/info_requests_list_widget.cpp
+    info/requests_list/info_requests_list_widget.h
     info/saved/info_saved_sublists_widget.cpp
     info/saved/info_saved_sublists_widget.h
     info/settings/info_settings_widget.cpp
@@ -1075,6 +1083,7 @@ PRIVATE
     info/statistics/info_statistics_list_controllers.h
     info/statistics/info_statistics_recent_message.cpp
     info/statistics/info_statistics_recent_message.h
+    info/statistics/info_statistics_tag.h
     info/statistics/info_statistics_widget.cpp
     info/statistics/info_statistics_widget.h
     info/stories/info_stories_inner_widget.cpp
@@ -1111,6 +1120,10 @@ PRIVATE
     info/info_wrap_widget.h
     inline_bots/bot_attach_web_view.cpp
     inline_bots/bot_attach_web_view.h
+    inline_bots/inline_bot_confirm_prepared.cpp
+    inline_bots/inline_bot_confirm_prepared.h
+    inline_bots/inline_bot_downloads.cpp
+    inline_bots/inline_bot_downloads.h
     inline_bots/inline_bot_layout_internal.cpp
     inline_bots/inline_bot_layout_internal.h
     inline_bots/inline_bot_layout_item.cpp
@@ -1242,6 +1255,8 @@ PRIVATE
     media/streaming/media_streaming_player.h
     media/streaming/media_streaming_reader.cpp
     media/streaming/media_streaming_reader.h
+    media/streaming/media_streaming_round_preview.cpp
+    media/streaming/media_streaming_round_preview.h
     media/streaming/media_streaming_utility.cpp
     media/streaming/media_streaming_utility.h
     media/streaming/media_streaming_video_track.cpp
@@ -1581,6 +1596,8 @@ PRIVATE
     ui/chat/choose_send_as.h
     ui/chat/choose_theme_controller.cpp
     ui/chat/choose_theme_controller.h
+    ui/chat/sponsored_message_bar.cpp
+    ui/chat/sponsored_message_bar.h
     ui/controls/emoji_button_factory.cpp
     ui/controls/emoji_button_factory.h
     ui/controls/location_picker.cpp
@@ -1612,6 +1629,8 @@ PRIVATE
     ui/widgets/expandable_peer_list.h
     ui/widgets/label_with_custom_emoji.cpp
     ui/widgets/label_with_custom_emoji.h
+    ui/widgets/chat_filters_tabs_strip.cpp
+    ui/widgets/chat_filters_tabs_strip.h
     ui/countryinput.cpp
     ui/countryinput.h
     ui/dynamic_thumbnails.cpp
@@ -1931,7 +1950,7 @@ endif()
 
 set_target_properties(Telegram PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${output_folder})
 
-if (WIN32 AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+if (MSVC)
     target_link_libraries(Telegram
     PRIVATE
         delayimp
@@ -2028,7 +2047,7 @@ if (NOT DESKTOP_APP_DISABLE_AUTOUPDATE AND NOT build_macstore AND NOT build_wins
             base/platform/win/base_windows_safe_library.h
         )
         target_include_directories(Updater PRIVATE ${lib_base_loc})
-        if (CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+        if (MSVC)
             target_link_libraries(Updater
             PRIVATE
                 delayimp

@@ -414,7 +414,9 @@ void BottomInfo::layoutDateText() {
 
 	const auto edited = (_data.flags & Data::Flag::Edited)
 							? (settings->editedMark + ' ')
-							: QString();
+							: (_data.flags & Data::Flag::EstimateDate)
+		? (tr::lng_approximate(tr::now) + ' ')
+		: QString();
 	const auto author = _data.author;
 	const auto prefix = !author.isEmpty() ? (author == settings->deletedMark ? u" "_q : u", "_q) : QString();
 	const auto date = edited + QLocale().toString(
@@ -610,6 +612,9 @@ BottomInfo::Data BottomInfoDataFromMessage(not_null<Message*> message) {
 	const auto forwarded = item->Get<HistoryMessageForwarded>();
 	if (forwarded && forwarded->imported) {
 		result.flags |= Flag::Imported;
+	}
+	if (item->awaitingVideoProcessing()) {
+		result.flags |= Flag::EstimateDate;
 	}
 	// We don't want to pass and update it in Data for now.
 	//if (item->unread()) {

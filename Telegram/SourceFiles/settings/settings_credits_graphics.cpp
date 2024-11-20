@@ -52,10 +52,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "statistics/widgets/chart_header_widget.h"
 #include "ui/boxes/confirm_box.h"
 #include "ui/controls/userpic_button.h"
+#include "ui/dynamic_image.h"
+#include "ui/dynamic_thumbnails.h"
 #include "ui/effects/credits_graphics.h"
 #include "ui/effects/premium_graphics.h"
 #include "ui/effects/premium_stars_colored.h"
 #include "ui/effects/premium_top_bar.h"
+#include "ui/effects/toggle_arrow.h"
 #include "ui/image/image_prepare.h"
 #include "ui/layers/generic_box.h"
 #include "ui/painter.h"
@@ -172,17 +175,17 @@ void ToggleStarGiftSaved(
 		sender->inputUser,
 		MTP_int(itemId.bare)
 	)).done([=] {
+		done(true);
 		if (const auto strong = weak.get()) {
 			strong->showToast((save
 				? tr::lng_gift_display_done
 				: tr::lng_gift_display_done_hide)(tr::now));
 		}
-		done(true);
 	}).fail([=](const MTP::Error &error) {
+		done(false);
 		if (const auto strong = weak.get()) {
 			strong->showToast(error.type());
 		}
-		done(false);
 	}).send();
 }
 
@@ -190,14 +193,28 @@ void ConfirmConvertStarGift(
 		std::shared_ptr<Ui::Show> show,
 		QString name,
 		int stars,
+		int daysLeft,
 		Fn<void()> convert) {
-	show->show(Ui::MakeConfirmBox({
-		.text = tr::lng_gift_convert_sure_text(
+	auto text = rpl::combine(
+		tr::lng_gift_convert_sure_confirm(
 			lt_count,
 			rpl::single(stars * 1.),
 			lt_user,
 			rpl::single(Ui::Text::Bold(name)),
 			Ui::Text::RichLangValue),
+		tr::lng_gift_convert_sure_limit(
+			lt_count,
+			rpl::single(daysLeft * 1.),
+			Ui::Text::RichLangValue),
+		tr::lng_gift_convert_sure_caution(Ui::Text::RichLangValue)
+	) | rpl::map([](
+			TextWithEntities &&a,
+			TextWithEntities &&b,
+			TextWithEntities &&c) {
+		return a.append("\n\n").append(b).append("\n\n").append(c);
+	});
+	show->show(Ui::MakeConfirmBox({
+		.text = std::move(text),
 		.confirmed = [=](Fn<void()> close) { close(); convert(); },
 		.confirmText = tr::lng_gift_convert_sure(),
 		.title = tr::lng_gift_convert_sure_title(),
@@ -279,6 +296,7 @@ void AddViewMediaHandler(
 				state->item,
 				owner->document(item.id),
 				true, // skipPremiumEffect
+				false, // hasQualitiesList
 				false, // spoiler
 				0)); // ttlSeconds
 		}
@@ -380,7 +398,9 @@ void FillCreditOptions(
 		not_null<Ui::VerticalLayout*> container,
 		not_null<PeerData*> peer,
 		int minimumCredits,
-		Fn<void()> paid) {
+		Fn<void()> paid,
+		rpl::producer<QString> subtitle,
+		std::vector<Data::CreditTopupOption> preloadedTopupOptions) {
 	const auto options = container->add(
 		object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
 			container,
@@ -397,9 +417,26 @@ void FillCreditOptions(
 		while (content->count()) {
 			delete content->widgetAt(0);
 		}
-		Ui::AddSubsectionTitle(
-			content,
-			tr::lng_credits_summary_options_subtitle());
+		if (subtitle) {
+			Ui::AddSubsectionTitle(content, std::move(subtitle));
+		}
+
+		const auto buttons = content->add(
+			object_ptr<Ui::VerticalLayout>(content));
+
+		const auto showMoreWrap = content->add(
+			object_ptr<Ui::SlideWrap<Ui::SettingsButton>>(
+				content,
+				object_ptr<Ui::SettingsButton>(
+					content,
+					tr::lng_credits_more_options(),
+					st::statisticsShowMoreButton)));
+		const auto showMore = showMoreWrap->entity();
+		showMore->setClickedCallback([=] {
+			showMoreWrap->toggle(false, anim::type::instant);
+		});
+		Ui::AddToggleUpDownArrowToMoreButton(showMore);
+
 		const auto &st = st::creditsTopupButton;
 		const auto diffBetweenTextAndStar = st.padding.left()
 			- st.iconLeft
@@ -414,10 +451,24 @@ void FillCreditOptions(
 			if (option.credits < minCredits) {
 				continue;
 			}
-			const auto button = content->add(object_ptr<Ui::SettingsButton>(
-				content,
-				rpl::never<QString>(),
-				st));
+			const auto button = [&] {
+				auto owned = object_ptr<Ui::SettingsButton>(
+					buttons,
+					rpl::never<QString>(),
+					st);
+				if (!option.extended) {
+					return buttons->add(std::move(owned));
+				}
+				const auto wrap = buttons->add(
+					object_ptr<Ui::SlideWrap<Ui::SettingsButton>>(
+						buttons,
+						std::move(owned)));
+				wrap->toggle(false, anim::type::instant);
+				showMore->clicks() | rpl::start_with_next([=] {
+					wrap->toggle(true, anim::type::normal);
+				}, wrap->lifetime());
+				return wrap->entity();
+			}();
 			const auto text = button->lifetime().make_state<Ui::Text::String>(
 				st.style,
 				tr::lng_credits_summary_options_credits(
@@ -502,12 +553,16 @@ void FillCreditOptions(
 	const auto apiCredits = content->lifetime().make_state<ApiOptions>(peer);
 
 	if (show->session().premiumPossible()) {
-		apiCredits->request(
-		) | rpl::start_with_error_done([=](const QString &error) {
-			show->showToast(error);
-		}, [=] {
-			fill(apiCredits->options());
-		}, content->lifetime());
+		if (preloadedTopupOptions.empty()) {
+			apiCredits->request(
+			) | rpl::start_with_error_done([=](const QString &error) {
+				show->showToast(error);
+			}, [=] {
+				fill(apiCredits->options());
+			}, content->lifetime());
+		} else {
+			fill(std::move(preloadedTopupOptions));
+		}
 	}
 
 	show->session().premiumPossibleValue(
@@ -521,29 +576,41 @@ void FillCreditOptions(
 not_null<Ui::RpWidget*> AddBalanceWidget(
 		not_null<Ui::RpWidget*> parent,
 		rpl::producer<uint64> balanceValue,
-		bool rightAlign) {
+		bool rightAlign,
+		rpl::producer<float64> opacityValue) {
+	struct State final {
+		QImage star;
+		float64 opacity = 1.0;
+		Ui::Text::String label;
+		Ui::Text::String count;
+	};
 	const auto balance = Ui::CreateChild<Balance>(parent);
-	const auto balanceStar = balance->lifetime().make_state<QImage>(
-		Ui::GenerateStars(st::creditsBalanceStarHeight, 1));
-	const auto starSize = balanceStar->size() / style::DevicePixelRatio();
-	const auto label = balance->lifetime().make_state<Ui::Text::String>(
+	const auto state = balance->lifetime().make_state<State>();
+	state->star = QImage(Ui::GenerateStars(st::creditsBalanceStarHeight, 1));
+	const auto starSize = state->star.size() / style::DevicePixelRatio();
+	state->label = Ui::Text::String(
 		st::defaultTextStyle,
 		tr::lng_credits_summary_balance(tr::now));
-	const auto count = balance->lifetime().make_state<Ui::Text::String>(
+	state->count = Ui::Text::String(
 		st::semiboldTextStyle,
 		tr::lng_contacts_loading(tr::now));
-	const auto diffBetweenStarAndCount = count->style()->font->spacew;
+	if (opacityValue) {
+		std::move(opacityValue) | rpl::start_with_next([=](float64 value) {
+			state->opacity = value;
+		}, balance->lifetime());
+	}
+	const auto diffBetweenStarAndCount = state->count.style()->font->spacew;
 	const auto resize = [=] {
 		balance->resize(
 			std::max(
-				label->maxWidth(),
-				count->maxWidth()
+				state->label.maxWidth(),
+				state->count.maxWidth()
 					+ starSize.width()
 					+ diffBetweenStarAndCount),
-			label->style()->font->height + starSize.height());
+			state->label.style()->font->height + starSize.height());
 	};
 	std::move(balanceValue) | rpl::start_with_next([=](uint64 value) {
-		count->setText(
+		state->count.setText(
 			st::semiboldTextStyle,
 			Lang::FormatCountToShort(value).string);
 		balance->setBalance(value);
@@ -553,32 +620,33 @@ not_null<Ui::RpWidget*> AddBalanceWidget(
 	) | rpl::start_with_next([=] {
 		auto p = QPainter(balance);
 
+		p.setOpacity(state->opacity);
 		p.setPen(st::boxTextFg);
 
-		label->draw(p, {
+		state->label.draw(p, {
 			.position = QPoint(
-				rightAlign ? (balance->width() - label->maxWidth()) : 0,
+				rightAlign ? (balance->width() - state->label.maxWidth()) : 0,
 				0),
 			.availableWidth = balance->width(),
 		});
-		count->draw(p, {
+		state->count.draw(p, {
 			.position = QPoint(
 				(rightAlign
-					? (balance->width() - count->maxWidth())
+					? (balance->width() - state->count.maxWidth())
 					: (starSize.width() + diffBetweenStarAndCount)),
-				label->minHeight()
-					+ (starSize.height() - count->minHeight()) / 2),
+				state->label.minHeight()
+					+ (starSize.height() - state->count.minHeight()) / 2),
 			.availableWidth = balance->width(),
 		});
 		p.drawImage(
 			(rightAlign
 				? (balance->width()
-					- count->maxWidth()
+					- state->count.maxWidth()
 					- starSize.width()
 					- diffBetweenStarAndCount)
 				: 0),
-			label->minHeight(),
-			*balanceStar);
+			state->label.minHeight(),
+			state->star);
 	}, balance->lifetime());
 	return balance;
 }
@@ -729,7 +797,7 @@ void ReceiptCreditsBox(
 		const Data::SubscriptionEntry &s) {
 	const auto item = controller->session().data().message(
 		PeerId(e.barePeerId), MsgId(e.bareMsgId));
-	const auto isStarGift = (e.convertStars > 0);
+	const auto isStarGift = e.stargift || e.soldOutInfo;
 	const auto creditsHistoryStarGift = isStarGift && !e.id.isEmpty();
 	const auto sentStarGift = creditsHistoryStarGift && !e.in;
 	const auto convertedStarGift = creditsHistoryStarGift && e.converted;
@@ -739,9 +807,19 @@ void ReceiptCreditsBox(
 		: (isStarGift && e.in)
 		? controller->session().data().peer(PeerId(e.barePeerId))->asUser()
 		: nullptr;
-	const auto canConvert = gotStarGift && !e.converted && starGiftSender;
+	const auto convertLast = base::unixtime::serialize(e.date)
+		+ controller->session().appConfig().stargiftConvertPeriodMax();
+	const auto timeLeft = int64(convertLast) - int64(base::unixtime::now());
+	const auto timeExceeded = (timeLeft <= 0);
+	const auto forConvert = gotStarGift
+		&& e.starsConverted
+		&& !e.converted
+		&& starGiftSender;
+	const auto canConvert = forConvert && !timeExceeded;
+	const auto couldConvert = forConvert && timeExceeded;
+	const auto nonConvertible = (gotStarGift && !e.starsConverted);
 
-	box->setStyle(canConvert ? st::starGiftBox : st::giveawayGiftCodeBox);
+	box->setStyle(st::giveawayGiftCodeBox);
 	box->setNoContentMargin(true);
 
 	const auto content = box->verticalLayout();
@@ -763,6 +841,8 @@ void ReceiptCreditsBox(
 		? session->data().peer(PeerId(s.barePeerId)).get()
 		: (e.peerType == Type::PremiumBot)
 		? nullptr
+		: e.bareActorId
+		? session->data().peer(PeerId(e.bareActorId)).get()
 		: e.barePeerId
 		? session->data().peer(PeerId(e.barePeerId)).get()
 		: nullptr;
@@ -772,9 +852,15 @@ void ReceiptCreditsBox(
 			GenericEntryPhoto(content, callback, stUser.photoSize)));
 		AddViewMediaHandler(thumb->entity(), controller, e);
 	} else if (peer && !e.gift) {
-		content->add(object_ptr<Ui::CenterWrap<>>(
-			content,
-			object_ptr<Ui::UserpicButton>(content, peer, stUser)));
+		if (e.subscriptionUntil.isNull() && s.until.isNull()) {
+			content->add(object_ptr<Ui::CenterWrap<>>(
+				content,
+				object_ptr<Ui::UserpicButton>(content, peer, stUser)));
+		} else {
+			content->add(object_ptr<Ui::CenterWrap<>>(
+				content,
+				SubscriptionUserpic(content, peer, stUser.photoSize)));
+		}
 	} else if (e.gift || isPrize) {
 		struct State final {
 			DocumentData *sticker = nullptr;
@@ -872,6 +958,8 @@ void ReceiptCreditsBox(
 				? tr::lng_credits_box_history_entry_subscription(tr::now)
 				: !e.title.isEmpty()
 				? e.title
+				: e.soldOutInfo
+				? tr::lng_credits_box_history_entry_gift_unavailable(tr::now)
 				: sentStarGift
 				? tr::lng_credits_box_history_entry_gift_sent(tr::now)
 				: convertedStarGift
@@ -887,7 +975,7 @@ void ReceiptCreditsBox(
 
 	Ui::AddSkip(content);
 
-	{
+	if (!isStarGift || creditsHistoryStarGift || e.soldOutInfo) {
 		constexpr auto kMinus = QChar(0x2212);
 		auto &lifetime = content->lifetime();
 		const auto text = lifetime.make_state<Ui::Text::String>();
@@ -912,7 +1000,11 @@ void ReceiptCreditsBox(
 			.session = session,
 			.customEmojiRepaint = [=] { amount->update(); },
 		};
-		if (s) {
+		if (e.soldOutInfo) {
+			text->setText(
+				st::defaultTextStyle,
+				tr::lng_credits_box_history_entry_gift_sold_out(tr::now));
+		} else if (s) {
 			text->setMarkedText(
 				st::defaultTextStyle,
 				tr::lng_credits_subscription_subtitle(
@@ -952,7 +1044,9 @@ void ReceiptCreditsBox(
 		amount->paintRequest(
 		) | rpl::start_with_next([=] {
 			auto p = Painter(amount);
-			p.setPen(s
+			p.setPen(e.soldOutInfo
+				? st::menuIconAttentionColor
+				: s
 				? st::windowSubTextFg
 				: e.pending
 				? st::creditsStroke
@@ -1018,17 +1112,25 @@ void ReceiptCreditsBox(
 				box,
 				object_ptr<Ui::FlatLabel>(
 					box,
-					rpl::combine(
-						(canConvert
-							? tr::lng_action_gift_got_stars_text
-							: tr::lng_gift_got_stars)(
-								lt_count,
-								rpl::single(e.convertStars * 1.),
-								Ui::Text::RichLangValue),
-						tr::lng_paid_about_link()
-					) | rpl::map([](TextWithEntities text, QString link) {
-						return text.append(' ').append(Ui::Text::Link(link));
-					}),
+					((couldConvert || nonConvertible)
+						? (e.savedToProfile
+							? tr::lng_action_gift_can_remove_text
+							: tr::lng_action_gift_got_gift_text)(
+								Ui::Text::WithEntities)
+						: rpl::combine(
+							(canConvert
+								? tr::lng_action_gift_got_stars_text
+								: tr::lng_gift_got_stars)(
+									lt_count,
+									rpl::single(e.starsConverted * 1.),
+									Ui::Text::RichLangValue),
+							tr::lng_paid_about_link()
+						) | rpl::map([](
+								TextWithEntities text,
+								QString link) {
+							return text.append(' ').append(
+								Ui::Text::Link(link));
+						})),
 					st::creditsBoxAbout)))->entity();
 		about->setClickHandlerFilter([=](const auto &...) {
 			Core::App().iv().openWithIvPreferred(
@@ -1075,8 +1177,62 @@ void ReceiptCreditsBox(
 	Ui::AddSkip(content);
 	Ui::AddSkip(content);
 
+	struct State final {
+		rpl::variable<bool> confirmButtonBusy;
+		rpl::variable<bool> convertButtonBusy;
+	};
+	const auto state = box->lifetime().make_state<State>();
+	const auto weakWindow = base::make_weak(controller);
+
 	if (isStarGift && e.id.isEmpty()) {
-		AddStarGiftTable(controller, content, e);
+		const auto convert = [=, weak = Ui::MakeWeak(box)] {
+			const auto stars = e.starsConverted;
+			const auto days = canConvert ? ((timeLeft + 86399) / 86400) : 0;
+			const auto name = starGiftSender->shortName();
+			ConfirmConvertStarGift(box->uiShow(), name, stars, days, [=] {
+				if (state->convertButtonBusy.current()
+					|| state->confirmButtonBusy.current()) {
+					return;
+				}
+				state->convertButtonBusy = true;
+				const auto window = weakWindow.get();
+				const auto itemId = MsgId(e.bareMsgId);
+				if (window && stars) {
+					const auto done = [=](bool ok) {
+						if (const auto window = weakWindow.get()) {
+							if (ok) {
+								using GiftAction = Data::GiftUpdate::Action;
+								window->session().data().notifyGiftUpdate({
+									.itemId = FullMsgId(
+										starGiftSender->id,
+										itemId),
+									.action = GiftAction::Convert,
+								});
+							}
+						}
+						if (const auto strong = weak.data()) {
+							if (ok) {
+								strong->closeBox();
+							} else {
+								state->convertButtonBusy = false;
+							}
+						}
+					};
+					ConvertStarGift(
+						window,
+						starGiftSender,
+						itemId,
+						stars,
+						done);
+				}
+			});
+		};
+
+		AddStarGiftTable(
+			controller,
+			content,
+			e,
+			canConvert ? convert : Fn<void()>());
 	} else {
 		AddCreditsHistoryEntryTable(controller, content, e);
 		AddSubscriptionEntryTable(controller, content, s);
@@ -1115,16 +1271,19 @@ void ReceiptCreditsBox(
 	}
 	if (s) {
 		Ui::AddSkip(content);
-		box->addRow(object_ptr<Ui::CenterWrap<>>(
+		auto label = object_ptr<Ui::FlatLabel>(
 			box,
-			object_ptr<Ui::FlatLabel>(
-				box,
-				s.cancelled
-					? tr::lng_credits_subscription_off_about()
-					: tr::lng_credits_subscription_on_about(
-						lt_date,
-						rpl::single(langDayOfMonthFull(s.until.date()))),
-				st::creditsBoxAboutDivider)));
+			s.cancelled
+				? tr::lng_credits_subscription_off_about()
+				: tr::lng_credits_subscription_on_about(
+					lt_date,
+					rpl::single(langDayOfMonthFull(s.until.date()))),
+				st::creditsBoxAboutDivider);
+		if (s.cancelled) {
+			label->setTextColorOverride(st::menuIconAttentionColor->c);
+		}
+		box->addRow(
+			object_ptr<Ui::CenterWrap<>>(box, std::move(label)));
 	}
 
 	Ui::AddSkip(content);
@@ -1159,11 +1318,6 @@ void ReceiptCreditsBox(
 	const auto toRenew = (s.cancelled || s.expired)
 		&& !s.inviteHash.isEmpty();
 	const auto toCancel = !toRenew && s;
-	struct State final {
-		rpl::variable<bool> confirmButtonBusy;
-		rpl::variable<bool> convertButtonBusy;
-	};
-	const auto state = box->lifetime().make_state<State>();
 	auto confirmText = rpl::conditional(
 		state->confirmButtonBusy.value(),
 		rpl::single(QString()),
@@ -1171,14 +1325,13 @@ void ReceiptCreditsBox(
 			? tr::lng_credits_subscription_off_button()
 			: toCancel
 			? tr::lng_credits_subscription_on_button()
-			: canConvert
+			: (canConvert || couldConvert || nonConvertible)
 			? (e.savedToProfile
 				? tr::lng_gift_display_on_page_hide()
 				: tr::lng_gift_display_on_page())
 			: tr::lng_box_ok()));
-	const auto weakWindow = base::make_weak(controller);
 	const auto send = [=, weak = Ui::MakeWeak(box)] {
-		if (canConvert) {
+		if (canConvert || couldConvert || nonConvertible) {
 			const auto save = !e.savedToProfile;
 			const auto window = weakWindow.get();
 			const auto showSection = !e.fromGiftsList;
@@ -1252,7 +1405,12 @@ void ReceiptCreditsBox(
 			return;
 		}
 		state->confirmButtonBusy = true;
-		if ((toRenew || toCancel || canConvert) && peer) {
+		if (peer
+			&& (toRenew
+				|| toCancel
+				|| canConvert
+				|| couldConvert
+				|| nonConvertible)) {
 			send();
 		} else {
 			box->closeBox();
@@ -1274,85 +1432,6 @@ void ReceiptCreditsBox(
 	}) | rpl::start_with_next([=] {
 		button->resizeToWidth(buttonWidth);
 	}, button->lifetime());
-
-	if (canConvert) {
-		using namespace Ui;
-		auto convertText = rpl::conditional(
-			state->convertButtonBusy.value(),
-			rpl::single(QString()),
-			tr::lng_gift_convert_to_stars(
-				lt_count,
-				rpl::single(e.convertStars * 1.)));
-		const auto convert = CreateChild<RoundButton>(
-			button->parentWidget(),
-			std::move(convertText),
-			st::defaultLightButton);
-		convert->setTextTransform(RoundButton::TextTransform::NoTransform);
-		convert->widthValue() | rpl::filter([=] {
-			return convert->widthNoMargins() != buttonWidth;
-		}) | rpl::start_with_next([=] {
-			convert->resizeToWidth(buttonWidth);
-		}, convert->lifetime());
-		button->positionValue(
-		) | rpl::start_with_next([=](QPoint position) {
-			convert->move(
-				position.x(),
-				(position.y()
-					+ st::starGiftBox.buttonHeight
-					+ st::starGiftBox.buttonPadding.bottom()
-					- st::starGiftBox.buttonPadding.top()
-					- convert->height()));
-		}, convert->lifetime());
-		convert->setClickedCallback([=, weak = Ui::MakeWeak(box)] {
-			const auto stars = e.convertStars;
-			const auto name = starGiftSender->shortName();
-			ConfirmConvertStarGift(box->uiShow(), name, stars, [=] {
-				if (state->convertButtonBusy.current()
-					|| state->confirmButtonBusy.current()) {
-					return;
-				}
-				state->convertButtonBusy = true;
-				const auto window = weakWindow.get();
-				const auto itemId = MsgId(e.bareMsgId);
-				if (window && stars) {
-					const auto done = [=](bool ok) {
-						if (const auto window = weakWindow.get()) {
-							if (ok) {
-								using GiftAction = Data::GiftUpdate::Action;
-								window->session().data().notifyGiftUpdate({
-									.itemId = FullMsgId(
-										starGiftSender->id,
-										itemId),
-									.action = GiftAction::Convert,
-								});
-							}
-						}
-						if (const auto strong = weak.data()) {
-							if (ok) {
-								strong->closeBox();
-							} else {
-								state->convertButtonBusy = false;
-							}
-						}
-					};
-					ConvertStarGift(
-						window,
-						starGiftSender,
-						itemId,
-						stars,
-						done);
-				}
-			});
-		});
-
-		using namespace Info::Statistics;
-		const auto loadingAnimation = InfiniteRadialAnimationWidget(
-			convert,
-			convert->height() / 2,
-			&st::starConvertButtonLoading);
-		AddChildToWidgetCenter(convert, loadingAnimation);
-		loadingAnimation->showOn(state->convertButtonBusy.value());
-	}
 }
 
 void GiftedCreditsBox(
@@ -1416,18 +1495,17 @@ void UserStarGiftBox(
 		Data::CreditsHistoryEntry{
 			.description = data.message,
 			.date = base::unixtime::parse(data.date),
-			.credits = uint64(data.gift.stars),
+			.credits = uint64(data.info.stars),
 			.bareMsgId = uint64(data.messageId.bare),
 			.barePeerId = data.fromId.value,
-			.bareGiftStickerId = (data.gift.document
-				? data.gift.document->id
-				: 0),
+			.bareGiftStickerId = data.info.document->id,
 			.peerType = Data::CreditsHistoryEntry::PeerType::Peer,
-			.limitedCount = data.gift.limitedCount,
-			.limitedLeft = data.gift.limitedLeft,
-			.convertStars = int(data.gift.convertStars),
+			.limitedCount = data.info.limitedCount,
+			.limitedLeft = data.info.limitedLeft,
+			.starsConverted = int(data.info.starsConverted),
 			.converted = false,
 			.anonymous = data.anonymous,
+			.stargift = true,
 			.savedToProfile = !data.hidden,
 			.fromGiftsList = true,
 			.in = data.mine,
@@ -1455,9 +1533,10 @@ void StarGiftViewBox(
 			.peerType = Data::CreditsHistoryEntry::PeerType::Peer,
 			.limitedCount = data.limitedCount,
 			.limitedLeft = data.limitedLeft,
-			.convertStars = data.convertStars,
+			.starsConverted = data.starsConverted,
 			.converted = data.converted,
 			.anonymous = data.anonymous,
+			.stargift = true,
 			.savedToProfile = data.saved,
 			.in = true,
 			.gift = true,
@@ -1541,6 +1620,35 @@ object_ptr<Ui::RpWidget> PaidMediaThumbnail(
 		photoSize);
 }
 
+object_ptr<Ui::RpWidget> SubscriptionUserpic(
+		not_null<Ui::RpWidget*> parent,
+		not_null<PeerData*> peer,
+		int photoSize) {
+	auto widget = object_ptr<Ui::RpWidget>(parent);
+	const auto raw = widget.data();
+	widget->resize(photoSize, photoSize);
+	const auto userpicMedia = Ui::MakeUserpicThumbnail(peer, false);
+	userpicMedia->subscribeToUpdates([=] { raw->update(); });
+	const auto creditsIconSize = photoSize / 3;
+	const auto creditsIconCallback =
+		Ui::PaintOutlinedColoredCreditsIconCallback(
+			creditsIconSize,
+			1.5);
+	widget->paintRequest() | rpl::start_with_next([=] {
+		auto p = QPainter(raw);
+		p.fillRect(Rect(Size(photoSize)), Qt::transparent);
+		auto image = userpicMedia->image(photoSize);
+		{
+			auto q = QPainter(&image);
+			q.translate(photoSize, photoSize);
+			q.translate(-creditsIconSize, -creditsIconSize);
+			creditsIconCallback(q);
+		}
+		p.drawImage(0, 0, image);
+	}, widget->lifetime());
+	return widget;
+}
+
 void SmallBalanceBox(
 		not_null<Ui::GenericBox*> box,
 		std::shared_ptr<Main::SessionShow> show,
@@ -1620,7 +1728,9 @@ void SmallBalanceBox(
 		box->verticalLayout(),
 		show->session().user(),
 		credits - show->session().credits().balance(),
-		[=] { show->session().credits().load(true); });
+		[=] { show->session().credits().load(true); },
+		tr::lng_credits_summary_options_subtitle(),
+		{});
 
 	content->setMaximumHeight(st::creditsLowBalancePremiumCoverHeight);
 	content->setMinimumHeight(st::infoLayerTopBarHeight);
@@ -1811,44 +1921,48 @@ void AddWithdrawalWidget(
 	}, label->lifetime());
 
 	const auto lockedColor = anim::with_alpha(stButton.textFg->c, .5);
-	const auto lockedLabelTop = Ui::CreateChild<Ui::FlatLabel>(
-		button,
-		tr::lng_bot_earn_balance_button_locked(),
-		st::botEarnLockedButtonLabel);
-	lockedLabelTop->setTextColorOverride(lockedColor);
-	lockedLabelTop->setAttribute(Qt::WA_TransparentForMouseEvents);
-	const auto lockedLabelBottom = Ui::CreateChild<Ui::FlatLabel>(
-		button,
-		QString(),
-		st::botEarnLockedButtonLabel);
-	lockedLabelBottom->setTextColorOverride(lockedColor);
-	lockedLabelBottom->setAttribute(Qt::WA_TransparentForMouseEvents);
+	const auto lockedLabel = Ui::CreateChild<Ui::RpWidget>(button);
+	lockedLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+	struct LockedState final {
+		Ui::Text::String text;
+		bool locked = false;
+		bool dateIsNull = false;
+		rpl::lifetime dateUpdateLifetime;
+	};
+	const auto state = lockedLabel->lifetime().make_state<LockedState>();
 	rpl::combine(
 		rpl::duplicate(lockedValue),
-		button->sizeValue(),
-		lockedLabelTop->sizeValue(),
-		lockedLabelBottom->sizeValue()
-	) | rpl::start_with_next([=](
-			bool locked,
-			const QSize &b,
-			const QSize &top,
-			const QSize &bottom) {
-		const auto factor = locked ? 1 : -10;
-		const auto sumHeight = top.height() + bottom.height();
-		lockedLabelTop->moveToLeft(
-			(b.width() - top.width()) / 2,
-			factor * (b.height() - sumHeight) / 2);
-		lockedLabelBottom->moveToLeft(
-			(b.width() - bottom.width()) / 2,
-			factor * ((b.height() - sumHeight) / 2 + top.height()));
-	}, lockedLabelTop->lifetime());
+		button->sizeValue()
+	) | rpl::start_with_next([=](bool locked, const QSize &s) {
+		state->locked = locked;
+		lockedLabel->resize(s);
+	}, lockedLabel->lifetime());
+	lockedLabel->paintRequest() | rpl::start_with_next([=] {
+		auto p = QPainter(lockedLabel);
+		p.setPen(state->locked ? QPen(lockedColor) : stButton.textFg->p);
+		if (state->dateIsNull) {
+			p.setFont(st::channelEarnSemiboldLabel.style.font);
+			p.drawText(
+				lockedLabel->rect(),
+				style::al_center,
+				tr::lng_bot_earn_balance_button_locked(tr::now));
+			return;
+		}
+		state->text.draw(p, {
+			.position = QPoint(
+				0,
+				(lockedLabel->height() - state->text.minHeight()) / 2),
+			.outerWidth = lockedLabel->width(),
+			.availableWidth = lockedLabel->width(),
+			.align = style::al_center,
+		});
+	}, lockedLabel->lifetime());
 
-	const auto dateUpdateLifetime
-		= lockedLabelBottom->lifetime().make_state<rpl::lifetime>();
 	std::move(
 		dateValue
 	) | rpl::start_with_next([=](const QDateTime &dt) {
-		dateUpdateLifetime->destroy();
+		state->dateUpdateLifetime.destroy();
+		state->dateIsNull = dt.isNull();
 		if (dt.isNull()) {
 			return;
 		}
@@ -1857,7 +1971,7 @@ void AddWithdrawalWidget(
 
 		const auto context = Core::MarkedTextContext{
 			.session = session,
-			.customEmojiRepaint = [=] { lockedLabelBottom->update(); },
+			.customEmojiRepaint = [=] { lockedLabel->update(); },
 		};
 		const auto emoji = Ui::Text::SingleCustomEmoji(
 			session->data().customEmojiManager().registerInternalEmoji(
@@ -1885,11 +1999,18 @@ void AddWithdrawalWidget(
 				: (u"%1:%2"_q)
 					.arg(minutes, 2, 10, kZero)
 					.arg(seconds, 2, 10, kZero);
-			lockedLabelBottom->setMarkedText(
-				base::duplicate(emoji).append(formatted),
+			state->text.setMarkedText(
+				st::botEarnLockedButtonLabel.style,
+				TextWithEntities()
+					.append(tr::lng_bot_earn_balance_button_locked(tr::now))
+					.append('\n')
+					.append(emoji)
+					.append(formatted),
+				kMarkupTextOptions,
 				context);
-		}, *dateUpdateLifetime);
-	}, lockedLabelBottom->lifetime());
+			lockedLabel->update();
+		}, state->dateUpdateLifetime);
+	}, lockedLabel->lifetime());
 
 	Api::HandleWithdrawalButton(
 		Api::RewardReceiver{

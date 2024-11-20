@@ -432,8 +432,10 @@ public:
 	[[nodiscard]] bool forbidsForward() const;
 	[[nodiscard]] bool forbidsSaving() const;
 	[[nodiscard]] bool allowsSendNow() const;
+	[[nodiscard]] bool allowsReschedule() const;
 	[[nodiscard]] bool allowsForward() const;
 	[[nodiscard]] bool allowsEdit(TimeId now) const;
+	[[nodiscard]] bool allowsEditMedia() const;
 	[[nodiscard]] bool canDelete() const;
 	[[nodiscard]] bool canDeleteForEveryone(TimeId now) const;
 	[[nodiscard]] bool suggestReport() const;
@@ -484,6 +486,7 @@ public:
 	[[nodiscard]] GlobalMsgId globalId() const;
 	[[nodiscard]] Data::MessagePosition position() const;
 	[[nodiscard]] TimeId date() const;
+	[[nodiscard]] bool awaitingVideoProcessing() const;
 
 	[[nodiscard]] Data::Media *media() const {
 		return _media.get();

@@ -294,7 +294,7 @@ Dialogs::RowDescriptor WrapWidget::activeChat() const {
 	} else if (key().settingsSelf()
 			|| key().isDownloads()
 			|| key().poll()
-			|| key().statisticsPeer()) {
+			|| key().statisticsTag().peer) {
 		return Dialogs::RowDescriptor();
 	}
 	Unexpected("Owner in WrapWidget::activeChat().");
