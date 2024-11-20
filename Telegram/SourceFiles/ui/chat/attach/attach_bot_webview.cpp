@@ -395,7 +395,7 @@ Panel::Panel(Args &&args)
 		size.setWidth(st::botWebViewPanelWidthIncreased);
 	}
 
-	_widget->setInnerSize(size);
+	_widget->setInnerSize(size, true);
 
 	const auto params = _delegate->botThemeParams();
 	updateColorOverrides(params);
