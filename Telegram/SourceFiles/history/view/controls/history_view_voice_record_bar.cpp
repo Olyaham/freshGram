@@ -2072,9 +2072,9 @@ void VoiceRecordBar::stopRecording(StopType type, bool ttlBeforeHide) {
 				{
 					_sendVoiceRequests.fire({
 						.bytes = _data.content,
-						.waveform =_data.waveform,
+						.waveform = _data.waveform,
 						.duration = _data.duration,
-						.options =options,
+						.options = options,
 					});
 					close();
 				});
@@ -2164,10 +2164,10 @@ void VoiceRecordBar::requestToSendWithOptions(Api::SendOptions options) {
 			{
 				_sendVoiceRequests.fire({
 					.bytes = _data.content,
-					.waveform =_data.waveform,
+					.waveform = _data.waveform,
 					.duration = _data.duration,
 					.options = options,
-			.video = !_data.minithumbs.isNull(),
+					.video = !_data.minithumbs.isNull(),
 				});
 				close();
 			});
