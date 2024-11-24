@@ -555,3 +555,5 @@ private:
 	bool _wasForceClickPreview = false;
 
 };
+
+[[nodiscard]] bool CanSendReply(not_null<const HistoryItem*> item);
