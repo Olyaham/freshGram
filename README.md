@@ -54,9 +54,13 @@ scoop install ayugram
 Follow [official guide](https://github.com/AyuGram/AyuGramDesktop/blob/dev/docs/building-win-x64.md) if you want to
 build by yourself.
 
+### macOS
+
+You can download prebuilt macOS package from [Releases tab](https://github.com/AyuGram/AyuGramDesktop/releases).
+
 ### Arch Linux
 
-You can install `ayugram-desktop` or `ayugram-desktop-bin` from [AUR](https://aur.archlinux.org/packages?O=0&K=ayugram).
+You can install `ayugram-desktop` from [AUR](https://aur.archlinux.org/packages?O=0&K=ayugram).
 
 ### NixOS
 
