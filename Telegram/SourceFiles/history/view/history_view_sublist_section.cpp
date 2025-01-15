@@ -349,7 +349,7 @@ bool SublistWidget::searchInChatEmbedded(
 		_composeSearch->setInnerFocus();
 		return true;
 	}
-	_composeSearch = std::make_unique<HistoryView::ComposeSearch>(
+	_composeSearch = std::make_unique<ComposeSearch>(
 		this,
 		controller(),
 		_history,
@@ -360,10 +360,15 @@ bool SublistWidget::searchInChatEmbedded(
 	setInnerFocus();
 
 	_composeSearch->activations(
-	) | rpl::start_with_next([=](not_null<HistoryItem*> item) {
+	) | rpl::start_with_next([=](ComposeSearch::Activation activation) {
+		const auto item = activation.item;
+		auto params = ::Window::SectionShow(
+			::Window::SectionShow::Way::ClearStack);
+		params.highlightPart = { activation.query };
+		params.highlightPartOffsetHint = kSearchQueryOffsetHint;
 		controller()->showPeerHistory(
 			item->history()->peer->id,
-			::Window::SectionShow::Way::ClearStack,
+			params,
 			item->fullId().msg);
 	}, _composeSearch->lifetime());
 

@@ -68,6 +68,7 @@ struct SponsoredFrom;
 class Story;
 class SavedSublist;
 struct PaidReactionSend;
+struct SendError;
 } // namespace Data
 
 namespace Main {
@@ -107,6 +108,8 @@ struct HistoryItemCommonFields {
 	uint64 groupedId = 0;
 	EffectId effectId = 0;
 	HistoryMessageMarkupData markup;
+	bool ignoreForwardFrom = false;
+	bool ignoreForwardCaptions = false;
 };
 
 enum class HistoryReactionSource : char {
@@ -443,7 +446,7 @@ public:
 	[[nodiscard]] bool suggestDeleteAllReport() const;
 	[[nodiscard]] ChatRestriction requiredSendRight() const;
 	[[nodiscard]] bool requiresSendInlineRight() const;
-	[[nodiscard]] std::optional<QString> errorTextForForward(
+	[[nodiscard]] Data::SendError errorTextForForward(
 		not_null<Data::Thread*> to) const;
 	[[nodiscard]] const HistoryMessageTranslation *translation() const;
 	[[nodiscard]] bool translationShowRequiresCheck(LanguageId to) const;
@@ -472,6 +475,7 @@ public:
 	[[nodiscard]] auto topPaidReactionsWithLocal() const
 		-> std::vector<Data::MessageReactionsTopPaid>;
 	[[nodiscard]] int reactionsPaidScheduled() const;
+	[[nodiscard]] bool reactionsLocalAnonymous() const;
 	[[nodiscard]] bool canViewReactions() const;
 	[[nodiscard]] std::vector<Data::ReactionId> chosenReactions() const;
 	[[nodiscard]] Data::ReactionId lookupUnreadReaction(
@@ -555,6 +559,8 @@ public:
 	void updateDate(TimeId newDate);
 	[[nodiscard]] bool canUpdateDate() const;
 	void customEmojiRepaint();
+
+	[[nodiscard]] bool needsUpdateForVideoQualities(const MTPMessage &data);
 
 	[[nodiscard]] TimeId ttlDestroyAt() const {
 		return _ttlDestroyAt;
