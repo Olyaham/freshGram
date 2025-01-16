@@ -749,8 +749,6 @@ object_ptr<Ui::RpWidget> Controller::createStickersEdit() {
 		container,
 		tr::lng_group_stickers_description());
 
-	Ui::AddSkip(container, bottomSkip);
-
 	return result;
 }
 
@@ -1464,9 +1462,6 @@ void Controller::fillManageSection() {
 				: tr::lng_profile_delete_channel)(),
 			[=]{ deleteWithConfirmation(); }
 		);
-	}
-
-	if (canEditStickers || canDeleteChannel) {
 		::AddSkip(_controls.buttonsLayout);
 	}
 }
