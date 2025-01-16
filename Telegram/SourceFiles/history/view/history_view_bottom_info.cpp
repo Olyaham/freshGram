@@ -461,6 +461,9 @@ void BottomInfo::layoutDateText() {
 				owner->customEmojiManager().registerInternalEmoji(icon, padding)
 			);
 			deleted = Ui::Text::Colorized(added, 1);
+			if (!(_data.flags & Data::Flag::Edited)) {
+				deleted.append(' ');
+			}
 		}
 
 		TextWithEntities edited;
@@ -472,12 +475,13 @@ void BottomInfo::layoutDateText() {
 				owner->customEmojiManager().registerInternalEmoji(icon, padding)
 			);
 			edited = Ui::Text::Colorized(added, 1);
+			edited.append(' ');
 		} else if (_data.flags & Data::Flag::EstimateDate) {
 		    edited = TextWithEntities{ tr::lng_approximate(tr::now) + ' ' };
 		}
 
 		const auto author = _data.author;
-		const auto prefix = !author.isEmpty() ? u", "_q : QString();
+		const auto prefix = !author.isEmpty() ? (_data.flags & Data::Flag::Edited ? u" "_q : u", "_q) : QString();
 
 		const auto date = TextWithEntities{}.append(edited).append(QLocale().toString(
 			_data.date.time(),
