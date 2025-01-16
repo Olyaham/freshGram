@@ -149,7 +149,7 @@ private:
 	const std::unique_ptr<EmojiStatusPanel> _emojiStatusPanel;
 	const std::unique_ptr<Badge> _verify;
 	const std::unique_ptr<Badge> _badge;
-	const std::unique_ptr<Badge> _devBadge;
+	const std::unique_ptr<Badge> _exteraBadge;
 	rpl::variable<int> _onlineCount;
 
 	const object_ptr<Ui::UserpicButton> _userpic;
