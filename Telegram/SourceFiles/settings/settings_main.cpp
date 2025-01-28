@@ -78,7 +78,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 // AyuGram includes
 #include "ayu/ui/settings/settings_ayu.h"
 #include "ayu/ui/utils/ayu_profile_values.h"
-
+#include "ayu/utils/telegram_helpers.h"
 
 namespace Settings {
 namespace {
@@ -103,6 +103,7 @@ private:
 	const not_null<UserData*> _user;
 	Info::Profile::EmojiStatusPanel _emojiStatusPanel;
 	Info::Profile::Badge _badge;
+	Info::Profile::Badge _exteraBadge;
 
 	object_ptr<Ui::UserpicButton> _userpic;
 	object_ptr<Ui::FlatLabel> _name = { nullptr };
@@ -134,6 +135,18 @@ Cover::Cover(
 	},
 	0, // customStatusLoopsLimit
 	Info::Profile::BadgeType::Premium)
+, _exteraBadge(
+	this,
+	st::infoPeerBadge,
+	&user->session(),
+	ExteraBadgeTypeFromPeer(user),
+	&_emojiStatusPanel,
+	[=] {
+		return controller->isGifPausedAtLeastFor(
+			Window::GifPauseReason::Layer);
+	},
+	0, // customStatusLoopsLimit
+	Info::Profile::BadgeType::Extera | Info::Profile::BadgeType::ExteraSupporter)
 , _userpic(
 	this,
 	controller,
@@ -186,7 +199,10 @@ Cover::Cover(
 			_badge.widget(),
 			_badge.sizeTag());
 	});
-	_badge.updated() | rpl::start_with_next([=] {
+	rpl::combine(
+		_badge.updated(),
+		_exteraBadge.updated()
+	) | rpl::start_with_next([=] {
 		refreshNameGeometry(width());
 	}, _name->lifetime());
 }
@@ -252,12 +268,22 @@ void Cover::refreshNameGeometry(int newWidth) {
 	if (const auto width = _badge.widget() ? _badge.widget()->width() : 0) {
 		nameWidth -= st::infoVerifiedCheckPosition.x() + width;
 	}
+	if (const auto width = _exteraBadge.widget() ? _exteraBadge.widget()->width() : 0) {
+		nameWidth -= st::infoVerifiedCheckPosition.x() + width;
+	}
 	_name->resizeToNaturalWidth(nameWidth);
 	_name->moveToLeft(nameLeft, nameTop, newWidth);
 	const auto badgeLeft = nameLeft + _name->width();
 	const auto badgeTop = nameTop;
 	const auto badgeBottom = nameTop + _name->height();
 	_badge.move(badgeLeft, badgeTop, badgeBottom);
+	const auto exteraBadgeLeft = badgeLeft
+		+ (_badge.widget()
+			   ? (_badge.widget()->width() + st::infoVerifiedCheckPosition.x())
+			   : 0);
+	const auto exteraBadgeTop = nameTop;
+	const auto exteraBadgeBottom = nameTop + _name->height();
+	_exteraBadge.move(exteraBadgeLeft, exteraBadgeTop, exteraBadgeBottom);
 }
 
 void Cover::refreshIdGeometry(int newWidth) {
