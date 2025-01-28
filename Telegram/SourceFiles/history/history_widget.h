@@ -657,6 +657,7 @@ private:
 	[[nodiscard]] bool showRecordButton() const;
 	[[nodiscard]] bool showInlineBotCancel() const;
 	void refreshSilentToggle();
+	void setupFastButtonMode();
 
 	[[nodiscard]] bool isChoosingTheme() const;
 

@@ -42,7 +42,7 @@ FROM builder AS patches
 RUN git init patches \
 	&& cd patches \
 	&& git remote add origin {{ GIT }}/desktop-app/patches.git \
-	&& git fetch --depth=1 origin 748e206a977d7bd9fb6ed5081515b724e9bc58a0 \
+	&& git fetch --depth=1 origin 140cd1837ed200946d6248e9f4cada52452178c1 \
 	&& git reset --hard FETCH_HEAD \
 	&& rm -rf .git
 
@@ -591,6 +591,7 @@ RUN git clone -b n6.1.1 --depth=1 {{ GIT }}/FFmpeg/FFmpeg.git \
 		--enable-encoder=aac \
 		--enable-encoder=libopenh264 \
 		--enable-encoder=libopus \
+		--enable-encoder=pcm_s16le \
 		--enable-filter=atempo \
 		--enable-parser=aac \
 		--enable-parser=aac_latm \
@@ -616,6 +617,7 @@ RUN git clone -b n6.1.1 --depth=1 {{ GIT }}/FFmpeg/FFmpeg.git \
 		--enable-muxer=mp4 \
 		--enable-muxer=ogg \
 		--enable-muxer=opus \
+		--enable-muxer=wav \
 	&& make -j$(nproc) \
 	&& make DESTDIR="{{ LibrariesPath }}/ffmpeg-cache" install \
 	&& cd .. \

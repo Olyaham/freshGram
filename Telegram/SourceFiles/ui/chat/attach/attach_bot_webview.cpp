@@ -397,6 +397,16 @@ Panel::Panel(Args &&args)
 
 	_widget->setInnerSize(size, true);
 
+	const auto panel = _widget.get();
+	rpl::duplicate(
+		args.title
+	) | rpl::start_with_next([=](const QString &title) {
+		const auto value = tr::lng_credits_box_history_entry_miniapp(tr::now)
+			+ u": "_q
+			+ title;
+		panel->window()->setWindowTitle(value);
+	}, panel->lifetime());
+
 	const auto params = _delegate->botThemeParams();
 	updateColorOverrides(params);
 

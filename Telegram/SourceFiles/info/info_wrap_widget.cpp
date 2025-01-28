@@ -446,6 +446,11 @@ void WrapWidget::setupTopBarMenuToggle() {
 				addTopBarMenuButton();
 			}
 		}, _topBar->lifetime());
+	} else if (section.type() == Section::Type::PeerGifts
+		&& key.peer()
+		&& key.peer()->isChannel()
+		&& key.peer()->canManageGifts()) {
+		addTopBarMenuButton();
 	}
 }
 
@@ -491,6 +496,18 @@ void WrapWidget::addTopBarMenuButton() {
 	_topBarMenuToggle->addClickHandler([this] {
 		showTopBarMenu(false);
 	});
+
+	Shortcuts::Requests(
+	) | rpl::filter([=] {
+		return (_controller->section().type() == Section::Type::Profile);
+	}) | rpl::start_with_next([=](not_null<Shortcuts::Request*> request) {
+		using Command = Shortcuts::Command;
+
+		request->check(Command::ShowChatMenu, 1) && request->handle([=] {
+			showTopBarMenu(false);
+			return true;
+		});
+	}, _topBarMenuToggle->lifetime());
 }
 
 bool WrapWidget::closeByOutsideClick() const {
@@ -502,7 +519,7 @@ void WrapWidget::addProfileCallsButton() {
 
 	const auto peer = key().peer();
 	const auto user = peer ? peer->asUser() : nullptr;
-	if (!user || user->sharedMediaInfo()) {
+	if (!user || user->sharedMediaInfo() || user->isInaccessible()) {
 		return;
 	}
 
