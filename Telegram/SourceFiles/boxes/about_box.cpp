@@ -25,17 +25,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QGuiApplication>
 #include <QtGui/QClipboard>
 
+#include "window/window_session_controller.h"
+#include "window/window_session_controller_link_info.h"
+
+
 namespace {
 
-rpl::producer<TextWithEntities> Text1() {
-	return tr::lng_about_text1(
-		lt_api_link,
-		tr::lng_about_text1_api(
-		) | Ui::Text::ToLink("https://core.telegram.org/api"),
-		Ui::Text::WithEntities);
-}
-
-rpl::producer<TextWithEntities> Text2() {
+rpl::producer<TextWithEntities> Text() {
 	return tr::lng_about_text2(
 		lt_gpl_link,
 		rpl::single(Ui::Text::Link(
@@ -48,34 +44,33 @@ rpl::producer<TextWithEntities> Text2() {
 		Ui::Text::WithEntities);
 }
 
-rpl::producer<TextWithEntities> Text3() {
-	return tr::lng_about_text3(
-		lt_faq_link,
-		tr::lng_about_text3_faq() | Ui::Text::ToLink(telegramFaqLink()),
-		Ui::Text::WithEntities);
-}
-
 } // namespace
 
-AboutBox::AboutBox(QWidget *parent)
+AboutBox::AboutBox(QWidget *parent, not_null<Window::SessionController*> controller)
 : _version(this, tr::lng_about_version(tr::now, lt_version, currentVersionText()), st::aboutVersionLink)
-, _text1(this, Text1(), st::aboutLabel)
-, _text2(this, Text2(), st::aboutLabel)
-, _text3(this, Text3(), st::aboutLabel) {
+, _text(this, Text(), st::aboutLabel)
+, _controller(controller) {
 }
 
 void AboutBox::prepare() {
 	setTitle(rpl::single(u"AyuGram Desktop"_q));
 
 	addButton(tr::lng_close(), [this] { closeBox(); });
+	addLeftButton(
+		rpl::single(QString("@ayugramchat")),
+		[=]
+		{
+			_controller->showPeerByLink(Window::PeerByLinkInfo{
+				.usernameOrId = QString("ayugramchat"),
+			});
+			closeBox();
+		});
 
-	_text1->setLinksTrusted();
-	_text2->setLinksTrusted();
-	_text3->setLinksTrusted();
+	_text->setLinksTrusted();
 
 	_version->setClickedCallback([this] { showVersionHistory(); });
 
-	setDimensions(st::aboutWidth, st::aboutTextTop + _text1->height() + st::aboutSkip + _text2->height() + st::aboutSkip + _text3->height());
+	setDimensions(st::aboutWidth, st::aboutTextTop + _text->height());
 }
 
 void AboutBox::resizeEvent(QResizeEvent *e) {
@@ -85,42 +80,12 @@ void AboutBox::resizeEvent(QResizeEvent *e) {
 		- st::boxPadding.left()
 		- st::boxPadding.right();
 	_version->moveToLeft(st::boxPadding.left(), st::aboutVersionTop);
-	_text1->resizeToWidth(available);
-	_text1->moveToLeft(st::boxPadding.left(), st::aboutTextTop);
-	_text2->resizeToWidth(available);
-	_text2->moveToLeft(st::boxPadding.left(), _text1->y() + _text1->height() + st::aboutSkip);
-	_text3->resizeToWidth(available);
-	_text3->moveToLeft(st::boxPadding.left(), _text2->y() + _text2->height() + st::aboutSkip);
+	_text->resizeToWidth(available);
+	_text->moveToLeft(st::boxPadding.left(), st::aboutTextTop);
 }
 
 void AboutBox::showVersionHistory() {
-	if (cRealAlphaVersion()) {
-		auto url = u"https://tdesktop.com/"_q;
-		if (Platform::IsWindows32Bit()) {
-			url += u"win/%1.zip"_q;
-		} else if (Platform::IsWindows64Bit()) {
-			url += u"win64/%1.zip"_q;
-		} else if (Platform::IsWindowsARM64()) {
-			url += u"winarm/%1.zip"_q;
-		} else if (Platform::IsMac()) {
-			url += u"mac/%1.zip"_q;
-		} else if (Platform::IsLinux()) {
-			url += u"linux/%1.tar.xz"_q;
-		} else {
-			Unexpected("Platform value.");
-		}
-		url = url.arg(u"talpha%1_%2"_q.arg(cRealAlphaVersion()).arg(Core::countAlphaVersionSignature(cRealAlphaVersion())));
-
-		QGuiApplication::clipboard()->setText(url);
-
-		getDelegate()->show(
-			Ui::MakeInformBox(
-				"The link to the current private alpha "
-				"version of Telegram Desktop was copied to the clipboard."),
-			Ui::LayerOption::CloseOther);
-	} else {
-		File::OpenUrl(Core::App().changelogLink());
-	}
+	File::OpenUrl(Core::App().changelogLink());
 }
 
 void AboutBox::keyPressEvent(QKeyEvent *e) {
@@ -129,23 +94,6 @@ void AboutBox::keyPressEvent(QKeyEvent *e) {
 	} else {
 		BoxContent::keyPressEvent(e);
 	}
-}
-
-QString telegramFaqLink() {
-	const auto result = u"https://telegram.org/faq"_q;
-	const auto langpacked = [&](const char *language) {
-		return result + '/' + language;
-	};
-	const auto current = Lang::Id();
-	for (const auto language : { "de", "es", "it", "ko" }) {
-		if (current.startsWith(QLatin1String(language))) {
-			return langpacked(language);
-		}
-	}
-	if (current.startsWith(u"pt-br"_q)) {
-		return langpacked("br");
-	}
-	return result;
 }
 
 QString currentVersionText() {

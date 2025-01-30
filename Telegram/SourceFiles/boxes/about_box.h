@@ -9,6 +9,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "ui/layers/box_content.h"
 
+namespace Window {
+class SessionController;
+}
+
 namespace Ui {
 class LinkButton;
 class FlatLabel;
@@ -16,7 +20,7 @@ class FlatLabel;
 
 class AboutBox : public Ui::BoxContent {
 public:
-	AboutBox(QWidget*);
+	AboutBox(QWidget*, not_null<Window::SessionController*> controller);
 
 protected:
 	void prepare() override;
@@ -28,9 +32,8 @@ private:
 	void showVersionHistory();
 
 	object_ptr<Ui::LinkButton> _version;
-	object_ptr<Ui::FlatLabel> _text1;
-	object_ptr<Ui::FlatLabel> _text2;
-	object_ptr<Ui::FlatLabel> _text3;
+	object_ptr<Ui::FlatLabel> _text;
+	not_null<Window::SessionController*> _controller;
 
 };
 
