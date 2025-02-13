@@ -1090,15 +1090,19 @@ void HistoryWidget::refreshJoinChannelText() {
 }
 
 void HistoryWidget::refreshGiftToChannelShown() {
-	if (!_giftToChannelIn || !_giftToChannelOut) {
+	if (!_giftToChannelIn || !_giftToChannelOut || !_giftToChannelDiscuss) {
 		return;
 	}
+	// AyuGram: hide gift button almost everywhere
+	// still accessible via the menu in peer window
 	const auto channel = _peer->asChannel();
 	const auto shown = channel
 		&& channel->isBroadcast()
-		&& channel->stargiftsAvailable();
+		&& channel->stargiftsAvailable()
+		&& isExteraPeer(getBareID(channel));
 	_giftToChannelIn->setVisible(shown);
 	_giftToChannelOut->setVisible(shown);
+	_giftToChannelDiscuss->setVisible(shown);
 }
 
 void HistoryWidget::refreshTopBarActiveChat() {
@@ -2144,6 +2148,7 @@ void HistoryWidget::setupGiftToChannelButton() {
 	};
 	_giftToChannelIn = setupButton(_muteUnmute);
 	_giftToChannelOut = setupButton(_joinChannel);
+	_giftToChannelDiscuss = setupButton(_discuss);
 }
 
 void HistoryWidget::pushReplyReturn(not_null<HistoryItem*> item) {

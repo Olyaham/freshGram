@@ -781,6 +781,7 @@ private:
 	object_ptr<Ui::FlatButton> _muteUnmute;
 	QPointer<Ui::IconButton> _giftToChannelIn;
 	QPointer<Ui::IconButton> _giftToChannelOut;
+	QPointer<Ui::IconButton> _giftToChannelDiscuss;
 	object_ptr<Ui::FlatButton> _discuss;
 	object_ptr<Ui::FlatButton> _reportMessages;
 	struct {
