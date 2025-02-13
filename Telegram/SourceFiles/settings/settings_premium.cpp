@@ -215,7 +215,6 @@ using Order = std::vector<QString>;
 				tr::lng_premium_summary_subtitle_tags_for_messages(),
 				tr::lng_premium_summary_about_tags_for_messages(),
 				PremiumFeature::TagsForMessages,
-				true,
 			},
 		},
 		{
@@ -225,7 +224,6 @@ using Order = std::vector<QString>;
 				tr::lng_premium_summary_subtitle_last_seen(),
 				tr::lng_premium_summary_about_last_seen(),
 				PremiumFeature::LastSeen,
-				true,
 			},
 		},
 		{
@@ -235,7 +233,6 @@ using Order = std::vector<QString>;
 				tr::lng_premium_summary_subtitle_message_privacy(),
 				tr::lng_premium_summary_about_message_privacy(),
 				PremiumFeature::MessagePrivacy,
-				true,
 			},
 		},
 		{

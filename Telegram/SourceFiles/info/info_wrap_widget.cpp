@@ -110,6 +110,8 @@ WrapWidget::WrapWidget(
 	Wrap wrap,
 	not_null<Memento*> memento)
 : SectionWidget(parent, window, rpl::producer<PeerData*>())
+, _isSeparatedWindow(
+	window->windowId().type == Window::SeparateType::SharedMedia)
 , _wrap(wrap)
 , _controller(createController(window, memento->content()))
 , _topShadow(this)
@@ -446,10 +448,7 @@ void WrapWidget::setupTopBarMenuToggle() {
 				addTopBarMenuButton();
 			}
 		}, _topBar->lifetime());
-	} else if (section.type() == Section::Type::PeerGifts
-		&& key.peer()
-		&& key.peer()->isChannel()
-		&& key.peer()->canManageGifts()) {
+	} else if (section.type() == Section::Type::PeerGifts && key.peer()) {
 		addTopBarMenuButton();
 	}
 }
@@ -504,6 +503,7 @@ void WrapWidget::addTopBarMenuButton() {
 		using Command = Shortcuts::Command;
 
 		request->check(Command::ShowChatMenu, 1) && request->handle([=] {
+			Window::ActivateWindow(_controller->parentController());
 			showTopBarMenu(false);
 			return true;
 		});
@@ -1048,7 +1048,8 @@ const Ui::RoundRect *WrapWidget::bottomSkipRounding() const {
 }
 
 bool WrapWidget::hasBackButton() const {
-	return (wrap() == Wrap::Narrow || hasStackHistory());
+	return !_isSeparatedWindow
+		&& (wrap() == Wrap::Narrow || hasStackHistory());
 }
 
 bool WrapWidget::willHaveBackButton(
