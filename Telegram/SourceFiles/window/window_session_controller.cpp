@@ -176,12 +176,6 @@ private:
 
 [[nodiscard]] Ui::CollectibleDetails PrepareCollectibleDetails(
 		not_null<Main::Session*> session) {
-	const auto makeContext = [=] {
-		return Core::MarkedTextContext{
-			.session = session,
-			.customEmojiRepaint = [] {},
-		};
-	};
 	return {
 		.tonEmoji = Ui::Text::SingleCustomEmoji(
 			session->data().customEmojiManager().registerInternalEmoji(
@@ -190,7 +184,7 @@ private:
 					st::collectibleInfo.textFg->c),
 				st::collectibleInfoTonMargins,
 				true)),
-		.tonEmojiContext = makeContext,
+		.tonEmojiContext = Core::TextContext({ .session = session }),
 	};
 }
 

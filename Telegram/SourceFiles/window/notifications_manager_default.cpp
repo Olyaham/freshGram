@@ -203,16 +203,10 @@ void Manager::checkLastInput() {
 
 void Manager::startAllHiding() {
 	if (!hasReplyingNotification()) {
-		int notHidingCount = 0;
 		for (const auto &notification : _notifications) {
-			if (notification->isShowing()) {
-				++notHidingCount;
-			} else {
-				notification->startHiding();
-			}
+			notification->startHiding();
 		}
-		notHidingCount += _queuedNotifications.size();
-		if (_hideAll && notHidingCount < 2) {
+		if (_hideAll && _queuedNotifications.size() < 2) {
 			_hideAll->startHiding();
 		}
 	}
@@ -575,6 +569,10 @@ void Widget::hideStop() {
 
 void Widget::hideAnimated(float64 duration, const anim::transition &func) {
 	_hiding = true;
+	// Stop the previous animation so as to make sure that the notification
+	// is fully restored before hiding it again.
+	// Relates to https://github.com/telegramdesktop/tdesktop/issues/28811.
+	_a_opacity.stop();
 	_a_opacity.start([this] { opacityAnimationCallback(); }, 1., 0., duration, func);
 }
 
@@ -975,10 +973,10 @@ void Notification::updateNotifyDisplay() {
 				0,
 				Qt::LayoutDirectionAuto,
 			};
-			const auto context = Core::MarkedTextContext{
+			const auto context = Core::TextContext({
 				.session = &_history->session(),
-				.customEmojiRepaint = [=] { customEmojiCallback(); },
-			};
+				.repaint = [=] { customEmojiCallback(); },
+			});
 			_textCache.setMarkedText(
 				st::dialogsTextStyle,
 				text,
@@ -1014,10 +1012,10 @@ void Notification::updateNotifyDisplay() {
 		const auto fullTitle = manager()->addTargetAccountName(
 			std::move(title),
 			&_history->session());
-		const auto context = Core::MarkedTextContext{
+		const auto context = Core::TextContext({
 			.session = &_history->session(),
-			.customEmojiRepaint = [=] { customEmojiCallback(); },
-		};
+			.repaint = [=] { customEmojiCallback(); },
+		});
 		_titleCache.setMarkedText(
 			st::semiboldTextStyle,
 			fullTitle,

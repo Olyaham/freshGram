@@ -17,6 +17,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_item_components.h"
 #include "history/history_item.h"
 #include "history/history.h"
+#include "history/view/media/history_view_media.h"
 #include "history/view/history_view_message.h"
 #include "history/view/history_view_cursor_state.h"
 #include "chat_helpers/emoji_interactions.h"
@@ -28,6 +29,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_message_reactions.h"
 #include "window/window_session_controller.h"
 #include "styles/style_chat.h"
+#include "styles/style_credits.h"
 #include "styles/style_dialogs.h"
 
 // AyuGram includes
@@ -123,7 +125,7 @@ TextState BottomInfo::textState(
 	}
 	const auto textWidth = _authorEditedDate.maxWidth();
 	auto withTicksWidth = textWidth;
-	if (!AyuFeatures::MessageShot::isTakingShot() && _data.flags & (Data::Flag::OutLayout | Data::Flag::Sending)) {
+	if (!AyuFeatures::MessageShot::isTakingShot() && (_data.flags & (Data::Flag::OutLayout | Data::Flag::Sending))) {
 		withTicksWidth += st::historySendStateSpace;
 	}
 	if (!_views.isEmpty()) {
@@ -226,7 +228,7 @@ void BottomInfo::paint(
 
 	auto right = position.x() + width();
 	const auto firstLineBottom = position.y() + st::msgDateFont->height;
-	if (!AyuFeatures::MessageShot::isTakingShot() && _data.flags & Data::Flag::OutLayout) {
+	if (!AyuFeatures::MessageShot::isTakingShot() && (_data.flags & Data::Flag::OutLayout)) {
 		const auto &icon = (_data.flags & Data::Flag::Sending)
 			? (inverted
 				? st->historySendingInvertedIcon()
@@ -447,9 +449,14 @@ void BottomInfo::layoutDateText() {
 			: name.isEmpty()
 			? (deleted + date)
 			: (deleted + name + afterAuthor);
-		_authorEditedDate.setText(
+		auto marked = TextWithEntities{ full };
+	if (const auto count = _data.stars) {
+		marked.append(Ui::Text::IconEmoji(&st::starIconEmoji));
+		marked.append(Lang::FormatCountToShort(count).string);
+	}
+	_authorEditedDate.setMarkedText(
 			st::msgDateTextStyle,
-			full,
+			marked,
 			Ui::NameTextOptions());
 	} else {
 		TextWithEntities deleted;
@@ -564,7 +571,7 @@ QSize BottomInfo::countOptimalSize() {
 		return { st::historyShortcutStateSpace, st::msgDateFont->height };
 	}
 	auto width = 0;
-	if (!AyuFeatures::MessageShot::isTakingShot() && _data.flags & (Data::Flag::OutLayout | Data::Flag::Sending)) {
+	if (!AyuFeatures::MessageShot::isTakingShot() && (_data.flags & (Data::Flag::OutLayout | Data::Flag::Sending))) {
 		width += st::historySendStateSpace;
 	}
 	width += _authorEditedDate.maxWidth();
@@ -686,6 +693,17 @@ BottomInfo::Data BottomInfoDataFromMessage(not_null<Message*> message) {
 	}
 	if (item->isSending() || item->hasFailed()) {
 		result.flags |= Flag::Sending;
+	}
+	if (item->out() && !item->history()->peer->isUser()) {
+		const auto media = message->media();
+		const auto mine = PaidInformation{
+			.messages = 1,
+			.stars = item->starsPaid(),
+		};
+		auto info = media ? media->paidInformation().value_or(mine) : mine;
+		if (const auto total = info.stars) {
+			result.stars = total;
+		}
 	}
 	const auto forwarded = item->Get<HistoryMessageForwarded>();
 	if (forwarded && forwarded->imported) {
