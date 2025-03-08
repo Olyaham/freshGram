@@ -276,7 +276,7 @@ std::unique_ptr<Data::Media> HistoryItem::CreateMedia(
 		});
 	}, [&](const MTPDmessageMediaPhoto &media) -> Result {
 		const auto photo = media.vphoto();
-		if (media.vttl_seconds() && false) {  // AyuGram: show expiring messages
+		if (false) {  // AyuGram: show expiring messages
 			LOG(("App Error: "
 				"Unexpected MTPMessageMediaPhoto "
 				"with ttl_seconds in CreateMedia."));
@@ -438,6 +438,7 @@ HistoryItem::HistoryItem(
 		createServiceFromMtp(data);
 		applyTTL(data);
 	} else {
+		auto skipSetText = false;
 		createComponents(data);
 		if (media) {
 			setMedia(*media);
@@ -445,13 +446,25 @@ HistoryItem::HistoryItem(
 				media->match(
 					[&](const MTPDmessageMediaPhoto &media)
 					{
-						auto time = media.vttl_seconds()->v;
+						if (!data.is_media_unread()) {
+							createServiceFromMtp(data);
+							skipSetText = true;
+						}
+
+						const auto time = media.vttl_seconds()->v;
 						setAyuHint(formatTTL(time));
+						_unsupportedTTL = time;
 					},
 					[&](const MTPDmessageMediaDocument &media)
 					{
-						auto time = media.vttl_seconds()->v;
+						if (!data.is_media_unread()) {
+							createServiceFromMtp(data);
+							skipSetText = true;
+						}
+
+						const auto time = media.vttl_seconds()->v;
 						setAyuHint(formatTTL(time));
+						_unsupportedTTL = time;
 					},
 					[&](const MTPDmessageMediaWebPage &media)
 					{
@@ -482,7 +495,9 @@ HistoryItem::HistoryItem(
 				&history->session(),
 				data.ventities().value_or_empty())
 		};
-		setText(_media ? textWithEntities : EnsureNonEmpty(textWithEntities));
+		if (!skipSetText) {
+			setText(_media ? textWithEntities : EnsureNonEmpty(textWithEntities));
+		}
 		if (const auto groupedId = data.vgrouped_id()) {
 			setGroupId(
 				MessageGroupId::FromRaw(
