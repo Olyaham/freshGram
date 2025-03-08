@@ -1444,6 +1444,7 @@ void Filler::fillHistoryActions() {
 	addToggleMuteSubmenu(true);
 	addInfo();
 	AyuUi::AddJumpToBeginningAction(_peer, _thread, _controller, _addAction);
+	AyuUi::AddOpenChannelAction(_peer, _controller, _addAction);
 	addViewAsTopics();
 	addManageChat();
 	addStoryArchive();
@@ -1476,6 +1477,7 @@ void Filler::fillProfileActions() {
 	addTopicLink();
 	addManageTopic();
 	addToggleTopicClosed();
+	AyuUi::AddOpenChannelAction(_peer, _controller, _addAction);
 	addViewDiscussion();
 	addExportChat();
 	addToggleFolder();
