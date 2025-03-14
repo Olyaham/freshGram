@@ -3109,13 +3109,8 @@ void HistoryItem::setPostAuthor(const QString &postAuthor) {
 void HistoryItem::setDeleted() {
 	_deleted = true;
 
-	const auto settings = &AyuSettings::getInstance();
-	if (settings->replaceBottomInfoWithIcons) {
-		history()->owner().requestItemViewRefresh(this);
-		history()->owner().requestItemResize(this);
-	} else {
-		setAyuHint(settings->deletedMark);
-	}
+	history()->owner().requestItemViewRefresh(this);
+	history()->owner().requestItemResize(this);
 }
 
 bool HistoryItem::isDeleted() const {
