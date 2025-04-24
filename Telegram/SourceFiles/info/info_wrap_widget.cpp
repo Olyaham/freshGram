@@ -1063,6 +1063,11 @@ bool WrapWidget::willHaveBackButton(
 	return (wrap() == Wrap::Narrow) || willHaveStack;
 }
 
+void WrapWidget::replaceSwipeHandler(
+		Ui::Controls::SwipeHandlerArgs *incompleteArgs) {
+	_content->replaceSwipeHandler(std::move(incompleteArgs));
+}
+
 WrapWidget::~WrapWidget() = default;
 
 } // namespace Info
