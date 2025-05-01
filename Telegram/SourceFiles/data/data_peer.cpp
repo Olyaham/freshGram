@@ -673,7 +673,7 @@ bool PeerData::canTransferGifts() const {
 bool PeerData::canEditMessagesIndefinitely() const {
 	if (const auto user = asUser()) {
 		return user->isSelf();
-	} else if (const auto chat = asChat()) {
+	} else if (isChat()) {
 		return false;
 	} else if (const auto channel = asChannel()) {
 		return channel->isMegagroup()
@@ -1380,7 +1380,7 @@ Data::ForumTopic *PeerData::forumTopicFor(MsgId rootId) const {
 }
 
 bool PeerData::allowsForwarding() const {
-	if (const auto user = asUser()) {
+	if (isUser()) {
 		return true;
 	} else if (const auto channel = asChannel()) {
 		return channel->allowsForwarding();
