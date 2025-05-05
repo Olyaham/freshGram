@@ -484,13 +484,13 @@ void ChatFilters::requestToggleTags(bool value, Fn<void()> fail) {
 
 void ChatFilters::received(const QVector<MTPDialogFilter> &list) {
 	// AyuGram hideAllChatsFolder
-	const auto settings = &AyuSettings::getInstance();
+	const auto& settings = AyuSettings::getInstance();
 
 	auto position = 0;
 	auto changed = false;
 	for (const auto &filter : list) {
 		auto parsed = ChatFilter::FromTL(filter, _owner);
-		if (settings->hideAllChatsFolder && parsed.id() == 0 && list.size() > 1) {
+		if (settings.hideAllChatsFolder && parsed.id() == 0 && list.size() > 1) {
 			continue;
 		}
 		const auto b = begin(_list) + position;
@@ -514,7 +514,7 @@ void ChatFilters::received(const QVector<MTPDialogFilter> &list) {
 		applyRemove(position);
 		changed = true;
 	}
-	if (!settings->hideAllChatsFolder && !ranges::contains(begin(_list), end(_list), 0, &ChatFilter::id)) {
+	if (!settings.hideAllChatsFolder && !ranges::contains(begin(_list), end(_list), 0, &ChatFilter::id)) {
 		_list.insert(begin(_list), ChatFilter());
 	}
 	if (changed || !_loaded || _reloading) {
@@ -526,12 +526,12 @@ void ChatFilters::received(const QVector<MTPDialogFilter> &list) {
 
 void ChatFilters::apply(const MTPUpdate &update) {
 	// AyuGram hideAllChatsFolder
-	const auto settings = &AyuSettings::getInstance();
+	const auto& settings = AyuSettings::getInstance();
 
 	update.match([&](const MTPDupdateDialogFilter &data) {
 		if (const auto filter = data.vfilter()) {
 			auto parsed = ChatFilter::FromTL(*filter, _owner);
-			if (settings->hideAllChatsFolder && parsed.id() == 0) {
+			if (settings.hideAllChatsFolder && parsed.id() == 0) {
 				return;
 			}
 			set(parsed);
@@ -912,9 +912,9 @@ FilterId ChatFilters::lookupId(int index) const {
 		return FilterId(); // AyuGram: fix crash when using `hideAllChatsFolder`
 	}
 
-	const auto settings = &AyuSettings::getInstance();
+	const auto& settings = AyuSettings::getInstance();
 
-	if (_owner->session().user()->isPremium() || !_list.front().id() || settings->hideAllChatsFolder) {
+	if (_owner->session().user()->isPremium() || !_list.front().id() || settings.hideAllChatsFolder) {
 		return _list[index].id();
 	}
 	const auto i = ranges::find(_list, FilterId(0), &ChatFilter::id);

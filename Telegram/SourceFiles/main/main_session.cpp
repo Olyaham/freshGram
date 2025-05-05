@@ -319,8 +319,8 @@ rpl::producer<> Session::downloaderTaskFinished() const {
 }
 
 bool Session::premium() const {
-	auto settings = &AyuSettings::getInstance();
-	if (settings->localPremium) {
+	const auto& settings = AyuSettings::getInstance();
+	if (settings.localPremium) {
 		return true;
 	}
 
@@ -328,8 +328,8 @@ bool Session::premium() const {
 }
 
 bool Session::premiumPossible() const {
-	auto settings = &AyuSettings::getInstance();
-	if (settings->localPremium) {
+	const auto& settings = AyuSettings::getInstance();
+	if (settings.localPremium) {
 		return true;
 	}
 
@@ -351,8 +351,8 @@ rpl::producer<bool> Session::premiumPossibleValue() const {
 		return _user->isPremium();
 	});
 
-	auto settings = &AyuSettings::getInstance();
-	if (settings->localPremium) {
+	const auto& settings = AyuSettings::getInstance();
+	if (settings.localPremium) {
 		premium = rpl::single(true);
 	}
 

@@ -102,9 +102,9 @@ void Tray::rebuildMenu() {
 			[=] { toggleSoundNotifications(); });
 	}
 
-	auto settings = &AyuSettings::getInstance();
+	const auto& settings = AyuSettings::getInstance();
 
-	if (settings->showGhostToggleInTray) {
+	if (settings.showGhostToggleInTray) {
 		auto turnGhostModeText = _textUpdates.events(
 		) | rpl::map(
 			[=]
@@ -121,13 +121,13 @@ void Tray::rebuildMenu() {
 			{
 				bool ghostMode = AyuSettings::isGhostModeActive();
 
-				settings->set_ghostModeEnabled(!ghostMode);
+				AyuSettings::set_ghostModeEnabled(!ghostMode);
 
 				AyuSettings::save();
 			});
 	}
 
-	if (settings->showStreamerToggleInTray) {
+	if (settings.showStreamerToggleInTray) {
 		auto turnStreamerModeText = _textUpdates.events(
 		) | rpl::map(
 			[=]

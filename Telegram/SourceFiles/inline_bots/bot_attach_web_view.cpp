@@ -765,8 +765,8 @@ void BotAction::handleKeyPress(not_null<QKeyEvent*> e) {
 }
 
 QString WebviewPlatform() {
-	const auto settings = &AyuSettings::getInstance();
-	return settings->spoofWebviewAsAndroid ? "android" : "tdesktop";
+	const auto& settings = AyuSettings::getInstance();
+	return settings.spoofWebviewAsAndroid ? "android" : "tdesktop";
 }
 
 } // namespace
