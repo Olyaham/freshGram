@@ -2529,6 +2529,11 @@ bool HistoryItem::canDelete() const {
 		&& !isBusinessShortcut()) {
 		return false;
 	}
+
+	if (isDeleted()) {
+		return true;
+	}
+
 	auto channel = _history->peer->asChannel();
 	if (!channel) {
 		return !isGroupMigrate();
