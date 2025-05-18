@@ -1224,6 +1224,9 @@ void Message::draw(Painter &p, const PaintContext &context) const {
 		}
 		if (!mediaOnBottom && (!_viewButton || !reactionsInBubble)) {
 			localMediaBottom -= st::msgPadding.bottom();
+			if (mediaDisplayed) {
+				localMediaBottom -= st::mediaInBubbleSkip;
+			}
 		}
 		if (check) {
 			localMediaBottom -= check->height();

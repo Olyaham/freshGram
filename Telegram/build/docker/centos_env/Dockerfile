@@ -30,6 +30,7 @@ RUN dnf -y install epel-release \
 	&& dnf clean all
 
 RUN python3 -m pip install meson ninja
+RUN sed -i '/Requires.private: valgrind/d' /usr/lib64/pkgconfig/libdrm.pc
 RUN echo set debuginfod enabled on > /opt/rh/{{ TOOLSET }}/root/etc/gdbinit.d/00-debuginfod.gdb
 RUN adduser user
 
@@ -49,22 +50,21 @@ RUN git init patches \
 	&& rm -rf .git
 
 FROM builder AS zlib
-RUN git init zlib \
+RUN git clone -b v1.3.1 --depth=1 {{ GIT }}/madler/zlib.git \
 	&& cd zlib \
-	&& git remote add origin {{ GIT }}/madler/zlib.git \
-	&& git fetch --depth=1 origin 643e17b7498d12ab8d15565662880579692f769d \
-	&& git reset --hard FETCH_HEAD \
-	&& ./configure \
-	&& make -j$(nproc) \
-	&& make DESTDIR="{{ LibrariesPath }}/zlib-cache" install \
+	&& cmake -GNinja -B build . \
+		-DCMAKE_BUILD_TYPE=None \
+		-DZLIB_BUILD_EXAMPLES=OFF \
+	&& cmake --build build --parallel \
+	&& DESTDIR="{{ LibrariesPath }}/zlib-cache" cmake --install build \
 	&& cd .. \
 	&& rm -rf zlib
 
 FROM builder AS xz
-RUN git clone -b v5.4.4 --depth=1 {{ GIT }}/tukaani-project/xz.git \
+RUN git clone -b v5.8.1 --depth=1 {{ GIT }}/tukaani-project/xz.git \
 	&& cd xz \
-	&& cmake -B build . -DCMAKE_BUILD_TYPE=None \
-	&& cmake --build build -j$(nproc) \
+	&& cmake -GNinja -B build . -DCMAKE_BUILD_TYPE=None \
+	&& cmake --build build --parallel \
 	&& DESTDIR="{{ LibrariesPath }}/xz-cache" cmake --install build \
 	&& cd .. \
 	&& rm -rf xz
@@ -120,12 +120,11 @@ RUN git clone -b 1.0.7 --depth=1 {{ GIT }}/google/highway.git \
 	&& rm -rf highway
 
 FROM builder AS opus
-RUN git clone -b v1.4 --depth=1 {{ GIT }}/xiph/opus.git \
+RUN git clone -b v1.5.2 --depth=1 {{ GIT }}/xiph/opus.git \
 	&& cd opus \
-	&& ./autogen.sh \
-	&& ./configure \
-	&& make -j$(nproc) \
-	&& make DESTDIR="{{ LibrariesPath }}/opus-cache" install \
+	&& cmake -GNinja -B build . -DCMAKE_BUILD_TYPE=None \
+	&& cmake --build build --parallel \
+	&& DESTDIR="{{ LibrariesPath }}/opus-cache" cmake --install build \
 	&& cd .. \
 	&& rm -rf opus
 
@@ -279,10 +278,7 @@ RUN git clone -b master --depth=1 {{ GIT }}/desktop-app/rnnoise.git \
 	&& cd rnnoise \
 	&& cmake -GNinja -B build . -DCMAKE_BUILD_TYPE=None \
 	&& cmake --build build --parallel \
-	&& mkdir -p "{{ LibrariesPath }}/rnnoise-cache/usr/local/include" \
-	&& cp "include/rnnoise.h" "{{ LibrariesPath }}/rnnoise-cache/usr/local/include/" \
-	&& mkdir -p "{{ LibrariesPath }}/rnnoise-cache/usr/local/lib" \
-	&& cp "build/librnnoise.a" "{{ LibrariesPath }}/rnnoise-cache/usr/local/lib/" \
+	&& DESTDIR="{{ LibrariesPath }}/rnnoise-cache" cmake --install build \
 	&& cd .. \
 	&& rm -rf rnnoise
 
@@ -482,6 +478,7 @@ RUN git clone -b n6.1.1 --depth=1 {{ GIT }}/FFmpeg/FFmpeg.git \
 	&& ./configure \
 		--extra-cflags="-fno-lto -DCONFIG_SAFE_BITSTREAM_READER=1" \
 		--extra-cxxflags="-fno-lto -DCONFIG_SAFE_BITSTREAM_READER=1" \
+		--pkg-config-flags=--static \
 		--disable-debug \
 		--disable-programs \
 		--disable-doc \
@@ -707,6 +704,7 @@ RUN git clone -b 1.78.1 --depth=1 {{ GIT }}/GNOME/gobject-introspection.git \
 FROM patches AS qt
 COPY --link --from=zlib {{ LibrariesPath }}/zlib-cache /
 COPY --link --from=lcms2 {{ LibrariesPath }}/lcms2-cache /
+COPY --link --from=libwebp {{ LibrariesPath }}/libwebp-cache /
 COPY --link --from=libjxl {{ LibrariesPath }}/libjxl-cache /
 COPY --link --from=xcb {{ LibrariesPath }}/xcb-cache /
 COPY --link --from=xcb-wm {{ LibrariesPath }}/xcb-wm-cache /
@@ -718,7 +716,6 @@ COPY --link --from=xcb-cursor {{ LibrariesPath }}/xcb-cursor-cache /
 COPY --link --from=wayland {{ LibrariesPath }}/wayland-cache /
 COPY --link --from=openssl {{ LibrariesPath }}/openssl-cache /
 COPY --link --from=xkbcommon {{ LibrariesPath }}/xkbcommon-cache /
-COPY --link --from=libwebp {{ LibrariesPath }}/libwebp-cache /
 
 RUN git clone -b {{ QT_TAG }} --depth=1 {{ GIT }}/qt/qt5.git \
 	&& cd qt5 \
@@ -768,7 +765,7 @@ COPY --link --from=pipewire {{ LibrariesPath }}/pipewire-cache /
 RUN git init tg_owt \
 	&& cd tg_owt \
 	&& git remote add origin {{ GIT }}/desktop-app/tg_owt.git \
-	&& git fetch --depth=1 origin 8198c4d8b91e22d68eb5c7327fd408e3b6abcc79 \
+	&& git fetch --depth=1 origin c4192e8e2e10ccb72704daa79fa108becfa57b01 \
 	&& git reset --hard FETCH_HEAD \
 	&& git submodule update --init --recursive --depth=1 \
 	&& rm -rf .git \
@@ -811,37 +808,23 @@ RUN git clone -b v3.2.2 --depth=1 {{ GIT }}/ada-url/ada.git \
 	&& cd .. \
 	&& rm -rf ada
 
-FROM builder AS tdlib
+FROM builder AS tde2e
+COPY --link --from=zlib {{ LibrariesPath }}/zlib-cache /
 COPY --link --from=openssl {{ LibrariesPath }}/openssl-cache /
 
 # Shallow clone on a specific commit.
-RUN git init td \
-	&& cd td \
+RUN git init tde2e \
+	&& cd tde2e \
 	&& git remote add origin {{ GIT }}/tdlib/td.git \
-	&& git fetch --depth=1 origin f1b7500310baa496c0b779e4273a3aff0f14f42f \
+	&& git fetch --depth=1 origin 51743dfd01dff6179e2d8f7095729caa4e2222e9 \
 	&& git reset --hard FETCH_HEAD \
-	&& rm -rf .git \
-	&& env -u CFLAGS -u CXXFLAGS cmake -B out/Release . \
-		-DCMAKE_BUILD_TYPE=Release \
-		-DCMAKE_C_FLAGS_RELEASE="$CFLAGS" \
-		-DCMAKE_C_FLAGS_DEBUG="{{ CFLAGS_DEBUG }}" \
-		-DCMAKE_CXX_FLAGS_RELEASE="$CXXFLAGS" \
-		-DCMAKE_CXX_FLAGS_DEBUG="{{ CFLAGS_DEBUG }}" \
-	&& cmake --build out/Release --config Release --target tde2e -j$(nproc)
-
-WORKDIR td
-
-{%- if DEBUG %}
-
-FROM tdlib AS tdlib_debug
-RUN env -u CFLAGS -u CXXFLAGS cmake -B out/Debug . \
-		-DCMAKE_BUILD_TYPE=Debug \
-		-DCMAKE_C_FLAGS_RELEASE="$CFLAGS" \
-		-DCMAKE_C_FLAGS_DEBUG="{{ CFLAGS_DEBUG }}" \
-		-DCMAKE_CXX_FLAGS_RELEASE="$CXXFLAGS" \
-		-DCMAKE_CXX_FLAGS_DEBUG="{{ CFLAGS_DEBUG }}" \
-	&& cmake --build out/Debug --config Debug --target tde2e -j$(nproc)
-{%- endif %}
+	&& cmake -GNinja -B build . \
+		-DCMAKE_BUILD_TYPE=NONE \
+		-DTD_E2E_ONLY=ON \
+	&& cmake --build build --parallel \
+	&& DESTDIR="{{ LibrariesPath }}/tde2e-cache" cmake --install build \
+	&& cd .. \
+	&& rm -rf tde2e
 
 FROM builder
 COPY --link --from=zlib {{ LibrariesPath }}/zlib-cache /
@@ -855,6 +838,7 @@ COPY --link --from=dav1d {{ LibrariesPath }}/dav1d-cache /
 COPY --link --from=openh264 {{ LibrariesPath }}/openh264-cache /
 COPY --link --from=libde265 {{ LibrariesPath }}/libde265-cache /
 COPY --link --from=libvpx {{ LibrariesPath }}/libvpx-cache /
+COPY --link --from=libwebp {{ LibrariesPath }}/libwebp-cache /
 COPY --link --from=libavif {{ LibrariesPath }}/libavif-cache /
 COPY --link --from=libheif {{ LibrariesPath }}/libheif-cache /
 COPY --link --from=libjxl {{ LibrariesPath }}/libjxl-cache /
@@ -885,17 +869,11 @@ COPY --link --from=qt {{ LibrariesPath }}/qt-cache /
 COPY --link --from=breakpad {{ LibrariesPath }}/breakpad-cache /
 COPY --link --from=webrtc {{ LibrariesPath }}/tg_owt tg_owt
 COPY --link --from=webrtc_release {{ LibrariesPath }}/tg_owt/out/Release tg_owt/out/Release
-COPY --link --from=libwebp {{ LibrariesPath }}/libwebp-cache /
-COPY --link --from=ada {{ LibrariesPath }}/ada-cache /
-
 {%- if DEBUG %}
 COPY --link --from=webrtc_debug {{ LibrariesPath }}/tg_owt/out/Debug tg_owt/out/Debug
 {%- endif %}
-
-COPY --link --from=tdlib {{ LibrariesPath }}/td td
-{%- if DEBUG %}
-COPY --link --from=tdlib_debug {{ LibrariesPath }}/td/out/Debug td/out/Debug
-{%- endif %}
+COPY --link --from=ada {{ LibrariesPath }}/ada-cache /
+COPY --link --from=tde2e {{ LibrariesPath }}/tde2e-cache /
 
 WORKDIR ../tdesktop
 ENV QT {{ QT }}

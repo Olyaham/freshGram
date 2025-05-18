@@ -1226,7 +1226,9 @@ void Notification::mousePressEvent(QMouseEvent *e) {
 		unlinkHistoryInManager();
 	} else {
 		e->ignore();
-		manager()->notificationActivated(myId());
+		manager()->notificationActivated(myId(), {
+			.allowNewWindow = true,
+		});
 	}
 }
 
