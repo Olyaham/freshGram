@@ -4776,7 +4776,7 @@ void HistoryWidget::toggleMuteUnmute() {
 
 void HistoryWidget::goToDiscussionGroup() {
 	const auto channel = _peer ? _peer->asChannel() : nullptr;
-	const auto chat = channel ? channel->linkedChat() : nullptr;
+	const auto chat = channel ? channel->discussionLink() : nullptr;
 	if (!chat) {
 		return;
 	}
