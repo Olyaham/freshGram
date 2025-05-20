@@ -58,12 +58,12 @@ void AboutBox::prepare() {
 
 	addButton(tr::lng_close(), [this] { closeBox(); });
 	addLeftButton(
-		rpl::single(QString("@ayugramchat")),
+		rpl::single(QString("@AyuGramReleases")),
 		[this, controller = _controller]
 		{
 			closeBox();
 			controller->showPeerByLink(Window::PeerByLinkInfo{
-				.usernameOrId = QString("ayugramchat"),
+				.usernameOrId = QString("ayugramreleases"),
 			});
 		});
 
