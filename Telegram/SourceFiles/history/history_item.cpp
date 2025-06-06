@@ -2182,6 +2182,12 @@ void HistoryItem::clearMediaAsExpired() {
 	if (!media || !media->ttlSeconds()) {
 		return;
 	}
+
+	const auto& settings = AyuSettings::getInstance();
+	if (settings.saveDeletedMessages) {
+		return;
+	}
+
 	if (const auto document = media->document()) {
 		applyEditionToHistoryCleared();
 		auto text = (document->isVideoFile()
