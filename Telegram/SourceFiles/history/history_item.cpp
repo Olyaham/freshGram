@@ -1253,7 +1253,7 @@ void HistoryItem::setCommentsItemId(FullMsgId id) {
 void HistoryItem::setServiceText(PreparedServiceText &&prepared) {
 	auto text = std::move(prepared.text);
 
-	const auto& settings = AyuSettings::getInstance();
+	const auto &settings = AyuSettings::getInstance();
 	if (date() > 0) {
 		const auto timeString = QString(" (%1)").arg(QLocale().toString(
 			base::unixtime::parse(_date),
@@ -2183,7 +2183,7 @@ void HistoryItem::clearMediaAsExpired() {
 		return;
 	}
 
-	const auto& settings = AyuSettings::getInstance();
+	const auto &settings = AyuSettings::getInstance();
 	if (settings.saveDeletedMessages) {
 		return;
 	}
@@ -3189,7 +3189,7 @@ void HistoryItem::setDeleted() {
 	_deleted = true;
 
 	if (isService()) {
-		const auto& settings = AyuSettings::getInstance();
+		const auto &settings = AyuSettings::getInstance();
 		setAyuHint(settings.deletedMark);
 	} else {
 		history()->owner().requestItemViewRefresh(this);
