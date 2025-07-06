@@ -2251,7 +2251,6 @@ void HistoryWidget::setupDirectMessageButton() {
 			refreshDirectMessageShown();
 		}
 	}, _directMessage->lifetime());
-	_giftToChannelDiscuss = setupButton(_discuss);
 }
 
 void HistoryWidget::pushReplyReturn(not_null<HistoryItem*> item) {

@@ -9,6 +9,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "ui/layers/generic_box.h"
 
-void AboutBox(not_null<Ui::GenericBox*> box);
+namespace Window {
+class SessionController;
+}
+
+void AboutBox(not_null<Ui::GenericBox*> box, Window::SessionController* controller);
 
 QString currentVersionText();
