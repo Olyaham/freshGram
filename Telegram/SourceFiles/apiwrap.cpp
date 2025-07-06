@@ -90,6 +90,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ayu/ayu_settings.h"
 #include "ayu/ayu_worker.h"
 #include "ayu/utils/telegram_helpers.h"
+#include "ayu/features/forward/ayu_forward.h"
 
 
 namespace {
@@ -3279,6 +3280,22 @@ void ApiWrap::forwardMessages(
 		FnMut<void()> &&successCallback) {
 	Expects(!draft.items.empty());
 
+	const auto fullAyuForward = AyuForward::isFullAyuForwardNeeded(draft.items.front());
+	if (fullAyuForward) {
+		crl::async([=] {
+			AyuForward::forwardMessages(_session, action, false, draft);
+		});
+		return;
+	}
+
+	const auto ayuIntelligentForwardNeeded = AyuForward::isAyuForwardNeeded(draft.items);
+	if (ayuIntelligentForwardNeeded) {
+		crl::async([=] {
+			AyuForward::intelligentForward(_session, action, draft);
+		});
+		return;
+	}
+
 	auto &histories = _session->data().histories();
 
 	struct SharedCallback {
@@ -3766,8 +3783,12 @@ void ApiWrap::sendMessage(MessageToSend &&message) {
 		? replyTo->topicRootId()
 		: Data::ForumTopic::kGeneralId;
 	const auto topic = peer->forumTopicFor(topicRootId);
-	if (!(topic ? Data::CanSendTexts(topic) : Data::CanSendTexts(peer))
-		|| Api::SendDice(message)) {
+
+	const bool canSendTexts = topic
+		? Data::CanSendTexts(topic)
+		: Data::CanSendTexts(peer);
+
+	if (!canSendTexts && !AyuForward::isForwarding(peer->id) || Api::SendDice(message)) {
 		return;
 	}
 	local().saveRecentSentHashtags(textWithTags.text);
