@@ -2952,7 +2952,7 @@ QPointer<Ui::BoxContent> ShowForwardMessagesBox(
 		const auto items = history->owner().idsToItems(msgIds);
 		auto ayuForwarding = AyuForward::isAyuForwardNeeded(items) || AyuForward::isFullAyuForwardNeeded(items.front());
 
-		if (!state->submit || ayuForwarding && successCallback) {
+		if ((!state->submit || ayuForwarding) && successCallback) {
 			successCallback();
 		}
 		// AyuGram-changed
