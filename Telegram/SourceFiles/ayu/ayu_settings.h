@@ -6,6 +6,7 @@
 // Copyright @Radolyn, 2025
 #pragma once
 
+#include <unordered_set>
 #include "ayu/libs/json.hpp"
 #include "ayu/libs/json_ext.hpp"
 
@@ -59,6 +60,9 @@ public:
 
 	bool saveForBots;
 
+	std::unordered_set<long long> shadowBanIds;
+	bool filtersEnabled;
+	bool filtersEnabledInChats;
 	bool hideFromBlocked;
 
 	bool disableAds;
@@ -95,6 +99,7 @@ public:
 	int showHideMessageInContextMenu;
 	int showUserMessagesInContextMenu;
 	int showMessageDetailsInContextMenu;
+	int showAddFilterInContextMenu;
 
 	bool showAttachButtonInMessageField;
 	bool showCommandsButtonInMessageField;
@@ -160,6 +165,8 @@ void set_saveMessagesHistory(bool val);
 
 void set_saveForBots(bool val);
 
+void set_filtersEnabled(bool val);
+void set_filtersEnabledInChats(bool val);
 void set_hideFromBlocked(bool val);
 
 void set_disableAds(bool val);
@@ -196,6 +203,7 @@ void set_showViewsPanelInContextMenu(int val);
 void set_showHideMessageInContextMenu(int val);
 void set_showUserMessagesInContextMenu(int val);
 void set_showMessageDetailsInContextMenu(int val);
+void set_showAddFilterInContextMenu(int val);
 
 void set_showAttachButtonInMessageField(bool val);
 void set_showCommandsButtonInMessageField(bool val);
@@ -255,6 +263,9 @@ inline void to_json(nlohmann::json &nlohmann_json_j, const AyuGramSettings &nloh
 	NLOHMANN_JSON_TO(saveDeletedMessages)
 	NLOHMANN_JSON_TO(saveMessagesHistory)
 	NLOHMANN_JSON_TO(saveForBots)
+	NLOHMANN_JSON_TO(shadowBanIds)
+	NLOHMANN_JSON_TO(filtersEnabled)
+	NLOHMANN_JSON_TO(filtersEnabledInChats)
 	NLOHMANN_JSON_TO(hideFromBlocked)
 	NLOHMANN_JSON_TO(disableAds)
 	NLOHMANN_JSON_TO(disableStories)
@@ -282,6 +293,7 @@ inline void to_json(nlohmann::json &nlohmann_json_j, const AyuGramSettings &nloh
 	NLOHMANN_JSON_TO(showHideMessageInContextMenu)
 	NLOHMANN_JSON_TO(showUserMessagesInContextMenu)
 	NLOHMANN_JSON_TO(showMessageDetailsInContextMenu)
+	NLOHMANN_JSON_TO(showAddFilterInContextMenu)
 	NLOHMANN_JSON_TO(showAttachButtonInMessageField)
 	NLOHMANN_JSON_TO(showCommandsButtonInMessageField)
 	NLOHMANN_JSON_TO(showEmojiButtonInMessageField)
@@ -334,6 +346,9 @@ inline void from_json(const nlohmann::json &nlohmann_json_j, AyuGramSettings &nl
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(saveDeletedMessages)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(saveMessagesHistory)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(saveForBots)
+	NLOHMANN_JSON_FROM_WITH_DEFAULT(filtersEnabled)
+	NLOHMANN_JSON_FROM_WITH_DEFAULT(filtersEnabledInChats)
+	NLOHMANN_JSON_FROM_WITH_DEFAULT(shadowBanIds)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(hideFromBlocked)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(disableAds)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(disableStories)
@@ -361,6 +376,7 @@ inline void from_json(const nlohmann::json &nlohmann_json_j, AyuGramSettings &nl
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(showHideMessageInContextMenu)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(showUserMessagesInContextMenu)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(showMessageDetailsInContextMenu)
+	NLOHMANN_JSON_FROM_WITH_DEFAULT(showAddFilterInContextMenu)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(showAttachButtonInMessageField)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(showCommandsButtonInMessageField)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(showEmojiButtonInMessageField)
@@ -418,7 +434,8 @@ bool isUseScheduledMessages();
 
 rpl::producer<bool> get_ghostModeEnabledReactive();
 
-rpl::producer<bool> get_hideFromBlockedReactive();
+void fire_filtersUpdate();
+rpl::producer<> get_filtersUpdate();
 
 void triggerHistoryUpdate();
 rpl::producer<> get_historyUpdateReactive();

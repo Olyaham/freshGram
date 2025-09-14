@@ -44,7 +44,8 @@ rpl::variable<int> showPeerIdReactive;
 
 rpl::variable<QString> translationProviderReactive;
 
-rpl::variable<bool> hideFromBlockedReactive;
+rpl::event_stream<> filtersUpdateReactive; // triggered on adding / editing filter
+
 rpl::event_stream<> historyUpdateReactive;
 
 rpl::lifetime lifetime = rpl::lifetime();
@@ -142,8 +143,6 @@ void postinitialize() {
 	showPeerIdReactive = settings->showPeerId;
 	translationProviderReactive = settings->translationProvider;
 
-	hideFromBlockedReactive = settings->hideFromBlocked;
-
 	ghostModeEnabled = ghostModeEnabled_util(settings.value());
 }
 
@@ -226,6 +225,8 @@ AyuGramSettings::AyuGramSettings() {
 	saveForBots = false;
 
 	// ~ Message filters
+	filtersEnabled = false;
+	filtersEnabledInChats = false;
 	hideFromBlocked = false;
 
 	// ~ QoL toggles
@@ -257,7 +258,7 @@ AyuGramSettings::AyuGramSettings() {
 #else
 		AyuAssets::DEFAULT_ICON
 #endif
-	;
+		;
 	simpleQuotesAndReplies = true;
 	hideFastShare = false;
 	replaceBottomInfoWithIcons = true;
@@ -274,6 +275,7 @@ AyuGramSettings::AyuGramSettings() {
 	showHideMessageInContextMenu = 0;
 	showUserMessagesInContextMenu = 2;
 	showMessageDetailsInContextMenu = 2;
+	showAddFilterInContextMenu = 1;
 
 	showAttachButtonInMessageField = true;
 	showCommandsButtonInMessageField = true;
@@ -397,9 +399,16 @@ void set_saveForBots(bool val) {
 	settings->saveForBots = val;
 }
 
+void set_filtersEnabled(bool val) {
+	settings->filtersEnabled = val;
+}
+
+void set_filtersEnabledInChats(bool val) {
+	settings->filtersEnabledInChats = val;
+}
+
 void set_hideFromBlocked(bool val) {
 	settings->hideFromBlocked = val;
-	hideFromBlockedReactive = val;
 }
 
 void set_disableAds(bool val) {
@@ -514,6 +523,10 @@ void set_showUserMessagesInContextMenu(int val) {
 
 void set_showMessageDetailsInContextMenu(int val) {
 	settings->showMessageDetailsInContextMenu = val;
+}
+
+void set_showAddFilterInContextMenu(int val) {
+	settings->showAddFilterInContextMenu = val;
 }
 
 void set_showAttachButtonInMessageField(bool val) {
@@ -694,8 +707,12 @@ rpl::producer<bool> get_ghostModeEnabledReactive() {
 	return ghostModeEnabled.value();
 }
 
-rpl::producer<bool> get_hideFromBlockedReactive() {
-	return hideFromBlockedReactive.value();
+void fire_filtersUpdate() {
+	filtersUpdateReactive.fire({});
+}
+
+rpl::producer<> get_filtersUpdate() {
+	return filtersUpdateReactive.events();
 }
 
 void triggerHistoryUpdate() {

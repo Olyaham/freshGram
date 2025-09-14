@@ -1592,7 +1592,7 @@ void Element::destroyUnreadBar() {
 }
 
 int Element::displayedDateHeight() const {
-	if (AyuFeatures::MessageShot::isTakingShot()) {
+	if (AyuFeatures::MessageShot::isTakingShot() || isMessageHidden(data())) {
 		return 0;
 	}
 
@@ -2124,10 +2124,10 @@ Element *Element::previousInBlocks() const {
 
 Element *Element::previousDisplayedInBlocks() const {
 	auto result = previousInBlocks();
-	while (result && (result->data()->isEmpty() || result->isHidden())) {
+	while (result && ((result->data()->isEmpty() || result->isHidden()) && !isMessageHidden(data()))) {
 		result = result->previousInBlocks();
 	}
-	return result;
+	return result == this ? nullptr : result;
 }
 
 Element *Element::nextInBlocks() const {
@@ -2145,10 +2145,10 @@ Element *Element::nextInBlocks() const {
 
 Element *Element::nextDisplayedInBlocks() const {
 	auto result = nextInBlocks();
-	while (result && (result->data()->isEmpty() || result->isHidden())) {
+	while (result && ((result->data()->isEmpty() || result->isHidden()) && !isMessageHidden(data()))) {
 		result = result->nextInBlocks();
 	}
-	return result;
+	return result == this ? nullptr : result;
 }
 
 void Element::drawInfo(

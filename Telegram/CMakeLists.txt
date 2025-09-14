@@ -20,6 +20,10 @@ add_subdirectory(lib_webrtc)
 add_subdirectory(lib_webview)
 add_subdirectory(codegen)
 
+# AyuGram filters
+add_subdirectory(lib_icu)
+# AyuGram filters
+
 get_filename_component(src_loc SourceFiles REALPATH)
 get_filename_component(res_loc Resources REALPATH)
 
@@ -92,6 +96,9 @@ PRIVATE
     desktop-app::external_openssl
     desktop-app::external_openal
     desktop-app::external_xxhash
+
+    # AyuGram filters
+    ayugram::lib_icu
 )
 
 set(ayugram_files
@@ -137,10 +144,18 @@ set(ayugram_files
         ayu/ui/settings/settings_general.h
         ayu/ui/settings/settings_ayu.cpp
         ayu/ui/settings/settings_ayu.h
+        ayu/ui/settings/settings_filters.cpp
+        ayu/ui/settings/settings_filters.h
         ayu/ui/settings/settings_main.cpp
         ayu/ui/settings/settings_main.h
         ayu/ui/settings/settings_other.cpp
         ayu/ui/settings/settings_other.h
+        ayu/ui/settings/filters/settings_filters_list.cpp
+        ayu/ui/settings/filters/settings_filters_list.h
+        ayu/ui/settings/filters/per_dialog_filter.cpp
+        ayu/ui/settings/filters/per_dialog_filter.h
+        ayu/ui/settings/filters/edit_filter.cpp
+        ayu/ui/settings/filters/edit_filter.h
         ayu/ui/context_menu/context_menu.cpp
         ayu/ui/context_menu/context_menu.h
         ayu/ui/context_menu/menu_item_subtext.cpp
@@ -155,6 +170,8 @@ set(ayugram_files
         ayu/ui/boxes/edit_mark_box.h
         ayu/ui/boxes/font_selector.cpp
         ayu/ui/boxes/font_selector.h
+        ayu/ui/boxes/import_filters_box.cpp
+        ayu/ui/boxes/import_filters_box.h
         ayu/ui/boxes/theme_selector_box.cpp
         ayu/ui/boxes/theme_selector_box.h
         ayu/ui/boxes/message_shot_box.cpp
@@ -198,6 +215,14 @@ set(ayugram_files
         ayu/features/translator/implementations/telegram.h
         ayu/features/translator/implementations/base.cpp
         ayu/features/translator/implementations/base.h
+        ayu/features/filters/filters_controller.cpp
+        ayu/features/filters/filters_controller.h
+        ayu/features/filters/filters_cache_controller.cpp
+        ayu/features/filters/filters_cache_controller.h
+        ayu/features/filters/filters_utils.cpp
+        ayu/features/filters/filters_utils.h
+        ayu/features/filters/shadow_ban_utils.cpp
+        ayu/features/filters/shadow_ban_utils.h
         ayu/data/messages_storage.cpp
         ayu/data/messages_storage.h
         ayu/data/entities.h
@@ -2036,6 +2061,7 @@ PRIVATE
     TDESKTOP_API_ID=${TDESKTOP_API_ID}
     TDESKTOP_API_HASH=${TDESKTOP_API_HASH}
     G_LOG_DOMAIN="Telegram"
+    U_STATIC_IMPLEMENTATION=1 # AyuGram: do not use __declspec(dllimport) when including icu headers
 )
 
 get_property(is_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)

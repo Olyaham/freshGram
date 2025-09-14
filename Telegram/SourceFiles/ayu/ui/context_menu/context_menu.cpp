@@ -9,10 +9,10 @@
 #include "apiwrap.h"
 #include "lang_auto.h"
 #include "mainwidget.h"
-#include "mainwindow.h"
 #include "ayu/ayu_settings.h"
 #include "ayu/ayu_state.h"
 #include "ayu/data/messages_storage.h"
+#include "ayu/features/filters/shadow_ban_utils.h"
 #include "ayu/ui/context_menu/menu_item_subtext.h"
 #include "ayu/utils/qt_key_modifiers_extended.h"
 #include "history/history_item_components.h"
@@ -26,6 +26,7 @@
 #include "window/window_peer_menu.h"
 
 #include "ayu/ui/message_history/history_section.h"
+#include "ayu/ui/settings/filters/edit_filter.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "base/call_delayed.h"
 #include "base/random.h"
@@ -210,6 +211,7 @@ void AddDeletedMessagesActions(PeerData *peerData,
 				->showSection(std::make_shared<MessageHistory::SectionMemento>(peerData, nullptr, topicId));
 		},
 		&st::menuIconArchive);
+	// todo view filters
 }
 
 void AddJumpToBeginningAction(PeerData *peerData,
@@ -311,6 +313,33 @@ void AddOpenChannelAction(PeerData *peerData,
 			sessionController->showPeerHistory(chat, Window::SectionShow::Way::Forward);
 		},
 		&st::menuIconChannel);
+}
+
+void AddShadowBanAction(PeerData *peerData,
+						const Window::PeerMenuCallback &addCallback) {
+	const auto &settings = AyuSettings::getInstance();
+	if (!peerData || !peerData->isUser() || !settings.filtersEnabled) {
+		return;
+	}
+
+	const auto realId = getDialogIdFromPeer(peerData);
+	const auto shadowBanned = ShadowBanUtils::isShadowBanned(realId);
+	const auto toggleShadowBan = [=]
+	{
+		if (shadowBanned) {
+			ShadowBanUtils::removeShadowBan(realId);
+		} else {
+			ShadowBanUtils::addShadowBan(realId);
+		}
+	};
+
+	addCallback({
+		.text = (shadowBanned
+					 ? tr::ayu_FiltersQuickUnshadowBan(tr::now)
+					 : tr::ayu_FiltersQuickShadowBan(tr::now)),
+		.handler = toggleShadowBan,
+		.icon = shadowBanned ? &st::menuIconShowInChat : &st::menuIconStealth,
+	});
 }
 
 void AddDeleteOwnMessagesAction(PeerData *peerData,
@@ -716,6 +745,32 @@ void AddBurnAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
 			item->markContentsRead();
 		},
 		&st::menuIconTTLAny);
+}
+
+void AddCreateFilterAction(not_null<Ui::PopupMenu*> menu,
+						   not_null<Window::SessionController*> controller,
+						   HistoryItem *item,
+						   const QString &selectedText) {
+	const auto &settings = AyuSettings::getInstance();
+	if (!needToShowItem(settings.showAddFilterInContextMenu) || !settings.filtersEnabled) {
+		return;
+	}
+
+	if (!item || selectedText.isEmpty()) {
+		return;
+	}
+
+	menu->addAction(
+		tr::ayu_RegexFilterQuickAdd(tr::now),
+		[=]
+		{
+			RegexFilter filter;
+			filter.text = selectedText.toStdString();
+			filter.reversed = false;
+
+			controller->show(Settings::RegexEditBox(&filter, {}, getDialogIdFromPeer(item->history()->peer), true));
+		},
+		&st::menuIconAddToFolder);
 }
 
 } // namespace AyuUi

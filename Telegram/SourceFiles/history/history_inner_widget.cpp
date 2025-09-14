@@ -107,7 +107,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
+#include "ayu/features/filters/filters_cache_controller.h"
 #include "ayu/ui/context_menu/context_menu.h"
+#include "ayu/ui/settings/filters/edit_filter.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "data/data_document_media.h"
 
@@ -2340,6 +2342,9 @@ void HistoryInner::contextMenuEvent(QContextMenuEvent *e) {
 }
 
 void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+	const auto &settings = AyuSettings::getInstance();
+
+
 	if (e->reason() == QContextMenuEvent::Mouse) {
 		mouseActionUpdate(e->globalPos());
 	}
@@ -2985,6 +2990,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 						hasCopyRestrictionForSelected()));
 				}, &st::menuIconTranslate);
 			}
+			AyuUi::AddCreateFilterAction(_menu, _controller, item, selectedText.rich.text);
 			addItemActions(item, item);
 		} else {
 			addReplyAction(partItemOrLeader);

@@ -53,6 +53,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_menu_icons.h"
 #include "styles/style_layers.h"
 
+// AyuGram includes
+#include "ayu/ayu_settings.h"
+#include "ayu/ui/settings/filters/edit_filter.h"
+#include "ayu/ui/settings/filters/settings_filters_list.h"
+#include "styles/style_ayu_settings.h"
 
 namespace Info {
 namespace {
@@ -410,6 +415,31 @@ void WrapWidget::setupTopBarMenuToggle() {
 						Box(Ui::FillPeerQrBox, self, std::nullopt, nullptr));
 				});
 			}
+		} else if (section.settingsType() == ::Settings::AyuFiltersList::Id()) {
+			const auto controller = _controller->parentController();
+			const auto &st = st::filtersAddIcon;
+			const auto button = _topBar->addButton(base::make_unique_q<Ui::IconButton>(_topBar, st));
+
+			const auto show = controller->uiShow();
+
+			button->addClickHandler(
+				[=]
+				{
+					show->show(::Settings::RegexEditBox(nullptr, nullptr, controller->dialogId));
+				});
+
+
+			if (controller->showExclude.has_value() && controller->showExclude.value()) {
+				auto icon = base::make_unique_q<Ui::IconButton>(_topBar, st::filtersExcludeIcon);
+
+				const auto excludeButton = _topBar->addButton(std::move(icon));
+				excludeButton->addClickHandler([=, content = _content.data()]
+				{
+					// open new
+					controller->showExclude = false;
+					controller->showSettings(::Settings::AyuFiltersList::Id());
+				});
+			}
 		}
 	} else if (key.storiesPeer()
 		&& key.storiesPeer()->isSelf()
@@ -679,6 +709,21 @@ void WrapWidget::finishShowContent() {
 	_content->scrollBottomSkipValue(
 	) | rpl::start_with_next([=] {
 		updateContentGeometry();
+	}, _content->lifetime());
+
+	AyuSettings::get_filtersUpdate() | rpl::start_with_next([=]
+	{
+		auto contentMemento = _content->createMemento();
+		if (!contentMemento) {
+			return;
+		}
+
+		std::vector<std::shared_ptr<ContentMemento>> stack;
+		stack.push_back(std::move(contentMemento));
+		const auto sectionMemento = std::make_shared<Memento>(std::move(stack));
+
+		showBackFromStackInternal(Window::SectionShow(anim::type::instant));
+		showInternal(sectionMemento.get(), Window::SectionShow(anim::type::instant));
 	}, _content->lifetime());
 }
 

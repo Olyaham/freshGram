@@ -9,6 +9,8 @@
 #include "lang_auto.h"
 #include "settings_ayu_utils.h"
 #include "ayu/ayu_settings.h"
+#include "boxes/peer_list_box.h"
+#include "filters/settings_filters_list.h"
 #include "settings/settings_common.h"
 #include "styles/style_settings.h"
 #include "ui/vertical_list.h"
@@ -242,31 +244,6 @@ void SetupSpyEssentials(not_null<Ui::VerticalLayout*> container) {
 		container->lifetime());
 }
 
-void SetupMessageFilters(not_null<Ui::VerticalLayout*> container) {
-	auto *settings = &AyuSettings::getInstance();
-
-	AddSubsectionTitle(container, tr::ayu_RegexFilters());
-
-	AddButtonWithIcon(
-		container,
-		tr::ayu_FiltersHideFromBlocked(),
-		st::settingsButtonNoIcon
-	)->toggleOn(
-		rpl::single(settings->hideFromBlocked)
-	)->toggledValue(
-	) | rpl::filter(
-		[=](bool enabled)
-		{
-			return (enabled != settings->hideFromBlocked);
-		}) | start_with_next(
-		[=](bool enabled)
-		{
-			AyuSettings::set_hideFromBlocked(enabled);
-			AyuSettings::save();
-		},
-		container->lifetime());
-}
-
 void SetupOther(not_null<Ui::VerticalLayout*> container) {
 	auto *settings = &AyuSettings::getInstance();
 
@@ -322,12 +299,6 @@ void AyuGhost::setupContent(not_null<Window::SessionController*> controller) {
 
 	AddSkip(content);
 	SetupSpyEssentials(content);
-
-	AddSkip(content);
-	AddDivider(content);
-	AddSkip(content);
-
-	SetupMessageFilters(content);
 
 	AddSkip(content);
 	AddDivider(content);

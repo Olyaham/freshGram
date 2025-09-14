@@ -15,12 +15,13 @@ class SessionController;
 
 namespace Settings {
 
-class AyuGeneral : public Section<AyuGeneral>
+class AyuFilters : public Section<AyuFilters>
 {
 public:
-	AyuGeneral(QWidget *parent, not_null<Window::SessionController*> controller);
+	AyuFilters(QWidget *parent, not_null<Window::SessionController*> controller);
 
 	[[nodiscard]] rpl::producer<QString> title() override;
+	void fillTopBarMenu(const Ui::Menu::MenuCallback &addAction) override;
 
 private:
 	void setupContent(not_null<Window::SessionController*> controller);

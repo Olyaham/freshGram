@@ -658,10 +658,10 @@ HistoryWidget::HistoryWidget(
 	}, lifetime());
 
 	rpl::merge(
-		AyuSettings::get_hideFromBlockedReactive() | rpl::to_empty,
 		session().changes().peerUpdates(
 			Data::PeerUpdate::Flag::IsBlocked
-		) | rpl::to_empty
+		) | rpl::to_empty,
+		AyuSettings::get_filtersUpdate()
 	) | rpl::start_with_next(
 		[=]
 		{
@@ -676,6 +676,20 @@ HistoryWidget::HistoryWidget(
 						}
 						updateHistoryGeometry();
 						update();
+
+						for (const auto &item : _history->blocks) {
+							if (!item) {
+								continue;
+							}
+							for (const auto &msg : item->messages) {
+								if (!msg) {
+									continue;
+								}
+
+								_history->owner().requestViewResize(msg.get());
+								_history->owner().requestItemViewRefresh(msg->data());
+							}
+						}
 					}
 				});
 		},
