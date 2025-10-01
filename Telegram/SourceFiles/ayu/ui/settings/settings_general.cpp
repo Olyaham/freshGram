@@ -64,7 +64,7 @@ void SetupTranslator(not_null<Ui::VerticalLayout*> container,
 
 	const auto button = AddButtonWithLabel(
 		container,
-		tr::ayu_TranslationProvider(),
+		asBeta(tr::ayu_TranslationProvider()),
 		currentVal,
 		st::settingsButtonNoIcon);
 	button->addClickHandler(

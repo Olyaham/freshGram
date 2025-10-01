@@ -1225,15 +1225,14 @@ void LanguageBox::setupTop(not_null<Ui::VerticalLayout*> container) {
 
 	translateChat->toggledValue(
 	) | rpl::filter([=](bool checked) {
-		const auto premium = _controller->session().premium();
+		/*const auto premium = _controller->session().premium();
 		if (checked && !premium) {
 			ShowPremiumPreviewToBuy(
 				_controller,
 				PremiumFeature::RealTimeTranslation);
 			_translateChatTurnOff.fire(false);
-		}
-		return premium
-			&& (checked != Core::App().settings().translateChatEnabled());
+		}*/
+		return checked != Core::App().settings().translateChatEnabled();
 	}) | rpl::start_with_next([=](bool checked) {
 		Core::App().settings().setTranslateChatEnabled(checked);
 		Core::App().saveSettingsDelayed();
