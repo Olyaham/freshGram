@@ -28,6 +28,7 @@ bool isCustomBadgePeer(ID peerId);
 CustomBadge getCustomBadge(ID peerId);
 
 rpl::producer<Info::Profile::Badge::Content> ExteraBadgeTypeFromPeer(not_null<PeerData*> peer);
+Fn<void()> badgeClickHandler(not_null<PeerData *> peer);
 
 bool isMessageHidden(not_null<HistoryItem*> item);
 

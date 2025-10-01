@@ -38,10 +38,14 @@
 #include "ayu/ayu_settings.h"
 #include "ayu/ayu_state.h"
 #include "ayu/data/messages_storage.h"
-#include "data/data_poll.h"
 #include "ayu/features/filters/filters_controller.h"
+#include "data/data_poll.h"
 #include "data/data_saved_sublist.h"
+#include "lang/lang_text_entity.h"
 #include "main/main_domain.h"
+#include "styles/style_ayu_styles.h"
+#include "ui/text/text_utilities.h"
+#include "ui/toast/toast.h"
 
 
 #include "unicode/regex.h"
@@ -129,6 +133,59 @@ rpl::producer<Info::Profile::Badge::Content> ExteraBadgeTypeFromPeer(not_null<Pe
 		});
 	}
 	return rpl::single(Info::Profile::Badge::Content{Info::Profile::BadgeType::None});
+}
+
+Fn<void()> badgeClickHandler(not_null<PeerData *> peer) {
+	return [=] {
+		const auto isCustomBadge = isCustomBadgePeer(getBareID(peer));
+		const auto isExtera = isExteraPeer(getBareID(peer));
+		const auto isSupporter = isSupporterPeer(getBareID(peer));
+
+		TextWithEntities text;
+		if (isCustomBadge) {
+			const auto custom = getCustomBadge(getBareID(peer));
+			text = custom.text.isEmpty()
+					   ? (isExtera
+							  ? tr::ayu_DeveloperPopup(
+								  tr::now,
+								  lt_item,
+								  TextWithEntities{peer->name()},
+								  Ui::Text::RichLangValue)
+							  : tr::ayu_SupporterPopup(
+								  tr::now,
+								  lt_item,
+								  TextWithEntities{peer->name()},
+								  Ui::Text::RichLangValue))
+					   : Ui::Text::RichLangValue(custom.text);
+		} else if (isExtera) {
+			text = peer->isUser()
+					   ? tr::ayu_DeveloperPopup(
+						   tr::now,
+						   lt_item,
+						   TextWithEntities{peer->name()},
+						   Ui::Text::RichLangValue)
+					   : tr::ayu_OfficialResourcePopup(
+						   tr::now,
+						   lt_item,
+						   TextWithEntities{peer->name()},
+						   Ui::Text::RichLangValue);
+		} else if (isSupporter) {
+			text = tr::ayu_SupporterPopup(
+				tr::now,
+				lt_item,
+				TextWithEntities{peer->name()},
+				Ui::Text::RichLangValue);
+		} else {
+			return;
+		}
+
+		Ui::Toast::Show({
+			.text = text,
+			.st = &st::exteraBadgeToast,
+			.adaptive = true,
+			.duration = 3 * crl::time(1000),
+		});
+	};
 }
 
 bool isMessageHidden(const not_null<HistoryItem*> item) {
