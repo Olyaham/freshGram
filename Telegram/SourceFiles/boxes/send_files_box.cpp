@@ -187,9 +187,9 @@ void EditPriceBox(
 			field->showError();
 			return;
 		}
-		const auto weak = Ui::MakeWeak(box);
+		const auto weak = base::make_weak(box);
 		apply(now);
-		if (const auto strong = weak.data()) {
+		if (const auto strong = weak.get()) {
 			strong->closeBox();
 		}
 	};
@@ -612,7 +612,7 @@ void SendFilesBox::enqueueNextPrepare() {
 	}
 	auto file = std::move(_list.filesToProcess.front());
 	_list.filesToProcess.pop_front();
-	const auto weak = Ui::MakeWeak(this);
+	const auto weak = base::make_weak(this);
 	_preparing = true;
 	const auto sideLimit = PhotoSideLimit(); // Get on main thread.
 	crl::async([weak, sideLimit, file = std::move(file)]() mutable {
@@ -822,7 +822,7 @@ void SendFilesBox::toggleSpoilers(bool enabled) {
 }
 
 void SendFilesBox::changePrice() {
-	const auto weak = Ui::MakeWeak(this);
+	const auto weak = base::make_weak(this);
 	const auto session = &_show->session();
 	const auto now = _price.current();
 	_show->show(Box(EditPriceBox, session, now, [=](uint64 price) {
@@ -862,9 +862,8 @@ void SendFilesBox::refreshPriceTag() {
 			QPainter(raw).drawImage(0, 0, _priceTagBg);
 		}, raw->lifetime());
 
-		const auto session = &_show->session();
 		auto price = _price.value() | rpl::map([=](uint64 amount) {
-			auto result = Ui::Text::Colorized(Ui::CreditsEmoji(session));
+			auto result = Ui::Text::Colorized(Ui::CreditsEmoji());
 			result.append(Lang::FormatCountDecimal(amount));
 			return result;
 		});
@@ -876,10 +875,10 @@ void SendFilesBox::refreshPriceTag() {
 			raw,
 			QString(),
 			st::paidTagLabel);
-		std::move(text) | rpl::start_with_next([=](TextWithEntities &&text) {
-			label->setMarkedText(text, Core::TextContext({
-				.session = session,
-			}));
+		std::move(
+			text
+		) | rpl::start_with_next([=](const TextWithEntities &text) {
+			label->setMarkedText(text);
 		}, label->lifetime());
 		label->show();
 		label->sizeValue() | rpl::start_with_next([=](QSize size) {

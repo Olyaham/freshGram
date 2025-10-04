@@ -863,6 +863,7 @@ rpl::producer<CreditsAmount> AddCurrencyAction(
 		not_null<Controller*> controller) {
 	struct State final {
 		rpl::variable<CreditsAmount> balance;
+		Ui::Text::CustomEmojiHelper helper;
 	};
 	const auto state = wrap->lifetime().make_state<State>();
 	const auto parentController = controller->parentController();
@@ -893,13 +894,13 @@ rpl::producer<CreditsAmount> AddCurrencyAction(
 		state->balance = balance;
 	}
 	{
-		const auto weak = Ui::MakeWeak(wrap);
+		const auto weak = base::make_weak(wrap);
 		const auto currencyLoadLifetime
 			= std::make_shared<rpl::lifetime>();
 		const auto currencyLoad
 			= currencyLoadLifetime->make_state<Api::EarnStatistics>(user);
 		const auto done = [=](CreditsAmount balance) {
-			if ([[maybe_unused]] const auto strong = weak.data()) {
+			if ([[maybe_unused]] const auto strong = weak.get()) {
 				state->balance = balance;
 				currencyLoadLifetime->destroy();
 			}
@@ -914,13 +915,11 @@ rpl::producer<CreditsAmount> AddCurrencyAction(
 	const auto &st = st::infoSharedMediaButton;
 	const auto button = wrapButton->entity();
 	const auto name = Ui::CreateChild<Ui::FlatLabel>(button, st.rightLabel);
-	const auto icon = Ui::Text::SingleCustomEmoji(
-		user->owner().customEmojiManager().registerInternalEmoji(
-			Ui::Earn::IconCurrencyColored(
-				st.rightLabel.style.font,
-				st.rightLabel.textFg->c),
-			st::channelEarnCurrencyCommonMargins,
-			false));
+	const auto icon = state->helper.paletteDependent({ .factory = [=] {
+		return Ui::Earn::IconCurrencyColored(
+			st.rightLabel.style.font,
+			st.rightLabel.textFg->c);
+	}, .margin = st::channelEarnCurrencyCommonMargins });
 	name->show();
 	rpl::combine(
 		button->widthValue(),
@@ -939,10 +938,7 @@ rpl::producer<CreditsAmount> AddCurrencyAction(
 				.append(QChar(' '))
 				.append(Info::ChannelEarn::MajorPart(balance))
 				.append(Info::ChannelEarn::MinorPart(balance)),
-			Core::TextContext({
-				.session = &user->session(),
-				.repaint = [=] { name->update(); },
-			}));
+			state->helper.context());
 		name->resizeToNaturalWidth(available);
 		name->moveToRight(st::settingsButtonRightSkip, st.padding.top());
 	}, name->lifetime());
@@ -995,7 +991,10 @@ rpl::producer<CreditsAmount> AddCreditsAction(
 	const auto &st = st::infoSharedMediaButton;
 	const auto button = wrapButton->entity();
 	const auto name = Ui::CreateChild<Ui::FlatLabel>(button, st.rightLabel);
-	const auto icon = user->owner().customEmojiManager().creditsEmoji();
+
+	auto helper = Ui::Text::CustomEmojiHelper();
+	const auto icon = helper.paletteDependent(Ui::Earn::IconCreditsEmoji());
+	const auto context = helper.context([=] { name->update(); });
 	name->show();
 	rpl::combine(
 		button->widthValue(),
@@ -1013,10 +1012,7 @@ rpl::producer<CreditsAmount> AddCreditsAction(
 			base::duplicate(icon)
 				.append(QChar(' '))
 				.append(Lang::FormatCreditsAmountDecimal(balance)),
-			Core::TextContext({
-				.session = &user->session(),
-				.repaint = [=] { name->update(); },
-			}));
+			context);
 		name->resizeToNaturalWidth(available);
 		name->moveToRight(st::settingsButtonRightSkip, st.padding.top());
 	}, name->lifetime());
@@ -1507,8 +1503,11 @@ object_ptr<Ui::RpWidget> DetailsFiller::setupInfo() {
 
 		if (!user->isBot()) {
 			tracker.track(result->add(
-				CreateBirthday(result, controller, user)));
-			tracker.track(result->add(CreateWorkingHours(result, user)));
+				CreateBirthday(result, controller, user),
+				{},
+				style::al_justify));
+			tracker.track(result->add(
+				CreateWorkingHours(result, user), {}, style::al_justify));
 
 			auto locationText = user->session().changes().peerFlagsValue(
 				user,
@@ -2105,7 +2104,8 @@ void DetailsFiller::setupMainApp() {
 			_wrap,
 			tr::lng_profile_open_app(),
 			st::infoOpenApp),
-		st::infoOpenAppMargin);
+		st::infoOpenAppMargin,
+		style::al_justify);
 	button->setTextTransform(Ui::RoundButton::TextTransform::NoTransform);
 
 	const auto user = _peer->asUser();
