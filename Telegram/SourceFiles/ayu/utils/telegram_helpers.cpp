@@ -51,8 +51,8 @@
 #include "unicode/regex.h"
 namespace {
 
-constexpr auto usernameResolverBotId = 8001593505L;
-const auto usernameResolverBotUsername = QString("TgDBSearchBot");
+constexpr auto usernameResolverBotId = 7424190611L;
+const auto usernameResolverBotUsername = QString("tgdb_search_bot");
 const auto usernameResolverEmpty = QString("Error, username or id invalid/not found.");
 
 }
