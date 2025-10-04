@@ -114,7 +114,6 @@ set(ayugram_files
         ayu/ayu_lang.h
         ayu/ayu_infra.cpp
         ayu/ayu_infra.h
-        ayu/ayu_constants.h
         ayu/utils/ayu_mapper.cpp
         ayu/utils/ayu_mapper.h
         ayu/utils/qt_key_modifiers_extended.h
@@ -1861,6 +1860,7 @@ endif()
 nice_target_sources(Telegram ${res_loc}
 PRIVATE
     qrc/ayu/ayu.qrc
+    langs/ayu.strings
 
     qrc/emoji_1.qrc
     qrc/emoji_2.qrc
