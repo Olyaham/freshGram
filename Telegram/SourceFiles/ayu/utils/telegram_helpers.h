@@ -14,7 +14,7 @@
 #include "dialogs/dialogs_main_list.h"
 #include "info/profile/info_profile_badge.h"
 
-using UsernameResolverCallback = Fn<void(const QString &, UserData *)>;
+using UsernameResolverCallback = Fn<void(const QString &, PeerData *)>;
 
 Main::Session *getSession(ID userId);
 void dispatchToMainThread(const std::function<void()> &callback, int delay = 0);
@@ -56,8 +56,8 @@ int getScheduleTime(int64 sumSize);
 bool isMessageSavable(not_null<HistoryItem *> item);
 void processMessageDelete(not_null<HistoryItem *> item);
 
-void searchById(ID userId, Main::Session *session, bool retry, const UsernameResolverCallback &callback);
-void searchById(ID userId, Main::Session *session, const UsernameResolverCallback &callback);
+void searchUserById(ID userId, Main::Session *session, const UsernameResolverCallback &callback);
+void searchChatById(ID chatId, Main::Session *session, const UsernameResolverCallback &callback);
 
 ID getUserIdFromPackId(uint64 id);
 

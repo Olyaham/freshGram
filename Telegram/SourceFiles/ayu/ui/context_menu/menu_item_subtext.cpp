@@ -221,10 +221,10 @@ void ActionStickerPackAuthor::searchAuthor(ID authorId) {
 	const auto session = _session;
 	const auto weak = base::make_weak(this);
 
-	searchById(
+	searchUserById(
 		authorId,
 		session,
-		[session, weak, authorId](const QString &username, UserData *user)
+		[session, weak, authorId](const QString &username, PeerData *user)
 		{
 			if (!weak) {
 				LOG(("ContextActionStickerAuthor: searchById callback after destruction"));

@@ -18,6 +18,11 @@ bool ResolveUser(
 	const Match &match,
 	const QVariant &context);
 
+bool ResolveChat(
+	Window::SessionController *controller,
+	const Match &match,
+	const QVariant &context);
+
 bool HandleAyu(
 	Window::SessionController *controller,
 	const Match &match,

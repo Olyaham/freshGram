@@ -130,10 +130,10 @@ ResolvePhoneAction::ResolvePhoneAction(
 				const auto weak = base::make_weak(this);
 				const auto session = &controller->session();
 
-				searchById(
+				searchUserById(
 					possibleId,
 					session,
-					[weak](const QString &username, UserData *user)
+					[weak](const QString &username, PeerData *user)
 					{
 						if (!weak) {
 							return;

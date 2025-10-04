@@ -1680,6 +1680,10 @@ const std::vector<LocalUrlHandler> &LocalUrlHandlers() {
 			AyuUrlHandlers::ResolveUser
 		},
 		{
+			u"^chat\\?(.+)(#|$)"_q,
+			AyuUrlHandlers::ResolveChat
+		},
+		{
 			u"^ayu(/?.+)?(#|$)"_q,
 			AyuUrlHandlers::HandleAyu
 		},

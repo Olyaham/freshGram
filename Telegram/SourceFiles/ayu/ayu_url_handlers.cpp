@@ -46,10 +46,48 @@ bool ResolveUser(
 		return true;
 	}
 
-	searchById(
+	searchUserById(
 		userId,
 		&controller->session(),
-		[=](const QString &title, UserData *data)
+		[=](const QString &title, PeerData *data)
+		{
+			if (data) {
+				controller->showPeerInfo(data);
+				return;
+			}
+
+			Core::App().hideMediaView();
+			Ui::show(Ui::MakeInformBox(tr::ayu_UserNotFoundMessage()));
+		}
+	);
+
+	return true;
+}
+
+bool ResolveChat(
+	Window::SessionController *controller,
+	const Match &match,
+	const QVariant &context) {
+	if (!controller) {
+		return false;
+	}
+	const auto params = url_parse_params(
+		match->captured(1),
+		qthelp::UrlParamNameTransform::ToLower);
+	const auto chatId = params.value(qsl("id")).toLongLong();
+	if (!chatId) {
+		return false;
+	}
+	const auto peer = controller->session().data().peerLoaded(static_cast<PeerId>(chatId));
+	if (peer != nullptr) {
+		controller->showPeerInfo(peer);
+		return true;
+	}
+
+	searchChatById(
+		chatId,
+		&controller->session(),
+		[=](const QString &title, PeerData *data)
 		{
 			if (data) {
 				controller->showPeerInfo(data);

@@ -781,10 +781,10 @@ void StickerSetBox::updateButtons() {
 							return;
 						}
 
-						searchById(
+						searchUserById(
 							innerId,
 							session,
-							[session, weak, innerId](const QString &username, UserData *user)
+							[session, weak, innerId](const QString &username, PeerData *user)
 							{
 								if (!weak) {
 									return;
