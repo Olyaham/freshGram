@@ -763,7 +763,7 @@ void StickerSetBox::updateButtons() {
 		{
 			if (type == Data::StickersType::Stickers || type == Data::StickersType::Emoji) {
 				const auto &settings = AyuSettings::getInstance();
-				const auto weak = Ui::MakeWeak(this);
+				const auto weak = base::make_weak(this);
 				const auto session = _session;
 				const auto setId = _inner->setId();
 				const auto innerId = setId >> 32;
@@ -776,7 +776,7 @@ void StickerSetBox::updateButtons() {
 							return;
 						}
 
-						const auto strong = weak.data();
+						const auto strong = weak.get();
 						if (!strong) {
 							return;
 						}
@@ -790,7 +790,7 @@ void StickerSetBox::updateButtons() {
 									return;
 								}
 
-								const auto strongInner = weak.data();
+								const auto strongInner = weak.get();
 								if (!strongInner) {
 									return;
 								}
@@ -813,13 +813,13 @@ void StickerSetBox::updateButtons() {
 				if (settings.showPeerId != 0) {
 					(*menu)->addAction(
 						tr::ayu_ContextCopyID(tr::now),
-						[weak, session, setId]
+						[weak, setId]
 						{
 							if (!weak) {
 								return;
 							}
 
-							const auto strongInner = weak.data();
+							const auto strongInner = weak.get();
 							if (!strongInner) {
 								return;
 							}

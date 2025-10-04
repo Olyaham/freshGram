@@ -96,7 +96,8 @@ object_ptr<Ui::RpWidget> InfoRow(
 	not_null<Main::Session*> session,
 	const QString &title,
 	const TextWithEntities &text,
-	not_null<const style::icon*> icon) {
+	not_null<const style::icon*> icon,
+	const Text::MarkedContext &context) {
 	auto row = object_ptr<Ui::VerticalLayout>(parent);
 	const auto raw = row.data();
 
@@ -115,9 +116,7 @@ object_ptr<Ui::RpWidget> InfoRow(
 
 	label->setMarkedText(
 		text,
-		Core::TextContext({
-			.session = std::move(session),
-		})
+		std::move(context)
 	);
 
 	object_ptr<Info::Profile::FloatingIcon>(
@@ -150,14 +149,13 @@ void FillDonateInfoBox(not_null<Ui::GenericBox*> box, not_null<Window::SessionCo
 	Ui::AddSkip(box->verticalLayout());
 
 	box->verticalLayout()->add(
-		object_ptr<Ui::CenterWrap<Ui::FlatLabel>>(
-			box,
-			object_ptr<Ui::FlatLabel>(
-				box->verticalLayout(),
-				tr::ayu_SupportBoxHeader()
-				| Ui::Text::ToBold(),
-				st::boxTitle)),
-		st::boxRowPadding);
+		object_ptr<Ui::FlatLabel>(
+			box->verticalLayout(),
+			tr::ayu_SupportBoxHeader()
+			| Ui::Text::ToBold(),
+			st::boxTitle),
+		st::boxRowPadding,
+		style::al_top);
 
 	box->verticalLayout()->add(
 		object_ptr<Ui::FlatLabel>(
@@ -170,12 +168,16 @@ void FillDonateInfoBox(not_null<Ui::GenericBox*> box, not_null<Window::SessionCo
 	Ui::AddSkip(box->verticalLayout());
 	Ui::AddSkip(box->verticalLayout());
 
-	const auto tonSymbol = Ui::Text::SingleCustomEmoji(
-		controller->session().data().customEmojiManager().registerInternalEmoji(
-			Ui::Earn::IconCurrencyColored(
+	auto emojiHelper = Ui::Text::CustomEmojiHelper();
+	const auto tonSymbol = emojiHelper.paletteDependent({
+		.factory = [=]
+		{
+			return Ui::Earn::IconCurrencyColored(
 				st::boxDividerLabel.style.font,
-				st::boxDividerLabel.textFg->c),
-			st::channelEarnCurrencyLearnMargins));
+				st::boxDividerLabel.textFg->c);
+		},
+		.margin = st::channelEarnCurrencyLearnMargins
+	});
 
 	const auto dollarAmount = RCManager::getInstance().donateAmountUsd().prepend("$");
 	const auto tonAmount = RCManager::getInstance().donateAmountTon();
@@ -196,7 +198,8 @@ void FillDonateInfoBox(not_null<Ui::GenericBox*> box, not_null<Window::SessionCo
 		&controller->session(),
 		tr::ayu_SupportBoxMakeDonationHeader(tr::now),
 		str,
-		&st::menuIconEarn));
+		&st::menuIconEarn,
+		emojiHelper.context()));
 
 	Ui::AddSkip(box->verticalLayout());
 
@@ -215,7 +218,10 @@ void FillDonateInfoBox(not_null<Ui::GenericBox*> box, not_null<Window::SessionCo
 		&controller->session(),
 		tr::ayu_SupportBoxSendProofHeader(tr::now),
 		proofText,
-		&st::menuIconPhoto));
+		&st::menuIconPhoto,
+		Core::TextContext({
+			.session = std::move(&controller->session()),
+		})));
 
 	Ui::AddSkip(box->verticalLayout());
 
@@ -226,7 +232,10 @@ void FillDonateInfoBox(not_null<Ui::GenericBox*> box, not_null<Window::SessionCo
 		TextWithEntities{
 			tr::ayu_SupportBoxReceiveBadgeInfo(tr::now)
 		},
-		&st::menuIconStarRefShare));
+		&st::menuIconStarRefShare,
+		Core::TextContext({
+			.session = std::move(&controller->session()),
+		})));
 
 	const auto closeButton = box->addButton(tr::lng_close(), [=] { box->closeBox(); });
 	const auto buttonWidth = box->width()

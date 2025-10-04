@@ -461,13 +461,14 @@ void BottomInfo::layoutDateText() {
 	} else {
 		TextWithEntities deleted;
 		if (_data.flags & Data::Flag::AyuDeleted) {
-			const auto &icon = st::deletedIcon;
-			const auto padding = st::deletedIconPadding;
-			const auto owner = &_reactionsOwner->owner();
-			auto added = Ui::Text::SingleCustomEmoji(
-				owner->customEmojiManager().registerInternalEmoji(icon, padding)
-			);
-			deleted = Ui::Text::Colorized(added, 1);
+			// const auto &icon = st::deletedIcon;
+			// const auto padding = st::deletedIconPadding;
+			// const auto owner = &_reactionsOwner->owner();
+			// auto added = Ui::Text::SingleCustomEmoji(
+			// 	owner->customEmojiManager().registerInternalEmoji(icon, padding)
+			// );
+			// deleted = Ui::Text::Colorized(added, 1);
+			deleted = Ui::Text::IconEmoji(&st::deletedIcon);
 			if (!(_data.flags & Data::Flag::Edited)) {
 				deleted.append(' ');
 			}
@@ -475,13 +476,14 @@ void BottomInfo::layoutDateText() {
 
 		TextWithEntities edited;
 		if (_data.flags & Data::Flag::Edited) {
-			const auto &icon = st::editedIcon;
-			const auto padding = st::editedIconPadding;
-			const auto owner = &_reactionsOwner->owner();
-			auto added = Ui::Text::SingleCustomEmoji(
-				owner->customEmojiManager().registerInternalEmoji(icon, padding)
-			);
-			edited = Ui::Text::Colorized(added, 1);
+			// const auto &icon = st::editedIcon;
+			// const auto padding = st::editedIconPadding;
+			// const auto owner = &_reactionsOwner->owner();
+			// auto added = Ui::Text::SingleCustomEmoji(
+			// 	owner->customEmojiManager().registerInternalEmoji(icon, padding)
+			// );
+			// edited = Ui::Text::Colorized(added, 1);
+			edited = Ui::Text::IconEmoji(&st::editedIcon);
 			edited.append(' ');
 		} else if (_data.flags & Data::Flag::EstimateDate) {
 		    edited = TextWithEntities{ tr::lng_approximate(tr::now) + ' ' };

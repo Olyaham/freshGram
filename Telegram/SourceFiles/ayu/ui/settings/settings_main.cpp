@@ -49,17 +49,16 @@ AyuMain::AyuMain(
 
 void SetupAppLogo(not_null<Ui::VerticalLayout*> container) {
 	const auto logo = container->add(
-		object_ptr<Ui::CenterWrap<Ui::RpWidget>>(
-			container,
-			object_ptr<Ui::RpWidget>(container)));
+		object_ptr<Ui::RpWidget>(container),
+		style::al_top);
 
-	const auto widget = logo->entity();
-	widget->resize(QSize(st::settingsCloudPasswordIconSize, st::settingsCloudPasswordIconSize));
+	logo->resize(QSize(st::settingsCloudPasswordIconSize, st::settingsCloudPasswordIconSize));
+	logo->setNaturalWidth(st::settingsCloudPasswordIconSize);
 
-	widget->paintRequest(
+	logo->paintRequest(
 	) | rpl::start_with_next([=](QRect clip)
 							 {
-								 auto p = QPainter(widget);
+								 auto p = QPainter(logo);
 								 const auto image = AyuAssets::currentAppLogoNoMargin(); // todo: svg renderer
 								 if (!image.isNull()) {
 									 const auto size = st::settingsCloudPasswordIconSize;
@@ -73,7 +72,7 @@ void SetupAppLogo(not_null<Ui::VerticalLayout*> container) {
 										 scaled);
 								 }
 							 },
-							 widget->lifetime());
+							 logo->lifetime());
 }
 
 void SetupCategories(
@@ -184,22 +183,20 @@ void AyuMain::setupContent(not_null<Window::SessionController*> controller) {
 	AddSkip(content);
 
 	content->add(
-		object_ptr<Ui::CenterWrap<Ui::FlatLabel>>(
+		object_ptr<Ui::FlatLabel>(
 			content,
-			object_ptr<Ui::FlatLabel>(
-				content,
-				rpl::single(QString("AyuGram Desktop v") + QString::fromLatin1(AppVersionStr)),
-				st::boxTitle)));
+			rpl::single(QString("AyuGram Desktop v") + QString::fromLatin1(AppVersionStr)),
+			st::boxTitle),
+		style::al_top);
 
 	AddSkip(content);
 
 	content->add(
-		object_ptr<Ui::CenterWrap<Ui::FlatLabel>>(
+		object_ptr<Ui::FlatLabel>(
 			content,
-			object_ptr<Ui::FlatLabel>(
-				content,
-				tr::ayu_SettingsDescription(),
-				st::centeredBoxLabel)));
+			tr::ayu_SettingsDescription(),
+			st::centeredBoxLabel),
+		style::al_top);
 
 	AddSkip(content);
 	AddSkip(content);

@@ -1884,7 +1884,6 @@ endif()
 nice_target_sources(Telegram ${res_loc}
 PRIVATE
     qrc/ayu/ayu.qrc
-    langs/ayu.strings
 
     qrc/emoji_1.qrc
     qrc/emoji_2.qrc

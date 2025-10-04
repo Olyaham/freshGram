@@ -27,7 +27,7 @@
 
 namespace MessageHistory {
 
-class FixedBar final : public TWidget
+class FixedBar final : public Ui::RpWidget
 {
 public:
 	FixedBar(
@@ -72,7 +72,7 @@ FixedBar::FixedBar(
 	QWidget *parent,
 	not_null<Window::SessionController*> controller,
 	not_null<PeerData*> peer)
-	: TWidget(parent), _controller(controller), _peer(peer), _backButton(
+	: Ui::RpWidget(parent), _controller(controller), _peer(peer), _backButton(
 		  this,
 		  &controller->session(),
 		  tr::lng_terms_back(tr::now),
@@ -134,7 +134,7 @@ void FixedBar::mousePressEvent(QMouseEvent *e) {
 	if (e->button() == Qt::LeftButton) {
 		goBack();
 	} else {
-		TWidget::mousePressEvent(e);
+		Ui::RpWidget::mousePressEvent(e);
 	}
 }
 
