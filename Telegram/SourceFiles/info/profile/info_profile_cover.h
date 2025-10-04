@@ -45,7 +45,7 @@ struct InfoProfileCover;
 namespace Info::Profile {
 
 class EmojiStatusPanel;
-class MusicButton;
+class AyuMusicButton;
 class Badge;
 
 class TopicIconView final {
@@ -182,7 +182,7 @@ private:
 	//object_ptr<CoverDropArea> _dropArea = { nullptr };
 	base::Timer _refreshStatusTimer;
 
-	std::unique_ptr<MusicButton> _musicButton;
+	std::unique_ptr<AyuMusicButton> _musicButton;
 
 	rpl::event_stream<Section> _showSection;
 

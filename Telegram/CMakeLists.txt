@@ -133,6 +133,12 @@ set(ayugram_files
         ayu/ui/ayu_logo.h
         ayu/ui/utils/ayu_profile_values.cpp
         ayu/ui/utils/ayu_profile_values.h
+        ayu/ui/utils/color_cut_quantizer.cpp
+        ayu/ui/utils/color_cut_quantizer.h
+        ayu/ui/utils/color_utils.cpp
+        ayu/ui/utils/color_utils.h
+        ayu/ui/utils/palette.cpp
+        ayu/ui/utils/palette.h
         ayu/ui/settings/settings_appearance.cpp
         ayu/ui/settings/settings_appearance.h
         ayu/ui/settings/settings_ayu_utils.cpp
@@ -183,6 +189,8 @@ set(ayugram_files
         ayu/ui/components/image_view.h
         ayu/ui/components/icon_picker.cpp
         ayu/ui/components/icon_picker.h
+        ayu/ui/components/now_playing.cpp
+        ayu/ui/components/now_playing.h
         ayu/libs/json.hpp
         ayu/libs/json_ext.hpp
         ayu/libs/sqlite/sqlite3.c
@@ -227,6 +235,9 @@ set(ayugram_files
         ayu/data/entities.h
         ayu/data/ayu_database.cpp
         ayu/data/ayu_database.h
+
+        info/profile/info_profile_music_button.cpp
+        info/profile/info_profile_music_button.h
 )
 
 target_precompile_headers(Telegram PRIVATE $<$<COMPILE_LANGUAGE:CXX,OBJCXX>:${src_loc}/stdafx.h>)

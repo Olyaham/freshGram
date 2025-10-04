@@ -59,7 +59,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_menu_icons.h"
 
 // AyuGram includes
+#include "ayu/ui/components/now_playing.h"
 #include "ayu/utils/telegram_helpers.h"
+#include "data/data_file_origin.h"
 #include "ui/toast/toast.h"
 
 
@@ -130,12 +132,15 @@ constexpr auto kGlareTimeout = crl::time(1000);
 }
 
 [[nodiscard]] MusicButtonData DocumentMusicButtonData(
-		not_null<DocumentData*> document) {
+		not_null<DocumentData*> document, HistoryItem *item) {
 	if (const auto song = document->song()) {
 		if (!song->performer.isEmpty() || !song->title.isEmpty()) {
+			const auto mediaView = document->createMediaView();
+			mediaView->thumbnailWanted(Data::FileOrigin(item->fullId()));
 			return {
 				.performer = song->performer,
 				.title = song->title,
+				.mediaView = mediaView
 			};
 		}
 	}
@@ -867,21 +872,21 @@ void Cover::setupSavedMusic() {
 			resize(width(), _st.height);
 		} else if (!_musicButton) {
 			using namespace Info::Saved;
-			_musicButton = std::make_unique<MusicButton>(
+			_musicButton = std::make_unique<AyuMusicButton>(
 				this,
-				DocumentMusicButtonData(document),
+				DocumentMusicButtonData(document, item),
 				[=] { _controller->showSection(MakeMusic(_peer)); });
 			_musicButton->show();
 
 			widthValue(
 			) | rpl::start_with_next([=](int newWidth) {
 				_musicButton->resizeToWidth(newWidth);
-				const auto skip = st::infoMusicButtonBottom;
-				_musicButton->moveToLeft(0, _st.height - skip, newWidth);
+				// const auto skip = st::infoMusicButtonBottom;
+				_musicButton->moveToLeft(0, _st.height, newWidth);
 				resize(width(), _st.height + _musicButton->height());
 			}, _musicButton->lifetime());
 		} else {
-			_musicButton->updateData(DocumentMusicButtonData(document));
+			_musicButton->updateData(DocumentMusicButtonData(document, item));
 		}
 	}, lifetime());
 }

@@ -13,11 +13,16 @@ namespace Ui {
 class FlatLabel;
 } // namespace Ui
 
+namespace Data {
+class DocumentMedia;
+}
+
 namespace Info::Profile {
 
 struct MusicButtonData {
 	QString performer;
 	QString title;
+	std::shared_ptr<Data::DocumentMedia> mediaView;
 };
 
 class MusicButton final : public Ui::RippleButton {
