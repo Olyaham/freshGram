@@ -7,6 +7,15 @@
 #pragma once
 
 #include "entities.h"
+#include <functional>
+
+
+class SchemaVersion
+{
+public:
+	int id;
+	int version;
+};
 
 namespace AyuDatabase {
 
@@ -44,5 +53,7 @@ void deleteAllExclusions();
 
 bool hasFilters();
 bool hasPerDialogFilters();
+
+void moveCurrentDatabase();
 
 }

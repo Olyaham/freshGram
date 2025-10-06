@@ -16,6 +16,11 @@
 using namespace sqlite_orm;
 auto storage = make_storage(
 	"./tdata/ayudata.db",
+	make_table<SchemaVersion>(
+		"SchemaVersion",
+		make_column("id", &SchemaVersion::id, primary_key()),
+		make_column("version", &SchemaVersion::version)
+	),
 	make_index("idx_deleted_message_userId_dialogId_topicId_messageId",
 			   column<DeletedMessage>(&DeletedMessage::userId),
 			   column<DeletedMessage>(&DeletedMessage::dialogId),
@@ -142,6 +147,68 @@ auto storage = make_storage(
 	)
 );
 
+namespace AyuMigrations {
+
+void migrateToV1(decltype(storage) &storage) {
+	// drop RegexFilter table as we've added primary_key()
+	try {
+		storage.drop_table_if_exists("RegexFilter");
+		LOG(("Migration to V1 successful."));
+	} catch (const std::exception &ex) {
+		LOG(("Migration to V1 failed: %1").arg(ex.what()));
+	}
+}
+
+}
+
+void runMigrations(decltype(storage) &storage) {
+	constexpr int kLatestVersion = 1;
+
+	const std::map<int, Fn<void(decltype(storage) &)>> migrations = {
+		{1, AyuMigrations::migrateToV1},
+	};
+
+	int currentVersion = 0;
+	try {
+		if (auto versionRow = storage.get_pointer<SchemaVersion>(1)) {
+			currentVersion = versionRow->version;
+		} else {
+			storage.insert(SchemaVersion{1, 0});
+		}
+	} catch (...) {
+		LOG(("No SchemaVersion, assuming 0"));
+		storage.insert(SchemaVersion{1, 0});
+	}
+
+	if (currentVersion >= kLatestVersion) {
+		LOG(("Database is ok"));
+		return;
+	}
+
+	LOG(("Database version: %1. Latest version: %2.").arg(currentVersion).arg(kLatestVersion));
+
+	for (int v = currentVersion + 1; v <= kLatestVersion; ++v) {
+		if (migrations.contains(v)) {
+			try {
+				LOG(("Migration for version: %1").arg(v));
+				storage.begin_transaction();
+
+				migrations.at(v)(storage);
+
+				storage.update_all(set(c(&SchemaVersion::version) = v), where(c(&SchemaVersion::id) == 1));
+				storage.commit();
+				LOG(("Applied migration for version: %1.").arg(v));
+			} catch (...) {
+				storage.rollback();
+				LOG(("Failed to apply migration for version: %1.").arg(v));
+				AyuDatabase::moveCurrentDatabase();
+
+				return;
+			}
+		}
+	}
+}
+
 namespace AyuDatabase {
 
 void moveCurrentDatabase() {
@@ -161,38 +228,21 @@ void moveCurrentDatabase() {
 }
 
 void initialize() {
-	auto movePrevious = false;
-
-	try {
-		const auto res = storage.sync_schema_simulate(true);
-		for (const auto val : res | std::views::values) {
-			if (val == sync_schema_result::dropped_and_recreated) {
-				movePrevious = true;
-				break;
-			}
-		}
-	} catch (...) {
-		LOG(("Exception during sync simulation; possibly corrupted database"));
-		movePrevious = true;
-	}
-
-	if (movePrevious) {
-		moveCurrentDatabase();
-	}
-
 	try {
 		storage.sync_schema(true);
-	} catch (...) {
-		LOG(("Failed to sync database schema"));
-		LOG(("Moving current database just in case"));
 
+		runMigrations(storage);
+
+		storage.sync_schema(true);
+	} catch (const std::exception &ex) {
+		LOG(("Database initialization failed: %1").arg(ex.what()));
 		moveCurrentDatabase();
 
-		storage.sync_schema();
+		storage.sync_schema(true);
+		if (!storage.get_pointer<SchemaVersion>(1)) {
+			storage.insert(SchemaVersion{1, 0});
+		}
 	}
-
-	storage.begin_transaction();
-	storage.commit();
 }
 
 void addEditedMessage(const EditedMessage &message) {
@@ -276,7 +326,8 @@ bool hasDeletedMessages(ID userId, ID dialogId, ID topicId) {
 		return false;
 	}
 }
-template <typename T>
+
+template<typename T>
 std::vector<T> getAllT() {
 	try {
 		return storage.get_all<T>();
@@ -299,7 +350,7 @@ std::vector<RegexFilter> getExcludedByDialogId(ID dialogId) {
 		return storage.get_all<RegexFilter>(
 			where(in(&RegexFilter::id,
 					 storage.select(columns(&RegexFilterGlobalExclusion::filterId),
-					 	where(is_equal(&RegexFilterGlobalExclusion::dialogId, dialogId))
+									where(is_equal(&RegexFilterGlobalExclusion::dialogId, dialogId))
 					 )
 			))
 		);
@@ -351,13 +402,13 @@ std::vector<RegexFilter> getByDialogId(ID dialogId) {
 	}
 }
 
-
 void addRegexFilter(const RegexFilter &filter) {
 	try {
 		storage.begin_transaction();
 		storage.replace(filter); // we're using replace as we set std::vector<char> as primary key
 		storage.commit();
 	} catch (std::exception &ex) {
+		storage.rollback();
 		LOG(("Failed to save regex filter for some reason: %1").arg(ex.what()));
 	}
 }
@@ -413,8 +464,8 @@ void deleteExclusion(ID dialogId, std::vector<char> filterId) {
 	try {
 		storage.remove_all<RegexFilterGlobalExclusion>(
 			where(column<RegexFilterGlobalExclusion>(&RegexFilterGlobalExclusion::filterId) == filterId and
-					column<RegexFilterGlobalExclusion>(&RegexFilterGlobalExclusion::dialogId) == dialogId
-				)
+				column<RegexFilterGlobalExclusion>(&RegexFilterGlobalExclusion::dialogId) == dialogId
+			)
 		);
 	} catch (std::exception &ex) {
 		LOG(("Failed to delete regex filter exclusion for some reason: %1").arg(ex.what()));
