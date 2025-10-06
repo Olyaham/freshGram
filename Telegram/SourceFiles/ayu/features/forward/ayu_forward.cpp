@@ -191,7 +191,7 @@ void sendMedia(
 								   data,
 								   primaryMedia->document()->duration(),
 								   mediaType == SendMediaType::Round,
-								   message.action);
+								   std::move(message));
 			return;
 		}
 		// at least try to send it as squared-video

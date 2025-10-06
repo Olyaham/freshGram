@@ -428,6 +428,9 @@ public:
 
 	static constexpr auto kJoinErrorDuration = 5 * crl::time(1000);
 
+	[[nodiscard]] std::unique_ptr<TaskQueue> &fileLoader() {
+		return _fileLoader;
+	}
 private:
 	struct MessageDataRequest {
 		using Callbacks = std::vector<Fn<void()>>;

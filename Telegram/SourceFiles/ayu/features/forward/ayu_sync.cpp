@@ -318,14 +318,24 @@ void sendVoiceSync(not_null<Main::Session*> session,
 				   const QByteArray &data,
 				   int64_t duration,
 				   bool video,
-				   const Api::SendAction &action) {
-	crl::on_main([&]
+				   Api::MessageToSend &&message) {
+	const auto action = message.action;
+
+	crl::on_main([=]
 	{
-		session->api().sendVoiceMessage(data,
-										QVector<signed char>(),
-										duration,
-										video,
-										action);
+		const auto to = FileLoadTo(
+			action.history->peer->id,
+			action.options,
+			action.replyTo,
+			action.replaceMediaOf);
+		session->api().fileLoader()->addTask(std::make_unique<FileLoadTask>(
+			session,
+			data,
+			duration,
+			QVector<signed char>(),
+			video,
+			to,
+			message.textWithTags));
 	});
 	waitForMsgSync(session, action);
 }
