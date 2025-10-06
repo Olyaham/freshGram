@@ -259,7 +259,7 @@ AyuGramSettings::AyuGramSettings() {
 		AyuAssets::DEFAULT_ICON
 #endif
 		;
-	simpleQuotesAndReplies = true;
+	simpleQuotesAndReplies = false;
 	hideFastShare = false;
 	replaceBottomInfoWithIcons = true;
 	deletedMark = "🧹";
@@ -332,6 +332,8 @@ AyuGramSettings::AyuGramSettings() {
 	voiceConfirmation = false;
 
 	translationProvider = "telegram"; // telegram, google, yandex
+
+	adaptiveCoverColor = true;
 
 	crashReporting = true;
 }
