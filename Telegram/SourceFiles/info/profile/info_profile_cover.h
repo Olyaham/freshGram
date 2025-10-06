@@ -182,7 +182,7 @@ private:
 	//object_ptr<CoverDropArea> _dropArea = { nullptr };
 	base::Timer _refreshStatusTimer;
 
-	std::unique_ptr<AyuMusicButton> _musicButton;
+	object_ptr<Ui::SlideWrap<AyuMusicButton>> _musicButton = { nullptr };
 
 	rpl::event_stream<Section> _showSection;
 

@@ -63,6 +63,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ayu/utils/telegram_helpers.h"
 #include "data/data_file_origin.h"
 #include "ui/toast/toast.h"
+#include "ui/wrap/slide_wrap.h"
 
 
 namespace Info::Profile {
@@ -135,12 +136,11 @@ constexpr auto kGlareTimeout = crl::time(1000);
 		not_null<DocumentData*> document, HistoryItem *item) {
 	if (const auto song = document->song()) {
 		if (!song->performer.isEmpty() || !song->title.isEmpty()) {
-			const auto mediaView = document->createMediaView();
-			mediaView->thumbnailWanted(Data::FileOrigin(item->fullId()));
 			return {
 				.performer = song->performer,
 				.title = song->title,
-				.mediaView = mediaView
+				.msgId = item->fullId(),
+				.mediaView = document->createMediaView()
 			};
 		}
 	}
@@ -855,7 +855,7 @@ void Cover::setupChildGeometry() {
 }
 
 void Cover::setupSavedMusic() {
-	if (!Data::SavedMusic::Supported(_peer->id)) {
+	if (!Data::SavedMusic::Supported(_peer->id) || _role == Role::EditContact) {
 		return;
 	}
 	Data::SavedMusicList(
@@ -872,21 +872,52 @@ void Cover::setupSavedMusic() {
 			resize(width(), _st.height);
 		} else if (!_musicButton) {
 			using namespace Info::Saved;
-			_musicButton = std::make_unique<AyuMusicButton>(
+			_musicButton = object_ptr<Ui::SlideWrap<AyuMusicButton>>(
 				this,
-				DocumentMusicButtonData(document, item),
-				[=] { _controller->showSection(MakeMusic(_peer)); });
-			_musicButton->show();
+				object_ptr<AyuMusicButton>(
+					this,
+					DocumentMusicButtonData(document, item),
+					[=]
+					{
+						_controller->showSection(MakeMusic(_peer));
+					}));
+			_musicButton->hide(anim::type::instant);
+			_musicButton->ease = anim::easeOutCubic;
+			_musicButton->setDuration(250);
 
-			widthValue(
-			) | rpl::start_with_next([=](int newWidth) {
-				_musicButton->resizeToWidth(newWidth);
-				// const auto skip = st::infoMusicButtonBottom;
-				_musicButton->moveToLeft(0, _st.height, newWidth);
-				resize(width(), _st.height + _musicButton->height());
-			}, _musicButton->lifetime());
+			const auto weak = base::make_weak(this);
+
+			_musicButton->entity()->onReady() | rpl::start_with_next(
+				[=]
+				{
+					// fix animation glitch
+					dispatchToMainThread(
+						[=]
+						{
+							if (const auto strong = weak.get()) {
+								strong->_musicButton->show(anim::type::normal);
+							}
+						},
+						st::widgetFadeDuration);
+				},
+				_musicButton->lifetime());
+
+			widthValue() | rpl::start_with_next(
+				[=](int newWidth)
+				{
+					_musicButton->resizeToWidth(newWidth);
+					_musicButton->moveToLeft(0, _st.height, newWidth);
+					resize(width(), _st.height + _musicButton->height());
+				},
+				_musicButton->lifetime());
+			_musicButton->heightValue() | rpl::start_with_next(
+				[=]
+				{
+					resize(width(), _st.height + _musicButton->height());
+				},
+				_musicButton->lifetime());
 		} else {
-			_musicButton->updateData(DocumentMusicButtonData(document, item));
+			_musicButton->entity()->updateData(DocumentMusicButtonData(document, item));
 		}
 	}, lifetime());
 }
