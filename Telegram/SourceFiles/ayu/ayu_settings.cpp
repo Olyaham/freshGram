@@ -675,6 +675,10 @@ void set_translationProvider(const QString &val) {
 	Ayu::Translator::TranslateManager::currentInstance()->resetCache();
 }
 
+void set_adaptiveCoverColor(bool val) {
+	settings->adaptiveCoverColor = val;
+}
+
 void set_crashReporting(bool val) {
 	settings->crashReporting = val;
 }

@@ -10,6 +10,7 @@
 
 #include <QSvgRenderer>
 
+#include "ayu/ayu_settings.h"
 #include "ayu/ui/utils/color_utils.h"
 #include "ayu/ui/utils/palette.h"
 #include "data/data_document.h"
@@ -240,13 +241,14 @@ void AyuMusicButton::makeCover() {
 	const auto weak = base::make_weak(this);
 	crl::async([=, mediaView = _mediaView]
 	{
+		const auto &settings = AyuSettings::getInstance();
 		const auto &font = st::infoMusicButtonTitle.style.font;
 		const auto skip = st::normalFont->spacew / 2;
 		const auto size = font->height + skip + font->height;
 
 		const auto cover = GetCurrentCover(mediaView, QSize(size, size));
 		QColor bgColor;
-		if (cover.noCover) {
+		if (cover.noCover || !settings.adaptiveCoverColor) {
 			bgColor = GetNoCoverBgColor();
 		} else {
 			bgColor = QColor::fromRgb(ExtractColorFromCover(cover.pixToBg));
@@ -297,7 +299,8 @@ void AyuMusicButton::paintEvent(QPaintEvent *e) {
 	}
 
 	if (!cover.pix.isNull()) {
-		if (!cover.noCover) {
+		const auto &settings = AyuSettings::getInstance();
+		if (!cover.noCover && settings.adaptiveCoverColor) {
 			_title->setTextColorOverride(Qt::white);
 			_performer->setTextColorOverride(Qt::lightGray);
 		} else {

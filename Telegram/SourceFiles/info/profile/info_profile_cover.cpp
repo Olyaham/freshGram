@@ -59,9 +59,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_menu_icons.h"
 
 // AyuGram includes
+#include "ayu/ayu_settings.h"
 #include "ayu/ui/components/now_playing.h"
 #include "ayu/utils/telegram_helpers.h"
-#include "data/data_file_origin.h"
 #include "ui/toast/toast.h"
 #include "ui/wrap/slide_wrap.h"
 
@@ -884,6 +884,29 @@ void Cover::setupSavedMusic() {
 			_musicButton->hide(anim::type::instant);
 			_musicButton->ease = anim::easeOutCubic;
 			_musicButton->setDuration(250);
+			_musicButton->entity()->setAcceptBoth(true);
+			_musicButton->entity()->clicks() | rpl::filter([=](Qt::MouseButton mouseButton)
+			{
+				return mouseButton == Qt::RightButton;
+			}) | rpl::start_with_next([=] {
+				const auto &settings = AyuSettings::getInstance();
+
+				const auto contextMenu = new Ui::PopupMenu(nullptr, st::popupMenuWithIcons);
+				contextMenu->setAttribute(Qt::WA_DeleteOnClose);
+
+				contextMenu->addAction(
+					settings.adaptiveCoverColor ? tr::ayu_DisableColorfulCover(tr::now) : tr::ayu_EnableColorfulCover(tr::now),
+					[=]
+					{
+						AyuSettings::set_adaptiveCoverColor(!settings.adaptiveCoverColor);
+						AyuSettings::save();
+
+						_musicButton->entity()->updateData(DocumentMusicButtonData(document, item));
+					},
+					&st::menuIconPalette);
+
+				contextMenu->popup(QCursor::pos());
+			}, _musicButton->lifetime());
 
 			const auto weak = base::make_weak(this);
 

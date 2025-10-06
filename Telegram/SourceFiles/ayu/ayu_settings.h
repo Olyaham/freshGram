@@ -145,6 +145,8 @@ public:
 
 	QString translationProvider;
 
+	bool adaptiveCoverColor;
+
 	bool crashReporting;
 };
 
@@ -249,6 +251,8 @@ void set_voiceConfirmation(bool val);
 
 void set_translationProvider(const QString &val);
 
+void set_adaptiveCoverColor(bool val);
+
 void set_crashReporting(bool val);
 
 inline void to_json(nlohmann::json &nlohmann_json_j, const AyuGramSettings &nlohmann_json_t) {
@@ -330,6 +334,7 @@ inline void to_json(nlohmann::json &nlohmann_json_j, const AyuGramSettings &nloh
 	NLOHMANN_JSON_TO(gifConfirmation)
 	NLOHMANN_JSON_TO(voiceConfirmation)
 	NLOHMANN_JSON_TO(translationProvider)
+	NLOHMANN_JSON_TO(adaptiveCoverColor)
 	NLOHMANN_JSON_TO(crashReporting)
 }
 
@@ -413,6 +418,7 @@ inline void from_json(const nlohmann::json &nlohmann_json_j, AyuGramSettings &nl
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(gifConfirmation)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(voiceConfirmation)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(translationProvider)
+	NLOHMANN_JSON_FROM_WITH_DEFAULT(adaptiveCoverColor)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(crashReporting)
 }
 
