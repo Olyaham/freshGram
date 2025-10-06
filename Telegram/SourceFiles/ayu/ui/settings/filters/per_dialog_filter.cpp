@@ -7,13 +7,17 @@
 #include "per_dialog_filter.h"
 
 #include <utility>
+
 #include "lang_auto.h"
 #include "settings_filters_list.h"
+#include "ayu/ayu_settings.h"
 #include "ayu/data/ayu_database.h"
+#include "ayu/features/filters/shadow_ban_utils.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "data/data_peer.h"
 #include "data/data_session.h"
 #include "main/main_session.h"
+#include "styles/style_menu_icons.h"
 #include "ui/painter.h"
 #include "window/window_session_controller.h"
 
@@ -50,16 +54,35 @@ PaintRoundImageCallback PerDialogFiltersListRow::generatePaintUserpicCallback(bo
 }
 
 PerDialogFiltersListController::PerDialogFiltersListController(not_null<Main::Session*> session,
-															 not_null<Window::SessionController*> controller)
+															   not_null<Window::SessionController*> controller,
+															   bool shadowBan)
 	: _session(session)
-	  , _controller(controller) {
+	  , _controller(controller)
+	  , shadowBan(shadowBan) {
 }
 
 Main::Session &PerDialogFiltersListController::session() const {
 	return *_session;
 }
 
+void PerDialogFiltersListController::prepareShadowBan() {
+	const auto &settings = AyuSettings::getInstance();
+	const auto &shadowBanned = settings.shadowBanIds;
+
+	for (const auto id : shadowBanned) {
+		auto peerId = PeerId(PeerIdHelper(abs(id)));
+
+		auto row = std::make_unique<PerDialogFiltersListRow>(peerId);
+
+		delegate()->peerListAppendRow(reinterpret_cast<std::unique_ptr<PeerListRow>&&>(row));
+	}
+}
+
 void PerDialogFiltersListController::prepare() {
+	if (shadowBan) {
+		prepareShadowBan();
+		return;
+	}
 	const auto filters = AyuDatabase::getAllRegexFilters();
 	const auto exclusions = AyuDatabase::getAllFiltersExclusions();
 
@@ -106,7 +129,7 @@ void PerDialogFiltersListController::prepare() {
 void PerDialogFiltersListController::rowClicked(not_null<PeerListRow*> peer) {
 	ID did;
 	if (peer->special()) {
-		const ID pred =  peer->id() & PeerId::kChatTypeMask;
+		const ID pred = peer->id() & PeerId::kChatTypeMask;
 		if (countsByDialogIds.contains(pred)) {
 			did = pred;
 		} else {
@@ -115,47 +138,28 @@ void PerDialogFiltersListController::rowClicked(not_null<PeerListRow*> peer) {
 	} else {
 		did = getDialogIdFromPeer(peer->peer());
 	}
+	if (shadowBan) {
+		auto _contextMenu = new Ui::PopupMenu(nullptr, st::popupMenuWithIcons);
+		_contextMenu->setAttribute(Qt::WA_DeleteOnClose);
+
+		_contextMenu->addAction(
+			tr::lng_theme_delete(tr::now),
+			[=]
+			{
+				if (ShadowBanUtils::isShadowBanned(did)) {
+					ShadowBanUtils::removeShadowBan(did);
+				} else {
+					ShadowBanUtils::addShadowBan(did);
+				}
+			},
+			&st::menuIconDelete);
+
+		_contextMenu->popup(QCursor::pos());
+		return;
+	}
 	_controller->dialogId = did;
 	_controller->showExclude = true;
 	_controller->showSettings(AyuFiltersList::Id());
 }
 
-SelectChatBoxController::SelectChatBoxController(
-	not_null<Window::SessionController*> controller,
-	Fn<void(not_null<PeerData*>)> onSelectedCallback)
-	: ChatsListBoxController(&controller->session())
-	  , _controller(controller)
-	  , _onSelectedCallback(std::move(onSelectedCallback)) {
-}
-
-Main::Session &SelectChatBoxController::session() const {
-	return _controller->session();
-}
-
-void SelectChatBoxController::rowClicked(not_null<PeerListRow*> row) {
-	if (_onSelectedCallback) {
-		_onSelectedCallback(row->peer());
-	}
-}
-
-std::unique_ptr<ChatsListBoxController::Row> SelectChatBoxController::createRow(not_null<History*> history) {
-	const auto peer = history->peer;
-
-	const auto skip =
-		peer->isUser() ||
-		//peer->forum() ||
-		peer->monoforum();
-
-	if (skip) {
-		return nullptr;
-	}
-	auto result = std::make_unique<Row>(
-		history,
-		nullptr);
-	return result;
-}
-
-void SelectChatBoxController::prepareViewHook() {
-	delegate()->peerListSetTitle(tr::ayu_FiltersMenuSelectChat());
-}
 }

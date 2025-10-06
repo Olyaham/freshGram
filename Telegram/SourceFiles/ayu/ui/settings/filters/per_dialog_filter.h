@@ -35,7 +35,8 @@ class PerDialogFiltersListController final : public PeerListController
 {
 public:
 	explicit PerDialogFiltersListController(not_null<Main::Session*> session,
-										   not_null<Window::SessionController*> controller);
+											not_null<Window::SessionController*> controller,
+											bool shadowBan = false);
 
 	[[nodiscard]] Main::Session &session() const override;
 
@@ -44,36 +45,19 @@ public:
 	void rowClicked(not_null<PeerListRow*> row) override;
 
 private:
+	void prepareShadowBan();
+
 	struct FilterCounts
 	{
 		int filters = 0;
 		int exclusions = 0;
 	};
+
 	std::unordered_map<ID, FilterCounts> countsByDialogIds;
 
 	const not_null<Main::Session*> _session;
 	not_null<Window::SessionController*> _controller;
+	bool shadowBan;
 };
 
-class SelectChatBoxController
-	: public ChatsListBoxController
-	  , public base::has_weak_ptr
-{
-public:
-	explicit SelectChatBoxController(
-		not_null<Window::SessionController*> controller,
-		Fn<void(not_null<PeerData*>)> onSelectedCallback
-	);
-
-	Main::Session &session() const override;
-	void rowClicked(not_null<PeerListRow*> row) override;
-
-protected:
-	std::unique_ptr<Row> createRow(not_null<History*> history) override;
-	void prepareViewHook() override;
-
-private:
-	not_null<Window::SessionController*> _controller;
-	Fn<void(not_null<PeerData*>)> _onSelectedCallback;
-};
 } // namespace Settings

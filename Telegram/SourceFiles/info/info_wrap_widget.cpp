@@ -55,9 +55,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
+#include "ayu/features/filters/shadow_ban_utils.h"
 #include "ayu/ui/settings/filters/edit_filter.h"
 #include "ayu/ui/settings/filters/settings_filters_list.h"
+#include "ayu/utils/telegram_helpers.h"
+#include "inline_bots/bot_attach_web_view.h"
 #include "styles/style_ayu_settings.h"
+#include "window/window_peer_menu.h"
 
 namespace Info {
 namespace {
@@ -431,12 +435,34 @@ void WrapWidget::setupTopBarMenuToggle() {
 			const auto button = _topBar->addButton(base::make_unique_q<Ui::IconButton>(_topBar, st));
 
 			const auto show = controller->uiShow();
+			if (controller->shadowBan) {
+				auto types = InlineBots::PeerTypes();
+				types |= InlineBots::PeerType::Bot;
+				types |= InlineBots::PeerType::User;
 
-			button->addClickHandler(
-				[=]
+				button->addClickHandler([=]
+				{
+					Window::ShowChooseRecipientBox(
+						controller,
+						[=](not_null<Data::Thread*> thread)
+						{
+							const auto peer = thread->peer();
+							const auto realId = getDialogIdFromPeer(peer);
+
+							ShadowBanUtils::addShadowBan(realId);
+							return true;
+						},
+						tr::ayu_FiltersMenuSelectChat(),
+						nullptr,
+						types
+					);
+				});
+			} else {
+				button->addClickHandler([=]
 				{
 					show->show(::Settings::RegexEditBox(nullptr, nullptr, controller->dialogId));
 				});
+			}
 
 
 			if (controller->showExclude.has_value() && controller->showExclude.value()) {

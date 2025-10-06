@@ -33,6 +33,7 @@ public:
 private:
 	void setupContent(not_null<Window::SessionController*> controller);
 	void initializeSharedFilters(not_null<Ui::VerticalLayout*> container);
+	void initializeShadowBan(not_null<Ui::VerticalLayout*> container);
 
 	void addNewFilter(const RegexFilter &filter, bool exclusion = false);
 
@@ -46,6 +47,7 @@ private:
 	Ui::FlatLabel *excludedTitle = nullptr;
 
 	std::optional<long long> dialogId;
+	bool shadowBan;
 };
 
 } // namespace Settings

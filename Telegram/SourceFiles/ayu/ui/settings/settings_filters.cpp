@@ -212,6 +212,21 @@ void SetupShared(not_null<Window::SessionController*> controller,
 	});
 }
 
+void SetupShadowBan(not_null<Window::SessionController*> controller,
+					Ui::VerticalLayout *container) {
+	auto button = container->add(object_ptr<Ui::SettingsButton>(
+		container,
+		tr::ayu_FiltersShadowBan()
+	));
+	button->addClickHandler([=]
+	{
+		controller->dialogId = std::nullopt;
+		controller->showExclude = false;
+		controller->shadowBan = true;
+		controller->showSettings(AyuFiltersList::Id());
+	});
+}
+
 void SetupPerDialog(
 	not_null<Window::SessionController*> controller,
 	not_null<Ui::VerticalLayout*> container
@@ -268,6 +283,7 @@ void AyuFilters::setupContent(not_null<Window::SessionController*> controller) {
 	AddDivider(content);
 
 	SetupShared(controller, content);
+	SetupShadowBan(controller, content);
 
 	if (AyuDatabase::hasPerDialogFilters()) {
 		AddSkip(content);
