@@ -31,6 +31,8 @@ namespace Info::Profile {
 
 namespace {
 
+QColor performerColor(255, 255, 255, 153); // white 60%
+
 QRgb AdjustHsl(QRgb color, float luminance, float saturation = -1.0f) {
 	auto hsl = Ayu::Ui::ColorUtils::colorToHSL(color);
 
@@ -293,16 +295,21 @@ void AyuMusicButton::paintEvent(QPaintEvent *e) {
 	const auto size = font->height + skip + font->height;
 
 	const auto cover = _currentCover.value();
-	p.fillRect(e->rect(), cover.bg);
 	if (cover.noCover) {
+		p.fillRect(e->rect(), cover.bg);
 		paintRipple(p, QPoint());
+	} else {
+		QRadialGradient gradient(rect().topRight(), rect().width() / 2.0);
+		gradient.setColorAt(0, cover.bg);
+		gradient.setColorAt(1, QColor::fromRgb(AdjustHsl(cover.bg.rgb(), 1.5f)));
+		p.fillRect(rect(), gradient);
 	}
 
 	if (!cover.pix.isNull()) {
 		const auto &settings = AyuSettings::getInstance();
 		if (!cover.noCover && settings.adaptiveCoverColor) {
 			_title->setTextColorOverride(Qt::white);
-			_performer->setTextColorOverride(Qt::lightGray);
+			_performer->setTextColorOverride(performerColor);
 		} else {
 			_title->setTextColorOverride(std::nullopt);
 			_performer->setTextColorOverride(std::nullopt);
