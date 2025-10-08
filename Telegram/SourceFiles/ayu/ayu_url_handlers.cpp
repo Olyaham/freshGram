@@ -80,7 +80,7 @@ bool ResolveChat(
 	}
 	const auto peer = controller->session().data().peerLoaded(static_cast<PeerId>(chatId));
 	if (peer != nullptr) {
-		controller->showPeerInfo(peer);
+		controller->showPeerHistory(peer);
 		return true;
 	}
 
@@ -90,7 +90,7 @@ bool ResolveChat(
 		[=](const QString &title, PeerData *data)
 		{
 			if (data) {
-				controller->showPeerInfo(data);
+				controller->showPeerHistory(data);
 				return;
 			}
 
