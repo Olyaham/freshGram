@@ -89,7 +89,7 @@ std::optional<bool> isFiltered(const QString &str, uint64 dialogId) {
 
 bool isEnabled(not_null<PeerData*> peer) {
 	const auto &settings = AyuSettings::getInstance();
-	return settings.filtersEnabled && (settings.filtersEnabledInChats || !peer->isMegagroup() && !peer->isGigagroup());
+	return settings.filtersEnabled && (settings.filtersEnabledInChats || !peer->isMegagroup() && !peer->isGigagroup() && !peer->isUser());
 }
 
 bool isBlocked(const not_null<HistoryItem*> item) {
