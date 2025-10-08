@@ -1225,12 +1225,10 @@ void Cover::refreshNameGeometry(int newWidth) {
 		badgeBottom);
 
 	const auto exteraBadgeLeft = badgeLeft
-		+ (badgeWidget
-			   ? (badgeWidget->width() + st::infoVerifiedCheckPosition.x())
-			   : 0)
-		+ (verifiedWidget
-			   ? verifiedWidget->width()
-			   : 0);
+		+ (badgeWidget ? badgeWidget->width() : 0)
+		+ (badgeWidget && verifiedWidget ? st::infoVerifiedCheckPosition.x() : 0)
+		+ (verifiedWidget ? verifiedWidget->width() : 0)
+		+ ((badgeWidget || verifiedWidget) ? st::infoVerifiedCheckPosition.x() : 0);
 	const auto exteraBadgeTop = _st.nameTop;
 	const auto exteraBadgeBottom = _st.nameTop + _name->height();
 	_exteraBadge->move(exteraBadgeLeft, exteraBadgeTop, exteraBadgeBottom);

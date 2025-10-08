@@ -215,7 +215,7 @@ Cover::Cover(
 	if (isExtera || isSupporter || isCustomBadge) {
 		_exteraBadge.setPremiumClickCallback(badgeClickHandler(_user));
 	}
-	rpl::combine(
+	rpl::merge(
 		_badge.updated(),
 		_exteraBadge.updated()
 	) | rpl::start_with_next([=] {
@@ -300,9 +300,7 @@ void Cover::refreshNameGeometry(int newWidth) {
 		+ (_badge.widget()
 			   ? (_badge.widget()->width() + st::infoVerifiedCheckPosition.x())
 			   : 0);
-	const auto exteraBadgeTop = nameTop;
-	const auto exteraBadgeBottom = nameTop + _name->height();
-	_exteraBadge.move(exteraBadgeLeft, exteraBadgeTop, exteraBadgeBottom);
+	_exteraBadge.move(exteraBadgeLeft, badgeTop, badgeBottom);
 }
 
 void Cover::refreshIdGeometry(int newWidth) {
