@@ -115,8 +115,8 @@ Cover GetCurrentCover(
 	};
 	if (const auto normal = dataMedia->thumbnail()) {
 		return {
-			.pixToDraw = normal->pixSingle(scaled(normal), args),
-			.pixToBg = normal->pix(),
+			.pixToDraw = normal->pixNoCache(scaled(normal), args),
+			.pixToBg = normal->pixNoCache(),
 			.noCover = false
 		};
 	} /*else if (const auto blurred = dataMedia->thumbnailInline()) {

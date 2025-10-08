@@ -917,7 +917,7 @@ void Cover::setupSavedMusic() {
 					dispatchToMainThread(
 						[=]
 						{
-							if (const auto strong = weak.get()) {
+							if (const auto strong = weak.get(); strong && strong->_musicButton) {
 								strong->_musicButton->show(anim::type::normal);
 							}
 						},
@@ -928,15 +928,19 @@ void Cover::setupSavedMusic() {
 			widthValue() | rpl::start_with_next(
 				[=](int newWidth)
 				{
-					_musicButton->resizeToWidth(newWidth);
-					_musicButton->moveToLeft(0, _st.height, newWidth);
-					resize(width(), _st.height + _musicButton->height());
+					if (_musicButton) {
+						_musicButton->resizeToWidth(newWidth);
+						_musicButton->moveToLeft(0, _st.height, newWidth);
+						resize(width(), _st.height + _musicButton->height());
+					}
 				},
 				_musicButton->lifetime());
 			_musicButton->heightValue() | rpl::start_with_next(
 				[=]
 				{
-					resize(width(), _st.height + _musicButton->height());
+					if (_musicButton) {
+						resize(width(), _st.height + _musicButton->height());
+					}
 				},
 				_musicButton->lifetime());
 		} else {
