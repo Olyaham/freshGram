@@ -251,6 +251,9 @@ void RegexEditBuilder(
 				   {
 					   box->closeBox();
 				   });
+	box->setFocusCallback([=] {
+		regexValue->setFocusFast();
+	});
 
 	errorText->entity()->resizeToWidth(box->width());
 	errorText->resizeToWidth(box->width());
