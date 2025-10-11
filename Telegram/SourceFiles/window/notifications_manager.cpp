@@ -45,7 +45,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
-
+#include "ayu/utils/telegram_helpers.h"
 
 #if __has_include(<gio/gio.hpp>)
 #include <gio/gio.hpp>
@@ -394,6 +394,10 @@ void System::schedule(Data::ItemNotification notification) {
 	const auto thread = item->notificationThread();
 	const auto skip = skipNotification(notification);
 	if (skip.value == SkipState::Skip) {
+		thread->popNotification(notification);
+		return;
+	}
+	if (isMessageHidden(item)) {
 		thread->popNotification(notification);
 		return;
 	}
