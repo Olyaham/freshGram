@@ -38,8 +38,7 @@ bool isForwarding(const PeerId &id) {
 		return state.state != ForwardState::State::Finished
 			&& state.currentChunk < state.totalChunks
 			&& !state.stopRequested
-			&& state.totalChunks
-			&& state.totalMessages;
+			&& (state.totalChunks && state.totalMessages || state.state == ForwardState::State::Downloading);
 	}
 	return false;
 }
@@ -85,7 +84,7 @@ std::pair<QString, QString> stateName(const PeerId &id) {
 	if (state->state == ForwardState::State::Preparing) {
 		status = tr::ayu_AyuForwardStatusPreparing(tr::now);
 	} else if (state->state == ForwardState::State::Downloading) {
-		status = tr::ayu_AyuForwardStatusLoadingMedia(tr::now);
+		return std::make_pair(tr::ayu_AyuForwardStatusLoadingMedia(tr::now), "");
 	} else if (state->state == ForwardState::State::Sending) {
 		status = tr::ayu_AyuForwardStatusForwarding(tr::now);
 	} else {
@@ -367,6 +366,7 @@ void forwardMessages(
 		}
 
 		auto message = Api::MessageToSend(Api::SendAction(session->data().history(peer->id)));
+		message.action.options.invertCaption = item->invertMedia();
 		message.action.replyTo = action.replyTo;
 
 		if (draft.options != Data::ForwardOptions::NoNamesAndCaptions) {
