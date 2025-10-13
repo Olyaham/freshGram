@@ -85,6 +85,16 @@ QString filePath(not_null<Main::Session*> session, const Data::Media *media) {
 			return pathForSave(session) + "round_" + QString::number(document->getDC()) + "_" +
 				QString::number(document->id) + ".mp4";
 		}
+
+		// media without any file name
+		if (document->isGifv()) {
+			return pathForSave(session) + "gif_" + QString::number(document->getDC()) + "_" +
+				QString::number(document->id) + ".gif";
+		}
+		if (document->isVideoFile()) {
+			return pathForSave(session) + "video_" + QString::number(document->getDC()) + "_" +
+				QString::number(document->id) + ".mp4";
+		}
 	} else if (const auto photo = media->photo()) {
 		return pathForSave(session) + QString::number(photo->getDC()) + "_" + QString::number(photo->id) + ".jpg";
 	}
@@ -140,9 +150,8 @@ void loadDocumentSync(not_null<Main::Session*> session, DocumentData *data, not_
 	{
 		data->save(Data::FileOriginMessage(item->fullId()), path);
 
-		rpl::single() | rpl::then(
-			session->downloaderTaskFinished()
-		) | rpl::filter([&]
+
+		session->downloaderTaskFinished() | rpl::filter([&]
 		{
 			return data->status == FileDownloadFailed || fileSize(item) == data->size;
 		}) | rpl::start_with_next([&]() mutable
@@ -290,13 +299,13 @@ void sendDocumentSync(not_null<Main::Session*> session,
 					  SendMediaType type,
 					  TextWithTags &&caption,
 					  const Api::SendAction &action) {
-
 	auto groupId = std::make_shared<SendingAlbum>();
 	groupId->groupId = base::RandomValue<uint64>();
 
 	crl::on_main([=, lst = std::move(group.list), caption = std::move(caption)]() mutable
 	{
-		session->api().sendFiles(std::move(lst), type, std::move(caption), groupId, action);
+		auto size = lst.files.size();
+		session->api().sendFiles(std::move(lst), type, std::move(caption), size > 1 ? groupId : nullptr, action);
 	});
 
 	waitForMsgSync(session, action);
