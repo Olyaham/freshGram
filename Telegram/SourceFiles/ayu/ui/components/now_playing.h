@@ -33,13 +33,15 @@ public:
 	~AyuMusicButton();
 
 	void updateData(MusicButtonData data);
-	void makeCover();
 
 	rpl::producer<> onReady() const {
 		return _onReady.events();
 	}
 
 private:
+	void downloadAndMakeCover(FullMsgId msgId);
+	void makeCover();
+
 	void paintEvent(QPaintEvent *e) override;
 	int resizeGetHeight(int newWidth) override;
 

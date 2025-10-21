@@ -96,7 +96,6 @@ void ColorCutQuantizer::splitBoxes(
 			queue.push(vbox.splitBox());
 			queue.push(vbox);
 		} else {
-			queue.push(vbox);
 			return;
 		}
 	}

@@ -31,6 +31,8 @@ namespace Info::Profile {
 
 namespace {
 
+constexpr auto kMaxFileSize = 20 * 1024 * 1024; // 20 MB
+
 QColor performerColor(255, 255, 255, 153); // white 60%
 
 QRgb AdjustHsl(QRgb color, float luminance, float saturation = -1.0f) {
@@ -121,12 +123,7 @@ Cover GetCurrentCover(
 			.pixToBg = normal->pixNoCache(),
 			.noCover = false
 		};
-	} /*else if (const auto blurred = dataMedia->thumbnailInline()) {
-		return {
-			.pix = blurred->pixSingle(scaled(blurred), args.blurred()),
-			.noCover = false
-		};
-	}*/
+	}
 
 	return {
 		.pixToDraw = MakeNoCoverImage(size),
@@ -153,15 +150,15 @@ QRgb ExtractColorFromCover(const QPixmap &cover) {
 		return GetNoCoverBgColor().rgb();
 	}
 
-	auto extractedColor = swatch->rgb();
+	const auto extractedColor = swatch->rgb();
 
-	const auto whiteColor = qRgb(255, 255, 255);
+	constexpr auto whiteColor = qRgb(255, 255, 255);
 	const auto contrast = Ayu::Ui::ColorUtils::calculateContrast(whiteColor, extractedColor);
 
 	auto adjustedColor = extractedColor;
 	if (contrast > 15.0f) {
 		adjustedColor = AdjustHsl(extractedColor, 2.0f);
-	} else if (static_cast<int>(contrast) < 10) {
+	} else if (contrast < 10.0f) {
 		adjustedColor = AdjustHsl(extractedColor, 0.5f);
 	}
 
@@ -198,19 +195,7 @@ AyuMusicButton::AyuMusicButton(
 	_title->setAttribute(Qt::WA_TransparentForMouseEvents);
 	_performer->setAttribute(Qt::WA_TransparentForMouseEvents);
 
-	if (_mediaView && _mediaView->owner()->isSongWithCover() && !_mediaView->thumbnail()) {
-		_mediaView->thumbnailWanted(Data::FileOrigin(data.msgId));
-		_mediaView->owner()->owner().session().downloaderTaskFinished(
-		) | rpl::take_while([=]
-		{
-			if (_mediaView->thumbnail()) {
-				makeCover();
-			}
-			return !_mediaView->thumbnail();
-		}) | rpl::start(lifetime());
-	} else {
-		makeCover();
-	}
+	downloadAndMakeCover(data.msgId);
 
 	setClickedCallback(std::move(handler));
 }
@@ -221,9 +206,14 @@ void AyuMusicButton::updateData(MusicButtonData data) {
 	_performer->setText(data.performer);
 	_title->setText(data.title);
 	_mediaView = data.mediaView;
+	downloadAndMakeCover(data.msgId);
 
-	if (_mediaView && _mediaView->owner()->isSongWithCover() && !_mediaView->thumbnail()) {
-		_mediaView->thumbnailWanted(Data::FileOrigin(data.msgId));
+	resizeToWidth(widthNoMargins());
+}
+
+void AyuMusicButton::downloadAndMakeCover(FullMsgId msgId) {
+	if (_mediaView && _mediaView->owner()->isSongWithCover() && !_mediaView->thumbnail() && _mediaView->owner()->size <= kMaxFileSize) {
+		_mediaView->thumbnailWanted(Data::FileOrigin(msgId));
 		_mediaView->owner()->owner().session().downloaderTaskFinished(
 		) | rpl::take_while([=]
 		{
@@ -232,11 +222,9 @@ void AyuMusicButton::updateData(MusicButtonData data) {
 			}
 			return !_mediaView->thumbnail();
 		}) | rpl::start(lifetime());
-	} else {
+	} else { // todo: search cover in iTunes
 		makeCover();
 	}
-
-	resizeToWidth(widthNoMargins());
 }
 
 void AyuMusicButton::makeCover() {
@@ -294,19 +282,19 @@ void AyuMusicButton::paintEvent(QPaintEvent *e) {
 	const auto skip = st::normalFont->spacew / 2;
 	const auto size = font->height + skip + font->height;
 
+	const auto &settings = AyuSettings::getInstance();
 	const auto cover = _currentCover.value();
-	if (cover.noCover) {
+	if (cover.noCover || !settings.adaptiveCoverColor) {
 		p.fillRect(e->rect(), cover.bg);
 		paintRipple(p, QPoint());
 	} else {
-		QRadialGradient gradient(rect().topRight(), rect().width() / 2.0);
+		QRadialGradient gradient(rect().topRight(), rect().width() * 2.0);
 		gradient.setColorAt(0, cover.bg);
 		gradient.setColorAt(1, QColor::fromRgb(AdjustHsl(cover.bg.rgb(), 1.5f)));
 		p.fillRect(rect(), gradient);
 	}
 
 	if (!cover.pix.isNull()) {
-		const auto &settings = AyuSettings::getInstance();
 		if (!cover.noCover && settings.adaptiveCoverColor) {
 			_title->setTextColorOverride(Qt::white);
 			_performer->setTextColorOverride(performerColor);

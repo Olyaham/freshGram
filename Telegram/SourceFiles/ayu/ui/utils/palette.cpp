@@ -5,7 +5,9 @@
 //
 // Copyright @Radolyn, 2025
 //
-// Code is based on https://github.com/androidx/androidx/blob/androidx-main/palette/palette/src/main/java/androidx/palette/graphics/Palette.java
+// Code is based on:
+// - https://github.com/androidx/androidx/blob/androidx-main/palette/palette/src/main/java/androidx/palette/graphics/Palette.java
+// - https://github.com/androidx/androidx/blob/androidx-main/palette/palette/src/main/java/androidx/palette/graphics/Target.java
 #include "palette.h"
 #include "color_utils.h"
 #include "color_cut_quantizer.h"
@@ -167,6 +169,15 @@ Target::Target(const Target &from)
 	  , _isExclusive(from._isExclusive) {
 }
 
+bool Target::operator==(const Target &other) const {
+	for (int i = 0; i < 3; ++i) {
+		if (_saturationTargets[i] != other._saturationTargets[i]) return false;
+		if (_lightnessTargets[i] != other._lightnessTargets[i]) return false;
+		if (_weights[i] != other._weights[i]) return false;
+	}
+	return _isExclusive == other._isExclusive;
+}
+
 float Target::minimumSaturation() const {
 	return _saturationTargets[0];
 }
@@ -209,12 +220,17 @@ bool Target::isExclusive() const {
 
 void Target::normalizeWeights() {
 	float sum = 0.0f;
-	for (const auto w : _weights) {
-		sum += w;
+	for (int i = 0; i < _weights.size(); i++) {
+		float weight = _weights[i];
+		if (weight > 0) {
+			sum += weight;
+		}
 	}
 	if (sum != 0.0f) {
-		for (auto &w : _weights) {
-			w /= sum;
+		for (int i = 0; i < _weights.size(); i++) {
+			if (_weights[i] > 0) {
+				_weights[i] /= sum;
+			}
 		}
 	}
 }
@@ -222,7 +238,6 @@ void Target::normalizeWeights() {
 void Target::setDefaultLightLightnessValues(Target &target) {
 	target._lightnessTargets[0] = 0.55f;
 	target._lightnessTargets[1] = 0.74f;
-	target._lightnessTargets[2] = 1.0f;
 }
 
 void Target::setDefaultNormalLightnessValues(Target &target) {
@@ -232,7 +247,6 @@ void Target::setDefaultNormalLightnessValues(Target &target) {
 }
 
 void Target::setDefaultDarkLightnessValues(Target &target) {
-	target._lightnessTargets[0] = 0.0f;
 	target._lightnessTargets[1] = 0.26f;
 	target._lightnessTargets[2] = 0.45f;
 }
@@ -240,11 +254,9 @@ void Target::setDefaultDarkLightnessValues(Target &target) {
 void Target::setDefaultVibrantSaturationValues(Target &target) {
 	target._saturationTargets[0] = 0.35f;
 	target._saturationTargets[1] = 1.0f;
-	target._saturationTargets[2] = 1.0f;
 }
 
 void Target::setDefaultMutedSaturationValues(Target &target) {
-	target._saturationTargets[0] = 0.0f;
 	target._saturationTargets[1] = 0.3f;
 	target._saturationTargets[2] = 0.4f;
 }
@@ -334,7 +346,7 @@ QRgb Palette::dominantColor(QRgb defaultColor) const {
 
 const Swatch *Palette::swatchForTarget(const Target &target) const {
 	for (const auto &[key, swatch] : _selectedSwatches) {
-		if (key == &target) {
+		if (key == target) {
 			return swatch;
 		}
 	}
@@ -347,12 +359,13 @@ QRgb Palette::colorForTarget(const Target &target, QRgb defaultColor) const {
 }
 
 void Palette::generate() {
+	_selectedSwatches.clear();
 	_dominantSwatch = findDominantSwatch();
 
 	for (auto &target : _targets) {
 		target.normalizeWeights();
 		const auto swatch = generateScoredTarget(target);
-		_selectedSwatches[&target] = swatch;
+		_selectedSwatches.push_back({ target, swatch });
 	}
 
 	_usedColors.clear();
@@ -445,7 +458,10 @@ Palette Palette::fromSwatches(const std::vector<Swatch> &swatches) {
 
 Palette::Filter Palette::Builder::DEFAULT_FILTER = [](QRgb rgb, const std::array<float, 3> &hsl)
 {
-	return hsl[2] > 0.05f && hsl[2] < 0.95f;
+	const bool isBlack = (hsl[2] <= 0.05f);
+	const bool isWhite = (hsl[2] >= 0.95f);
+	const bool isNearRedILine = (hsl[0] >= 10.0f && hsl[0] <= 37.0f && hsl[1] <= 0.82f);
+	return !isWhite && !isBlack && !isNearRedILine;
 };
 
 Palette::Builder::Builder(const QPixmap &pixmap)
@@ -509,7 +525,7 @@ Palette::Builder &Palette::Builder::clearRegion() {
 Palette::Builder &Palette::Builder::addTarget(const Target &target) {
 	bool found = false;
 	for (const auto &t : _targets) {
-		if (&t == &target) {
+		if (t == target) {
 			found = true;
 			break;
 		}
@@ -535,13 +551,13 @@ Palette Palette::Builder::generate() {
 			const auto scale = static_cast<double>(bitmap.width()) / _image.width();
 			const auto left = static_cast<int>(std::floor(_region.left() * scale));
 			const auto top = static_cast<int>(std::floor(_region.top() * scale));
-			const auto right = std::min(
-				static_cast<int>(std::ceil(_region.right() * scale)),
+			const auto rightExclusive = std::min(
+				static_cast<int>(std::ceil((_region.left() + _region.width()) * scale)),
 				bitmap.width());
-			const auto bottom = std::min(
-				static_cast<int>(std::ceil(_region.bottom() * scale)),
+			const auto bottomExclusive = std::min(
+				static_cast<int>(std::ceil((_region.top() + _region.height()) * scale)),
 				bitmap.height());
-			_region = QRect(left, top, right - left, bottom - top);
+			_region = QRect(left, top, rightExclusive - left, bottomExclusive - top);
 		}
 
 		const auto pixels = getPixelsFromImage(bitmap);
@@ -574,9 +590,13 @@ std::vector<int> Palette::Builder::getPixelsFromImage(const QImage &image) {
 
 	if (_hasRegion) {
 		pixels.reserve(_region.width() * _region.height());
-		for (int y = _region.top(); y < _region.bottom(); ++y) {
+		const int yStart = _region.top();
+		const int yEndExclusive = _region.top() + _region.height();
+		const int xStart = _region.left();
+		const int xEndExclusive = _region.left() + _region.width();
+		for (int y = yStart; y < yEndExclusive; ++y) {
 			const auto line = reinterpret_cast<const QRgb*>(img.scanLine(y));
-			for (int x = _region.left(); x < _region.right(); ++x) {
+			for (int x = xStart; x < xEndExclusive; ++x) {
 				pixels.push_back(line[x]);
 			}
 		}
@@ -598,13 +618,12 @@ QImage Palette::Builder::scaleBitmapDown(const QImage &image) {
 
 	if (_resizeArea > 0 && area > _resizeArea) {
 		const auto scale = std::sqrt(static_cast<double>(_resizeArea) / area);
-		const auto newWidth = static_cast<int>(image.width() * scale);
-		const auto newHeight = static_cast<int>(image.height() * scale);
-		return image.scaled(newWidth, newHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+		const auto newWidth = static_cast<int>(std::ceil(image.width() * scale));
+		const auto newHeight = static_cast<int>(std::ceil(image.height() * scale));
+		return image.scaled(newWidth, newHeight, Qt::IgnoreAspectRatio, Qt::FastTransformation);
 	}
 
 	return image;
 }
 
 } // namespace Ayu::Ui
-

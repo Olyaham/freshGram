@@ -70,6 +70,8 @@ public:
 
 	void normalizeWeights();
 
+	bool operator==(const Target &other) const;
+
 private:
 	static void setDefaultLightLightnessValues(Target &target);
 	static void setDefaultNormalLightnessValues(Target &target);
@@ -137,7 +139,7 @@ private:
 
 	std::vector<Swatch> _swatches;
 	std::vector<Target> _targets;
-	std::map<const Target*, const Swatch*> _selectedSwatches;
+	std::vector<std::pair<Target, const Swatch*>> _selectedSwatches;
 	std::set<QRgb> _usedColors;
 	const Swatch *_dominantSwatch = nullptr;
 
@@ -180,4 +182,3 @@ private:
 };
 
 } // namespace Ayu::Ui
-
