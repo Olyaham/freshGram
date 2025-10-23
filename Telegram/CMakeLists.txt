@@ -139,6 +139,8 @@ set(ayugram_files
         ayu/ui/utils/color_utils.h
         ayu/ui/utils/palette.cpp
         ayu/ui/utils/palette.h
+        ayu/ui/utils/itunes_search.cpp
+        ayu/ui/utils/itunes_search.h
         ayu/ui/settings/settings_appearance.cpp
         ayu/ui/settings/settings_appearance.h
         ayu/ui/settings/settings_ayu_utils.cpp
@@ -189,8 +191,8 @@ set(ayugram_files
         ayu/ui/components/image_view.h
         ayu/ui/components/icon_picker.cpp
         ayu/ui/components/icon_picker.h
-        ayu/ui/components/now_playing.cpp
-        ayu/ui/components/now_playing.h
+        ayu/ui/components/saved_music.cpp
+        ayu/ui/components/saved_music.h
         ayu/libs/json.hpp
         ayu/libs/json_ext.hpp
         ayu/libs/sqlite/sqlite3.c

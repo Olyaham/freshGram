@@ -4,7 +4,7 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2025
-#include "now_playing.h"
+#include "saved_music.h"
 
 #include "info/profile/info_profile_music_button.h"
 
@@ -12,6 +12,7 @@
 
 #include "ayu/ayu_settings.h"
 #include "ayu/ui/utils/color_utils.h"
+#include "ayu/ui/utils/itunes_search.h"
 #include "ayu/ui/utils/palette.h"
 #include "data/data_document.h"
 #include "data/data_document_media.h"
@@ -25,13 +26,11 @@
 #include "ui/widgets/labels.h"
 #include "window/themes/window_theme.h"
 
-class Image;
-
 namespace Info::Profile {
 
 namespace {
 
-constexpr auto kMaxFileSize = 20 * 1024 * 1024; // 20 MB
+constexpr auto kMaxFileSize = 12 * 1024 * 1024; // 12 MB
 
 QColor performerColor(255, 255, 255, 153); // white 60%
 
@@ -183,6 +182,8 @@ AyuMusicButton::AyuMusicButton(
 		  data.title,
 		  st::infoMusicButtonTitle))
 	  , _mediaView(data.mediaView) {
+	_performerText = data.performer;
+	_titleText = data.title;
 	rpl::combine(
 		_title->naturalWidthValue(),
 		_performer->naturalWidthValue()
@@ -205,6 +206,8 @@ AyuMusicButton::~AyuMusicButton() = default;
 void AyuMusicButton::updateData(MusicButtonData data) {
 	_performer->setText(data.performer);
 	_title->setText(data.title);
+	_performerText = data.performer;
+	_titleText = data.title;
 	_mediaView = data.mediaView;
 	downloadAndMakeCover(data.msgId);
 
@@ -222,7 +225,7 @@ void AyuMusicButton::downloadAndMakeCover(FullMsgId msgId) {
 			}
 			return !_mediaView->thumbnail();
 		}) | rpl::start(lifetime());
-	} else { // todo: search cover in iTunes
+	} else {
 		makeCover();
 	}
 }
@@ -236,7 +239,22 @@ void AyuMusicButton::makeCover() {
 		const auto skip = st::normalFont->spacew / 2;
 		const auto size = font->height + skip + font->height;
 
-		const auto cover = GetCurrentCover(mediaView, QSize(size, size));
+		auto cover = GetCurrentCover(mediaView, QSize(size, size));
+
+		if (cover.noCover) {
+			const auto pix = Ayu::Ui::Itunes::FetchCover(_performerText, _titleText, size);
+			if (!pix.isNull()) {
+				const auto img = Image(pix.toImage());
+				const auto args = Images::PrepareArgs{
+					.options = Images::Option::RoundSmall,
+					.outer = QSize(size, size),
+				};
+				cover.pixToDraw = img.pix(QSize(size, size), args);
+				cover.pixToBg = pix;
+				cover.noCover = false;
+			}
+		}
+
 		QColor bgColor;
 		if (cover.noCover || !settings.adaptiveCoverColor) {
 			bgColor = GetNoCoverBgColor();

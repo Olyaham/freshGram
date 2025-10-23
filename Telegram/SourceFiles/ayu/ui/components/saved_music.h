@@ -51,6 +51,9 @@ private:
 	std::optional<ResultCover> _currentCover;
 	rpl::event_stream<> _onReady;
 
+	QString _performerText;
+	QString _titleText;
+
 };
 
 } // namespace Info::Profile
