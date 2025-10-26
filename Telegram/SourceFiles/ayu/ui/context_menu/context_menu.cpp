@@ -13,14 +13,16 @@
 #include "ayu/ayu_state.h"
 #include "ayu/data/messages_storage.h"
 #include "ayu/features/filters/shadow_ban_utils.h"
+#include "ayu/features/forward/ayu_forward.h"
 #include "ayu/ui/context_menu/menu_item_subtext.h"
 #include "ayu/utils/qt_key_modifiers_extended.h"
 #include "history/history_item_components.h"
+#include "main/session/send_as_peers.h"
 
 #include "core/mime_type.h"
 #include "styles/style_ayu_icons.h"
-#include "styles/style_menu_icons.h"
 #include "styles/style_layers.h"
+#include "styles/style_menu_icons.h"
 #include "ui/widgets/popup_menu.h"
 #include "ui/widgets/menu/menu_add_action_callback_factory.h"
 #include "window/window_peer_menu.h"
@@ -32,11 +34,12 @@
 #include "base/random.h"
 #include "base/unixtime.h"
 #include "data/data_channel.h"
-#include "data/data_user.h"
 #include "data/data_chat.h"
 #include "data/data_forum_topic.h"
+#include "data/data_saved_sublist.h"
 #include "data/data_search_controller.h"
 #include "data/data_session.h"
+#include "data/data_user.h"
 #include "history/view/history_view_context_menu.h"
 #include "history/view/history_view_element.h"
 #include "ui/boxes/confirm_box.h"
@@ -658,6 +661,71 @@ void AddMessageDetailsAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
 			}
 		},
 	});
+}
+
+void AddRepeatMessageAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
+	const auto &settings = AyuSettings::getInstance();
+	if (!needToShowItem(settings.showRepeatMessageInContextMenu)) {
+		return;
+	}
+
+	if (!item || item->isService() || item->isLocal() || !item->allowsForward() || item->id <= 0) {
+		return;
+	}
+
+	const auto history = item->history();
+	const auto peer = history->peer;
+	if (!peer->isUser() && !peer->isChat() && !peer->isMegagroup() && !peer->isGigagroup()) {
+		return;
+	}
+
+	const auto itemId = item->fullId();
+	const auto session = &history->session();
+
+	menu->addAction(
+		tr::ayu_RepeatMessage(tr::now),
+		[=]
+		{
+			auto sendOptions = Api::SendOptions{
+				.sendAs = session->sendAsPeers().resolveChosen(peer),
+			};
+
+			if (peer->isUser() || peer->isChat() || item->history()->peer->isMonoforum()) {
+				sendOptions.sendAs = nullptr;
+			}
+
+			auto action = Api::SendAction(history, sendOptions);
+			action.clearDraft = false;
+
+			if (item->topic()) {
+				action.replyTo.topicRootId = item->topicRootId();
+			}
+
+			if (const auto sublist = item->savedSublist()) {
+				action.replyTo.monoforumPeerId = sublist->monoforumPeerId();
+			}
+
+			const auto forwardDraft = Data::ForwardDraft{
+				.ids = MessageIdsList{ itemId },
+				.options = base::IsShiftPressed() ? Data::ForwardOptions::NoSenderNames : Data::ForwardOptions::PreserveInfo
+			};
+			auto resolvedDraft = history->resolveForwardDraft(forwardDraft);
+
+			if (AyuForward::isFullAyuForwardNeeded(item)) {
+				crl::async([=]
+				{
+					AyuForward::forwardMessages(session, action, false, resolvedDraft);
+				});
+			} else if (AyuForward::isAyuForwardNeeded(item)) {
+				crl::async([=]
+				{
+					AyuForward::intelligentForward(session, action, resolvedDraft);
+				});
+			} else {
+				session->api().forwardMessages(std::move(resolvedDraft), action, [] {});
+			}
+		},
+		&st::menuIconRestore);
 }
 
 void AddReadUntilAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {

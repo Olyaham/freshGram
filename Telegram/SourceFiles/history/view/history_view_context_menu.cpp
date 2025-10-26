@@ -1044,6 +1044,7 @@ void AddMessageActions(
 		AyuUi::AddHistoryAction(menu, request.item);
 		AyuUi::AddHideMessageAction(menu, request.item);
 		AyuUi::AddUserMessagesAction(menu, request.item);
+		AyuUi::AddRepeatMessageAction(menu, request.item);
 		AyuUi::AddMessageDetailsAction(menu, request.item);
 	}
 
