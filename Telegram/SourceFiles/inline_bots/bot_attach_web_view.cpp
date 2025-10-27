@@ -1412,7 +1412,7 @@ void WebViewInstance::showGame() {
 	Expects(v::is<WebViewSourceGame>(_source));
 
 	if (!_bot->isFullLoaded()) {
-		_botFullWaitingArgs.emplace();
+		_botFullWaitingArgs = ShowArgs{};
 		return;
 	}
 	const auto game = v::get<WebViewSourceGame>(_source);

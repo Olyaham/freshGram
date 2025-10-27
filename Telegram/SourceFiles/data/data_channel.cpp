@@ -1186,12 +1186,6 @@ void ChannelData::setStoriesState(StoriesState state) {
 	}
 }
 
-void ChannelData::processTopics(const MTPVector<MTPForumTopic> &topics) {
-	if (const auto forum = this->forum()) {
-		forum->applyReceivedTopics(topics);
-	}
-}
-
 int ChannelData::levelHint() const {
 	return _levelHint;
 }

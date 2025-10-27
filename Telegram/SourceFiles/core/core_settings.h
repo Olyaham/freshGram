@@ -247,6 +247,12 @@ public:
 	void setNotificationsCorner(ScreenCorner corner) {
 		_notificationsCorner = corner;
 	}
+	[[nodiscard]] int32 notificationsDisplayChecksum() const {
+		return _notificationsDisplayChecksum;
+	}
+	void setNotificationsDisplayChecksum(int32 checksum) {
+		_notificationsDisplayChecksum = checksum;
+	}
 	[[nodiscard]] bool includeMutedCounter() const {
 		return _includeMutedCounter;
 	}
@@ -994,6 +1000,7 @@ private:
 	bool _skipToastsInFocus = false;
 	int _notificationsCount = 3;
 	ScreenCorner _notificationsCorner = ScreenCorner::BottomRight;
+	int32 _notificationsDisplayChecksum = 0;
 	bool _includeMutedCounter = true;
 	bool _includeMutedCounterFolders = true;
 	bool _countUnreadMessages = true;

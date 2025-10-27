@@ -40,8 +40,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "main/main_session_settings.h"
 #include "ui/text/text_utilities.h"
+#include "platform/platform_specific.h"
 
 #include <QtGui/QWindow>
+#include <QtGui/QGuiApplication>
+#include <QtGui/QScreen>
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
@@ -133,7 +136,21 @@ constexpr auto kSystemAlertDuration = crl::time(0);
 
 } // namespace
 
+const char kOptionCustomNotification[] = "custom-notification";
+
+base::options::toggle OptionCustomNotification({
+	.id = kOptionCustomNotification,
+	.name = "Force non-native notifications availability",
+	.description = "Allow to disable native notifications"
+		" even if custom notifications are broken on this platform",
+	.scope = [] {
+		return Platform::Notifications::Enforced();
+	},
+	.restartRequired = true,
+});
+
 const char kOptionGNotification[] = "gnotification";
+const char kOptionHideReplyButton[] = "hide-reply-button";
 
 base::options::toggle OptionGNotification({
 	.id = kOptionGNotification,
@@ -149,6 +166,12 @@ base::options::toggle OptionGNotification({
 #endif // __has_include(<gio/gio.hpp>)
 	},
 	.restartRequired = true,
+});
+
+base::options::toggle HideReplyButtonOption({
+	.id = kOptionHideReplyButton,
+	.name = "Hide reply button",
+	.description = "Hide reply button in notifications.",
 });
 
 struct System::Waiter {
@@ -202,7 +225,7 @@ void System::setManager(Fn<std::unique_ptr<Manager>()> create) {
 	});
 
 	if ((Core::App().settings().nativeNotifications()
-				|| Platform::Notifications::Enforced())
+				|| nativeEnforced())
 			&& Platform::Notifications::Supported()) {
 		if (_manager->type() == ManagerType::Native) {
 			return;
@@ -214,7 +237,7 @@ void System::setManager(Fn<std::unique_ptr<Manager>()> create) {
 		}
 	}
 
-	if (Platform::Notifications::Enforced()) {
+	if (nativeEnforced()) {
 		if (_manager->type() != ManagerType::Dummy) {
 			_manager = std::make_unique<DummyManager>(this);
 		}
@@ -230,6 +253,10 @@ Manager &System::manager() const {
 
 rpl::producer<> System::managerChanged() const {
 	return _managerChanged.events();
+}
+
+bool System::nativeEnforced() const {
+	return !OptionCustomNotification.value() && Platform::Notifications::Enforced();
 }
 
 Main::Session *System::findSession(uint64 sessionId) const {
@@ -1052,7 +1079,8 @@ Manager::DisplayOptions Manager::getNotificationOptions(
 			&& (!topic || !Data::CanSendTexts(topic)))
 		|| peer->isBroadcast()
 		|| (peer->slowmodeSecondsLeft() > 0)
-		|| (peer->starsPerMessageChecked() > 0);
+		|| (peer->starsPerMessageChecked() > 0)
+		|| HideReplyButtonOption.value();
 	result.spoilerLoginCode = item
 		&& !item->out()
 		&& peer->isNotificationsUser()
@@ -1287,7 +1315,7 @@ Window::SessionController *Manager::openNotificationMessage(
 
 	const auto separateId = !topic
 		? Window::SeparateId(history->peer)
-		: history->peer->asChannel()->useSubsectionTabs()
+		: history->peer->useSubsectionTabs()
 		? Window::SeparateId(Window::SeparateType::Chat, topic)
 		: Window::SeparateId(Window::SeparateType::Forum, history);
 	const auto separate = Core::App().separateWindowFor(separateId);
@@ -1483,6 +1511,28 @@ System::~System() = default;
 
 QString WrapFromScheduled(const QString &text) {
 	return QString::fromUtf8("\xF0\x9F\x93\x85 ") + text;
+}
+
+QRect NotificationDisplayRect(Window::Controller *controller) {
+	const auto displayChecksum
+		= Core::App().settings().notificationsDisplayChecksum();
+
+	auto screen = (QScreen*)(nullptr);
+	if (displayChecksum) {
+		using namespace Platform;
+		for (const auto candidateScreen : QGuiApplication::screens()) {
+			if (ScreenNameChecksum(candidateScreen) == displayChecksum) {
+				screen = candidateScreen;
+				break;
+			}
+		}
+	}
+
+	return screen
+		? screen->availableGeometry()
+		: controller
+		? controller->widget()->desktopRect()
+		: QGuiApplication::primaryScreen()->availableGeometry();
 }
 
 } // namespace Notifications

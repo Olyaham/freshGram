@@ -360,6 +360,8 @@ enum class MessageFlag : uint64 {
 	StoryInProfile        = (1ULL << 54),
 	SavedMusicItem        = (1ULL << 55),
 
+	HasHiddenLinks        = (1ULL << 56),
+
 	AyuNoForwards         = (1ULL << 63),
 };
 inline constexpr bool is_flag_type(MessageFlag) { return true; }
