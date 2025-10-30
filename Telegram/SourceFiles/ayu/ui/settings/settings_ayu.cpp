@@ -78,15 +78,13 @@ void SetupGhostModeToggle(not_null<Ui::VerticalLayout*> container) {
 	AddCollapsibleToggle(container, tr::ayu_GhostModeToggle(), checkboxes, true);
 }
 
-void SetupGhostEssentials(not_null<Ui::VerticalLayout*> container) {
-	auto *settings = &AyuSettings::getInstance();
-
+void SetupGhostEssentials(
+	not_null<Ui::VerticalLayout*> container,
+	not_null<AyuSettings::AyuGramSettings*> settings,
+	not_null<rpl::variable<bool>*> markReadAfterActionVal,
+	not_null<rpl::variable<bool>*> useScheduledMessagesVal) {
 	SetupGhostModeToggle(container);
 
-	auto markReadAfterActionVal = container->lifetime().make_state<rpl::variable<bool>>(
-		settings->markReadAfterAction);
-	auto useScheduledMessagesVal = container->lifetime().make_state<rpl::variable<
-		bool>>(settings->useScheduledMessages);
 
 	AddButtonWithIcon(
 		container,
@@ -115,14 +113,11 @@ void SetupGhostEssentials(not_null<Ui::VerticalLayout*> container) {
 	AddDividerText(container, tr::ayu_MarkReadAfterActionDescription());
 }
 
-void SetupScheduleMessages(not_null<Ui::VerticalLayout*> container) {
-	auto *settings = &AyuSettings::getInstance();
-
-	auto markReadAfterActionVal = container->lifetime().make_state<rpl::variable<bool>>(
-		settings->markReadAfterAction);
-	auto useScheduledMessagesVal = container->lifetime().make_state<rpl::variable<
-		bool>>(settings->useScheduledMessages);
-
+void SetupScheduleMessages(
+	not_null<Ui::VerticalLayout*> container,
+	not_null<AyuSettings::AyuGramSettings*> settings,
+	not_null<rpl::variable<bool>*> markReadAfterActionVal,
+	not_null<rpl::variable<bool>*> useScheduledMessagesVal) {
 	AddSkip(container);
 	AddButtonWithIcon(
 		container,
@@ -291,10 +286,16 @@ void SetupOther(not_null<Ui::VerticalLayout*> container) {
 void AyuGhost::setupContent(not_null<Window::SessionController*> controller) {
 	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
 
+	const auto settings = &AyuSettings::getInstance();
+	const auto markReadAfterActionVal = content->lifetime().make_state<rpl::variable<bool>>(
+		settings->markReadAfterAction);
+	const auto useScheduledMessagesVal = content->lifetime().make_state<rpl::variable<bool>>(
+		settings->useScheduledMessages);
+
 	AddSkip(content);
 
-	SetupGhostEssentials(content);
-	SetupScheduleMessages(content);
+	SetupGhostEssentials(content, settings, markReadAfterActionVal, useScheduledMessagesVal);
+	SetupScheduleMessages(content, settings, markReadAfterActionVal, useScheduledMessagesVal);
 	SetupSendWithoutSound(content);
 
 	AddSkip(content);
