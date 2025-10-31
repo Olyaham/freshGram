@@ -245,7 +245,7 @@ void AddJumpToBeginningAction(PeerData *peerData,
 			QDate(2013, 8, 1),
 			[=](not_null<PeerData*> peer, MsgId id)
 			{
-				if (const auto strong = weak.get()) {
+				if (weak.get()) {
 					callback(peer, id);
 				}
 			});
@@ -772,7 +772,7 @@ void AddReadUntilAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
 }
 
 void AddBurnAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
-	if (!item->media() || item->media()->ttlSeconds() <= 0 && item->unsupportedTTL() <= 0 || item->out() ||
+	if (!item->media() || (item->media()->ttlSeconds() <= 0 && item->unsupportedTTL() <= 0) || item->out() ||
 		!item->isUnreadMedia()) {
 		return;
 	}

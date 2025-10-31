@@ -4,8 +4,6 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2025
-#pragma once
-
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>

@@ -885,7 +885,7 @@ TextWithTags extractText(not_null<HistoryItem*> item) {
 		if (const auto poll = media->poll()) {
 			text.append("\xF0\x9F\x93\x8A ") // 📊
 				.append(poll->question.text).append("\n");
-			for (const auto answer : poll->answers) {
+			for (const auto &answer : poll->answers) {
 				text.append("• ").append(answer.text.text).append("\n");
 			}
 		}
@@ -909,14 +909,13 @@ bool mediaDownloadable(const Data::Media *media) {
 }
 
 void resolveAllChats(const std::map<long long, QString> &peers) {
-	// not sure is this works
 	auto session = currentSession();
 
 	crl::async([=, &session]
 	{
 		while (!peers.empty()) {
 			for (const auto &[id, username] : peers) {
-				std::latch latch(1);
+                auto latch = std::make_shared<TimedCountDownLatch>(1);
 
 				auto onSuccess = [=, &latch](const MTPChatInvite &invite)
 				{
@@ -935,18 +934,18 @@ void resolveAllChats(const std::map<long long, QString> &peers) {
 								 {
 								 });
 
-					latch.count_down();
+					latch->countDown();
 				};
 				auto onFail = [=, &latch](const MTP::Error &error)
 				{
 					if (MTP::IsFloodError(error.type())) {
 						std::this_thread::sleep_for(std::chrono::seconds(20));
 					}
-					latch.count_down();
+					latch->countDown();
 				};
 
 				session->api().checkChatInvite(username, onSuccess, onFail);
-				latch.wait();
+				latch->await(std::chrono::seconds(20));
 			}
 		}
 	});

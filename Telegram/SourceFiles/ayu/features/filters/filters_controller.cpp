@@ -59,7 +59,7 @@ std::optional<bool> isFiltered(const QString &str, uint64 dialogId) {
 
 		const auto reversed = pattern.reversed;
 
-		if (!reversed && match || reversed && !match) {
+		if ((!reversed && match) || (reversed && !match)) {
 			return true;
 		}
 		return false;
@@ -89,7 +89,7 @@ std::optional<bool> isFiltered(const QString &str, uint64 dialogId) {
 
 bool isEnabled(not_null<PeerData*> peer) {
 	const auto &settings = AyuSettings::getInstance();
-	return settings.filtersEnabled && (settings.filtersEnabledInChats || !peer->isMegagroup() && !peer->isGigagroup() && !peer->isUser());
+	return settings.filtersEnabled && (settings.filtersEnabledInChats || (!peer->isMegagroup() && !peer->isGigagroup() && !peer->isUser()));
 }
 
 bool isBlocked(const not_null<HistoryItem*> item) {
@@ -115,8 +115,8 @@ bool isBlocked(const not_null<HistoryItem*> item) {
 
 	return settings.filtersEnabled &&
 	(
-		item->from()->isUser() && ShadowBanUtils::isShadowBanned(getDialogIdFromPeer(item->from())) ||
-		settings.hideFromBlocked && blocked
+		(item->from()->isUser() && ShadowBanUtils::isShadowBanned(getDialogIdFromPeer(item->from()))) ||
+		(settings.hideFromBlocked && blocked)
 	);
 }
 

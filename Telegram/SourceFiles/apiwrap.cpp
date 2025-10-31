@@ -4016,7 +4016,7 @@ void ApiWrap::sendMessage(
 		? Data::CanSendTexts(topic)
 		: Data::CanSendTexts(peer);
 
-	if (!canSendTexts && !AyuForward::isForwarding(peer->id) || Api::SendDice(message)) {
+	if ((!canSendTexts && !AyuForward::isForwarding(peer->id)) || Api::SendDice(message)) {
 		return;
 	}
 	local().saveRecentSentHashtags(textWithTags.text);

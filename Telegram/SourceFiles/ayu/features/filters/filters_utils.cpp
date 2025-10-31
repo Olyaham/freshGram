@@ -278,7 +278,7 @@ int typeOfMessage(const HistoryItem *item) {
 			if (media->giveawayResults()) {
 				return 28; // TYPE_GIVEAWAY_RESULTS
 			}
-			if (const auto dice = dynamic_cast<Data::MediaDice*>(media)) {
+			if (dynamic_cast<Data::MediaDice*>(media)) {
 				return 15; // TYPE_ANIMATED_STICKER
 			}
 			if (media->photo()) {

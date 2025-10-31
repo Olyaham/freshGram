@@ -26,7 +26,7 @@ struct ApplyChanges
 
 	std::map<long long, QString> peersToBeResolved;
 
-	auto operator<=>(const ApplyChanges&) const = default;
+	bool operator==(const ApplyChanges&) const = default;
 };
 
 
