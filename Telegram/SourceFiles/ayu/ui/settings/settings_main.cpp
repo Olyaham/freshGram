@@ -59,7 +59,7 @@ void SetupAppLogo(not_null<Ui::VerticalLayout*> container) {
 	) | rpl::start_with_next([=](QRect clip)
 							 {
 								 auto p = QPainter(logo);
-								 const auto image = AyuAssets::currentAppLogoNoMargin(); // todo: svg renderer
+								 const auto image = AyuAssets::currentAppLogoPad();
 								 if (!image.isNull()) {
 									 const auto size = st::settingsCloudPasswordIconSize;
 									 const auto scaled = image.scaled(

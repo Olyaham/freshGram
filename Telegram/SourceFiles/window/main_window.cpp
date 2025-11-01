@@ -124,7 +124,7 @@ QImage Logo() {
 }
 
 QImage LogoNoMargin() {
-	return AyuAssets::currentAppLogoNoMargin();
+	return AyuAssets::currentAppLogo();
 }
 
 const QImage &LogoTelegramDefault() {

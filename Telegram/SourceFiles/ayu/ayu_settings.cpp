@@ -144,6 +144,10 @@ void postinitialize() {
 	translationProviderReactive = settings->translationProvider;
 
 	ghostModeEnabled = ghostModeEnabled_util(settings.value());
+
+	if (settings->appIcon == QString("macos")) {
+		settings->appIcon = AyuAssets::DEFAULT_ICON;
+	}
 }
 
 AyuGramSettings &getInstance() {
@@ -252,13 +256,7 @@ AyuGramSettings::AyuGramSettings() {
 	showGroupReactions = true;
 
 	// ~ Customization
-	appIcon =
-#ifdef Q_OS_MAC
-		AyuAssets::DEFAULT_MACOS_ICON
-#else
-		AyuAssets::DEFAULT_ICON
-#endif
-		;
+	appIcon = AyuAssets::DEFAULT_ICON;
 	simpleQuotesAndReplies = false;
 	hideFastShare = false;
 	replaceBottomInfoWithIcons = true;
