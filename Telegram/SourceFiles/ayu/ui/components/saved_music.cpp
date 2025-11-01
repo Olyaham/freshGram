@@ -110,7 +110,8 @@ Cover GetCurrentCover(
 	const auto scaled = [&](not_null<Image*> image)
 	{
 		const auto aspectRatio = Qt::KeepAspectRatioByExpanding;
-		return image->size().scaled(size, aspectRatio);
+		const auto targetSize = size * style::DevicePixelRatio();
+		return image->size().scaled(targetSize, aspectRatio);
 	};
 	const auto args = Images::PrepareArgs{
 		.options = Images::Option::RoundSmall,
@@ -323,7 +324,7 @@ void AyuMusicButton::paintEvent(QPaintEvent *e) {
 
 		auto hq = PainterHighQualityEnabler(p);
 		const auto coverRect = QRect(st::infoMusicButtonPadding.left(), st::infoMusicButtonPadding.top(), size, size);
-		p.drawPixmap(coverRect.topLeft(), cover.pix);
+		p.drawPixmap(coverRect, cover.pix);
 	} else {
 		_title->setTextColorOverride(std::nullopt);
 		_performer->setTextColorOverride(std::nullopt);
