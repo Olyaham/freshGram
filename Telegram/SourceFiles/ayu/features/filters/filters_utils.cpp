@@ -145,7 +145,8 @@ bool FilterUtils::importFromJson(const QByteArray &json) {
 	const auto changes = prepareChanges(document.object());
 
 	if (changes == ApplyChanges{}) {
-		Ui::Toast::Show(tr::ayu_FiltersToastFailImport(tr::now));
+		Ui::Toast::Show(tr::ayu_FiltersToastFailNoChanges(tr::now));
+        LOG(("FilterUtils: received empty changes"));
 		return false;
 	}
 
