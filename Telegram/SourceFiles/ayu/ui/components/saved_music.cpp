@@ -19,6 +19,7 @@
 #include "data/data_file_origin.h"
 #include "data/data_session.h"
 #include "main/main_session.h"
+#include "main/main_session_settings.h"
 #include "styles/palette.h"
 #include "styles/style_info.h"
 #include "ui/painter.h"
@@ -29,8 +30,6 @@
 namespace Info::Profile {
 
 namespace {
-
-constexpr auto kMaxFileSize = 12 * 1024 * 1024; // 12 MB
 
 QColor performerColor(255, 255, 255, 153); // white 60%
 
@@ -216,19 +215,24 @@ void AyuMusicButton::updateData(MusicButtonData data) {
 }
 
 void AyuMusicButton::downloadAndMakeCover(FullMsgId msgId) {
-	if (_mediaView && _mediaView->owner()->isSongWithCover() && !_mediaView->thumbnail() && _mediaView->owner()->size <= kMaxFileSize) {
-		_mediaView->thumbnailWanted(Data::FileOrigin(msgId));
-		_mediaView->owner()->owner().session().downloaderTaskFinished(
-		) | rpl::take_while([=]
-		{
-			if (_mediaView->thumbnail()) {
-				makeCover();
-			}
-			return !_mediaView->thumbnail();
-		}) | rpl::start(lifetime());
-	} else {
-		makeCover();
+	if (_mediaView && _mediaView->owner()->isSongWithCover() && !_mediaView->thumbnail()) {
+        const auto settings = &_mediaView->owner()->session().settings().autoDownload();
+        // Data::AutoDownload::Type::Music always returns false
+        if (settings->shouldDownload(Data::AutoDownload::Source::User, Data::AutoDownload::Type::File, _mediaView->owner()->size)) {
+            _mediaView->thumbnailWanted(Data::FileOrigin(msgId));
+            _mediaView->owner()->owner().session().downloaderTaskFinished(
+            ) | rpl::take_while([=]
+            {
+                if (_mediaView->thumbnail()) {
+                    makeCover();
+                }
+                return !_mediaView->thumbnail();
+            }) | rpl::start(lifetime());
+            return;
+        }
 	}
+
+    makeCover();
 }
 
 void AyuMusicButton::makeCover() {
