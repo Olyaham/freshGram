@@ -231,7 +231,7 @@ void TranslateBox(
 		loading->show(anim::type::instant);
 		translated->hide(anim::type::instant);
 		Ayu::Translator::TranslateManager::currentInstance()->request(
-			peer->session(),
+			&peer->session(),
 			MTP_flags(flags),
 			msgId ? peer->input : MTP_inputPeerEmpty(),
 			(msgId

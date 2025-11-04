@@ -27,7 +27,7 @@ namespace Ayu::Translator {
 
 TranslateManager::Builder::Builder(
 	TranslateManager &manager,
-	Main::Session &session,
+	Main::Session *session,
 	const MTPflags<MTPmessages_translateText::Flags> &flags,
 	const MTPInputPeer &peer,
 	const MTPVector<MTPint> &id,
@@ -35,7 +35,7 @@ TranslateManager::Builder::Builder(
 	const MTPstring &to_lang
 )
 	: _manager(&manager)
-	  , _session(&session)
+	  , _session(session)
 	  , _flags(flags)
 	  , _peer(peer)
 	  , _idList(id)
@@ -73,7 +73,7 @@ void TranslateManager::Builder::cancel() {
 }
 
 TranslateManager::Builder TranslateManager::request(
-	Main::Session &session,
+	Main::Session *session,
 	const MTPflags<MTPmessages_translateText::Flags> &flags,
 	const MTPInputPeer &peer,
 	const MTPVector<MTPint> &id,

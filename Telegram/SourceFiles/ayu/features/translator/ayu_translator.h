@@ -34,7 +34,7 @@ public:
     public:
         Builder(
             TranslateManager &manager,
-            Main::Session &session,
+            Main::Session *session,
             const MTPflags<MTPmessages_translateText::Flags> &flags,
             const MTPInputPeer &peer,
             const MTPVector<MTPint> &id,
@@ -52,7 +52,7 @@ public:
         mtpRequestId send();
         void cancel();
 
-        [[nodiscard]] const auto &session() const { return _session; }
+        [[nodiscard]] auto *session() const { return _session; }
         [[nodiscard]] const auto &flags() const { return _flags; }
         [[nodiscard]] const auto &peer() const { return _peer; }
         [[nodiscard]] const auto &ids() const { return _idList; }
@@ -61,7 +61,7 @@ public:
 
     private:
         TranslateManager *_manager = nullptr;
-        not_null<Main::Session*> _session;
+        Main::Session* _session;
         mtpRequestId _id = 0;
 
         MTPflags<MTPmessages_translateText::Flags> _flags;
@@ -80,7 +80,7 @@ public:
     ~TranslateManager() = default;
 
     Builder request(
-        Main::Session &session,
+        Main::Session *session,
         const MTPflags<MTPmessages_translateText::Flags> &flags,
         const MTPInputPeer &peer,
         const MTPVector<MTPint> &id,

@@ -278,7 +278,7 @@ void TranslateTracker::requestSome() {
 	}
 	using Flag = MTPmessages_TranslateText::Flag;
 	_requestId = Ayu::Translator::TranslateManager::currentInstance()->request(
-		peer->session(),
+		&peer->session(),
 		MTP_flags(Flag::f_peer | Flag::f_id),
 		peer->input,
 		MTP_vector<MTPint>(list),
