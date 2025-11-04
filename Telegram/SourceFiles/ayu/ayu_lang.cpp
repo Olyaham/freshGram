@@ -20,6 +20,15 @@ std::map<QString, QString> langMapping = {
 	{"zh-hant-raw", "zh-hant"},
 };
 
+constexpr auto postfixes = {
+	"zero",
+	"one",
+	"two",
+	"few",
+	"many",
+	"other"
+};
+
 AyuLanguage *AyuLanguage::instance = nullptr;
 
 AyuLanguage::AyuLanguage() = default;
@@ -109,14 +118,19 @@ void AyuLanguage::applyLanguageJson(QJsonDocument doc) {
 		auto key = qsl("ayu_") + brokenKey;
 		auto val = json.value(brokenKey).toString().replace(qsl("&amp;"), qsl("&"));
 
-		if (key.endsWith("_zero") || key.endsWith("_two") || key.endsWith("_few") || key.endsWith("_many")) {
+		if (key.endsWith("_Android")) {
 			continue;
 		}
 
-		if (key.endsWith("_one")) {
-			key = key.replace("_one", "#one");
-		} else if (key.endsWith("_other")) {
-			key = key.replace("_other", "#other");
+		for (const auto &postfix : postfixes) {
+			if (key.endsWith(qsl("_") + postfix)) {
+				key = key.replace(qsl("_") + postfix, qsl("#") + postfix);
+				break;
+			}
+		}
+
+		if (key.endsWith("_PC")) {
+			key = key.replace("_PC", "");
 		}
 
 		if (val.contains(qsl("%1$d")) && !val.contains(qsl("%2$d"))) {
