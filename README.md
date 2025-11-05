@@ -20,11 +20,18 @@ And many more. Check out our [Documentation](https://docs.ayugram.one/desktop/).
 
 <h3>
   <details>
-    <summary>Preferences screenshots</summary>
-    <img src='.github/demos/demo1.png' width='268'>
-    <img src='.github/demos/demo2.png' width='268'>
-    <img src='.github/demos/demo3.png' width='268'>
-    <img src='.github/demos/demo4.png' width='268'>
+    <summary>Preview</summary>
+    <table>
+      <tr>
+        <td><img src='.github/demos/demo1.png' width='268' alt='Preferences'></td>
+        <td><img src='.github/demos/demo2.png' width='268' alt='AyuGram Options'></td>
+        <td><img src='.github/demos/demo3.png' width='268' alt='Message Filters'></td>
+      </tr>
+      <td colspan="3" style="text-align: center;">
+        <img src='.github/demos/demo4.png' width='268' alt='Appearance'>
+        <img src='.github/demos/demo5.png' width='268' alt='Chats'>
+      </td>
+    </table>
   </details>
 </h3>
 
