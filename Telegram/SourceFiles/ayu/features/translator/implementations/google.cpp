@@ -88,7 +88,10 @@ QPointer<QNetworkReply> GoogleTranslator::startSingleTranslation(
 	const auto from = fromLang.trimmed().isEmpty() ? QStringLiteral("auto") : fromLang.trimmed();
 	const auto to = toLang.trimmed();
 
-	const auto preparedText = shouldWrapInHtml() ? Html::entitiesToHtml(text) : text.text;
+	auto textToTranslate = text.text;
+	textToTranslate = textToTranslate.replace(qsl("\n"), qsl("<br>"));
+
+	const auto preparedText = textToTranslate;
 	QJsonArray requestRoot;
 	QJsonArray requestPayload;
 	QJsonArray requestText;
