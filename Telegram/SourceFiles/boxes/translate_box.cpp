@@ -230,7 +230,7 @@ void TranslateBox(
 	const auto send = [=](LanguageId to) {
 		loading->show(anim::type::instant);
 		translated->hide(anim::type::instant);
-		Ayu::Translator::TranslateManager::currentInstance()->request(
+		const auto reqId = Ayu::Translator::TranslateManager::currentInstance()->request(
 			&peer->session(),
 			MTP_flags(flags),
 			msgId ? peer->input : MTP_inputPeerEmpty(),
@@ -261,6 +261,11 @@ void TranslateBox(
 			showText(
 				Ui::Text::Italic(tr::lng_translate_box_error(tr::now)));
 		}).send();
+
+		box->boxClosing() | rpl::start_with_next([=]
+		{
+			Ayu::Translator::TranslateManager::currentInstance()->cancel(reqId);
+		}, box->lifetime());
 	};
 	state->to.value() | rpl::start_with_next(send, box->lifetime());
 

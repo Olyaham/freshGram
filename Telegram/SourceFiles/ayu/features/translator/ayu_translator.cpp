@@ -43,12 +43,12 @@ TranslateManager::Builder::Builder(
 	  , _toLang(to_lang) {
 }
 
-TranslateManager::Builder &TranslateManager::Builder::done(std::function < void(const Result &) > cb) {
+TranslateManager::Builder &TranslateManager::Builder::done(std::function<void(const Result &)> cb) {
 	_done = std::move(cb);
 	return *this;
 }
 
-TranslateManager::Builder &TranslateManager::Builder::fail(std::function < void(const MTP::Error &) > cb) {
+TranslateManager::Builder &TranslateManager::Builder::fail(std::function<void(const MTP::Error &)> cb) {
 	_fail = std::move(cb);
 	return *this;
 }
@@ -242,7 +242,8 @@ bool TranslateManager::cancel(mtpRequestId requestId) {
 	if (it->second.cancel) {
 		it->second.cancel();
 	}
-	_pending.erase(it);
+	// already erased by `triggerFail`
+	// _pending.erase(it);
 	return true;
 }
 
