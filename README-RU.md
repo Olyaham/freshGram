@@ -19,11 +19,18 @@
 
 <h3>
   <details>
-    <summary>Скриншоты настроек</summary>
-    <img src='.github/demos/demo1.png' width='268'>
-    <img src='.github/demos/demo2.png' width='268'>
-    <img src='.github/demos/demo3.png' width='268'>
-    <img src='.github/demos/demo4.png' width='268'>
+    <summary>Превью</summary>
+    <table>
+      <tr>
+        <td><img src='.github/demos/demo1.png' width='268' alt='Preferences'></td>
+        <td><img src='.github/demos/demo2.png' width='268' alt='AyuGram Options'></td>
+        <td><img src='.github/demos/demo3.png' width='268' alt='Message Filters'></td>
+      </tr>
+      <tr>
+        <td><img src='.github/demos/demo4.png' width='268' alt='Appearance'></td>
+        <td><img src='.github/demos/demo5.png' width='268' alt='Chats'></td>
+      </tr>
+    </table>
   </details>
 </h3>
 
