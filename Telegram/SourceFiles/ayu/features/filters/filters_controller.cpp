@@ -150,4 +150,13 @@ bool filtered(const not_null<HistoryItem*> item) {
 	return false;
 }
 
+void invalidate(not_null<HistoryItem*> item) {
+	const auto &settings = AyuSettings::getInstance();
+	if (!settings.filtersEnabled) {
+		return;
+	}
+
+	FiltersCacheController::invalidate(item);
+}
+
 }
