@@ -68,6 +68,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
+#include "ayu/ayu_worker.h"
 
 
 namespace Api {
@@ -2039,6 +2040,7 @@ void Updates::feedUpdate(const MTPUpdate &update) {
 			} else if (d.vstatus().type() == mtpc_userStatusOnline) {
 				cSetOtherOnline(
 					d.vstatus().c_userStatusOnline().vexpires().v);
+				AyuWorker::markAsOnline(_session);
 			}
 		}
 	} break;
