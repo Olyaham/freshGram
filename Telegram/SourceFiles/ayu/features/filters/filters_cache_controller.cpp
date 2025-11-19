@@ -10,7 +10,9 @@
 
 #include "filters_controller.h"
 #include "ayu/data/ayu_database.h"
+#include "data/data_groups.h"
 #include "data/data_peer.h"
+#include "data/data_session.h"
 #include "history/history.h"
 #include "history/history_item.h"
 
@@ -98,13 +100,17 @@ std::optional<bool> isFiltered(not_null<HistoryItem*> item) {
 	return it->second;
 }
 
-void putFiltered(not_null<HistoryItem*> item, bool res) {
+void putFiltered(not_null<HistoryItem*> item, const Data::Group *group, bool res) {
 	std::lock_guard lock(mutex);
 	filteredMessages[item->history()->peer->id.value][item->id.bare] = res;
+	if (group && res) {
+		for (const auto& groupItem : group->items) {
+			filteredMessages[item->history()->peer->id.value][groupItem->id.bare] = true;
+		}
+	}
 }
 
-void invalidate(not_null<HistoryItem*> item) {
-	std::lock_guard lock(mutex);
+void invalidateSingle(not_null<HistoryItem*> item) {
 	const auto dialogIt = filteredMessages.find(item->history()->peer->id.value);
 
 	if (dialogIt == filteredMessages.end()) {
@@ -117,6 +123,17 @@ void invalidate(not_null<HistoryItem*> item) {
 	}
 
 	dialogIt->second.erase(it);
+}
+
+void invalidate(not_null<HistoryItem*> item) {
+	std::lock_guard lock(mutex);
+	if (const auto group = item->history()->owner().groups().find(item)) {
+		for (const auto& groupItem : group->items) {
+			invalidateSingle(groupItem);
+		}
+	} else {
+		invalidateSingle(item);
+	}
 }
 
 std::optional<std::vector<ReversiblePattern>> getPatternsByDialogId(uint64 dialogId) {
