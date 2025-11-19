@@ -325,6 +325,12 @@ void AddShadowBanAction(PeerData *peerData,
 		return;
 	}
 
+	if (const auto user = peerData->asUser()) {
+		if (user->isSelf()) {
+			return;
+		}
+	}
+
 	const auto realId = getDialogIdFromPeer(peerData);
 	const auto shadowBanned = ShadowBanUtils::isShadowBanned(realId);
 	const auto toggleShadowBan = [=]
