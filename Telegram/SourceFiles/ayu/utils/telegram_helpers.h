@@ -103,3 +103,6 @@ not_null<Main::Session *> currentSession();
 
 PeerData* getPeerFromDialogId(ID id);
 PeerData* getPeerFromDialogId(unsigned long long id);
+
+void getRegistrationDate(not_null<PeerData*> peer, Fn<void(TextWithEntities)> callback);
+

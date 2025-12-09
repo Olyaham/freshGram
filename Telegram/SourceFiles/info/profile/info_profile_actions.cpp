@@ -109,6 +109,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ayu/ayu_settings.h"
 #include "ayu/ui/utils/ayu_profile_values.h"
 #include "ayu/utils/telegram_helpers.h"
+#include "base/event_filter.h"
+#include "styles/style_ayu_styles.h"
+#include "ui/widgets/tooltip.h"
 #include "ui/text/text_entity.h"
 
 
@@ -1371,6 +1374,83 @@ bool SetClickContext(
 	return false;
 }
 
+void AddRegistrationOrCreationButton(const not_null<Window::SessionController*> controller,
+									 not_null<PeerData*> peer,
+									 TextWithLabel &idInfo,
+									 const auto fitLabelToButton) {
+	if (peer->isBot() || peer->isServiceUser()) {
+		return;
+	}
+
+	const auto registrationDateButton = Ui::CreateChild<Ui::IconButton>(
+		idInfo.text->parentWidget(),
+		st::infoProfileLabeledButtonRegistrationDate);
+	const auto rightSkip = st::infoProfileLabeledButtonQrRightSkip;
+	fitLabelToButton(registrationDateButton, idInfo.text, rightSkip);
+	fitLabelToButton(registrationDateButton, idInfo.subtext, rightSkip);
+	registrationDateButton->setClickedCallback([=, show = controller->uiShow()]
+	{
+		getRegistrationDate(
+			peer,
+			[=](const TextWithEntities &result)
+			{
+				if (result.empty()) {
+					return;
+				}
+				const auto parent = registrationDateButton->window();
+				const auto tooltip = Ui::CreateChild<Ui::ImportantTooltip>(
+					parent,
+					Ui::MakeNiceTooltipLabel(
+						parent,
+						rpl::single(result),
+						st::boxWideWidth,
+						st::registrationDateImportantTooltipLabel),
+					st::defaultImportantTooltip);
+				tooltip->toggleFast(false);
+
+				const auto geometry = Ui::MapFrom(
+					parent,
+					registrationDateButton,
+					registrationDateButton->rect());
+				const auto countPosition = [=](QSize size)
+				{
+					const auto left = geometry.x()
+						+ (geometry.width() - size.width()) / 2;
+					const auto right = parent->width()
+						- st::normalFont->spacew;
+					return QPoint(
+						std::max(std::min(left, right - size.width()), 0),
+						geometry.y() - size.height() - st::normalFont->descent);
+				};
+				tooltip->pointAt(geometry, RectPart::Top, countPosition);
+
+				const auto weak = QPointer(tooltip);
+				tooltip->setHiddenCallback([weak]
+				{
+					if (weak) {
+						weak->deleteLater();
+					}
+				});
+
+				base::install_event_filter(
+					tooltip,
+					qApp,
+					[weak](not_null<QEvent*> e)
+					{
+						if (e->type() == QEvent::MouseButtonPress) {
+							if (weak) {
+								weak->toggleAnimated(false);
+							}
+						}
+						return base::EventFilterResult::Continue;
+					});
+
+				tooltip->toggleAnimated(true);
+			});
+		return false;
+	});
+}
+
 object_ptr<Ui::RpWidget> DetailsFiller::setupInfo() {
 	const auto &settings = AyuSettings::getInstance();
 
@@ -1728,6 +1808,7 @@ object_ptr<Ui::RpWidget> DetailsFiller::setupInfo() {
 				}
 				return false;
 			});
+			AddRegistrationOrCreationButton(controller, _peer, idInfo, fitLabelToButton);
 		}
 	} else {
 		const auto topicRootId = _topic ? _topic->rootId() : 0;
@@ -1860,6 +1941,7 @@ object_ptr<Ui::RpWidget> DetailsFiller::setupInfo() {
 				}
 				return false;
 			});
+			AddRegistrationOrCreationButton(controller, _peer, idInfo, fitLabelToButton);
 		}
 
 		if (settings.showPeerId != 0 && _topic) {
@@ -1884,6 +1966,7 @@ object_ptr<Ui::RpWidget> DetailsFiller::setupInfo() {
 				}
 				return false;
 			});
+			AddRegistrationOrCreationButton(controller, _peer, idInfo, fitLabelToButton);
 		}
 	}
 	wrap->toggleOn(tracker.atLeastOneShownValue());

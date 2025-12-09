@@ -137,8 +137,10 @@ void AyuLanguage::applyLanguageJson(QJsonDocument doc) {
 			val = val.replace(qsl("%1$d"), qsl("{count}"));
 		} else if (val.contains(qsl("%1$d")) && val.contains(qsl("%2$d"))) {
 			val = val.replace(qsl("%1$d"), qsl("{count1}")).replace(qsl("%2$d"), qsl("{count2}"));
-		} else if (val.contains(qsl("%1$s"))) {
+		} else if (val.contains(qsl("%1$s")) && !val.contains(qsl("%2$s"))) {
 			val = val.replace(qsl("%1$s"), qsl("{item}"));
+		} else if (val.contains(qsl("%1$s")) && val.contains(qsl("%2$s"))) {
+			val = val.replace(qsl("%1$s"), qsl("{item1}")).replace(qsl("%2$s"), qsl("{item2}"));
 		}
 
 		Lang::GetInstance().resetValue(key.toUtf8());
