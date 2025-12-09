@@ -205,7 +205,11 @@ void Badge::setContent(Content content) {
 		_view->paintRequest(
 		) | rpl::start_with_next([=, check = _view.data()]{
 			Painter p(check);
-			icon->paint(p, skip, 0, check->width());
+			if (_overrideSt) {
+				icon->paint(p, skip, 0, check->width(), _overrideSt->premiumFg->c);
+			} else {
+				icon->paint(p, skip, 0, check->width());
+			}
 		}, _view->lifetime());
 	} break;
 	}

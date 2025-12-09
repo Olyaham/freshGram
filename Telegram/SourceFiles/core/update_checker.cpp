@@ -639,7 +639,8 @@ void HttpChecker::start() {
 		+ (updaterVersion > 1 ? QString::number(updaterVersion) : QString());
 	auto url = QUrl(path);
 	DEBUG_LOG(("Update Info: requesting update state"));
-	const auto request = QNetworkRequest(url);
+	auto request = QNetworkRequest(url);
+	request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
 	_manager = std::make_unique<QNetworkAccessManager>();
 	_reply = _manager->get(request);
 	_reply->connect(_reply, &QNetworkReply::finished, [=] {
@@ -830,6 +831,7 @@ void HttpLoaderActor::sendRequest() {
 	request.setAttribute(
 		QNetworkRequest::HttpPipeliningAllowedAttribute,
 		true);
+	request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
 	_reply.reset(_manager.get(request));
 	connect(
 		_reply.get(),
