@@ -226,6 +226,7 @@ void SetupOtherThings(not_null<Ui::VerticalLayout*> container, not_null<Window::
 			.confirmed = [=](Fn<void()> &&close)
 			{
 				AyuSettings::reset();
+				controller->showToast(tr::lng_box_done(tr::now));
 				close();
 			},
 			.confirmText = tr::lng_box_yes(),
