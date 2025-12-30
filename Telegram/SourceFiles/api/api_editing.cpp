@@ -150,7 +150,7 @@ mtpRequestId SuggestMedia(
 	const auto randomId = base::RandomValue<uint64>();
 	return api->request(MTPmessages_SendMedia(
 		MTP_flags(flags),
-		item->history()->peer->input,
+		item->history()->peer->input(),
 		ReplyToForMTP(item->history(), replyTo),
 		inputMedia.value_or(Data::WebPageForMTP(webpage, text.isEmpty())),
 		MTP_string(text),
@@ -315,7 +315,7 @@ mtpRequestId EditMessage(
 		: item->id;
 	return api->request(MTPmessages_EditMessage(
 		MTP_flags(flags),
-		item->history()->peer->input,
+		item->history()->peer->input(),
 		MTP_int(id),
 		MTP_string(text),
 		inputMedia.value_or(Data::WebPageForMTP(webpage, text.isEmpty())),

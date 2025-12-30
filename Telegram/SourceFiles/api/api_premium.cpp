@@ -95,7 +95,7 @@ Premium::Premium(not_null<ApiWrap*> api)
 		// only queued, because it is not constructed yet.
 		Data::AmPremiumValue(
 			_session
-		) | rpl::start_with_next([=] {
+		) | rpl::on_next([=] {
 			reload();
 			if (_session->premium()) {
 				reloadCloudSet();
@@ -365,7 +365,7 @@ void Premium::resolveGiveawayInfo(
 	_giveawayInfoPeer = peer;
 	_giveawayInfoMessageId = messageId;
 	_giveawayInfoRequestId = _api.request(MTPpayments_GetGiveawayInfo(
-		_giveawayInfoPeer->input,
+		_giveawayInfoPeer->input(),
 		MTP_int(_giveawayInfoMessageId.bare)
 	)).done([=](const MTPpayments_GiveawayInfo &result) {
 		_giveawayInfoRequestId = 0;
@@ -500,7 +500,7 @@ rpl::producer<rpl::no_value, QString> PremiumGiftCodeOptions::request() {
 			MTP_flags(_peer->isChannel()
 				? MTPpayments_GetPremiumGiftCodeOptions::Flag::f_boost_peer
 				: MTPpayments_GetPremiumGiftCodeOptions::Flag(0)),
-			_peer->input
+			_peer->input()
 		)).done([=](const MTPVector<TLOption> &result) {
 			auto tlMapOptions = base::flat_map<Amount, QVector<TLOption>>();
 			for (const auto &tlOption : result.v) {
@@ -554,7 +554,7 @@ rpl::producer<rpl::no_value, QString> PremiumGiftCodeOptions::applyPrepaid(
 		}
 
 		_api.request(MTPpayments_LaunchPrepaidGiveaway(
-			_peer->input,
+			_peer->input(),
 			MTP_long(prepaidId),
 			invoice.giveawayCredits
 				? Payments::InvoiceCreditsGiveawayToTL(invoice)

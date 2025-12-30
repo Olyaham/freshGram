@@ -483,7 +483,7 @@ ThemeDocumentBox::ThemeDocumentBox(
 	Window::WallPaperResolved(
 		&_parent->history()->owner(),
 		&paper
-	) | rpl::start_with_next([=](const Data::WallPaper *paper) {
+	) | rpl::on_next([=](const Data::WallPaper *paper) {
 		_parent->repaint();
 		if (!paper) {
 			_preview.reset();
@@ -555,7 +555,7 @@ ClickHandlerPtr ThemeDocumentBox::createViewLink() {
 					const auto api = &controller->session().api();
 					api->request(MTPmessages_SetChatWallPaper(
 						MTP_flags(MTPmessages_SetChatWallPaper::Flag::f_revert),
-						view->data()->history()->peer->input,
+						view->data()->history()->peer->input(),
 						MTPInputWallPaper(),
 						MTPWallPaperSettings(),
 						MTPint()
