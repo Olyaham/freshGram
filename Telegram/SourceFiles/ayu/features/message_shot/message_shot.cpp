@@ -376,11 +376,12 @@ QImage Make(not_null<QWidget*> box, const ShotConfig &config) {
 
 		const auto displayUserpic = view->displayFromPhoto() || message->isPost();
 
-		const auto rect = QRect(0, y, width, view->height());
+		const auto rect = QRect(0, 0, width, view->height());
 
 		auto context = controller->defaultChatTheme()->preparePaintContext(
 			st.get(),
 			viewport,
+			rect,
 			rect,
 			true);
 

@@ -11,6 +11,7 @@
 #include "base/timer.h"
 #include "data/data_channel.h"
 #include "data/data_session.h"
+#include "info/profile/info_profile_values.h"
 #include "lang/lang_keys.h"
 #include "profile/profile_back_button.h"
 #include "styles/style_chat.h"
@@ -18,6 +19,7 @@
 #include "styles/style_info.h"
 #include "ui/ui_utility.h"
 #include "ui/boxes/confirm_box.h"
+#include "ui/controls/userpic_button.h"
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/scroll_area.h"
 #include "ui/widgets/shadow.h"
@@ -71,12 +73,11 @@ object_ptr<Window::SectionWidget> SectionMemento::createWidget(
 FixedBar::FixedBar(
 	QWidget *parent,
 	not_null<Window::SessionController*> controller,
-	not_null<PeerData*> peer)
-	: Ui::RpWidget(parent), _controller(controller), _peer(peer), _backButton(
-		  this,
-		  &controller->session(),
-		  tr::lng_terms_back(tr::now),
-		  controller->adaptive().oneColumnValue()), _cancel(this, st::historyAdminLogCancelSearch) {
+	not_null<PeerData*> peer) : Ui::RpWidget(parent)
+, _controller(controller)
+, _peer(peer)
+, _backButton(this)
+, _cancel(this, st::historyAdminLogCancelSearch) {
 	_backButton->moveToLeft(0, 0);
 	_backButton->setClickedCallback([=]
 	{
@@ -84,6 +85,14 @@ FixedBar::FixedBar(
 	});
 
 	_cancel->hide(anim::type::instant);
+
+	Info::Profile::NameValue(peer) | rpl::on_next([=](QString name) {
+		_backButton->setText(name);
+	}, _backButton->lifetime());
+	_backButton->setWidget(Ui::CreateChild<Ui::UserpicButton>(
+		_backButton.get(),
+		peer,
+		st::topBarInfoButton));
 }
 
 void FixedBar::goBack() {
