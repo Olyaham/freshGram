@@ -67,6 +67,9 @@ const auto regDateBotUsername = QString("exteraAuthBot");
 constexpr auto regDateBotFallbackId = 6247153446L;
 const auto regDateBotFallbackUsername = QString("ayugrambot");
 
+const auto kZalgoPattern = QStringLiteral(
+	"\\p{Mn}{3,}|[\\x{202A}-\\x{202E}\\x{2066}-\\x{2069}\\x{200E}\\x{200F}\\x{061C}]");
+
 }
 
 Main::Session *getSession(ID userId) {
@@ -1041,6 +1044,35 @@ PeerData *getPeerFromDialogId(ID id) {
 
 PeerData *getPeerFromDialogId(unsigned long long id) {
 	return getPeerFromDialogId<unsigned long long>(id);
+}
+
+QString filterZalgo(const QString &text) {
+	static const auto regex = QRegularExpression(
+		kZalgoPattern,
+		QRegularExpression::UseUnicodePropertiesOption);
+
+	auto match = regex.match(text);
+	if (!match.hasMatch()) {
+		return text;
+	}
+
+	QString output;
+	output.reserve(text.length());
+	int lastEnd = 0;
+
+	auto it = regex.globalMatch(text);
+	while (it.hasNext()) {
+		match = it.next();
+		output.append(text.mid(lastEnd, match.capturedStart() - lastEnd));
+		const int matchLength = match.capturedLength();
+		for (int i = 0; i < matchLength; i++) {
+			output.append(QChar(0x2060));
+		}
+		lastEnd = match.capturedEnd();
+	}
+	output.append(text.mid(lastEnd));
+
+	return output;
 }
 
 void getUserRegistrationDateInner(

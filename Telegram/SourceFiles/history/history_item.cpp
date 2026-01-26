@@ -74,7 +74,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
-#include "ayu/ayu_state.h"
 #include "ayu/features/message_shot/message_shot.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "ui/emoji_config.h"
@@ -3952,6 +3951,10 @@ FullReplyTo HistoryItem::replyTo() const {
 
 void HistoryItem::setText(const TextWithEntities &textWithEntities) {
 	auto text = textWithEntities;
+	const auto &settings = AyuSettings::getInstance();
+	if (settings.filterZalgo) {
+		text.text = filterZalgo(text.text);
+	}
 
 	static const auto kEmojiLinkRegex = QRegularExpression(
 		QStringLiteral("^tg://emoji\\?id=(\\d+)$"));

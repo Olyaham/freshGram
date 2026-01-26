@@ -346,17 +346,26 @@ void UserData::setName(
 		const QString &newLastName,
 		const QString &newPhoneName,
 		const QString &newUsername) {
-	bool changeName = !newFirstName.isEmpty() || !newLastName.isEmpty();
+	auto filteredFirstName = newFirstName;
+	auto filteredLastName = newLastName;
+
+	const auto &settings = AyuSettings::getInstance();
+	if (settings.filterZalgo) {
+		filteredFirstName = filterZalgo(filteredFirstName);
+		filteredLastName = filterZalgo(filteredLastName);
+	}
+
+	bool changeName = !filteredFirstName.isEmpty() || !filteredLastName.isEmpty();
 
 	QString newFullName;
-	if (changeName && newFirstName.trimmed().isEmpty()) {
-		firstName = newLastName;
+	if (changeName && filteredFirstName.trimmed().isEmpty()) {
+		firstName = filteredLastName;
 		lastName = QString();
 		newFullName = firstName;
 	} else {
 		if (changeName) {
-			firstName = newFirstName;
-			lastName = newLastName;
+			firstName = filteredFirstName;
+			lastName = filteredLastName;
 		}
 		newFullName = lastName.isEmpty()
 			? firstName

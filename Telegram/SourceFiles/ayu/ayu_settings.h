@@ -140,6 +140,8 @@ public:
 	bool showMessageSeconds;
 	bool showMessageShot;
 
+	bool filterZalgo;
+
 	bool stickerConfirmation;
 	bool gifConfirmation;
 	bool voiceConfirmation;
@@ -247,6 +249,8 @@ void set_showPeerId(int val);
 void set_showMessageSeconds(bool val);
 void set_showMessageShot(bool val);
 
+void set_filterZalgo(bool val);
+
 void set_stickerConfirmation(bool val);
 void set_gifConfirmation(bool val);
 void set_voiceConfirmation(bool val);
@@ -333,6 +337,7 @@ inline void to_json(nlohmann::json &nlohmann_json_j, const AyuGramSettings &nloh
 	NLOHMANN_JSON_TO(showPeerId)
 	NLOHMANN_JSON_TO(showMessageSeconds)
 	NLOHMANN_JSON_TO(showMessageShot)
+	NLOHMANN_JSON_TO(filterZalgo)
 	NLOHMANN_JSON_TO(stickerConfirmation)
 	NLOHMANN_JSON_TO(gifConfirmation)
 	NLOHMANN_JSON_TO(voiceConfirmation)
@@ -418,6 +423,7 @@ inline void from_json(const nlohmann::json &nlohmann_json_j, AyuGramSettings &nl
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(showPeerId)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(showMessageSeconds)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(showMessageShot)
+	NLOHMANN_JSON_FROM_WITH_DEFAULT(filterZalgo)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(stickerConfirmation)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(gifConfirmation)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(voiceConfirmation)

@@ -327,6 +327,8 @@ AyuGramSettings::AyuGramSettings() {
 	showMessageSeconds = false;
 	showMessageShot = true;
 
+	filterZalgo = true;
+
 	// ~ Confirmations
 	stickerConfirmation = false;
 	gifConfirmation = false;
@@ -662,6 +664,10 @@ void set_showMessageSeconds(bool val) {
 
 void set_showMessageShot(bool val) {
 	settings->showMessageShot = val;
+}
+
+void set_filterZalgo(bool val) {
+	settings->filterZalgo = val;
 }
 
 void set_stickerConfirmation(bool val) {

@@ -9,9 +9,11 @@
 #include "lang_auto.h"
 #include "settings_ayu_utils.h"
 #include "ayu/ayu_settings.h"
+#include "core/application.h"
 #include "settings/settings_common.h"
 #include "styles/style_settings.h"
 #include "ui/vertical_list.h"
+#include "ui/boxes/confirm_box.h"
 #include "ui/boxes/single_choice_box.h"
 #include "ui/widgets/buttons.h"
 #include "ui/wrap/vertical_layout.h"
@@ -203,6 +205,37 @@ void SetupQoLToggles(not_null<Ui::VerticalLayout*> container, not_null<Window::S
 	AddSkip(container);
 	AddDivider(container);
 	AddSkip(container);
+
+	AddButtonWithIcon(
+		container,
+		tr::ayu_FilterZalgo(),
+		st::settingsButtonNoIcon
+	)->toggleOn(
+		rpl::single(settings->filterZalgo)
+	)->toggledValue(
+	) | rpl::filter(
+		[=](bool enabled)
+		{
+			return (enabled != settings->filterZalgo);
+		}) | on_next(
+		[=](bool enabled)
+		{
+			AyuSettings::set_filterZalgo(enabled);
+			AyuSettings::save();
+
+			// restart because hooks for filter are in Peer::setName which can be updated only on restart
+			// same for HistoryItem::setText
+			controller->show(Ui::MakeConfirmBox({
+				.text = tr::lng_settings_need_restart(),
+				.confirmed = []
+				{
+					Core::Restart();
+				},
+				.confirmText = tr::lng_settings_restart_now(),
+				.cancelText = tr::lng_settings_restart_later(),
+			}));
+		},
+		container->lifetime());
 
 	AddButtonWithIcon(
 		container,
