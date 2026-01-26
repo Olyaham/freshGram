@@ -293,6 +293,9 @@ private:
 	// Don't load anything until the memento was read.
 	bool _upLoaded = true;
 	bool _downLoaded = true;
+	bool _loadingUp = false;
+	bool _loadingDown = false;
+	int _loadRequestNum = 0;
 	Ui::Text::String _emptyText;
 	QString _searchQuery;
 
