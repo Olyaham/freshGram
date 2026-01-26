@@ -17,7 +17,7 @@ std::vector<AyuMessageBase> getEditedMessages(not_null<HistoryItem*> item, ID mi
 bool hasRevisions(not_null<HistoryItem*> item);
 
 void addDeletedMessage(not_null<HistoryItem*> item);
-std::vector<AyuMessageBase> getDeletedMessages(not_null<PeerData*> peer, ID topicId, ID minId, ID maxId, int totalLimit);
+std::vector<AyuMessageBase> getDeletedMessages(not_null<PeerData*> peer, ID topicId, ID minId, ID maxId, int totalLimit, const QString &searchQuery = QString());
 bool hasDeletedMessages(not_null<PeerData*> peer, ID topicId);
 
 }

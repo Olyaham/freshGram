@@ -78,6 +78,8 @@ public:
 	void saveState(not_null<SectionMemento*> memento);
 	void restoreState(not_null<SectionMemento*> memento);
 
+	void applySearch(const QString &query);
+
 	// Ui::AbstractTooltipShower interface.
 	QString tooltipText() const override;
 	QPoint tooltipPos() const override;
@@ -292,6 +294,7 @@ private:
 	bool _upLoaded = true;
 	bool _downLoaded = true;
 	Ui::Text::String _emptyText;
+	QString _searchQuery;
 
 	MouseAction _mouseAction = MouseAction::None;
 	TextSelectType _mouseSelectType = TextSelectType::Letters;

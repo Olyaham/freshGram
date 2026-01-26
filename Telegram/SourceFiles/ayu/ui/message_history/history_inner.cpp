@@ -472,6 +472,9 @@ void InnerWidget::checkPreloadMore() {
 }
 
 void InnerWidget::updateEmptyText() {
+	// auto text = !_searchQuery.isEmpty()
+	// 	? tr::lng_admin_log_no_results_title(tr::now)
+	// 	: tr::lng_search_messages_none(tr::now);
 	_emptyText.setMarkedText(st::defaultTextStyle, Ui::Text::Semibold(tr::lng_search_messages_none(tr::now)));
 }
 
@@ -639,6 +642,7 @@ void InnerWidget::saveState(not_null<SectionMemento*> memento) {
 		base::take(_messageIds),
 		_upLoaded,
 		_downLoaded);
+	memento->setSearchQuery(base::take(_searchQuery));
 	base::take(_itemsByData);
 	_upLoaded = _downLoaded = true; // Don't load or handle anything anymore.
 }
@@ -652,8 +656,28 @@ void InnerWidget::restoreState(not_null<SectionMemento*> memento) {
 	_messageIds = memento->takeMessageIds();
 	_upLoaded = memento->upLoaded();
 	_downLoaded = memento->downLoaded();
+	_searchQuery = memento->takeSearchQuery();
 	updateMinMaxIds();
 	updateSize();
+}
+
+void InnerWidget::applySearch(const QString &query) {
+	if (_item) {
+		return;
+	}
+	if (_searchQuery != query) {
+		_searchQuery = query;
+		_upLoaded = false;
+		_downLoaded = true;
+		_items.clear();
+		_messageIds.clear();
+		_itemsByData.clear();
+		_itemDates.clear();
+		updateMinMaxIds();
+		updateEmptyText();
+		updateSize();
+		preloadMore(Direction::Up);
+	}
 }
 
 void InnerWidget::preloadMore(Direction direction) {
@@ -672,7 +696,7 @@ void InnerWidget::preloadMore(Direction direction) {
 		messages = AyuMessages::getEditedMessages(_item, minId, maxId, perPage);
 	} else {
 		// viewing deleted messages
-		messages = AyuMessages::getDeletedMessages(_peer, _topicId, minId, maxId, perPage);
+		messages = AyuMessages::getDeletedMessages(_peer, _topicId, minId, maxId, perPage, _searchQuery);
 	}
 
 	crl::on_main([=]

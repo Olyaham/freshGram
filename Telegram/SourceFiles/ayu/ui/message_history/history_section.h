@@ -139,6 +139,14 @@ public:
 		return _downLoaded;
 	}
 
+	void setSearchQuery(QString &&query) {
+		_searchQuery = std::move(query);
+	}
+
+	QString takeSearchQuery() {
+		return std::move(_searchQuery);
+	}
+
 private:
 	not_null<PeerData*> _peer;
 	HistoryItem *_item;
@@ -148,6 +156,7 @@ private:
 	std::set<uint64> _messageIds;
 	bool _upLoaded = false;
 	bool _downLoaded = true;
+	QString _searchQuery;
 };
 
 } // namespace MessageHistory
