@@ -80,7 +80,7 @@ MTPInputReplyTo ReplyToForMTP(
 		const auto external = replyTo.messageId
 			&& (replyTo.messageId.peer != history->peer->id
 				|| replyingToTopicId != replyToTopicId);
-		const auto textNormalized = reverseLocalPremiumEmoji(replyTo.quote, history);
+		const auto textNormalized = reverseLocalPremiumEmoji(replyTo.quote, history, true);
 		const auto quoteEntities = Api::EntitiesToMTP(
 			&history->session(),
 			textNormalized.entities,
@@ -104,7 +104,7 @@ MTPInputReplyTo ReplyToForMTP(
 			(external
 				? owner->peer(replyTo.messageId.peer)->input()
 				: MTPInputPeer()),
-			MTP_string(replyTo.quote.text),
+			MTP_string(textNormalized.text),
 			quoteEntities,
 			MTP_int(replyTo.quoteOffset),
 			(replyToMonoforumPeerId

@@ -54,6 +54,7 @@
 #include "ui/text/text_utilities.h"
 #include "ui/text/text_entity.h"
 #include "ui/toast/toast.h"
+#include "ui/emoji_config.h"
 
 namespace {
 
@@ -968,6 +969,37 @@ TextWithEntities reverseLocalPremiumEmoji(const TextWithEntities &text, not_null
 		}
 	}
 	return result;
+}
+
+void applyLocalPremiumEmoji(TextWithEntities &text) {
+	static const auto kLocalPremiumEmojiRegex = QRegularExpression(
+		QStringLiteral("^tg://emoji\\?id=(\\d+)$"));
+
+	for (auto &entity : text.entities) {
+		if (entity.type() == EntityType::CustomUrl) {
+			const auto match = kLocalPremiumEmojiRegex.match(entity.data());
+			if (match.hasMatch()) {
+				const auto entityText = text.text.mid(
+					entity.offset(),
+					entity.length());
+				auto emojiLength = 0;
+				const auto emoji = Ui::Emoji::Find(entityText, &emojiLength);
+				if (emoji && emojiLength == entityText.size()) {
+					const auto emojiId = match.captured(1);
+					auto ok = false;
+					emojiId.toULongLong(&ok);
+					if (ok) {
+						entity = EntityInText(
+							EntityType::CustomEmoji,
+							entity.offset(),
+							entity.length(),
+							emojiId);
+						entity.setLocal();
+					}
+				}
+			}
+		}
+	}
 }
 
 void resolveAllChats(const std::map<long long, QString> &peers) {

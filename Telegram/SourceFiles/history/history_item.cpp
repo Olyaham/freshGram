@@ -3956,33 +3956,7 @@ void HistoryItem::setText(const TextWithEntities &textWithEntities) {
 		text.text = filterZalgo(text.text);
 	}
 
-	static const auto kEmojiLinkRegex = QRegularExpression(
-		QStringLiteral("^tg://emoji\\?id=(\\d+)$"));
-	for (auto &entity : text.entities) {
-		if (entity.type() == EntityType::CustomUrl) {
-			const auto match = kEmojiLinkRegex.match(entity.data());
-			if (match.hasMatch()) {
-				const auto entityText = text.text.mid(
-					entity.offset(),
-					entity.length());
-				int emojiLength = 0;
-				const auto emoji = Ui::Emoji::Find(entityText, &emojiLength);
-				if (emoji && emojiLength == entityText.size()) {
-					const auto emojiId = match.captured(1);
-					auto ok = false;
-					emojiId.toULongLong(&ok);
-					if (ok) {
-						entity = EntityInText(
-							EntityType::CustomEmoji,
-							entity.offset(),
-							entity.length(),
-							emojiId);
-						entity.setLocal();
-					}
-				}
-			}
-		}
-	}
+	applyLocalPremiumEmoji(text);
 
 	for (const auto &entity : text.entities) {
 		auto type = entity.type();
