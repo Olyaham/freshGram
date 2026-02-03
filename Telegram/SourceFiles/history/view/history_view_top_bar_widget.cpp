@@ -818,7 +818,7 @@ void TopBarWidget::infoClicked() {
 void TopBarWidget::backClicked() {
 	if (_activeChat.key.folder()) {
 		const auto &settings = AyuSettings::getInstance();
-		if (settings.hideAllChatsFolder) {
+		if (settings.hideAllChatsFolder()) {
 			const auto filters = &_controller->session().data().chatsFilters();
 			const auto lookupId = filters->lookupId(_controller->session().premium() ? 0 : 1);
 			_controller->setActiveChatsFilter(lookupId);
@@ -1199,7 +1199,7 @@ void TopBarWidget::updateControlsVisibility() {
 
 	_clear->show();
 	_delete->setVisible(_canDelete);
-	_messageShot->setVisible(settings.showMessageShot);
+	_messageShot->setVisible(settings.showMessageShot());
 	_forward->setVisible(_canForward);
 	_sendNow->setVisible(_canSendNow);
 
@@ -1291,7 +1291,7 @@ void TopBarWidget::updateControlsVisibility() {
 	const auto showRecentActions = [&]
 	{
 		const auto &settings = AyuSettings::getInstance();
-		if (!settings.quickAdminShortcuts) {
+		if (!settings.quickAdminShortcuts()) {
 			return false;
 		}
 		if (_activeChat.section == Section::ChatsList) {
@@ -1309,7 +1309,7 @@ void TopBarWidget::updateControlsVisibility() {
 	const auto showAdmins = [&]
 	{
 		const auto &settings = AyuSettings::getInstance();
-		if (!settings.quickAdminShortcuts) {
+		if (!settings.quickAdminShortcuts()) {
 			return false;
 		}
 		if (_activeChat.section == Section::ChatsList) {
@@ -1399,7 +1399,7 @@ bool TopBarWidget::showSelectedState() const {
 	const auto &settings = AyuSettings::getInstance();
 
 	return (_selectedCount > 0)
-		&& (_canDelete || _canForward || _canSendNow || settings.showMessageShot);
+		&& (_canDelete || _canForward || _canSendNow || settings.showMessageShot());
 }
 
 void TopBarWidget::showSelected(SelectedState state) {
@@ -1408,7 +1408,7 @@ void TopBarWidget::showSelected(SelectedState state) {
 	auto canDelete = (state.count > 0 && state.count == state.canDeleteCount);
 	auto canForward = (state.count > 0 && state.count == state.canForwardCount);
 	auto canSendNow = (state.count > 0 && state.count == state.canSendNowCount);
-	auto count = (!canDelete && !canForward && !canSendNow && !settings.showMessageShot) ? 0 : state.count;
+	auto count = (!canDelete && !canForward && !canSendNow && !settings.showMessageShot()) ? 0 : state.count;
 	if (_selectedCount == count
 		&& _canDelete == canDelete
 		&& _canForward == canForward

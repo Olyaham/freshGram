@@ -13,6 +13,7 @@
 #include "lang_auto.h"
 #include "ayu/ayu_settings.h"
 #include "ayu/ui/boxes/donate_qr_box.h"
+#include "ayu/ui/settings/settings_ayu_utils.h"
 #include "boxes/abstract_box.h"
 #include "core/application.h"
 #include "lang/lang_text_entity.h"
@@ -174,30 +175,10 @@ void SetupDonations(not_null<Ui::VerticalLayout*> container, not_null<Window::Se
 }
 
 void SetupCrashReporting(not_null<Ui::VerticalLayout*> container) {
-	auto *settings = &AyuSettings::getInstance();
-
 	AddSkip(container);
 	AddSubsectionTitle(container, tr::ayu_CategoryOther());
 
-	AddButtonWithIcon(
-		container,
-		tr::ayu_CrashReporting(),
-		st::settingsButton,
-		{&st::menuIconReport}
-	)->toggleOn(
-		rpl::single(settings->crashReporting)
-	)->toggledValue(
-	) | rpl::filter(
-		[=](bool enabled)
-		{
-			return (enabled != settings->crashReporting);
-		}) | on_next(
-		[=](bool enabled)
-		{
-			AyuSettings::set_crashReporting(enabled);
-			AyuSettings::save();
-		},
-		container->lifetime());
+	AddSettingToggle(container, tr::ayu_CrashReporting(), &AyuSettings::crashReporting, &AyuSettings::setCrashReporting, st::menuIconReport);
 	AddSkip(container);
 	AddDividerText(container, tr::ayu_CrashReportingDescription());
 }

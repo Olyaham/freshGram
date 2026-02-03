@@ -845,12 +845,12 @@ InlineListData InlineListDataFromMessage(not_null<Element*> view) {
 	using Flag = InlineListData::Flag;
 	const auto item = view->data();
 	const auto &settings = AyuSettings::getInstance();
-	if (!settings.showChannelReactions
+	if (!settings.showChannelReactions()
 		&& item->history()->peer->isChannel()
 		&& !item->history()->peer->isMegagroup()) {
 		return InlineListData();
 	}
-	if (!settings.showGroupReactions
+	if (!settings.showGroupReactions()
 		&& item->history()->peer->isMegagroup()) {
 		return InlineListData();
 	}

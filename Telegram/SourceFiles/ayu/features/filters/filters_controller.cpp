@@ -26,7 +26,6 @@
 #include "history/history_item_components.h"
 
 #include "filters_utils.h"
-#include "shadow_ban_utils.h"
 #include "ayu/utils/telegram_helpers.h"
 
 namespace FiltersController {
@@ -91,7 +90,7 @@ std::optional<bool> isFiltered(const QString &str, uint64 dialogId) {
 
 bool isEnabled(not_null<PeerData*> peer) {
 	const auto &settings = AyuSettings::getInstance();
-	return settings.filtersEnabled && (settings.filtersEnabledInChats || peer->isBroadcast());
+	return settings.filtersEnabled() && (settings.filtersEnabledInChats() || peer->isBroadcast());
 }
 
 bool isBlocked(const not_null<HistoryItem*> item) {
@@ -115,16 +114,16 @@ bool isBlocked(const not_null<HistoryItem*> item) {
 		return false;
 	}();
 
-	return settings.filtersEnabled &&
+	return settings.filtersEnabled() &&
 	(
-		((item->from()->isUser() || item->from()->isBroadcast()) && ShadowBanUtils::isShadowBanned(getDialogIdFromPeer(item->from()))) ||
-		(settings.hideFromBlocked && blocked)
+		((item->from()->isUser() || item->from()->isBroadcast()) && settings.isShadowBanned(getDialogIdFromPeer(item->from()))) ||
+		(settings.hideFromBlocked() && blocked)
 	);
 }
 
 bool filtered(const not_null<HistoryItem*> item) {
 	const auto &settings = AyuSettings::getInstance();
-	if (!settings.filtersEnabled) {
+	if (!settings.filtersEnabled()) {
 		return false;
 	}
 
@@ -155,7 +154,7 @@ bool filtered(const not_null<HistoryItem*> item) {
 
 void invalidate(not_null<HistoryItem*> item) {
 	const auto &settings = AyuSettings::getInstance();
-	if (!settings.filtersEnabled) {
+	if (!settings.filtersEnabled()) {
 		return;
 	}
 

@@ -853,7 +853,7 @@ void StickersListWidget::fillFilteredStickersRow() {
 
 void StickersListWidget::addSearchRow(not_null<StickersSet*> set) {
 	const auto &settings = AyuSettings::getInstance();
-	if (settings.showOnlyAddedEmojisAndStickers && !SetInMyList(set->flags)) {
+	if (settings.showOnlyAddedEmojisAndStickers() && !SetInMyList(set->flags)) {
 		return;
 	}
 	const auto skipPremium = !session().premiumPossible();
@@ -2170,7 +2170,8 @@ void StickersListWidget::mouseReleaseEvent(QMouseEvent *e) {
 					document
 				);
 				auto options = Api::SendOptions();
-				if (AyuSettings::isUseScheduledMessages()) {
+				auto &ghost = AyuSettings::ghost(&session());
+				if (ghost.isUseScheduledMessages() && !options.scheduled) {
 					auto current = base::unixtime::now();
 					options.scheduled = current + 12;
 				}
@@ -2185,7 +2186,7 @@ void StickersListWidget::mouseReleaseEvent(QMouseEvent *e) {
 						});
 					});
 
-				if (settings.stickerConfirmation && (_mode == Mode::Full || _mode == Mode::ChatIntro) && _requireConfirmation) {
+				if (settings.stickerConfirmation() && (_mode == Mode::Full || _mode == Mode::ChatIntro) && _requireConfirmation) {
 					Ui::show(Ui::MakeConfirmBox({
 						.text = tr::ayu_ConfirmationSticker(),
 						.confirmed = sendStickerCallback,
@@ -2599,7 +2600,7 @@ auto StickersListWidget::collectRecentStickers() -> std::vector<Sticker> {
     const auto &settings = AyuSettings::getInstance();
 
 	auto add = [&](not_null<DocumentData*> document, bool custom) {
-		if (result.size() >= settings.recentStickersCount) {
+		if (result.size() >= settings.recentStickersCount()) {
 			return;
 		}
 		const auto i = ranges::find(result, document, &Sticker::document);

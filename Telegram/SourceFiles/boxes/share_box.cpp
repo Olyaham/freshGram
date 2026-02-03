@@ -1867,8 +1867,8 @@ ShareBox::SubmitCallback ShareBox::DefaultForwardCallback(
 						}
 					}
 
-					const auto &settings = AyuSettings::getInstance();
-					if (!settings.sendReadMessages && settings.markReadAfterAction && history->lastMessage())
+					const auto &ghost = AyuSettings::ghost(&history->owner().session());
+					if (!ghost.sendReadMessages() && ghost.markReadAfterAction() && history->lastMessage())
 					{
 						readHistory(history->lastMessage());
 					}

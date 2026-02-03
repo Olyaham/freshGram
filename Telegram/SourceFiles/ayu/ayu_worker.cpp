@@ -54,11 +54,6 @@ void runOnce() {
 		lateInit();
 	}
 
-	const auto &settings = AyuSettings::getInstance();
-	if (!settings.sendOfflinePacketAfterOnline) {
-		return;
-	}
-
 	const auto t = base::unixtime::now();
 
 	for (const auto &[index, account] : Core::App().domain().accounts()) {
@@ -67,6 +62,11 @@ void runOnce() {
 				const auto id = session->userId().bare;
 				if (!state.contains(id)) {
 					state[id] = true;
+				}
+
+				const auto &ghost = AyuSettings::ghost(session);
+				if (!ghost.sendOfflinePacketAfterOnline()) {
+					continue;
 				}
 
 				if (state[id] || session->user()->lastseen().isOnline(t)) {

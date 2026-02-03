@@ -2190,8 +2190,15 @@ void ComposeControls::init() {
 		updateAttachBotsMenu();
 	}, _wrap->lifetime());
 
-	AyuSettings::get_historyUpdateReactive() | rpl::on_next([=]
-	{
+	rpl::merge(
+		AyuSettings::getInstance().showAttachButtonInMessageFieldChanges() | rpl::to_empty,
+		AyuSettings::getInstance().showCommandsButtonInMessageFieldChanges() | rpl::to_empty,
+		AyuSettings::getInstance().showEmojiButtonInMessageFieldChanges() | rpl::to_empty,
+		AyuSettings::getInstance().showMicrophoneButtonInMessageFieldChanges() | rpl::to_empty,
+		AyuSettings::getInstance().showAutoDeleteButtonInMessageFieldChanges() | rpl::to_empty,
+		AyuSettings::getInstance().showAttachPopupChanges() | rpl::to_empty,
+		AyuSettings::getInstance().showEmojiPopupChanges() | rpl::to_empty
+	) | rpl::on_next([=] {
 		updateSendButtonType();
 		updateControlsVisibility();
 		updateControlsGeometry(_wrap->size());
@@ -2208,7 +2215,7 @@ void ComposeControls::orderControls() {
 
 bool ComposeControls::showRecordButton() const {
 	const auto &settings = AyuSettings::getInstance();
-	if (!settings.showMicrophoneButtonInMessageField) {
+	if (!settings.showMicrophoneButtonInMessageField()) {
 		return false;
 	}
 
@@ -3365,18 +3372,18 @@ void ComposeControls::updateControlsGeometry(QSize size) {
 		- (commentsShown
 			? (_commentsShown->width() + _st.commentsSkip)
 			: 0)
-		- ((_attachToggle && settings.showAttachButtonInMessageField || _sendAs) ? _st.padding.left() : _st.fieldLeft)
-		- (_attachToggle && settings.showAttachButtonInMessageField ? _attachToggle->width() : 0)
+		- ((_attachToggle && settings.showAttachButtonInMessageField() || _sendAs) ? _st.padding.left() : _st.fieldLeft)
+		- (_attachToggle && settings.showAttachButtonInMessageField() ? _attachToggle->width() : 0)
 		- (_sendAs ? _sendAs->width() : 0)
 		- _st.padding.right()
 		- _send->width()
 		- (_editStars ? _editStars->width() : 0)
-		- (settings.showEmojiButtonInMessageField ? _tabbedSelectorToggle->width() : 0)
+		- (settings.showEmojiButtonInMessageField() ? _tabbedSelectorToggle->width() : 0)
 		- (_likeShown ? _like->width() : 0)
-		- (_botCommandShown && settings.showCommandsButtonInMessageField ? _botCommandStart->width() : 0)
+		- (_botCommandShown && settings.showCommandsButtonInMessageField() ? _botCommandStart->width() : 0)
 		- (_silent ? _silent->width() : 0)
 		- (_scheduled ? _scheduled->width() : 0)
-		- (_ttlInfo && settings.showAutoDeleteButtonInMessageField ? _ttlInfo->width() : 0)
+		- (_ttlInfo && settings.showAutoDeleteButtonInMessageField() ? _ttlInfo->width() : 0)
 		- (_starsReaction
 			? (_st.starsSkip + _starsReaction->width())
 			: 0);
@@ -3401,7 +3408,7 @@ void ComposeControls::updateControlsGeometry(QSize size) {
 	if (_replaceMedia) {
 		_replaceMedia->moveToLeft(left, buttonsTop);
 	}
-	if (_attachToggle && settings.showAttachButtonInMessageField) {
+	if (_attachToggle && settings.showAttachButtonInMessageField()) {
 		_attachToggle->moveToLeft(left, buttonsTop);
 		left += _attachToggle->width();
 	}
@@ -3430,7 +3437,7 @@ void ComposeControls::updateControlsGeometry(QSize size) {
 		_editStars->moveToRight(right, buttonsTop);
 		right += _editStars->width();
 	}
-	if (settings.showEmojiButtonInMessageField) {
+	if (settings.showEmojiButtonInMessageField()) {
 		_tabbedSelectorToggle->moveToRight(right, buttonsTop);
 		right += _tabbedSelectorToggle->width();
 	}
@@ -3447,7 +3454,7 @@ void ComposeControls::updateControlsGeometry(QSize size) {
 	}
 	if (_botCommandStart) {
 		_botCommandStart->moveToRight(right, buttonsTop);
-		if (_botCommandShown && settings.showCommandsButtonInMessageField) {
+		if (_botCommandShown && settings.showCommandsButtonInMessageField()) {
 			right += _botCommandStart->width();
 		}
 	}
@@ -3459,7 +3466,7 @@ void ComposeControls::updateControlsGeometry(QSize size) {
 		_scheduled->moveToRight(right, buttonsTop);
 		right += _scheduled->width();
 	}
-	if (_ttlInfo && settings.showAutoDeleteButtonInMessageField) {
+	if (_ttlInfo && settings.showAutoDeleteButtonInMessageField()) {
 		_ttlInfo->move(size.width() - right - _ttlInfo->width(), buttonsTop);
 	}
 
@@ -3473,7 +3480,7 @@ void ComposeControls::updateControlsVisibility() {
 	const auto &settings = AyuSettings::getInstance();
 
 	if (_botCommandStart) {
-		SWITCH_BUTTON(_botCommandStart, _botCommandShown && settings.showCommandsButtonInMessageField);
+		SWITCH_BUTTON(_botCommandStart, _botCommandShown && settings.showCommandsButtonInMessageField());
 	}
 	if (_like) {
 		_like->setVisible(_likeShown);
@@ -3482,7 +3489,7 @@ void ComposeControls::updateControlsVisibility() {
 		_editStars->show();
 	}
 	if (_ttlInfo) {
-		SWITCH_BUTTON(_ttlInfo, settings.showAutoDeleteButtonInMessageField);
+		SWITCH_BUTTON(_ttlInfo, settings.showAutoDeleteButtonInMessageField());
 	}
 	if (_sendAs) {
 		_sendAs->show();
@@ -3491,7 +3498,7 @@ void ComposeControls::updateControlsVisibility() {
 		_replaceMedia->show();
 	}
 	if (_attachToggle) {
-		SWITCH_BUTTON(_attachToggle, settings.showAttachButtonInMessageField && !_replaceMedia);
+		SWITCH_BUTTON(_attachToggle, settings.showAttachButtonInMessageField() && !_replaceMedia);
 	}
 	if (_scheduled) {
 		_scheduled->setVisible(!isEditingMessage());
@@ -3502,7 +3509,7 @@ void ComposeControls::updateControlsVisibility() {
 	if (_starsReaction) {
 		_starsReaction->show();
 	}
-	SWITCH_BUTTON(_tabbedSelectorToggle, settings.showEmojiButtonInMessageField);
+	SWITCH_BUTTON(_tabbedSelectorToggle, settings.showEmojiButtonInMessageField());
 }
 
 bool ComposeControls::updateLikeShown() {

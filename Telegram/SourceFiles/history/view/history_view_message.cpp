@@ -3852,7 +3852,7 @@ std::optional<QSize> Message::rightActionSize() const {
 
 bool Message::displayFastShare() const {
 	const auto &settings = AyuSettings::getInstance();
-	if (settings.hideFastShare) {
+	if (settings.hideFastShare()) {
 		return false;
 	}
 

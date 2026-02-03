@@ -250,7 +250,7 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 				const auto isMuted = includeMuted && (count == muted);
 
 				const auto &settings = AyuSettings::getInstance();
-				if (settings.hideNotificationCounters) {
+				if (settings.hideNotificationCounters()) {
 					count = 0;
 				}
 

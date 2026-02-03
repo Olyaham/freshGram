@@ -651,7 +651,7 @@ void MainMenu::setupMenu() {
 			std::move(descriptor));
 	};
 	if (!_controller->session().supportMode()) {
-		if (settings.showMyProfileInDrawer)
+		if (settings.showMyProfileInDrawer())
 		_menu->add(
 			CreateButtonWithIcon(
 				_menu,
@@ -663,15 +663,15 @@ void MainMenu::setupMenu() {
 				Info::Stories::Make(controller->session().user()));
 		});
 
-		if (settings.showBotsInDrawer)
+		if (settings.showBotsInDrawer())
 		SetupMenuBots(_menu, controller);
 
-		if (settings.showMyProfileInDrawer || settings.showBotsInDrawer)
+		if (settings.showMyProfileInDrawer() || settings.showBotsInDrawer())
 		_menu->add(
 			object_ptr<Ui::PlainShadow>(_menu),
 			{ 0, st::mainMenuSkip, 0, st::mainMenuSkip });
 
-		if (settings.showNewGroupInDrawer)
+		if (settings.showNewGroupInDrawer())
 		AddMyChannelsBox(addAction(
 			tr::lng_create_group_title(),
 			{ &st::menuIconGroups }
@@ -681,7 +681,7 @@ void MainMenu::setupMenu() {
 			}
 		});
 
-		if (settings.showNewChannelInDrawer)
+		if (settings.showNewChannelInDrawer())
 		AddMyChannelsBox(addAction(
 			tr::lng_create_channel_title(),
 			{ &st::menuIconChannel }
@@ -691,21 +691,21 @@ void MainMenu::setupMenu() {
 			}
 		});
 
-		if (settings.showContactsInDrawer)
+		if (settings.showContactsInDrawer())
 		addAction(
 			tr::lng_menu_contacts(),
 			{ &st::menuIconUserShow }
 		)->setClickedCallback([=] {
 			controller->show(PrepareContactsBox(controller));
 		});
-		if (settings.showCallsInDrawer)
+		if (settings.showCallsInDrawer())
 		addAction(
 			tr::lng_menu_calls(),
 			{ &st::menuIconPhone }
 		)->setClickedCallback([=] {
 			::Calls::ShowCallsBox(controller);
 		});
-		if (settings.showSavedMessagesInDrawer)
+		if (settings.showSavedMessagesInDrawer())
 		addAction(
 			tr::lng_saved_messages(),
 			{ &st::menuIconSavedMessages }
@@ -713,34 +713,37 @@ void MainMenu::setupMenu() {
 			controller->showPeerHistory(controller->session().user());
 		});
 
-		if (settings.showLReadToggleInDrawer) {
+		if (settings.showLReadToggleInDrawer()) {
 			addAction(
 				tr::ayu_LReadMessages(),
 				{&st::ayuLReadMenuIcon}
-			)->setClickedCallback([=]
+			)->setClickedCallback([=]() mutable
 			{
-				const auto prev = settings.sendReadMessages;
-				AyuSettings::set_sendReadMessages(false);
+				auto &ghost = AyuSettings::ghost(&controller->session());
+				const auto prev = ghost.sendReadMessages();
+				ghost.setSendReadMessages(false);
 
 				const auto chats = controller->session().data().chatsList();
 				MarkAsReadChatList(chats);
 
-				AyuSettings::set_sendReadMessages(prev);
+				ghost.setSendReadMessages(prev);
 			});
 		}
 
-		if (settings.showSReadToggleInDrawer) {
-			auto callback = [=](Fn<void()> &&close) {
-				auto prev = settings.sendReadMessages;
-				AyuSettings::set_sendReadMessages(true);
+		if (settings.showSReadToggleInDrawer()) {
+			auto callback = [=](Fn<void()> &&close) mutable {
+				auto &ghost = AyuSettings::ghost(&controller->session());
+				const auto prev = ghost.sendReadMessages();
+				ghost.setSendReadMessages(true);
 
 				auto chats = controller->session().data().chatsList();
 				MarkAsReadChatList(chats);
 
 				// slight delay for forums to send packets
-				dispatchToMainThread([=]
+				dispatchToMainThread([=]() mutable
 				{
-					AyuSettings::set_sendReadMessages(prev);
+					auto &ghost = AyuSettings::ghost(&controller->session());
+					ghost.setSendReadMessages(prev);
 				}, 200);
 				close();
 			};
@@ -789,7 +792,7 @@ void MainMenu::setupMenu() {
 		controller->showSettings();
 	});
 
-	if (settings.showNightModeToggleInDrawer) {
+	if (settings.showNightModeToggleInDrawer()) {
 
 	_nightThemeToggle = addAction(
 		tr::lng_menu_night_mode(),
@@ -831,23 +834,29 @@ void MainMenu::setupMenu() {
 
 	}
 
-	if (settings.showGhostToggleInDrawer) {
+	if (settings.showGhostToggleInDrawer()) {
+		auto ghostActiveChanges = AyuSettings::getInstance().useGlobalGhostModeChanges()
+			| rpl::map([controller = _controller](bool) {
+				return AyuSettings::ghost(&controller->session()).ghostModeActiveChanges();
+			})
+			| rpl::flatten_latest();
+
 		const auto ghostModeToggle = addAction(
 			tr::ayu_GhostModeToggle(),
 			{&st::ayuGhostIcon}
-		)->toggleOn(AyuSettings::get_ghostModeEnabledReactive());
+		)->toggleOn(std::move(ghostActiveChanges));
 
 		ghostModeToggle->toggledChanges(
 		) | rpl::on_next(
-			[=](bool ghostMode)
+			[controller = _controller](bool ghostMode)
 			{
-				AyuSettings::set_ghostModeEnabled(ghostMode);
-				AyuSettings::save();
+				auto &ghost = AyuSettings::ghost(&controller->session());
+				ghost.setGhostModeEnabled(ghostMode);
 			},
 			ghostModeToggle->lifetime());
 	}
 
-	if (settings.showStreamerToggleInDrawer) {
+	if (settings.showStreamerToggleInDrawer()) {
 		const auto streamerModeToggle = addAction(
 			tr::ayu_StreamerModeToggle(),
 			{&st::ayuStreamerModeMenuIcon}

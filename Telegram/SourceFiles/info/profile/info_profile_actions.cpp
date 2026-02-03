@@ -1789,7 +1789,7 @@ object_ptr<Ui::RpWidget> DetailsFiller::setupInfo() {
 			).text->setLinksTrusted();
 		}
 
-		if (settings.showPeerId != 0) {
+		if (settings.showPeerId() != PeerIdDisplay::Hidden) {
 			const auto dataCenter = getPeerDC(_peer);
 			const auto idLabel = dataCenter.isEmpty() ? QString("ID") : dataCenter;
 
@@ -1922,7 +1922,7 @@ object_ptr<Ui::RpWidget> DetailsFiller::setupInfo() {
 			addTranslateToMenu(about.text, AboutWithAdvancedValue(_peer));
 		}
 
-		if (settings.showPeerId != 0 && !_topic) {
+		if (settings.showPeerId() != PeerIdDisplay::Hidden && !_topic) {
 			const auto dataCenter = getPeerDC(_peer);
 			const auto idLabel = dataCenter.isEmpty() ? QString("ID") : dataCenter;
 
@@ -1950,7 +1950,7 @@ object_ptr<Ui::RpWidget> DetailsFiller::setupInfo() {
 			AddRegistrationOrCreationButton(controller, _peer, idInfo, fitLabelToButton);
 		}
 
-		if (settings.showPeerId != 0 && _topic) {
+		if (settings.showPeerId() != PeerIdDisplay::Hidden && _topic) {
 			auto idDrawableText = IDValue(
 				_peer->forumTopicFor(topicRootId)->topicRootId()
 			) | rpl::map([](TextWithEntities &&text)

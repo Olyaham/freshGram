@@ -12,8 +12,11 @@
 #include "ayu/ayu_worker.h"
 #include "ayu/data/ayu_database.h"
 #include "features/translator/ayu_translator.h"
-#include "features/filters/shadow_ban_utils.h"
 #include "lang/lang_instance.h"
+#include "main/main_account.h"
+#include "main/main_domain.h"
+#include "main/main_session.h"
+#include "ui/layers/generic_box.h"
 #include "utils/rc_manager.h"
 
 namespace AyuInfra {
@@ -32,9 +35,9 @@ void initLang() {
 void initUiSettings() {
 	const auto &settings = AyuSettings::getInstance();
 
-	AyuUiSettings::setMonoFont(settings.monoFont);
-	AyuUiSettings::setWideMultiplier(settings.wideMultiplier);
-	AyuUiSettings::setMaterialSwitches(settings.materialSwitches);
+	AyuUiSettings::setMonoFont(settings.monoFont());
+	AyuUiSettings::setWideMultiplier(settings.wideMultiplier());
+	AyuUiSettings::setMaterialSwitches(settings.materialSwitches());
 }
 
 void initDatabase() {

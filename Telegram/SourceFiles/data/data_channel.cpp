@@ -140,7 +140,7 @@ void ChannelData::setName(
 		const QString &newUsername) {
 	auto filteredName = newName;
 	const auto &settings = AyuSettings::getInstance();
-	if (settings.filterZalgo) {
+	if (settings.filterZalgo()) {
 		filteredName = filterZalgo(filteredName);
 	}
 	updateNameDelayed(filteredName.isEmpty() ? name() : filteredName, {}, newUsername);

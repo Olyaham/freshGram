@@ -12,7 +12,6 @@
 #include "settings_filters_list.h"
 #include "ayu/ayu_settings.h"
 #include "ayu/data/ayu_database.h"
-#include "ayu/features/filters/shadow_ban_utils.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "data/data_peer.h"
 #include "data/data_session.h"
@@ -67,7 +66,7 @@ Main::Session &PerDialogFiltersListController::session() const {
 
 void PerDialogFiltersListController::prepareShadowBan() {
 	const auto &settings = AyuSettings::getInstance();
-	const auto &shadowBanned = settings.shadowBanIds;
+	const auto &shadowBanned = settings.shadowBanIds();
 
 	for (const auto id : shadowBanned) {
 		auto peerId = PeerId(PeerIdHelper(abs(id)));
@@ -146,10 +145,10 @@ void PerDialogFiltersListController::rowClicked(not_null<PeerListRow*> peer) {
 			tr::lng_theme_delete(tr::now),
 			[=]
 			{
-				if (ShadowBanUtils::isShadowBanned(did)) {
-					ShadowBanUtils::removeShadowBan(did);
+				if (AyuSettings::getInstance().isShadowBanned(did)) {
+					AyuSettings::getInstance().removeShadowBan(did);
 				} else {
-					ShadowBanUtils::addShadowBan(did);
+					AyuSettings::getInstance().addShadowBan(did);
 				}
 			},
 			&st::menuIconDelete);

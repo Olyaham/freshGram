@@ -502,8 +502,8 @@ void GifsListWidget::selectInlineResult(
 		return;
 	}
 
-	const auto &settings = AyuSettings::getInstance();
-	if (AyuSettings::isUseScheduledMessages()) {
+	auto &ghost = AyuSettings::ghost(&session());
+	if (ghost.isUseScheduledMessages() && !options.scheduled) {
 		auto current = base::unixtime::now();
 		options.scheduled = current + 12;
 	}
@@ -553,7 +553,8 @@ void GifsListWidget::selectInlineResult(
 					});
 				});
 
-			if (settings.gifConfirmation) {
+			const auto &settings = AyuSettings::getInstance();
+			if (settings.gifConfirmation()) {
 				Ui::show(Ui::MakeConfirmBox({
 					.text = tr::ayu_ConfirmationGIF(),
 					.confirmed = sendGIFCallback,

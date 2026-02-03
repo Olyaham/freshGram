@@ -2437,7 +2437,7 @@ void HistoryItem::clearMediaAsExpired() {
 	}
 
 	const auto &settings = AyuSettings::getInstance();
-	if (settings.saveDeletedMessages) {
+	if (settings.saveDeletedMessages()) {
 		return;
 	}
 
@@ -3503,7 +3503,7 @@ void HistoryItem::setDeleted() {
 
 	if (isService()) {
 		const auto &settings = AyuSettings::getInstance();
-		setAyuHint(settings.deletedMark);
+		setAyuHint(settings.deletedMark());
 	} else {
 		history()->owner().requestItemViewRefresh(this);
 		history()->owner().requestItemResize(this);
@@ -3952,7 +3952,7 @@ FullReplyTo HistoryItem::replyTo() const {
 void HistoryItem::setText(const TextWithEntities &textWithEntities) {
 	auto text = textWithEntities;
 	const auto &settings = AyuSettings::getInstance();
-	if (settings.filterZalgo) {
+	if (settings.filterZalgo()) {
 		text.text = filterZalgo(text.text);
 	}
 

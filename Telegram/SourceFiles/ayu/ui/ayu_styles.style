@@ -107,3 +107,12 @@ pluginVersionAuthorLabel: FlatLabel(boxLabel) {
     align: align(center);
 }
 pluginChipSkip: 6px;
+
+ghostPickerArrow: icon{{ "info/edit/expand_arrow_small", windowActiveTextFg }};
+
+ghostPickerButton: LinkButton(defaultLinkButton) {
+	color: windowActiveTextFg;
+	overColor: windowActiveTextFg;
+	font: font(boxFontSize);
+	overFont: font(boxFontSize);
+}

@@ -611,8 +611,8 @@ QString NewMessagePostAuthor(const Api::SendAction &action) {
 bool ShouldSendSilent(
 		not_null<PeerData*> peer,
 		const Api::SendOptions &options) {
-	const auto &settings = AyuSettings::getInstance();
-	if (settings.sendWithoutSound) {
+	const auto &ghost = AyuSettings::ghost(&peer->session());
+	if (ghost.sendWithoutSound()) {
 		return !options.silent;
 	}
 
@@ -1186,8 +1186,8 @@ void CheckReactionNotificationSchedule(
 	}
 	const auto peer = item->history()->peer;
 	const auto &settings = AyuSettings::getInstance();
-	if ((peer->isChannel() && !peer->isMegagroup() && !settings.showChannelReactions)
-		|| (peer->isMegagroup() && !settings.showGroupReactions)) {
+	if ((peer->isChannel() && !peer->isMegagroup() && !settings.showChannelReactions())
+		|| (peer->isMegagroup() && !settings.showGroupReactions())) {
 		item->markEffectWatched();
 		return;
 	}

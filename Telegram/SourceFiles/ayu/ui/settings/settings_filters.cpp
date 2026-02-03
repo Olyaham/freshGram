@@ -11,6 +11,7 @@
 #include "ayu/data/ayu_database.h"
 #include "ayu/features/filters/filters_cache_controller.h"
 #include "ayu/ui/boxes/import_filters_box.h"
+#include "ayu/ui/settings/settings_ayu_utils.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "boxes/abstract_box.h"
 #include "boxes/peer_list_box.h"
@@ -100,7 +101,7 @@ void AyuFilters::fillTopBarMenu(const Ui::Menu::MenuCallback &addAction) {
 				AyuDatabase::deleteAllFilters();
 				AyuDatabase::deleteAllExclusions();
 				FiltersCacheController::rebuildCache();
-				AyuSettings::fire_filtersUpdate();
+				FiltersCacheController::fireUpdate();
 				close();
 			};
 
@@ -132,20 +133,19 @@ void SetupFiltersSettings(not_null<Ui::VerticalLayout*> container) {
 		tr::ayu_RegexFiltersEnable(),
 		st::settingsButtonNoIcon
 	)->toggleOn(
-		rpl::single(settings->filtersEnabled)
+		rpl::single(settings->filtersEnabled())
 	)->toggledValue(
 	) | rpl::filter(
 		[=](bool enabled)
 		{
-			return (enabled != settings->filtersEnabled);
+			return (enabled != settings->filtersEnabled());
 		}) | on_next(
 		[=](bool enabled)
 		{
-			AyuSettings::set_filtersEnabled(enabled);
-			AyuSettings::save();
+			AyuSettings::getInstance().setFiltersEnabled(enabled);
 
 			FiltersCacheController::rebuildCache();
-			AyuSettings::fire_filtersUpdate();
+			FiltersCacheController::fireUpdate();
 		},
 		container->lifetime());
 
@@ -154,20 +154,19 @@ void SetupFiltersSettings(not_null<Ui::VerticalLayout*> container) {
 		tr::ayu_RegexFiltersEnableSharedInChats(),
 		st::settingsButtonNoIcon
 	)->toggleOn(
-		rpl::single(settings->filtersEnabledInChats)
+		rpl::single(settings->filtersEnabledInChats())
 	)->toggledValue(
 	) | rpl::filter(
 		[=](bool enabled)
 		{
-			return (enabled != settings->filtersEnabledInChats);
+			return (enabled != settings->filtersEnabledInChats());
 		}) | on_next(
 		[=](bool enabled)
 		{
-			AyuSettings::set_filtersEnabledInChats(enabled);
-			AyuSettings::save();
+			AyuSettings::getInstance().setFiltersEnabledInChats(enabled);
 
 			FiltersCacheController::rebuildCache();
-			AyuSettings::fire_filtersUpdate();
+			FiltersCacheController::fireUpdate();
 		},
 		container->lifetime());
 
@@ -177,20 +176,19 @@ void SetupFiltersSettings(not_null<Ui::VerticalLayout*> container) {
 		tr::ayu_FiltersHideFromBlocked(),
 		st::settingsButtonNoIcon
 	)->toggleOn(
-		rpl::single(settings->hideFromBlocked)
+		rpl::single(settings->hideFromBlocked())
 	)->toggledValue(
 	) | rpl::filter(
 		[=](bool enabled)
 		{
-			return (enabled != settings->hideFromBlocked);
+			return (enabled != settings->hideFromBlocked());
 		}) | on_next(
 		[=](bool enabled)
 		{
-			AyuSettings::set_hideFromBlocked(enabled);
-			AyuSettings::save();
+			AyuSettings::getInstance().setHideFromBlocked(enabled);
 
 			FiltersCacheController::rebuildCache();
-			AyuSettings::fire_filtersUpdate();
+			FiltersCacheController::fireUpdate();
 		},
 		container->lifetime());
 	AddSkip(container);
@@ -251,28 +249,9 @@ void SetupPerDialog(
 }
 
 void SetupMessageFilters(not_null<Ui::VerticalLayout*> container) {
-	auto *settings = &AyuSettings::getInstance();
-
 	AddSubsectionTitle(container, tr::ayu_RegexFilters());
 
-	AddButtonWithIcon(
-		container,
-		tr::ayu_FiltersHideFromBlocked(),
-		st::settingsButtonNoIcon
-	)->toggleOn(
-		rpl::single(settings->hideFromBlocked)
-	)->toggledValue(
-	) | rpl::filter(
-		[=](bool enabled)
-		{
-			return (enabled != settings->hideFromBlocked);
-		}) | on_next(
-		[=](bool enabled)
-		{
-			AyuSettings::set_hideFromBlocked(enabled);
-			AyuSettings::save();
-		},
-		container->lifetime());
+	AddSettingToggle(container, tr::ayu_FiltersHideFromBlocked(), &AyuSettings::hideFromBlocked, &AyuSettings::setHideFromBlocked);
 }
 
 void AyuFilters::setupContent(not_null<Window::SessionController*> controller) {

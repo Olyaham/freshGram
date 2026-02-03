@@ -11,6 +11,7 @@
 #include "per_dialog_filter.h"
 #include "ayu/ayu_settings.h"
 #include "ayu/data/ayu_database.h"
+#include "ayu/ui/settings/settings_ayu_utils.h"
 #include "ayu/features/filters/filters_cache_controller.h"
 #include "ayu/features/filters/filters_utils.h"
 #include "ayu/ui/components/icon_picker.h"
@@ -118,7 +119,7 @@ void AyuFiltersList::addNewFilter(const RegexFilter &filter, bool exclusion) {
 				state->enabled = !state->enabled;
 				AyuDatabase::updateRegexFilter(*state);
 				FiltersCacheController::rebuildCache();
-				AyuSettings::fire_filtersUpdate();
+				FiltersCacheController::fireUpdate();
 			},
 			state->enabled ? &st::menuIconBlock : &st::menuIconUnblock);
 
@@ -131,7 +132,7 @@ void AyuFiltersList::addNewFilter(const RegexFilter &filter, bool exclusion) {
 				AyuDatabase::deleteFilter(state->id);
 				AyuDatabase::deleteExclusionsByFilterId(state->id);
 				FiltersCacheController::rebuildCache();
-				AyuSettings::fire_filtersUpdate();
+				FiltersCacheController::fireUpdate();
 			},
 			&st::menuIconDelete);
 
@@ -163,7 +164,7 @@ void AyuFiltersList::addNewFilter(const RegexFilter &filter, bool exclusion) {
 
 		AyuDatabase::addRegexExclusion(newExclusion);
 		FiltersCacheController::rebuildCache();
-		AyuSettings::fire_filtersUpdate();
+		FiltersCacheController::fireUpdate();
 
 		controller->dialogId = dialogId;
 		controller->showExclude = true;
@@ -183,7 +184,7 @@ void AyuFiltersList::addNewFilter(const RegexFilter &filter, bool exclusion) {
 
 				AyuDatabase::deleteExclusion(dialogId.value(), state->id);
 				FiltersCacheController::rebuildCache();
-				AyuSettings::fire_filtersUpdate();
+				FiltersCacheController::fireUpdate();
 			},
 			&st::menuIconDelete);
 
@@ -246,9 +247,7 @@ void AyuFiltersList::initializeSharedFilters(
 
 	if (!exclusions.empty()) {
 		if (!filters.empty()) {
-			AddSkip(container);
-			AddDivider(container);
-			AddSkip(container);
+			AddSectionDivider(container);
 		}
 
 		excludedTitle = AddSubsectionTitle(container, tr::ayu_RegexFiltersExcluded());
@@ -278,7 +277,7 @@ void AyuFiltersList::initializeShadowBan(not_null<Ui::VerticalLayout*> container
 		QMargins(0, -st::peerListBox.padding.top(), 0, -st::peerListBox.padding.bottom()));
 
 	// delegate is not initialized at this moment
-	if (AyuSettings::getInstance().shadowBanIds.size() > 0) {
+	if (AyuSettings::getInstance().shadowBanIds().size() > 0) {
 		AddSkip(container);
 
 		filtersTitle = AddSubsectionTitle(container, tr::ayu_RegexFiltersHeader());

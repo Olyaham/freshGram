@@ -456,12 +456,12 @@ void BottomInfo::layout() {
 void BottomInfo::layoutDateText() {
 	const auto &settings = AyuSettings::getInstance();
 
-	if (!settings.replaceBottomInfoWithIcons) {
+	if (!settings.replaceBottomInfoWithIcons()) {
 		const auto deleted = (_data.flags & Data::Flag::AyuDeleted)
-			? (settings.deletedMark + ' ')
+			? (settings.deletedMark() + ' ')
 			: QString();
 		const auto edited = (_data.flags & Data::Flag::Edited)
-			? (settings.editedMark + ' ')
+			? (settings.editedMark() + ' ')
 			: (_data.flags & Data::Flag::EstimateDate)
 			? (tr::lng_approximate(tr::now) + ' ')
 			: _data.scheduleRepeatPeriod

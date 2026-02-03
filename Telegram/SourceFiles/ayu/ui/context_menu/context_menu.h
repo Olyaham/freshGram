@@ -11,9 +11,11 @@
 #include "window/window_peer_menu.h"
 #include "window/window_session_controller.h"
 
+#include "ayu/ayu_settings.h"
+
 namespace AyuUi {
 
-bool needToShowItem(int state);
+bool needToShowItem(ContextMenuVisibility state);
 
 void AddDeletedMessagesActions(PeerData *peerData,
 							   Data::Thread *thread,

@@ -31,7 +31,7 @@ void loadAppIco() {
 		f.remove();
 	}
 	f.close();
-	QFile::copy(qsl(":/gui/art/ayu/%1/app_icon.ico").arg(settings.appIcon), tempIconPath);
+	QFile::copy(qsl(":/gui/art/ayu/%1/app_icon.ico").arg(settings.appIcon()), tempIconPath);
 }
 
 QImage CreateImage(const QString &name, const QSize resultImageSize, const int padding = 0) {
@@ -88,10 +88,10 @@ QImage CreateImage(const QString &name, const QSize resultImageSize, const int p
 
 void loadIcons() {
 	const auto &settings = AyuSettings::getInstance();
-	if (LAST_LOADED_NAME != settings.appIcon) {
-		LAST_LOADED_NAME = settings.appIcon;
-		LAST_LOADED = CreateImage(settings.appIcon, Size(256));
-		LAST_LOADED_PAD = CreateImage(settings.appIcon, Size(256), 12);
+	if (LAST_LOADED_NAME != settings.appIcon()) {
+		LAST_LOADED_NAME = settings.appIcon();
+		LAST_LOADED = CreateImage(settings.appIcon(), Size(256));
+		LAST_LOADED_PAD = CreateImage(settings.appIcon(), Size(256), 12);
 	}
 }
 

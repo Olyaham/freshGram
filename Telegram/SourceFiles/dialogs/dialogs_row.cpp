@@ -573,7 +573,7 @@ void Row::paintUserpic(
 	const auto cornerBadgeShown = !_cornerBadgeUserpic
 		? _cornerBadgeShown
 		: !_cornerBadgeUserpic->layersManager.isDisplayedNone();
-	const auto storiesPeer = settings.disableStories ? nullptr : peer
+	const auto storiesPeer = settings.disableStories() ? nullptr : peer
 		? ((peer->isUser() || peer->isChannel()) ? peer : nullptr)
 		: nullptr;
 	const auto storiesFolder = peer ? nullptr : _id.folder();

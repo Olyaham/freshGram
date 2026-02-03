@@ -192,6 +192,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
+#include "ayu/features/filters/filters_cache_controller.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "ayu/features/message_shot/message_shot.h"
 #include "ayu/features/forward/ayu_forward.h"
@@ -526,7 +527,7 @@ HistoryWidget::HistoryWidget(
 			_silent->setVisible(!hide);
 		}
 		if (_ttlInfo) {
-			_ttlInfo->setVisible(!hide && settings.showAutoDeleteButtonInMessageField);
+			_ttlInfo->setVisible(!hide && settings.showAutoDeleteButtonInMessageField());
 		}
 		if (_giftToUser) {
 			_giftToUser->setVisible(!hide);
@@ -676,7 +677,7 @@ HistoryWidget::HistoryWidget(
 		session().changes().peerUpdates(
 			Data::PeerUpdate::Flag::IsBlocked
 		) | rpl::to_empty,
-		AyuSettings::get_filtersUpdate()
+		FiltersCacheController::updates()
 	) | rpl::on_next(
 		[=]
 		{
@@ -808,8 +809,15 @@ HistoryWidget::HistoryWidget(
 		}
 	}, lifetime());
 
-	AyuSettings::get_historyUpdateReactive() | rpl::on_next([=]
-	{
+	rpl::merge(
+		AyuSettings::getInstance().showAttachButtonInMessageFieldChanges() | rpl::to_empty,
+		AyuSettings::getInstance().showCommandsButtonInMessageFieldChanges() | rpl::to_empty,
+		AyuSettings::getInstance().showEmojiButtonInMessageFieldChanges() | rpl::to_empty,
+		AyuSettings::getInstance().showMicrophoneButtonInMessageFieldChanges() | rpl::to_empty,
+		AyuSettings::getInstance().showAutoDeleteButtonInMessageFieldChanges() | rpl::to_empty,
+		AyuSettings::getInstance().showAttachPopupChanges() | rpl::to_empty,
+		AyuSettings::getInstance().showEmojiPopupChanges() | rpl::to_empty
+	) | rpl::on_next([=] {
 		refreshAttachBotsMenu();
 		updateHistoryGeometry();
 		updateControlsVisibility();
@@ -1099,7 +1107,8 @@ HistoryWidget::HistoryWidget(
 		if (action.replaceMediaOf) {
 		} else if (action.options.scheduled) {
 			cancelReplyOrSuggest(lastKeyboardUsed);
-			if (!AyuSettings::isUseScheduledMessages()) {
+			const auto &ghost = AyuSettings::ghost(&controller->session());
+			if (!ghost.isUseScheduledMessages()) {
 				crl::on_main(this, [=, history = action.history]
 				{
 					controller->showSection(
@@ -2078,8 +2087,8 @@ void HistoryWidget::fileChosen(ChatHelpers::FileChosen &&data) {
 			Data::InsertCustomEmoji(_field.data(), data.document);
 		}
 	} else if (_history) {
-		const auto &settings = AyuSettings::getInstance();
-		if (!settings.sendReadMessages && settings.markReadAfterAction) {
+		const auto &ghost = AyuSettings::ghost(&controller()->session());
+		if (!ghost.sendReadMessages() && ghost.markReadAfterAction()) {
 			if (const auto lastMessage = history()->lastMessage()) {
 				readHistory(lastMessage);
 			}
@@ -2990,7 +2999,7 @@ void HistoryWidget::setHistory(History *history) {
 	const auto &settings = AyuSettings::getInstance();
 
 	const auto was = _attachBotsMenu && _history && _history->peer->isUser();
-	const auto now = _attachBotsMenu && history && history->peer->isUser() && settings.showAttachPopup;
+	const auto now = _attachBotsMenu && history && history->peer->isUser() && settings.showAttachPopup();
 	if (was && !now) {
 		_attachToggle->removeEventFilter(_attachBotsMenu.get());
 		_attachBotsMenu->hideFast();
@@ -3090,7 +3099,7 @@ void HistoryWidget::refreshAttachBotsMenu() {
 	}
 	_attachBotsMenu->setOrigin(
 		Ui::PanelAnimation::Origin::BottomLeft);
-	if (settings.showAttachPopup) {
+	if (settings.showAttachPopup()) {
 		_attachToggle->installEventFilter(_attachBotsMenu.get());
 	}
 	_attachBotsMenu->heightValue(
@@ -3645,27 +3654,27 @@ void HistoryWidget::updateControlsVisibility() {
 			_botCommandStart->hide();
 		} else if (_kbReplyTo) {
 			_kbScroll->hide();
-			SWITCH_BUTTON(_tabbedSelectorToggle, settings.showEmojiButtonInMessageField);
+			SWITCH_BUTTON(_tabbedSelectorToggle, settings.showEmojiButtonInMessageField());
 			_botKeyboardHide->hide();
 			_botKeyboardShow->hide();
 			_botCommandStart->hide();
 		} else {
 			_kbScroll->hide();
-			SWITCH_BUTTON(_tabbedSelectorToggle, settings.showEmojiButtonInMessageField);
+			SWITCH_BUTTON(_tabbedSelectorToggle, settings.showEmojiButtonInMessageField());
 			_botKeyboardHide->hide();
 			if (_keyboard->hasMarkup()) {
 				_botKeyboardShow->show();
 				_botCommandStart->hide();
 			} else {
 				_botKeyboardShow->hide();
-				_botCommandStart->setVisible(_cmdStartShown && settings.showCommandsButtonInMessageField);
+				_botCommandStart->setVisible(_cmdStartShown && settings.showCommandsButtonInMessageField());
 			}
 		}
 		if (_replaceMedia) {
 			_replaceMedia->show();
 			_attachToggle->hide();
 		} else {
-			SWITCH_BUTTON(_attachToggle, settings.showAttachButtonInMessageField);
+			SWITCH_BUTTON(_attachToggle, settings.showAttachButtonInMessageField());
 		}
 		if (_botMenu.button) {
 			_botMenu.button->show();
@@ -3709,7 +3718,7 @@ void HistoryWidget::updateControlsVisibility() {
 			}
 			if (_ttlInfo) {
 				const auto was = _ttlInfo->isVisible();
-				const auto now = (!_editMsgId) && (!hideExtraButtons) && settings.showAutoDeleteButtonInMessageField;
+				const auto now = (!_editMsgId) && (!hideExtraButtons) && settings.showAutoDeleteButtonInMessageField();
 				if (was != now) {
 					_ttlInfo->setVisible(now);
 					rightButtonsChanged = true;
@@ -4878,14 +4887,14 @@ void HistoryWidget::sendVoice(const VoiceToSend &data) {
 }
 
 void HistoryWidget::send(Api::SendOptions options) {
-	const auto &settings = AyuSettings::getInstance();
-	if (AyuSettings::isUseScheduledMessages() && !options.scheduled) {
+	const auto &ghost = AyuSettings::ghost(&controller()->session());
+	if (ghost.isUseScheduledMessages() && !options.scheduled) {
 		auto current = base::unixtime::now();
 		options.scheduled = current + 12;
 	}
 
 	auto lastMessage = _history->lastMessage();
-	if (!settings.sendReadMessages && settings.markReadAfterAction && lastMessage) {
+	if (!ghost.sendReadMessages() && ghost.markReadAfterAction() && lastMessage) {
 		readHistory(lastMessage);
 	}
 
@@ -5090,7 +5099,7 @@ void HistoryWidget::goToDiscussionGroup() {
 
 bool HistoryWidget::hasDiscussionGroup() const {
 	const auto &settings = AyuSettings::getInstance();
-	if (settings.channelBottomButton != 2) {
+	if (settings.channelBottomButton() != ChannelBottomButton::DiscussWithFallback) {
 		return false;
 	}
 
@@ -5705,7 +5714,7 @@ bool HistoryWidget::isChoosingTheme() const {
 
 bool HistoryWidget::isMuteUnmute() const {
 	const auto &settings = AyuSettings::getInstance();
-	if (settings.channelBottomButton == 0) {
+	if (settings.channelBottomButton() == ChannelBottomButton::Hidden) {
 		return false;
 	}
 
@@ -5722,7 +5731,7 @@ bool HistoryWidget::isSearching() const {
 
 bool HistoryWidget::showRecordButton() const {
 	const auto &settings = AyuSettings::getInstance();
-	if (!settings.showMicrophoneButtonInMessageField) {
+	if (!settings.showMicrophoneButtonInMessageField()) {
 		return false;
 	}
 
@@ -6001,7 +6010,7 @@ void HistoryWidget::toggleKeyboard(bool manual) {
 		_botKeyboardHide->hide();
 		_botKeyboardShow->hide();
 		if (fieldEnabled) {
-			SWITCH_BUTTON(_botCommandStart, settings.showCommandsButtonInMessageField);
+			SWITCH_BUTTON(_botCommandStart, settings.showCommandsButtonInMessageField());
 		}
 		_kbScroll->hide();
 		_kbShown = false;
@@ -6051,7 +6060,7 @@ void HistoryWidget::toggleKeyboard(bool manual) {
 	updateFieldPlaceholder();
 	SWITCH_BUTTON(_tabbedSelectorToggle, _botKeyboardHide->isHidden()
 		&& canWriteMessage()
-		&& !_showAnimation && settings.showEmojiButtonInMessageField);
+		&& !_showAnimation && settings.showEmojiButtonInMessageField());
 	updateField();
 }
 
@@ -6214,7 +6223,7 @@ void HistoryWidget::moveFieldControls() {
 	if (_replaceMedia) {
 		_replaceMedia->moveToLeft(left, buttonsBottom);
 	}
-	if (settings.showAttachButtonInMessageField) {
+	if (settings.showAttachButtonInMessageField()) {
 		_attachToggle->moveToLeft(left, buttonsBottom);
 	left += _attachToggle->width();
 	}
@@ -6235,14 +6244,14 @@ void HistoryWidget::moveFieldControls() {
 	_voiceRecordBar->moveToLeft(0, bottom - _voiceRecordBar->height());
 	_tabbedSelectorToggle->moveToRight(right, buttonsBottom);
 	_botKeyboardHide->moveToRight(right, buttonsBottom);
-	right += settings.showEmojiButtonInMessageField || !_botKeyboardHide->isHidden() ? _botKeyboardHide->width() : 0;
+	right += settings.showEmojiButtonInMessageField() || !_botKeyboardHide->isHidden() ? _botKeyboardHide->width() : 0;
 	_botKeyboardShow->moveToRight(right, buttonsBottom);
 	_botCommandStart->moveToRight(right, buttonsBottom);
 	if (_silent) {
 		_silent->moveToRight(right, buttonsBottom);
 	}
 	const auto kbShowShown = _history && !_kbShown && _keyboard->hasMarkup();
-	if (kbShowShown || (_cmdStartShown && settings.showCommandsButtonInMessageField) || _silent) {
+	if (kbShowShown || (_cmdStartShown && settings.showCommandsButtonInMessageField()) || _silent) {
 		right += _botCommandStart->width();
 	}
 	if (_toggleSuggestPost) {
@@ -6297,10 +6306,10 @@ void HistoryWidget::updateFieldSize() {
 
 	const auto kbShowShown = _history && !_kbShown && _keyboard->hasMarkup();
 	auto fieldWidth = width()
-		- (settings.showAttachButtonInMessageField ? _attachToggle->width() : 0)
+		- (settings.showAttachButtonInMessageField() ? _attachToggle->width() : 0)
 		- st::historySendRight
 		- _send->width()
-		- (settings.showEmojiButtonInMessageField ? _tabbedSelectorToggle->width() : 0);
+		- (settings.showEmojiButtonInMessageField() ? _tabbedSelectorToggle->width() : 0);
 	if (_botMenu.button) {
 		fieldWidth -= st::historyBotMenuSkip + _botMenu.button->width();
 	}
@@ -6310,7 +6319,7 @@ void HistoryWidget::updateFieldSize() {
 	if (kbShowShown) {
 		fieldWidth -= _botKeyboardShow->width();
 	}
-	if (_cmdStartShown && settings.showCommandsButtonInMessageField) {
+	if (_cmdStartShown && settings.showCommandsButtonInMessageField()) {
 		fieldWidth -= _botCommandStart->width();
 	}
 	if (_silent && !_silent->isHidden()) {
@@ -6325,7 +6334,7 @@ void HistoryWidget::updateFieldSize() {
 	if (_scheduled && !_scheduled->isHidden()) {
 		fieldWidth -= _scheduled->width();
 	}
-	if (_ttlInfo && _ttlInfo->isVisible() && settings.showAutoDeleteButtonInMessageField) {
+	if (_ttlInfo && _ttlInfo->isVisible() && settings.showAutoDeleteButtonInMessageField()) {
 		fieldWidth -= _ttlInfo->width();
 	}
 
@@ -7535,7 +7544,7 @@ void HistoryWidget::updateBotKeyboard(History *h, bool force) {
 					showKeyboardHideButton();
 				} else {
 					_kbScroll->hide();
-					SWITCH_BUTTON(_tabbedSelectorToggle, settings.showEmojiButtonInMessageField);
+					SWITCH_BUTTON(_tabbedSelectorToggle, settings.showEmojiButtonInMessageField());
 					_botKeyboardHide->hide();
 				}
 				_botKeyboardShow->hide();
@@ -7559,7 +7568,7 @@ void HistoryWidget::updateBotKeyboard(History *h, bool force) {
 		} else {
 			if (!_showAnimation) {
 				_kbScroll->hide();
-				SWITCH_BUTTON(_tabbedSelectorToggle, settings.showEmojiButtonInMessageField);
+				SWITCH_BUTTON(_tabbedSelectorToggle, settings.showEmojiButtonInMessageField());
 				_botKeyboardHide->hide();
 				_botKeyboardShow->show();
 				_botCommandStart->hide();
@@ -7582,7 +7591,7 @@ void HistoryWidget::updateBotKeyboard(History *h, bool force) {
 			_tabbedSelectorToggle->show();
 			_botKeyboardHide->hide();
 			_botKeyboardShow->hide();
-			_botCommandStart->setVisible(!_editMsgId && settings.showCommandsButtonInMessageField);
+			_botCommandStart->setVisible(!_editMsgId && settings.showCommandsButtonInMessageField());
 		}
 		_field->setMaxHeight(computeMaxFieldHeight());
 		_kbShown = false;

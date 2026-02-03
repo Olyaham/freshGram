@@ -208,9 +208,7 @@ void AyuMain::setupContent(not_null<Window::SessionController*> controller) {
 	AddSubsectionTitle(content, tr::ayu_CategoriesHeader());
 	SetupCategories(content, controller, showOtherMethod());
 
-	AddSkip(content);
-	AddDivider(content);
-	AddSkip(content);
+	AddSectionDivider(content);
 
 	AddSubsectionTitle(content, tr::ayu_LinksHeader());
 	SetupLinks(content, controller);

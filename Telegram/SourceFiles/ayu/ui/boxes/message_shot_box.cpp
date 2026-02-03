@@ -39,7 +39,7 @@ void MessageShotBox::setupContent() {
 	_selectedPalette = std::make_shared<style::palette>();
 
 	const auto &settings = AyuSettings::getInstance();
-	const auto savedShowColorfulReplies = !settings.simpleQuotesAndReplies;
+	const auto savedShowColorfulReplies = !settings.simpleQuotesAndReplies();
 
 	using namespace Settings;
 
@@ -164,7 +164,7 @@ void MessageShotBox::setupContent() {
 	) | on_next(
 		[=](bool enabled)
 		{
-			AyuSettings::set_simpleQuotesAndReplies(!enabled);
+			AyuSettings::getInstance().setSimpleQuotesAndReplies(!enabled);
 
 			_config.st = std::make_shared<Ui::ChatStyle>(_config.st.get());
 			updatePreview();
@@ -208,7 +208,7 @@ void MessageShotBox::setupContent() {
 			AyuFeatures::MessageShot::resetDefaultSelected();
 			AyuFeatures::MessageShot::resetShotConfig();
 
-			AyuSettings::set_simpleQuotesAndReplies(!savedShowColorfulReplies);
+			AyuSettings::getInstance().setSimpleQuotesAndReplies(!savedShowColorfulReplies);
 		},
 		content->lifetime());
 

@@ -1839,7 +1839,7 @@ const std::vector<LocalUrlHandler> &LocalUrlHandlers() {
 			AyuUrlHandlers::HandleAyu
 		},
 		{
-			u"^support$"_q,
+			u"^(support)|(donate)$"_q,
 			AyuUrlHandlers::HandleSupport
 		},
 		{

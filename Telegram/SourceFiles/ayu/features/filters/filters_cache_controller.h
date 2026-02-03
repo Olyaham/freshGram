@@ -8,6 +8,7 @@
 
 #include "filters_controller.h"
 #include "ayu/data/entities.h"
+#include "rpl/producer.h"
 
 namespace Data {
 struct Group;
@@ -16,6 +17,9 @@ struct Group;
 using namespace FiltersController;
 
 namespace FiltersCacheController {
+
+void fireUpdate();
+[[nodiscard]] rpl::producer<> updates();
 
 void rebuildCache();
 

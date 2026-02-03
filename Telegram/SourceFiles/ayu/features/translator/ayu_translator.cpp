@@ -228,9 +228,9 @@ mtpRequestId TranslateManager::performTranslation(Builder &req) {
 
 	if (const auto it = _pending.find(id); it != _pending.end()) {
 		const auto &settings = AyuSettings::getInstance();
-		if (settings.translationProvider == "telegram") {
+		if (settings.translationProvider() == "telegram") {
 			it->second.cancel = TelegramTranslator::instance().startTranslation(args);
-		} else if (settings.translationProvider == "yandex") {
+		} else if (settings.translationProvider() == "yandex") {
 			it->second.cancel = YandexTranslator::instance().startTranslation(args);
 		} else {
 			it->second.cancel = GoogleTranslator::instance().startTranslation(args);

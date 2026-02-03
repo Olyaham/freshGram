@@ -274,7 +274,7 @@ void AyuMusicButton::makeCover() {
 			}
 
 			QColor bgColor;
-			if (cover.noCover || !settings.adaptiveCoverColor) {
+			if (cover.noCover || !settings.adaptiveCoverColor()) {
 				bgColor = GetNoCoverBgColor(overrideBg);
 			} else {
 				if (const auto extractedColor = ExtractColorFromCover(cover.pixToBg)) {
@@ -302,7 +302,7 @@ void AyuMusicButton::makeCover() {
 				const auto &settings2 = AyuSettings::getInstance();
 				const auto &cover2 = *strong->_currentCover;
 
-				if (!cover2.noCover && settings2.adaptiveCoverColor && !cover2.pix.isNull()) {
+				if (!cover2.noCover && settings2.adaptiveCoverColor() && !cover2.pix.isNull()) {
 					strong->_title->setTextColorOverride(Qt::white);
 					strong->_performer->setTextColorOverride(performerColor);
 				} else {
@@ -333,7 +333,7 @@ void AyuMusicButton::paintEvent(QPaintEvent *e) {
 
 	const auto &settings = AyuSettings::getInstance();
 	const auto cover = _currentCover.value();
-	if (cover.noCover || !settings.adaptiveCoverColor) {
+	if (cover.noCover || !settings.adaptiveCoverColor()) {
 		p.fillRect(e->rect(), cover.bg);
 		paintRipple(p, QPoint());
 	} else {

@@ -17,7 +17,7 @@ QString IDString(const not_null<PeerData*> peer) {
 	auto resultId = QString::number(getBareID(peer));
 
 	const auto &settings = AyuSettings::getInstance();
-	if (settings.showPeerId == 2) {
+	if (settings.showPeerId() == PeerIdDisplay::BotApi) {
 		if (peer->isChannel()) {
 			resultId = QString::number(peerToChannel(peer->id).bare - kMaxChannelId).prepend("-");
 		} else if (peer->isChat()) {

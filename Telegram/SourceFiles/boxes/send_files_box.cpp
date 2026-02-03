@@ -1947,7 +1947,8 @@ bool SendFilesBox::validateLength(const QString &text) const {
 void SendFilesBox::send(
 		Api::SendOptions options,
 		bool ctrlShiftEnter) {
-	if (AyuSettings::isUseScheduledMessages() && !options.scheduled) {
+	auto &ghost = AyuSettings::ghost();
+	if (ghost.isUseScheduledMessages() && !options.scheduled) {
 		const auto sumSize = ranges::accumulate(
 			_list.files,
 			0,

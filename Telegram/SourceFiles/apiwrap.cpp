@@ -460,7 +460,7 @@ void ApiWrap::toggleHistoryArchived(
 			history->setFolder(_session->data().folder(archiveId));
 		} else {
 			const auto &settings = AyuSettings::getInstance();
-			if (settings.hideAllChatsFolder) {
+			if (settings.hideAllChatsFolder()) {
 				if (const auto window = Core::App().activeWindow()) {
 					if (const auto controller = window->sessionController()) {
 						const auto filters = &_session->data().chatsFilters();
@@ -1347,7 +1347,7 @@ void ApiWrap::migrateFail(not_null<PeerData*> peer, const QString &error) {
 
 void ApiWrap::markContentsRead(
 		const base::flat_set<not_null<HistoryItem*>> &items) {
-	const auto &settings = AyuSettings::getInstance();
+	const auto &ghost = AyuSettings::ghost(&session());
 
 	auto markedIds = QVector<MTPint>();
 	auto channelMarkedIds = base::flat_map<
@@ -1361,7 +1361,7 @@ void ApiWrap::markContentsRead(
 			continue;
 		}
 
-		if (!settings.sendReadMessages && !passthrough) {
+		if (!ghost.sendReadMessages() && !passthrough) {
 			continue;
 		}
 
@@ -1393,8 +1393,8 @@ void ApiWrap::markContentsRead(not_null<HistoryItem*> item) {
 		return;
 	}
 
-	const auto &settings = AyuSettings::getInstance();
-	if (!settings.sendReadMessages && !passthrough) {
+	const auto &ghost = AyuSettings::ghost(&session());
+	if (!ghost.sendReadMessages() && !passthrough) {
 		return;
 	}
 
@@ -1828,7 +1828,7 @@ void ApiWrap::joinChannel(not_null<ChannelData*> channel) {
 		chatParticipants().loadSimilarPeers(channel);
 
 		const auto &settings = AyuSettings::getInstance();
-		if (!settings.collapseSimilarChannels) {
+		if (!settings.collapseSimilarChannels()) {
 			channel->setFlags(channel->flags() | Flag::SimilarExpanded);
 		}
 	}
@@ -3623,8 +3623,8 @@ void ApiWrap::forwardMessages(
 					shared->callback();
 				}
 
-				const auto &settings = AyuSettings::getInstance();
-				if (!settings.sendReadMessages && settings.markReadAfterAction && history->lastMessage())
+				const auto &ghost = AyuSettings::ghost(&session());
+				if (!ghost.sendReadMessages() && ghost.markReadAfterAction() && history->lastMessage())
 				{
 					readHistory(history->lastMessage());
 				}
@@ -3948,7 +3948,8 @@ void ApiWrap::sendUploadedPhoto(
 		Api::RemoteFileInfo info,
 		Api::SendOptions options) {
 	if (const auto item = _session->data().message(localId)) {
-		if (AyuSettings::isUseScheduledMessages() && !options.scheduled) {
+		const auto &ghost = AyuSettings::ghost(_session);
+		if (ghost.isUseScheduledMessages() && !options.scheduled) {
 			auto current = base::unixtime::now();
 			options.scheduled = current + 12;
 		}
@@ -3971,7 +3972,8 @@ void ApiWrap::sendUploadedDocument(
 			return;
 		}
 
-		if (AyuSettings::isUseScheduledMessages() && !options.scheduled) {
+		const auto &ghost = AyuSettings::ghost(_session);
+		if (ghost.isUseScheduledMessages() && !options.scheduled) {
 			auto current = base::unixtime::now();
 			options.scheduled = current + 12;
 		}
@@ -4299,7 +4301,8 @@ void ApiWrap::sendBotStart(
 			message.textWithTags.text += '@' + bot->username();
 		}
 
-		if (AyuSettings::isUseScheduledMessages()) {
+		const auto &ghost = AyuSettings::ghost(_session);
+		if (ghost.isUseScheduledMessages()) {
 			auto current = base::unixtime::now();
 			message.action.options.scheduled = current + 12;
 		}
@@ -4550,7 +4553,8 @@ void ApiWrap::sendMediaWithRandomId(
 		Api::SendOptions options,
 		uint64 randomId,
 		Fn<void(bool)> done) {
-	if (AyuSettings::isUseScheduledMessages() && !options.scheduled) {
+	const auto &ghost = AyuSettings::ghost(_session);
+	if (ghost.isUseScheduledMessages() && !options.scheduled) {
 		auto current = base::unixtime::now();
 		options.scheduled = current + 12;
 	}
@@ -4797,7 +4801,8 @@ void ApiWrap::sendAlbumIfReady(not_null<SendingAlbum*> album) {
 		return;
 	}
 
-	if (AyuSettings::isUseScheduledMessages() && !album->options.scheduled) {
+	const auto &ghost = AyuSettings::ghost(_session);
+	if (ghost.isUseScheduledMessages() && !album->options.scheduled) {
 		auto current = base::unixtime::now();
 		album->options.scheduled = current + 12;
 	}

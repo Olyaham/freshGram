@@ -2188,8 +2188,8 @@ void VoiceRecordBar::stopRecording(StopType type, bool ttlBeforeHide) {
 					: 0),
 			};
 
-			const auto &settings = AyuSettings::getInstance();
-			if (AyuSettings::isUseScheduledMessages()) {
+			auto &ghost = AyuSettings::ghost(&_show->session());
+			if (ghost.isUseScheduledMessages()) {
 				auto current = base::unixtime::now();
 				options.scheduled = current + 12 + 5;
 			}
@@ -2206,7 +2206,8 @@ void VoiceRecordBar::stopRecording(StopType type, bool ttlBeforeHide) {
 					close();
 				});
 
-			if (settings.voiceConfirmation) {
+			const auto &settings = AyuSettings::getInstance();
+			if (settings.voiceConfirmation()) {
 				_show->showBox(Ui::MakeConfirmBox(
 					{
 						.text = tr::ayu_ConfirmationVoice(),
@@ -2281,7 +2282,8 @@ void VoiceRecordBar::requestToSendWithOptions(Api::SendOptions options) {
 		}
 
 		const auto &settings = AyuSettings::getInstance();
-		if (AyuSettings::isUseScheduledMessages()) {
+		const auto &ghost = AyuSettings::ghost();
+		if (ghost.isUseScheduledMessages()) {
 			auto current = base::unixtime::now();
 			options.scheduled = current + 12 + 5;
 		}
@@ -2299,7 +2301,7 @@ void VoiceRecordBar::requestToSendWithOptions(Api::SendOptions options) {
 				close();
 			});
 
-		if (settings.voiceConfirmation) {
+		if (settings.voiceConfirmation()) {
 			_show->showBox(Ui::MakeConfirmBox(
 				{
 					.text = tr::ayu_ConfirmationVoice(),

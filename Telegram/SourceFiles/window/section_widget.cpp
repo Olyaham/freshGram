@@ -545,7 +545,7 @@ auto ChatThemeValueFromPeer(
 	-> rpl::producer<std::shared_ptr<Ui::ChatTheme>> {
 		const auto &settings = AyuSettings::getInstance();
 		// this check ensures that background is not a pattern wallpaper in a private chat
-		if (settings.disableCustomBackgrounds && resolved.paper && resolved.paper->media) {
+		if (settings.disableCustomBackgrounds() && resolved.paper && resolved.paper->media) {
 			resolved.paper = std::nullopt;
 		}
 

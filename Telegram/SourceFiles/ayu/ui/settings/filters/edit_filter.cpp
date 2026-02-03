@@ -217,7 +217,7 @@ void RegexEditBuilder(
 				if (onDone) {
 					onDone(newFilter);
 				}
-				AyuSettings::fire_filtersUpdate();
+				FiltersCacheController::fireUpdate();
 
 				if (showToast) {
 					const auto onClick = [=](const auto &...) mutable
@@ -226,7 +226,7 @@ void RegexEditBuilder(
 
 						AyuDatabase::updateRegexFilter(newFilter);
 						FiltersCacheController::rebuildCache();
-						AyuSettings::fire_filtersUpdate();
+						FiltersCacheController::fireUpdate();
 
 						return true;
 					};

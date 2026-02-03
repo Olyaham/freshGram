@@ -409,7 +409,7 @@ QString formatMessageTime(const QTime &time) {
 	const auto &settings = AyuSettings::getInstance();
 
 	const auto format =
-		settings.showMessageSeconds
+		settings.showMessageSeconds()
 			? (QLocale().timeFormat(QLocale::ShortFormat).contains("AP")
 				   ? "h:mm:ss AP"
 				   : "HH:mm:ss")
@@ -617,12 +617,12 @@ int getScheduleTime(int64 sumSize) {
 bool isMessageSavable(const not_null<HistoryItem*> item) {
 	const auto &settings = AyuSettings::getInstance();
 
-	if (!settings.saveDeletedMessages) {
+	if (!settings.saveDeletedMessages()) {
 		return false;
 	}
 
 	if (const auto possiblyBot = item->history()->peer->asUser()) {
-		return !possiblyBot->isBot() || (settings.saveForBots && possiblyBot->isBot());
+		return !possiblyBot->isBot() || (settings.saveForBots() && possiblyBot->isBot());
 	}
 	return true;
 }
