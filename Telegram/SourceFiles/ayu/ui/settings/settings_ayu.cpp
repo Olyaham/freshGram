@@ -490,6 +490,7 @@ void SetupOther(not_null<Ui::VerticalLayout*> container) {
 
 	AddSettingToggle(container, tr::ayu_LocalPremium(), &AyuSettings::localPremium, &AyuSettings::setLocalPremium);
 	AddSettingToggle(container, tr::ayu_DisableAds(), &AyuSettings::disableAds, &AyuSettings::setDisableAds);
+	AddSettingToggle(container, tr::ayu_SemiTransparentDeletedMessages(), &AyuSettings::semiTransparentDeletedMessages, &AyuSettings::setSemiTransparentDeletedMessages);
 }
 
 rpl::producer<QString> AyuGhost::title() {

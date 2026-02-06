@@ -48,6 +48,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/round_rect.h"
 #include "data/components/sponsored_messages.h"
 #include "data/data_channel.h"
+#include "data/data_groups.h"
 #include "data/data_saved_sublist.h"
 #include "data/data_session.h"
 #include "data/data_todo_list.h"
@@ -1152,6 +1153,15 @@ Element::Element(
 			AddComponents(FakeBotAboutTop::Bit());
 		}
 	}
+	if (replacing && replacing->_deletedOpacityAnimation.animating()) {
+		_deletedOpacityAnimation = replacing->takeDeletedAnimation();
+	} else if (data->isDeleted() && data->wasDeletedAnimated()) {
+		// grouped messages handle it per-item
+		if (!history()->owner().groups().find(data)) {
+			startDeletedAnimation();
+			data->markDeletedAnimated();
+		}
+	}
 }
 
 bool Element::embedReactionsInBubble() const {
@@ -1282,6 +1292,40 @@ void Element::prepareCustomEmojiPaint(
 
 void Element::repaint(QRect r) const {
 	history()->owner().requestViewRepaint(this, r);
+}
+
+float64 Element::deletedOpacity() const {
+	const auto &settings = AyuSettings::getInstance();
+	if (!settings.semiTransparentDeletedMessages()) {
+		return 1.;
+	}
+	if (_context == Context::AdminLog) { // render normally in "View Deleted"
+		return 1.;
+	}
+	if (_data->isDeleted()) {
+		if (const auto group = history()->owner().groups().find(_data)) {
+			// animation works weirdly on grouped messages, so only a fixed opacity here
+			const auto allDeleted = ranges::all_of(
+				group->items,
+				&HistoryItem::isDeleted);
+			return allDeleted ? 0.7 : 1.;
+		}
+		return _deletedOpacityAnimation.value(0.7);
+	}
+	return 1.;
+}
+
+void Element::startDeletedAnimation() {
+	_deletedOpacityAnimation.start(
+		[=] { repaint(); },
+		1.,
+		0.7,
+		500,
+		anim::easeOutCubic);
+}
+
+Ui::Animations::Simple Element::takeDeletedAnimation() {
+	return std::move(_deletedOpacityAnimation);
 }
 
 void Element::paintHighlight(

@@ -40,8 +40,6 @@ AyuChats::AyuChats(
 }
 
 void SetupStickersAndEmojiSettings(not_null<Ui::VerticalLayout*> container) {
-	auto *settings = &AyuSettings::getInstance();
-
 	AddSubsectionTitle(container, tr::lng_settings_stickers_emoji()/*rpl::single(QString("Stickers and Emoji"))*/);
 
 	AddSettingToggle(container, tr::ayu_ShowOnlyAddedEmojisAndStickers(), &AyuSettings::showOnlyAddedEmojisAndStickers, &AyuSettings::setShowOnlyAddedEmojisAndStickers);

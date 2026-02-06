@@ -389,6 +389,12 @@ void AyuSettings::setHideFromBlocked(bool val) {
 	save();
 }
 
+void AyuSettings::setSemiTransparentDeletedMessages(bool val) {
+	if (_semiTransparentDeletedMessages.current() == val) return;
+	_semiTransparentDeletedMessages = val;
+	save();
+}
+
 void AyuSettings::setDisableAds(bool val) {
 	if (_disableAds.current() == val) return;
 	_disableAds = val;
@@ -808,6 +814,7 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"filtersEnabled", s._filtersEnabled.current()},
 		{"filtersEnabledInChats", s._filtersEnabledInChats.current()},
 		{"hideFromBlocked", s._hideFromBlocked.current()},
+		{"semiTransparentDeletedMessages", s._semiTransparentDeletedMessages.current()},
 		{"disableAds", s._disableAds.current()},
 		{"disableStories", s._disableStories.current()},
 		{"disableCustomBackgrounds", s._disableCustomBackgrounds.current()},
@@ -898,6 +905,7 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._filtersEnabled = j.value("filtersEnabled", defaults._filtersEnabled.current());
 	s._filtersEnabledInChats = j.value("filtersEnabledInChats", defaults._filtersEnabledInChats.current());
 	s._hideFromBlocked = j.value("hideFromBlocked", defaults._hideFromBlocked.current());
+	s._semiTransparentDeletedMessages = j.value("semiTransparentDeletedMessages", defaults._semiTransparentDeletedMessages.current());
 	s._disableAds = j.value("disableAds", defaults._disableAds.current());
 	s._disableStories = j.value("disableStories", defaults._disableStories.current());
 	s._disableCustomBackgrounds = j.value("disableCustomBackgrounds", defaults._disableCustomBackgrounds.current());

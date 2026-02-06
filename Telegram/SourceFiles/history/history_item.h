@@ -437,6 +437,8 @@ public:
 	void setPostAuthor(const QString &author);
 	void setDeleted();
 	bool isDeleted() const;
+	[[nodiscard]] bool wasDeletedAnimated() const;
+	void markDeletedAnimated();
 	void applyTTL(TimeId destroyAt);
 	void setAyuHint(const QString &hint);
 	void setRealId(MsgId newId);
@@ -739,6 +741,7 @@ private:
 	crl::time _reactionsLastRefreshed = 0;
 
 	bool _deleted = false;
+	bool _deletedAnimated = false;
 	int _unsupportedTTL = 0;
 
 	TimeId _date = 0;

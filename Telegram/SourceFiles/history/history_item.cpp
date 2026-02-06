@@ -3500,6 +3500,7 @@ void HistoryItem::setPostAuthor(const QString &postAuthor) {
 
 void HistoryItem::setDeleted() {
 	_deleted = true;
+	_deletedAnimated = true;
 
 	if (isService()) {
 		const auto &settings = AyuSettings::getInstance();
@@ -3512,6 +3513,14 @@ void HistoryItem::setDeleted() {
 
 bool HistoryItem::isDeleted() const {
 	return _deleted;
+}
+
+bool HistoryItem::wasDeletedAnimated() const {
+	return _deletedAnimated;
+}
+
+void HistoryItem::markDeletedAnimated() {
+	_deletedAnimated = false;
 }
 
 void HistoryItem::setAyuHint(const QString &hint) {
