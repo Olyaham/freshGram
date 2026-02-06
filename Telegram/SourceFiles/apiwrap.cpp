@@ -4008,6 +4008,7 @@ void ApiWrap::sendMessage(
 		MessageToSend &&message,
 		std::optional<MsgId> localMessageId) {
 	applyGhostScheduling(_session, message.action.options);
+	const auto clearReplyTo = prependPseudoReply(message);
 
 	const auto history = message.action.history;
 	const auto peer = history->peer;
@@ -4033,6 +4034,11 @@ void ApiWrap::sendMessage(
 	const bool canSendTexts = topic
 		? Data::CanSendTexts(topic)
 		: Data::CanSendTexts(peer);
+
+	if (clearReplyTo) {
+		message.action.replyTo.messageId = FullMsgId(message.action.replyTo.messageId.peer, message.action.replyTo.topicRootId);
+		action.replyTo.messageId = FullMsgId(action.replyTo.messageId.peer, action.replyTo.topicRootId);
+	}
 
 	if ((!canSendTexts && !AyuForward::isForwarding(peer->id)) || Api::SendDice(message)) {
 		return;

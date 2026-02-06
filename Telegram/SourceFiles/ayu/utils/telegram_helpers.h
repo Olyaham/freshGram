@@ -7,6 +7,7 @@
 #pragma once
 
 #include "rc_manager.h"
+#include "api/api_common.h"
 #include "ayu/data/entities.h"
 
 #include "core/application.h"
@@ -112,6 +113,13 @@ PeerData* getPeerFromDialogId(ID id);
 PeerData* getPeerFromDialogId(unsigned long long id);
 
 QString filterZalgo(const QString &text);
+
+bool prependPseudoReply(Api::MessageToSend &message);
+bool prependPseudoReply(
+	not_null<Main::Session*> session,
+	not_null<History*> history,
+	TextWithTags &caption,
+	FullReplyTo &replyTo);
 
 void getRegistrationDate(not_null<PeerData*> peer, Fn<void(TextWithEntities)> callback);
 

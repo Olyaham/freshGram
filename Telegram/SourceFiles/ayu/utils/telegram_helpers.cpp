@@ -924,6 +924,125 @@ bool mediaDownloadable(const Data::Media *media) {
 	return true;
 }
 
+static bool prependPseudoReplyImpl(
+		not_null<Main::Session*> session,
+		not_null<History*> history,
+		TextWithTags &textWithTags,
+		FullReplyTo &replyTo) {
+	if (!replyTo) {
+		return false;
+	}
+	const auto replyItem = session->data().message(replyTo.messageId);
+	if (!replyItem || !replyItem->isDeleted()) {
+		return false;
+	}
+	const auto shortify = [&](const QString &text, int maxLength) {
+		if (text.isEmpty() || text.length() < maxLength) {
+			return text;
+		}
+		return text.left(maxLength - 1) + QChar(8230); // …
+	};
+	const auto shiftEntities = [&](QVector<TextWithTags::Tag> &tags, int offset) {
+		if (tags.isEmpty() || !offset) {
+			return;
+		}
+		for (auto &tag : tags) {
+			tag.offset += offset;
+		}
+	};
+
+	const auto from = replyItem->from();
+	auto name = QString();
+	if (!history->peer->isUser() || replyItem->history()->peer != history->peer) {
+		name = from->name();
+	}
+
+	auto msgText = !replyTo.quote.empty()
+		? replyTo.quote.text
+		: replyItem->originalText().text;
+	if (msgText.isEmpty()) {
+		msgText = replyItem->notificationText().text;
+	}
+	const auto shortifiedText = shortify(msgText, 100);
+
+	const auto prefix = name.isEmpty()
+		? shortifiedText
+		: (name + "\n" + shortifiedText);
+
+	if (textWithTags.empty()) {
+		textWithTags.text = prefix;
+	} else {
+		textWithTags.text.prepend(prefix + "\n");
+	}
+	const auto prefixLength = prefix.length() + (textWithTags.text.length() > prefix.length() ? 1 : 0);
+
+	shiftEntities(textWithTags.tags, prefixLength);
+
+	EntitiesInText newEntities;
+	const auto nameLength = name.length();
+
+	newEntities.push_back(EntityInText{
+		EntityType::Blockquote,
+		0,
+		prefix.length(),
+		{}
+	});
+
+	if (nameLength > 0) {
+		newEntities.push_back(EntityInText{
+			EntityType::Bold,
+			0,
+			nameLength,
+			QString()
+		});
+
+		auto accessHash = uint64(0);
+		if (const auto user = from->asUser()) {
+			accessHash = user->accessHash();
+		} else if (const auto channel = from->asChannel()) {
+			accessHash = channel->accessHash();
+		}
+
+		if (accessHash != 0) {
+			const auto mentionData = QStringLiteral("%1.%2:%3")
+				.arg(from->id.value)
+				.arg(accessHash)
+				.arg(session->userId().bare);
+
+			newEntities.push_back(EntityInText{
+				EntityType::MentionName,
+				0,
+				nameLength,
+				mentionData
+			});
+		}
+	}
+
+	const auto newTags = TextUtilities::ConvertEntitiesToTextTags(newEntities);
+	textWithTags.tags.append(newTags);
+
+	return true;
+}
+
+bool prependPseudoReply(Api::MessageToSend &message) {
+	if (!message.action.history) {
+		return false;
+	}
+	return prependPseudoReplyImpl(
+		&message.action.history->session(),
+		message.action.history,
+		message.textWithTags,
+		message.action.replyTo);
+}
+
+bool prependPseudoReply(
+		not_null<Main::Session*> session,
+		not_null<History*> history,
+		TextWithTags &caption,
+		FullReplyTo &replyTo) {
+	return prependPseudoReplyImpl(session, history, caption, replyTo);
+}
+
 TextWithEntities reverseLocalPremiumEmoji(const TextWithEntities &text, not_null<History *> history, bool isForQuote) {
 	if (text.empty()) {
 		return text;
