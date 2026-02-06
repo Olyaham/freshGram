@@ -14,6 +14,10 @@
 #include "dialogs/dialogs_main_list.h"
 #include "info/profile/info_profile_badge.h"
 
+namespace Api {
+struct SendOptions;
+}
+
 using UsernameResolverCallback = Fn<void(const QString &, PeerData *)>;
 
 class TimedCountDownLatch
@@ -110,4 +114,9 @@ PeerData* getPeerFromDialogId(unsigned long long id);
 QString filterZalgo(const QString &text);
 
 void getRegistrationDate(not_null<PeerData*> peer, Fn<void(TextWithEntities)> callback);
+
+void applyGhostScheduling(
+	not_null<Main::Session*> session,
+	Api::SendOptions &options,
+	int delaySeconds = 12);
 

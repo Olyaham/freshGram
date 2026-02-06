@@ -164,6 +164,8 @@ void SendExistingMedia(
 		Fn<MTPInputMedia()> inputMedia,
 		Data::FileOrigin origin,
 		std::optional<MsgId> localMessageId) {
+	applyGhostScheduling(&message.action.history->session(), message.action.options);
+
 	const auto history = message.action.history;
 	const auto peer = history->peer;
 	const auto session = &history->session();

@@ -3801,8 +3801,10 @@ void ApiWrap::sendVoiceMessage(
 		crl::time duration,
 		bool video,
 		const SendAction &action) {
+	auto scheduledAction = action;
+	applyGhostScheduling(_session, scheduledAction.options, 17);
 	const auto caption = TextWithTags();
-	const auto to = FileLoadTaskOptions(action);
+	const auto to = FileLoadTaskOptions(scheduledAction);
 	_fileLoader->addTask(std::make_unique<FileLoadTask>(
 		&session(),
 		result,
@@ -3948,12 +3950,6 @@ void ApiWrap::sendUploadedPhoto(
 		Api::RemoteFileInfo info,
 		Api::SendOptions options) {
 	if (const auto item = _session->data().message(localId)) {
-		const auto &ghost = AyuSettings::ghost(_session);
-		if (ghost.isUseScheduledMessages() && !options.scheduled) {
-			auto current = base::unixtime::now();
-			options.scheduled = current + 12;
-		}
-
 		const auto media = Api::PrepareUploadedPhoto(item, std::move(info));
 		if (const auto groupId = item->groupId()) {
 			uploadAlbumMedia(item, groupId, media);
@@ -3970,12 +3966,6 @@ void ApiWrap::sendUploadedDocument(
 	if (const auto item = _session->data().message(localId)) {
 		if (!item->media() || !item->media()->document()) {
 			return;
-		}
-
-		const auto &ghost = AyuSettings::ghost(_session);
-		if (ghost.isUseScheduledMessages() && !options.scheduled) {
-			auto current = base::unixtime::now();
-			options.scheduled = current + 12;
 		}
 
 		const auto media = Api::PrepareUploadedDocument(
@@ -4017,6 +4007,8 @@ void ApiWrap::sendShortcutMessages(
 void ApiWrap::sendMessage(
 		MessageToSend &&message,
 		std::optional<MsgId> localMessageId) {
+	applyGhostScheduling(_session, message.action.options);
+
 	const auto history = message.action.history;
 	const auto peer = history->peer;
 	auto &textWithTags = message.textWithTags;
@@ -4301,12 +4293,6 @@ void ApiWrap::sendBotStart(
 			message.textWithTags.text += '@' + bot->username();
 		}
 
-		const auto &ghost = AyuSettings::ghost(_session);
-		if (ghost.isUseScheduledMessages()) {
-			auto current = base::unixtime::now();
-			message.action.options.scheduled = current + 12;
-		}
-
 		sendMessage(std::move(message));
 		return;
 	}
@@ -4553,11 +4539,7 @@ void ApiWrap::sendMediaWithRandomId(
 		Api::SendOptions options,
 		uint64 randomId,
 		Fn<void(bool)> done) {
-	const auto &ghost = AyuSettings::ghost(_session);
-	if (ghost.isUseScheduledMessages() && !options.scheduled) {
-		auto current = base::unixtime::now();
-		options.scheduled = current + 12;
-	}
+	applyGhostScheduling(_session, options);
 
 	const auto history = item->history();
 	const auto replyTo = item->replyTo();
@@ -4801,11 +4783,7 @@ void ApiWrap::sendAlbumIfReady(not_null<SendingAlbum*> album) {
 		return;
 	}
 
-	const auto &ghost = AyuSettings::ghost(_session);
-	if (ghost.isUseScheduledMessages() && !album->options.scheduled) {
-		auto current = base::unixtime::now();
-		album->options.scheduled = current + 12;
-	}
+	applyGhostScheduling(_session, album->options);
 
 	const auto history = sample->history();
 	const auto replyTo = sample->replyTo();

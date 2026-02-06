@@ -59,7 +59,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ayu/ayu_settings.h"
 #include "styles/style_ayu_styles.h"
 #include "boxes/abstract_box.h"
-#include "base/unixtime.h"
 
 
 namespace ChatHelpers {
@@ -2170,11 +2169,6 @@ void StickersListWidget::mouseReleaseEvent(QMouseEvent *e) {
 					document
 				);
 				auto options = Api::SendOptions();
-				auto &ghost = AyuSettings::ghost(&session());
-				if (ghost.isUseScheduledMessages() && !options.scheduled) {
-					auto current = base::unixtime::now();
-					options.scheduled = current + 12;
-				}
 				auto sendStickerCallback = crl::guard(
 					this,
 					[=, this]

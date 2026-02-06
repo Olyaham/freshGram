@@ -1947,17 +1947,10 @@ bool SendFilesBox::validateLength(const QString &text) const {
 void SendFilesBox::send(
 		Api::SendOptions options,
 		bool ctrlShiftEnter) {
-	auto &ghost = AyuSettings::ghost();
-	if (ghost.isUseScheduledMessages() && !options.scheduled) {
-		const auto sumSize = ranges::accumulate(
-			_list.files,
-			0,
-			[](int sum, const auto &file) {
-				return sum + file.size;
-			});
-		auto current = base::unixtime::now();
-		options.scheduled = current + getScheduleTime(sumSize);
-	}
+	const auto sumSize = ranges::accumulate(
+		_list.files, int64(0),
+		[](int64 sum, const auto &file) { return sum + file.size; });
+	applyGhostScheduling(&_show->session(), options, getScheduleTime(sumSize));
 
 	if ((_sendType == Api::SendType::Scheduled
 		|| _sendType == Api::SendType::ScheduledToUser)

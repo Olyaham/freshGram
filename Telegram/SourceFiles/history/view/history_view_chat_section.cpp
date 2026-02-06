@@ -1432,10 +1432,6 @@ void ChatWidget::sendVoice(const ComposeControls::VoiceToSend &data) {
 
 void ChatWidget::send(Api::SendOptions options) {
 	const auto &ghost = AyuSettings::ghost(&controller()->session());
-	if (ghost.isUseScheduledMessages() && !options.scheduled) {
-		auto current = base::unixtime::now();
-		options.scheduled = current + 12;
-	}
 
 	auto lastMessage = _history->lastMessage();
 	if (!ghost.sendReadMessages() && ghost.markReadAfterAction() && lastMessage) {

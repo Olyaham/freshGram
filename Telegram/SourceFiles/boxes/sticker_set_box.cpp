@@ -1444,12 +1444,6 @@ void StickerSetBox::Inner::chosen(
 		? Ui::MessageSendingAnimationFrom()
 		: messageSentAnimationInfo(index, sticker);
 
-	auto &ghost = AyuSettings::ghost(_session);
-	if (ghost.isUseScheduledMessages() && !options.scheduled) {
-		auto current = base::unixtime::now();
-		options.scheduled = current + 12;
-	}
-
 	_show->processChosenSticker({
 		.document = sticker,
 		.options = options,

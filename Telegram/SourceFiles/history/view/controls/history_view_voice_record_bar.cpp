@@ -2188,11 +2188,6 @@ void VoiceRecordBar::stopRecording(StopType type, bool ttlBeforeHide) {
 					: 0),
 			};
 
-			auto &ghost = AyuSettings::ghost(&_show->session());
-			if (ghost.isUseScheduledMessages()) {
-				auto current = base::unixtime::now();
-				options.scheduled = current + 12 + 5;
-			}
 			auto sendVoiceCallback = crl::guard(
 				this,
 				[=, this](Fn<void()> &&close)
@@ -2282,11 +2277,6 @@ void VoiceRecordBar::requestToSendWithOptions(Api::SendOptions options) {
 		}
 
 		const auto &settings = AyuSettings::getInstance();
-		const auto &ghost = AyuSettings::ghost();
-		if (ghost.isUseScheduledMessages()) {
-			auto current = base::unixtime::now();
-			options.scheduled = current + 12 + 5;
-		}
 		auto sendVoiceCallback = crl::guard(
 			this,
 			[=, this](Fn<void()> &&close)

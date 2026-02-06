@@ -38,6 +38,7 @@
 #include "main/main_session.h"
 #include "ui/text/format_values.h"
 
+#include "api/api_common.h"
 #include "ayu/ayu_settings.h"
 #include "ayu/ayu_state.h"
 #include "ayu/data/messages_storage.h"
@@ -1348,5 +1349,15 @@ void getRegistrationDate(not_null<PeerData*> peer, Fn<void(TextWithEntities)> ca
 		if (callback) {
 			callback(TextWithEntities{});
 		}
+	}
+}
+
+void applyGhostScheduling(
+		not_null<Main::Session*> session,
+		Api::SendOptions &options,
+		int delaySeconds) {
+	const auto &ghost = AyuSettings::ghost(session);
+	if (ghost.isUseScheduledMessages() && !options.scheduled) {
+		options.scheduled = base::unixtime::now() + delaySeconds;
 	}
 }
