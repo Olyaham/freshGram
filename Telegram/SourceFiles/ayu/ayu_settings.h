@@ -234,6 +234,7 @@ public:
 	[[nodiscard]] bool voiceConfirmation() const { return _voiceConfirmation.current(); }
 	[[nodiscard]] const QString &translationProvider() const { return _translationProvider.current(); }
 	[[nodiscard]] bool adaptiveCoverColor() const { return _adaptiveCoverColor.current(); }
+	[[nodiscard]] bool improveLinkPreviews() const { return _improveLinkPreviews.current(); }
 	[[nodiscard]] bool crashReporting() const { return _crashReporting.current(); }
 
 	void setSaveDeletedMessages(bool val);
@@ -309,6 +310,7 @@ public:
 	void setVoiceConfirmation(bool val);
 	void setTranslationProvider(const QString &val);
 	void setAdaptiveCoverColor(bool val);
+	void setImproveLinkPreviews(bool val);
 	void setCrashReporting(bool val);
 
 	[[nodiscard]] rpl::producer<bool> useGlobalGhostModeChanges() const { return _useGlobalGhostMode.value(); }
@@ -385,6 +387,7 @@ public:
 	[[nodiscard]] rpl::producer<bool> voiceConfirmationChanges() const { return _voiceConfirmation.value(); }
 	[[nodiscard]] rpl::producer<QString> translationProviderChanges() const { return _translationProvider.value(); }
 	[[nodiscard]] rpl::producer<bool> adaptiveCoverColorChanges() const { return _adaptiveCoverColor.value(); }
+	[[nodiscard]] rpl::producer<bool> improveLinkPreviewsChanges() const { return _improveLinkPreviews.value(); }
 	[[nodiscard]] rpl::producer<bool> crashReportingChanges() const { return _crashReporting.value(); }
 
 	friend void to_json(nlohmann::json &j, const AyuSettings &s);
@@ -469,6 +472,7 @@ private:
 	rpl::variable<bool> _voiceConfirmation = false;
 	rpl::variable<QString> _translationProvider = QString("telegram");
 	rpl::variable<bool> _adaptiveCoverColor = true;
+	rpl::variable<bool> _improveLinkPreviews = true;
 	rpl::variable<bool> _crashReporting = true;
 
 	rpl::variable<bool> _useGlobalGhostMode = true;

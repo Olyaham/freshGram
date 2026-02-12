@@ -4225,7 +4225,7 @@ void ApiWrap::sendMessage(
 			action.options.shortcutId);
 		if (exactWebPage
 			&& !ignoreWebPage
-			&& (manualWebPage || sending.empty())) {
+			&& (manualWebPage || sending.empty() || message.webPage.previewChanged)) {
 			histories.sendPreparedMessage(
 				history,
 				action.replyTo,

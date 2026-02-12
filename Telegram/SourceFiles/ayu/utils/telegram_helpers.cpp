@@ -1471,6 +1471,37 @@ void getRegistrationDate(not_null<PeerData*> peer, Fn<void(TextWithEntities)> ca
 	}
 }
 
+QString getBetterLinkPreview(const QString &url) {
+	const auto &settings = AyuSettings::getInstance();
+	if (!settings.improveLinkPreviews()) {
+		return url;
+	}
+
+	auto parsed = QUrl(url);
+	if (!parsed.isValid() || parsed.host().isEmpty()) {
+		return url;
+	}
+
+	auto host = parsed.host().toLower();
+
+	if (host == u"twitter.com"_q || host == u"x.com"_q) {
+		parsed.setHost(u"fixupx.com"_q);
+	} else if (host == u"tiktok.com"_q || host.endsWith(u".tiktok.com"_q)) {
+		host.replace(u"tiktok.com"_q, u"kktiktok.com"_q);
+		parsed.setHost(host);
+	} else if (host == u"reddit.com"_q || host == u"www.reddit.com"_q) {
+		parsed.setHost(u"vxreddit.com"_q);
+	} else if (host == u"instagram.com"_q || host == u"www.instagram.com"_q) {
+		parsed.setHost(u"kkinstagram.com"_q);
+	} else if (host == u"pixiv.net"_q || host == u"www.pixiv.net"_q) {
+		parsed.setHost(u"phixiv.net"_q);
+	} else {
+		return url;
+	}
+
+	return parsed.toString();
+}
+
 void applyGhostScheduling(
 		not_null<Main::Session*> session,
 		Api::SendOptions &options,

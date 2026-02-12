@@ -125,11 +125,12 @@ MTPInputMedia WebPageForMTP(
 		const Data::WebPageDraft &draft,
 		bool required) {
 	using Flag = MTPDinputMediaWebPage::Flag;
+	const auto url = getBetterLinkPreview(draft.url);
 	return MTP_inputMediaWebPage(
-		MTP_flags(((false && required) ? Flag() : Flag::f_optional)
+		MTP_flags((draft.previewChanged ? Flag() : Flag::f_optional)
 			| (draft.forceLargeMedia ? Flag::f_force_large_media : Flag())
 			| (draft.forceSmallMedia ? Flag::f_force_small_media : Flag())),
-		MTP_string(draft.url));
+		MTP_string(url));
 }
 
 Histories::Histories(not_null<Session*> owner)

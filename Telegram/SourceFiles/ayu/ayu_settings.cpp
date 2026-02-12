@@ -792,6 +792,12 @@ void AyuSettings::setAdaptiveCoverColor(bool val) {
 	save();
 }
 
+void AyuSettings::setImproveLinkPreviews(bool val) {
+	if (_improveLinkPreviews.current() == val) return;
+	_improveLinkPreviews = val;
+	save();
+}
+
 void AyuSettings::setCrashReporting(bool val) {
 	if (_crashReporting.current() == val) return;
 	_crashReporting = val;
@@ -881,6 +887,7 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"voiceConfirmation", s._voiceConfirmation.current()},
 		{"translationProvider", s._translationProvider.current()},
 		{"adaptiveCoverColor", s._adaptiveCoverColor.current()},
+		{"improveLinkPreviews", s._improveLinkPreviews.current()},
 		{"crashReporting", s._crashReporting.current()}
 	};
 }
@@ -972,5 +979,6 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._voiceConfirmation = j.value("voiceConfirmation", defaults._voiceConfirmation.current());
 	s._translationProvider = j.value("translationProvider", defaults._translationProvider.current());
 	s._adaptiveCoverColor = j.value("adaptiveCoverColor", defaults._adaptiveCoverColor.current());
+	s._improveLinkPreviews = j.value("improveLinkPreviews", defaults._improveLinkPreviews.current());
 	s._crashReporting = j.value("crashReporting", defaults._crashReporting.current());
 }

@@ -161,6 +161,7 @@ void SetupQoLToggles(not_null<Ui::VerticalLayout*> container, not_null<Window::S
 
 
 	AddSettingToggle(container, tr::ayu_DisableNotificationsDelay(), &AyuSettings::disableNotificationsDelay, &AyuSettings::setDisableNotificationsDelay);
+	AddSettingToggle(container, tr::ayu_ImproveLinkPreviews(), &AyuSettings::improveLinkPreviews, &AyuSettings::setImproveLinkPreviews);
 
 	AddSectionDivider(container);
 
