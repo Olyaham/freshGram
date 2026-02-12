@@ -14,6 +14,7 @@
 #include "theme_selector_box.h"
 #include "ayu/ayu_settings.h"
 #include "ayu/ui/components/image_view.h"
+#include "ayu/utils/telegram_helpers.h"
 #include "boxes/abstract_box.h"
 #include "core/core_settings.h"
 #include "data/data_session.h"
@@ -60,10 +61,24 @@ void MessageShotBox::setupContent() {
 	AddSkip(content);
 	AddSubsectionTitle(content, tr::ayu_MessageShotPreferences());
 
+	const auto firstPreviewLatch = std::make_shared<TimedCountDownLatch>(1);
+	const auto generation = content->lifetime().make_state<int>(0);
+	const auto weak = base::make_weak(this);
+
 	const auto updatePreview = [=]
 	{
-		const auto image = AyuFeatures::MessageShot::Make(this, _config);
-		imageView->setImage(image);
+		const auto currentGeneration = ++(*generation);
+		AyuFeatures::MessageShot::Make(this, _config, [=](const QImage &image, bool final)
+		{
+			if (!weak || currentGeneration != *generation) {
+				return;
+			}
+
+			if (final || imageView->getImage().isNull()) {
+				imageView->setImage(image);
+			}
+			firstPreviewLatch->countDown();
+		});
 	};
 
 	auto selectedTheme =
@@ -187,6 +202,7 @@ void MessageShotBox::setupContent() {
 					  image.save(path);
 				  }
 
+			  	  _tookShot = true;
 				  closeBox();
 			  });
 	addButton(tr::ayu_MessageShotCopy(),
@@ -194,10 +210,12 @@ void MessageShotBox::setupContent() {
 			  {
 				  QGuiApplication::clipboard()->setImage(imageView->getImage());
 
+			  	  _tookShot = true;
 				  closeBox();
 			  });
 
 	updatePreview();
+	firstPreviewLatch->await(std::chrono::seconds(1));
 
 	const auto boxWidth = imageView->getImage().width() / style::DevicePixelRatio() + (st::boxPadding.left() + st::boxPadding.right()) * 4;
 

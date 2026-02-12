@@ -67,7 +67,7 @@ rpl::producer<style::palette> paletteChosen();
 // util
 QColor makeDefaultBackgroundColor();
 
-QImage Make(not_null<QWidget*> box, const ShotConfig &config);
+void Make(not_null<QWidget*> box, const ShotConfig &config, const Fn<void(QImage&,bool)>& callback);
 
 void Wrapper(not_null<HistoryView::ListWidget*> widget, Fn<void()> clearSelected);
 

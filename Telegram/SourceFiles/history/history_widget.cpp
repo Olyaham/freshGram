@@ -9421,10 +9421,11 @@ void HistoryWidget::messageShotSelected() {
 		messages
 	};
 	auto box = Box<MessageShotBox>(config);
-	box->boxClosing() | rpl::on_next([=]
+	const auto raw = box.data();
+	raw->boxClosing() | rpl::on_next([=]
 	{
-		clearSelected();
-	}, box->lifetime());
+		if (raw->tookShot()) clearSelected();
+	}, raw->lifetime());
 	Ui::show(std::move(box));
 }
 
