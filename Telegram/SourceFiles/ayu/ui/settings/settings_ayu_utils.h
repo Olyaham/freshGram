@@ -30,8 +30,7 @@ struct NestedEntry
 	Fn<void(bool)> lockSetter;
 };
 
-QString asBeta(const QString &text);
-rpl::producer<QString> asBeta(rpl::producer<QString> text);
+void AddBetaBadge(not_null<Button*> parent);
 
 not_null<Ui::RpWidget*> AddInnerToggle(not_null<Ui::VerticalLayout*> container,
 									   const style::SettingsButton &st,

@@ -8,16 +8,18 @@
 
 #include "lang/lang_text_entity.h"
 #include "settings/settings_common.h"
+#include "styles/style_ayu_styles.h"
 #include "styles/style_info.h"
 #include "styles/style_layers.h"
 #include "styles/style_settings.h"
 #include "ui/painter.h"
 #include "ui/vertical_list.h"
 #include "ui/boxes/single_choice_box.h"
-#include "ui/text/text_utilities.h"
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/checkbox.h"
 #include "ui/widgets/continuous_sliders.h"
+#include "ui/widgets/labels.h"
+#include "ui/wrap/padding_wrap.h"
 #include "ui/wrap/slide_wrap.h"
 #include "ui/wrap/vertical_layout.h"
 #include "window/window_session_controller.h"
@@ -28,15 +30,35 @@ class PainterHighQualityEnabler;
 
 namespace Settings {
 
-QString asBeta(const QString &text) {
-	return text + QString("  β");
-}
+void AddBetaBadge(not_null<Button*> parent) {
+	const auto badge = Ui::CreateChild<Ui::PaddingWrap<Ui::FlatLabel>>(
+		parent.get(),
+		object_ptr<Ui::FlatLabel>(
+			parent,
+			rpl::single(QString("BETA")),
+			st::settingsPremiumNewBadge),
+		st::ayuBetaBadgePadding);
+	badge->show();
+	badge->setAttribute(Qt::WA_TransparentForMouseEvents);
+	badge->paintRequest() | rpl::on_next([=] {
+		auto p = QPainter(badge);
+		auto hq = PainterHighQualityEnabler(p);
+		p.setPen(Qt::NoPen);
+		p.setBrush(st::windowBgActive);
+		const auto r = st::ayuBetaBadgePadding.left();
+		p.drawRoundedRect(badge->rect(), r, r);
+	}, badge->lifetime());
 
-rpl::producer<QString> asBeta(rpl::producer<QString> text) {
-	return std::move(text) | rpl::map([=](const QString &val)
-	{
-		return asBeta(val);
-	});
+	parent->sizeValue(
+	) | rpl::on_next([=](QSize size) {
+		const auto &st = parent->st();
+		badge->moveToLeft(
+			st.padding.left()
+				+ parent->fullTextWidth()
+				+ st::settingsPremiumNewBadgePosition.x(),
+			st.padding.top()
+				+ (st.style.font->height - badge->height()) / 2);
+	}, badge->lifetime());
 }
 
 not_null<Ui::RpWidget*> AddInnerToggle(not_null<Ui::VerticalLayout*> container,

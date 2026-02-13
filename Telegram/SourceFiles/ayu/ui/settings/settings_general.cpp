@@ -66,9 +66,10 @@ void SetupTranslator(not_null<Ui::VerticalLayout*> container,
 
 	const auto button = AddButtonWithLabel(
 		container,
-		asBeta(tr::ayu_TranslationProvider()),
+		tr::ayu_TranslationProvider(),
 		currentVal,
 		st::settingsButtonNoIcon);
+	AddBetaBadge(button);
 	button->addClickHandler(
 		[=]
 		{
@@ -164,13 +165,14 @@ void SetupQoLToggles(not_null<Ui::VerticalLayout*> container, not_null<Window::S
 
 	AddSectionDivider(container);
 
-	AddButtonWithIcon(
+	const auto button = AddButtonWithIcon(
 		container,
 		tr::ayu_FilterZalgo(),
 		st::settingsButtonNoIcon
 	)->toggleOn(
 		rpl::single(settings->filterZalgo())
-	)->toggledValue(
+	);
+	button->toggledValue(
 	) | rpl::filter(
 		[=](bool enabled)
 		{
@@ -193,6 +195,7 @@ void SetupQoLToggles(not_null<Ui::VerticalLayout*> container, not_null<Window::S
 			}));
 		},
 		container->lifetime());
+	AddBetaBadge(button);
 
 	AddSettingToggle(container, tr::ayu_ImproveLinkPreviews(), &AyuSettings::improveLinkPreviews, &AyuSettings::setImproveLinkPreviews);
 	AddSettingToggle(container, tr::ayu_SettingsShowMessageSeconds(), &AyuSettings::showMessageSeconds, &AyuSettings::setShowMessageSeconds);

@@ -11,6 +11,7 @@ using "ui/basic.style";
 using "ui/colors.palette";
 using "ui/widgets/widgets.style";
 using "info/info.style";
+using "settings/settings.style";
 
 /* Icon Picker */
 cpPadding: 14px;
@@ -116,3 +117,5 @@ ghostPickerButton: LinkButton(defaultLinkButton) {
 	font: font(boxFontSize);
 	overFont: font(boxFontSize);
 }
+
+ayuBetaBadgePadding: margins(4px, 1px, 4px, 1px);
