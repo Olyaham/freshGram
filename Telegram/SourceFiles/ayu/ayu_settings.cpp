@@ -8,6 +8,7 @@
 
 #include "ayu_worker.h"
 #include "lang_auto.h"
+#include "ayu/ayu_ui_settings.h"
 #include "ayu/ui/ayu_logo.h"
 #include "core/application.h"
 #include "features/filters/filters_cache_controller.h"
@@ -17,6 +18,7 @@
 #include "window/window_controller.h"
 
 #include <fstream>
+#include <QApplication>
 
 using json = nlohmann::json;
 
@@ -24,6 +26,12 @@ namespace {
 
 std::string getSettingsPath() {
 	return (cWorkingDir() + u"tdata/ayu_settings.json"_q).toStdString();
+}
+
+void repaintApp() {
+	for (QWidget *widget : QApplication::allWidgets()) {
+		widget->update();
+	}
 }
 
 rpl::lifetime lifetime; // idk reactivity dies when placed in `GhostModeAccountSettings` as field
@@ -434,6 +442,9 @@ void AyuSettings::setHideSimilarChannels(bool val) {
 void AyuSettings::setWideMultiplier(double val) {
 	if (_wideMultiplier.current() == val) return;
 	_wideMultiplier = val;
+	// doesn't work because it should be set before style::StartManager()
+	// AyuUiSettings::setWideMultiplier(val);
+	// repaintApp();
 	save();
 }
 
@@ -458,6 +469,8 @@ void AyuSettings::setIncreaseWebviewWidth(bool val) {
 void AyuSettings::setMaterialSwitches(bool val) {
 	if (_materialSwitches.current() == val) return;
 	_materialSwitches = val;
+	AyuUiSettings::setMaterialSwitches(val);
+	repaintApp();
 	save();
 }
 
@@ -704,6 +717,9 @@ void AyuSettings::setShowStreamerToggleInTray(bool val) {
 void AyuSettings::setMonoFont(const QString &val) {
 	if (_monoFont.current() == val) return;
 	_monoFont = val;
+	// doesn't work because `static const auto family = ...`
+	// AyuUiSettings::setMonoFont(val);
+	// repaintApp();
 	save();
 }
 

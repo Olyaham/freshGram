@@ -472,7 +472,7 @@ private:
 	rpl::variable<bool> _voiceConfirmation = false;
 	rpl::variable<QString> _translationProvider = QString("telegram");
 	rpl::variable<bool> _adaptiveCoverColor = true;
-	rpl::variable<bool> _improveLinkPreviews = true;
+	rpl::variable<bool> _improveLinkPreviews = false;
 	rpl::variable<bool> _crashReporting = true;
 
 	rpl::variable<bool> _useGlobalGhostMode = true;
