@@ -83,7 +83,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/chat/attach/attach_prepare.h"
 #include "ui/toast/toast.h"
 #include "support/support_helper.h"
-#include "settings/settings_premium.h"
+#include "settings/sections/settings_premium.h"
 #include "storage/localimageloader.h"
 #include "storage/download_manager_mtproto.h"
 #include "storage/file_upload.h"
@@ -3836,6 +3836,8 @@ void ApiWrap::editMedia(
 		to.replyTo.monoforumPeerId = existing->sublistPeerId();
 		to.replaceMediaOf = MsgId();
 	}
+	const auto forceFile = (type == SendMediaType::File)
+		&& (file.type == Ui::PreparedFile::Type::Video);
 	_fileLoader->addTask(std::make_unique<FileLoadTask>(
 		&session(),
 		file.path,
@@ -3856,7 +3858,9 @@ void ApiWrap::editMedia(
 		type,
 		to,
 		caption,
-		file.spoiler));
+		file.spoiler,
+		nullptr,
+		forceFile));
 }
 
 void ApiWrap::sendFiles(
@@ -3889,6 +3893,8 @@ void ApiWrap::sendFiles(
 				&& type != SendMediaType::File)
 			? SendMediaType::Photo
 			: SendMediaType::File;
+		const auto forceFile = (type == SendMediaType::File)
+			&& (file.type == Ui::PreparedFile::Type::Video);
 		tasks.push_back(std::make_unique<FileLoadTask>(
 			&session(),
 			file.path,
@@ -3911,7 +3917,8 @@ void ApiWrap::sendFiles(
 			to,
 			caption,
 			file.spoiler,
-			album));
+			album,
+			forceFile));
 		caption = TextWithTags();
 	}
 	if (album) {

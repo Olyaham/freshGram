@@ -45,7 +45,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "lang/lang_keys.h"
 #include "mainwidget.h"
 #include "main/main_session.h"
-#include "settings/settings_premium.h"
+#include "settings/sections/settings_premium.h"
 #include "ui/text/text_options.h"
 #include "ui/painter.h"
 #include "window/themes/window_theme.h" // IsNightMode.
@@ -629,7 +629,7 @@ QSize Message::performCountOptimalSize() {
 		auto mediaOnBottom = (mediaDisplayed && media->isBubbleBottom()) || check || (entry/* && entry->isBubbleBottom()*/);
 		auto mediaOnTop = (mediaDisplayed && media->isBubbleTop()) || (entry && entry->isBubbleTop());
 		maxWidth = textualWidth;
-		if (context() == Context::Replies && item->isDiscussionPost()) {
+		if (isCommentsRootView()) {
 			maxWidth = std::max(maxWidth, st::msgMaxWidth);
 		}
 		minHeight = withVisibleText ? text().minHeight() : 0;
@@ -1036,7 +1036,8 @@ void Message::draw(Painter &p, const PaintContext &context) const {
 			context.st,
 			messageRounding,
 			g.width(),
-			context.clip.translated(-keyboardPosition));
+			context.clip.translated(-keyboardPosition),
+			context.paused);
 		p.translate(-keyboardPosition);
 	}
 
@@ -2369,7 +2370,7 @@ bool Message::hasFromPhoto() const {
 			return true;
 		} else if (item->isEmpty()
 			|| item->isFakeAboutView()
-			|| (context() == Context::Replies && item->isDiscussionPost())) {
+			|| isCommentsRootView()) {
 			return false;
 		}
 		const auto mode = delegate()->elementChatMode();
@@ -3303,6 +3304,7 @@ Reactions::ButtonParameters Message::reactionButtonParameters(
 	const auto reactionsHeight = (_reactions && !embedReactionsInBubble())
 		? (st::mediaInBubbleSkip + _reactions->height())
 		: 0;
+	result.reactionsHeight = reactionsHeight;
 	const auto innerHeight = geometry.height()
 		- keyboardHeight
 		- reactionsHeight;
@@ -3778,7 +3780,7 @@ int Message::minWidthForMedia() const {
 
 bool Message::hasFastReply() const {
 	if (context() == Context::Replies) {
-		if (data()->isDiscussionPost()) {
+		if (isCommentsRootView()) {
 			return false;
 		}
 	} else if (context() != Context::History) {
@@ -4078,7 +4080,17 @@ ClickHandlerPtr Message::prepareRightActionLink() const {
 			}
 		};
 	};
-	return std::make_shared<LambdaClickHandler>([=](
+
+	class FastShareClickHandler : public LambdaClickHandler {
+	public:
+		FastShareClickHandler(Fn<void(ClickContext)> handler)
+			: LambdaClickHandler(std::move(handler)) {}
+		QString tooltip() const override {
+			return tr::lng_fast_share_tooltip(tr::now);
+		}
+	};
+
+	const auto result = std::make_shared<FastShareClickHandler>([=](
 			ClickContext context) {
 		const auto controller = ExtractController(context);
 		if (!controller || controller->session().uniqueId() != sessionId) {
@@ -4100,6 +4112,8 @@ ClickHandlerPtr Message::prepareRightActionLink() const {
 			}
 		}
 	});
+	result->setProperty(kFastShareProperty, QVariant::fromValue(true));
+	return result;
 }
 
 ClickHandlerPtr Message::fastReplyLink() const {
@@ -4305,10 +4319,16 @@ QRect Message::innerGeometry() const {
 	return result;
 }
 
+bool Message::isCommentsRootView() const {
+	return context() == Context::Replies
+		&& data()->isDiscussionPost()
+		&& !data()->history()->isForum();
+}
+
 QRect Message::countGeometry() const {
 	const auto item = data();
 	const auto centeredView = item->isFakeAboutView()
-		|| (context() == Context::Replies && item->isDiscussionPost());
+		|| isCommentsRootView();
 	const auto media = this->media();
 	const auto mediaWidth = (media && media->isDisplayed())
 		? media->width()
@@ -4374,7 +4394,7 @@ Ui::BubbleRounding Message::countMessageRounding() const {
 		|| (media && media->skipBubbleTail())
 		|| (keyboard != nullptr)
 		|| item->isFakeAboutView()
-		|| (context() == Context::Replies && item->isDiscussionPost());
+		|| isCommentsRootView();
 	const auto right = hasRightLayout();
 	using Corner = Ui::BubbleCornerRounding;
 	return Ui::BubbleRounding{
@@ -4447,7 +4467,7 @@ int Message::resizeContentGetHeight(int newWidth) {
 
 	// This code duplicates countGeometry() but also resizes media.
 	const auto centeredView = item->isFakeAboutView()
-		|| (context() == Context::Replies && item->isDiscussionPost());
+		|| isCommentsRootView();
 	const auto useMoreSpace = (delegate()->elementChatMode()
 		== ElementChatMode::Narrow);
 	const auto wideSkip = useMoreSpace
