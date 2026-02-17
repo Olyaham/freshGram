@@ -75,6 +75,9 @@ const auto kZalgoPattern = QStringLiteral(
 }
 
 Main::Session *getSession(ID userId) {
+	if (!userId) {
+		return nullptr;
+	}
 	for (const auto &[index, account] : Core::App().domain().accounts()) {
 		if (const auto session = account->maybeSession()) {
 			if (session->userId().bare == userId) {

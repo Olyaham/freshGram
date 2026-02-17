@@ -196,7 +196,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ayu/utils/telegram_helpers.h"
 #include "ayu/features/message_shot/message_shot.h"
 #include "ayu/features/forward/ayu_forward.h"
-#include "ayu/ui/boxes/message_shot_box.h"
 #include "boxes/abstract_box.h"
 
 
@@ -9401,32 +9400,13 @@ void HistoryWidget::confirmDeleteSelected() {
 }
 
 void HistoryWidget::messageShotSelected() {
-	if (!_list) return;
-
-	auto items = getSelectedItems();
-	if (items.empty()) {
+	if (!_list) {
 		return;
 	}
 
-	const auto messages = ranges::views::all(items)
-		| ranges::views::transform([this](const auto fullId)
-		{
-			return gsl::not_null(session().data().message(fullId));
-		})
-		| ranges::to_vector;
-
-	const AyuFeatures::MessageShot::ShotConfig config = {
-		controller(),
-		std::make_shared<Ui::ChatStyle>(controller()->chatStyle()),
-		messages
-	};
-	auto box = Box<MessageShotBox>(config);
-	const auto raw = box.data();
-	raw->boxClosing() | rpl::on_next([=]
-	{
-		if (raw->tookShot()) clearSelected();
-	}, raw->lifetime());
-	Ui::show(std::move(box));
+	AyuFeatures::MessageShot::Wrapper(
+		_list.data(),
+		[=] { clearSelected(); });
 }
 
 void HistoryWidget::escape() {

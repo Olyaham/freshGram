@@ -193,6 +193,119 @@ void from_json(const nlohmann::json &j, GhostModeAccountSettings &s) {
 	s._sendOfflinePacketAfterOnlineLocked = j.value("sendOfflinePacketAfterOnlineLocked", false);
 }
 
+void MessageShotSettings::setShowBackground(bool val) {
+	if (_showBackground.current() == val) return;
+	_showBackground = val;
+	AyuSettings::save();
+}
+
+void MessageShotSettings::setShowDate(bool val) {
+	if (_showDate.current() == val) return;
+	_showDate = val;
+	AyuSettings::save();
+}
+
+void MessageShotSettings::setShowReactions(bool val) {
+	if (_showReactions.current() == val) return;
+	_showReactions = val;
+	AyuSettings::save();
+}
+
+void MessageShotSettings::setShowColorfulReplies(bool val) {
+	if (_showColorfulReplies.current() == val) return;
+	_showColorfulReplies = val;
+	AyuSettings::save();
+}
+
+bool MessageShotSettings::isCloudThemeEmpty() const {
+	return !_cloudThemeId.current()
+		&& !_cloudThemeAccessHash.current()
+		&& !_cloudThemeDocumentId.current()
+		&& _cloudThemeTitle.current().isEmpty();
+}
+
+void MessageShotSettings::clearCloudThemeData() {
+	_cloudThemeId = uint64(0);
+	_cloudThemeAccessHash = uint64(0);
+	_cloudThemeDocumentId = uint64(0);
+	_cloudThemeTitle = QString();
+	_cloudThemeAccountId = uint64(0);
+}
+
+void MessageShotSettings::setEmbeddedTheme(int type, uint32 accentColor) {
+	if (_embeddedThemeType.current() == type
+		&& _embeddedThemeAccentColor.current() == accentColor
+		&& isCloudThemeEmpty()) {
+		return;
+	}
+	_embeddedThemeType = type;
+	_embeddedThemeAccentColor = accentColor;
+	clearCloudThemeData();
+	AyuSettings::save();
+}
+
+void MessageShotSettings::setCloudTheme(uint64 accountId, uint64 id, uint64 accessHash, uint64 documentId, const QString &title) {
+	if (_embeddedThemeType.current() == -1
+		&& _embeddedThemeAccentColor.current() == 0
+		&& _cloudThemeAccountId.current() == accountId
+		&& _cloudThemeId.current() == id
+		&& _cloudThemeAccessHash.current() == accessHash
+		&& _cloudThemeDocumentId.current() == documentId
+		&& _cloudThemeTitle.current() == title) {
+		return;
+	}
+	_embeddedThemeType = -1;
+	_embeddedThemeAccentColor = uint32(0);
+	_cloudThemeAccountId = accountId;
+	_cloudThemeId = id;
+	_cloudThemeAccessHash = accessHash;
+	_cloudThemeDocumentId = documentId;
+	_cloudThemeTitle = title;
+	AyuSettings::save();
+}
+
+void MessageShotSettings::clearTheme() {
+	if (_embeddedThemeType.current() == -1
+		&& _embeddedThemeAccentColor.current() == 0
+		&& isCloudThemeEmpty()) {
+		return;
+	}
+	_embeddedThemeType = -1;
+	_embeddedThemeAccentColor = uint32(0);
+	clearCloudThemeData();
+	AyuSettings::save();
+}
+
+void to_json(nlohmann::json &j, const MessageShotSettings &s) {
+	j = nlohmann::json{
+		{"showBackground", s._showBackground.current()},
+		{"showDate", s._showDate.current()},
+		{"showReactions", s._showReactions.current()},
+		{"showColorfulReplies", s._showColorfulReplies.current()},
+		{"embeddedThemeType", s._embeddedThemeType.current()},
+		{"embeddedThemeAccentColor", s._embeddedThemeAccentColor.current()},
+		{"cloudThemeId", s._cloudThemeId.current()},
+		{"cloudThemeAccessHash", s._cloudThemeAccessHash.current()},
+		{"cloudThemeDocumentId", s._cloudThemeDocumentId.current()},
+		{"cloudThemeTitle", s._cloudThemeTitle.current()},
+		{"cloudThemeAccountId", s._cloudThemeAccountId.current()},
+	};
+}
+
+void from_json(const nlohmann::json &j, MessageShotSettings &s) {
+	s._showBackground = j.value("showBackground", true);
+	s._showDate = j.value("showDate", false);
+	s._showReactions = j.value("showReactions", false);
+	s._showColorfulReplies = j.value("showColorfulReplies", false);
+	s._embeddedThemeType = j.value("embeddedThemeType", j.value("themeType", -1));
+	s._embeddedThemeAccentColor = j.value("embeddedThemeAccentColor", j.value("themeAccentColor", uint32(0)));
+	s._cloudThemeId = j.value("cloudThemeId", uint64(0));
+	s._cloudThemeAccessHash = j.value("cloudThemeAccessHash", uint64(0));
+	s._cloudThemeDocumentId = j.value("cloudThemeDocumentId", uint64(0));
+	s._cloudThemeTitle = j.value("cloudThemeTitle", QString());
+	s._cloudThemeAccountId = j.value("cloudThemeAccountId", uint64(0));
+}
+
 AyuSettings::AyuSettings()
 : _appIcon(AyuAssets::DEFAULT_ICON)
 , _editedMark(Core::IsAppLaunched() ? tr::lng_edited(tr::now) : QString("edited")) {
@@ -355,6 +468,14 @@ void AyuSettings::validate() {
 
 	validateRange(_wideMultiplier, 0.5, 3.0, defaults._wideMultiplier);
 	validateRange(_recentStickersCount, 1, 200, defaults._recentStickersCount);
+
+	const auto embeddedType = _messageShotSettings._embeddedThemeType.current();
+	auto embeddedTypeValid = (embeddedType == -1) || (embeddedType >= 0 && embeddedType <= 3); // from Window::Theme::EmbeddedType::DayBlue to Window::Theme::EmbeddedType::NightGreen
+	if (!embeddedTypeValid) {
+		_messageShotSettings._embeddedThemeType = defaults._messageShotSettings._embeddedThemeType.current();
+		_messageShotSettings._embeddedThemeAccentColor = defaults._messageShotSettings._embeddedThemeAccentColor.current();
+		modified = true;
+	}
 
 	if (modified) {
 		save();
@@ -904,7 +1025,8 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"translationProvider", s._translationProvider.current()},
 		{"adaptiveCoverColor", s._adaptiveCoverColor.current()},
 		{"improveLinkPreviews", s._improveLinkPreviews.current()},
-		{"crashReporting", s._crashReporting.current()}
+		{"crashReporting", s._crashReporting.current()},
+		{"messageShotSettings", s._messageShotSettings}
 	};
 }
 
@@ -997,4 +1119,8 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._adaptiveCoverColor = j.value("adaptiveCoverColor", defaults._adaptiveCoverColor.current());
 	s._improveLinkPreviews = j.value("improveLinkPreviews", defaults._improveLinkPreviews.current());
 	s._crashReporting = j.value("crashReporting", defaults._crashReporting.current());
+
+	if (j.contains("messageShotSettings") && j["messageShotSettings"].is_object()) {
+		j["messageShotSettings"].get_to(s._messageShotSettings);
+	}
 }

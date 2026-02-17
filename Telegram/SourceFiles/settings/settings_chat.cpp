@@ -1529,6 +1529,25 @@ void SetupDefaultThemes(
 
 	const auto updateMessageShotPalette = [=](const QString &path)
 	{
+		if (path.isEmpty()) { // for Default theme (otherwise doesn't dispaly name properly)
+			style::palette embeddedPalette;
+			const auto color = AyuFeatures::MessageShot::getSelectedColorFromDefault();
+			Window::Theme::PreparePaletteCallback(false, color)(embeddedPalette);
+			AyuFeatures::MessageShot::setPalette(embeddedPalette);
+			return;
+		}
+		if (const auto color = AyuFeatures::MessageShot::getSelectedColorFromDefault()) {
+			const auto type = AyuFeatures::MessageShot::getSelectedFromDefault();
+			const auto scheme = ranges::find(kSchemesList, type, &Scheme::type);
+			if (scheme != end(kSchemesList)) {
+				const auto colorizer = ColorizerFrom(*scheme, *color);
+				auto instance = Window::Theme::Instance();
+				if (Window::Theme::LoadFromFile(path, &instance, nullptr, nullptr, colorizer)) {
+					AyuFeatures::MessageShot::setPalette(instance.palette);
+					return;
+				}
+			}
+		}
 		const Data::CloudTheme theme;
 		if (const auto preview = PreviewFromFile(QByteArray(), path, theme)) {
 			AyuFeatures::MessageShot::setPalette(preview->instance.palette);

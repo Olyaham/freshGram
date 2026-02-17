@@ -210,6 +210,8 @@ set(ayugram_files
         ayu/features/streamer_mode/streamer_mode.h
         ayu/features/message_shot/message_shot.cpp
         ayu/features/message_shot/message_shot.h
+        ayu/features/message_shot/message_shot_theme_state.cpp
+        ayu/features/message_shot/message_shot_theme_state.h
         ayu/features/forward/ayu_forward.cpp
         ayu/features/forward/ayu_forward.h
         ayu/features/forward/ayu_sync.cpp

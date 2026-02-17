@@ -7,7 +7,7 @@
 #include "theme_selector_box.h"
 
 #include "lang_auto.h"
-#include "ayu/features/message_shot/message_shot.h"
+#include "ayu/features/message_shot/message_shot_theme_state.h"
 #include "data/data_document.h"
 #include "data/data_document_media.h"
 #include "data/data_file_origin.h"
@@ -140,6 +140,9 @@ void ThemeSelectorBox::setupContent() {
 					documentView->bytes(),
 					document->location().name(),
 					theme);
+				if (!preview) {
+					return;
+				}
 
 				_selectedPalette = preview->instance.palette;
 
@@ -168,7 +171,11 @@ void ThemeSelectorBox::setupContent() {
 	AyuFeatures::MessageShot::paletteChosen(
 	) | rpl::on_next([=](const auto &palette)
 							 {
-								 _themeNames.fire(tr::ayu_MessageShotThemeDefault(tr::now));
+								 const auto type = AyuFeatures::MessageShot::getSelectedFromDefault();
+								 const auto name = (type != Window::Theme::EmbeddedType(-1))
+									 ? AyuFeatures::MessageShot::embeddedThemeDisplayName(type)
+									 : tr::ayu_MessageShotThemeDefault(tr::now);
+								 _themeNames.fire(QString(name));
 								 _selectedPalette = palette;
 							 },
 							 lifetime());

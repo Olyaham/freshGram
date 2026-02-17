@@ -135,6 +135,56 @@ private:
 void to_json(nlohmann::json &j, const GhostModeAccountSettings &s);
 void from_json(const nlohmann::json &j, GhostModeAccountSettings &s);
 
+class MessageShotSettings {
+public:
+	[[nodiscard]] bool showBackground() const { return _showBackground.current(); }
+	[[nodiscard]] bool showDate() const { return _showDate.current(); }
+	[[nodiscard]] bool showReactions() const { return _showReactions.current(); }
+	[[nodiscard]] bool showColorfulReplies() const { return _showColorfulReplies.current(); }
+	[[nodiscard]] int embeddedThemeType() const { return _embeddedThemeType.current(); }
+	[[nodiscard]] uint32 embeddedThemeAccentColor() const { return _embeddedThemeAccentColor.current(); }
+	[[nodiscard]] uint64 cloudThemeId() const { return _cloudThemeId.current(); }
+	[[nodiscard]] uint64 cloudThemeAccessHash() const { return _cloudThemeAccessHash.current(); }
+	[[nodiscard]] uint64 cloudThemeDocumentId() const { return _cloudThemeDocumentId.current(); }
+	[[nodiscard]] const QString &cloudThemeTitle() const { return _cloudThemeTitle.current(); }
+	[[nodiscard]] uint64 cloudThemeAccountId() const { return _cloudThemeAccountId.current(); }
+
+	void setShowBackground(bool val);
+	void setShowDate(bool val);
+	void setShowReactions(bool val);
+	void setShowColorfulReplies(bool val);
+
+	void setEmbeddedTheme(int type, uint32 accentColor = 0);
+	void setCloudTheme(uint64 accountId, uint64 id, uint64 accessHash, uint64 documentId, const QString &title);
+	void clearTheme();
+
+	friend void to_json(nlohmann::json &j, const MessageShotSettings &s);
+	friend void from_json(const nlohmann::json &j, MessageShotSettings &s);
+
+private:
+	friend class AyuSettings;
+	[[nodiscard]] bool isCloudThemeEmpty() const;
+	void clearCloudThemeData();
+
+	rpl::variable<bool> _showBackground = true;
+	rpl::variable<bool> _showDate = false;
+	rpl::variable<bool> _showReactions = false;
+	rpl::variable<bool> _showColorfulReplies = false;
+
+	rpl::variable<int> _embeddedThemeType = -1;
+	rpl::variable<uint32> _embeddedThemeAccentColor = 0;
+
+	rpl::variable<uint64> _cloudThemeId = 0;
+	rpl::variable<uint64> _cloudThemeAccessHash = 0;
+	rpl::variable<uint64> _cloudThemeDocumentId = 0;
+	rpl::variable<QString> _cloudThemeTitle;
+	rpl::variable<uint64> _cloudThemeAccountId = 0;
+
+};
+
+void to_json(nlohmann::json &j, const MessageShotSettings &s);
+void from_json(const nlohmann::json &j, MessageShotSettings &s);
+
 class AyuSettings {
 public:
 	AyuSettings(const AyuSettings &) = delete;
@@ -151,6 +201,9 @@ public:
 	[[nodiscard]] static GhostModeAccountSettings &ghost(not_null<Main::Session*> session);
 	[[nodiscard]] static GhostModeAccountSettings &ghost(uint64 userId);
 	[[nodiscard]] static GhostModeAccountSettings &ghost();
+
+	[[nodiscard]] MessageShotSettings &messageShotSettings() { return _messageShotSettings; }
+	[[nodiscard]] const MessageShotSettings &messageShotSettings() const { return _messageShotSettings; }
 	[[nodiscard]] bool useGlobalGhostMode() const { return _useGlobalGhostMode.current(); }
 	void setUseGlobalGhostMode(bool val);
 
@@ -477,6 +530,8 @@ private:
 
 	rpl::variable<bool> _useGlobalGhostMode = true;
 	std::map<uint64, std::unique_ptr<GhostModeAccountSettings>> _ghostAccounts;
+
+	MessageShotSettings _messageShotSettings;
 };
 
 void to_json(nlohmann::json &j, const AyuSettings &s);

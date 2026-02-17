@@ -10,10 +10,10 @@
 #include "styles/style_layers.h"
 
 #include "qguiapplication.h"
+#include "ayu/ayu_settings.h"
 #include "ayu/ui/boxes/message_shot_box.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "boxes/abstract_box.h"
-#include "data/data_cloud_themes.h"
 #include "data/data_document.h"
 #include "data/data_document_media.h"
 #include "data/data_file_origin.h"
@@ -39,21 +39,10 @@
 
 namespace AyuFeatures::MessageShot {
 
-ShotConfig *config;
-
-Window::Theme::EmbeddedType defaultSelected = Window::Theme::EmbeddedType(-1);
-std::optional<QColor> defaultSelectedColor;
-
-std::optional<Data::CloudTheme> customSelected;
-
-rpl::event_stream<> resetDefaultSelectedStream;
-rpl::event_stream<> resetCustomSelectedStream;
+ShotConfig *config = nullptr;
 
 bool takingShot = false;
 bool choosingTheme = false;
-
-rpl::event_stream<Data::CloudTheme> themeChosenStream;
-rpl::event_stream<style::palette> paletteChosenStream;
 
 void setShotConfig(ShotConfig &config) {
 	MessageShot::config = &config;
@@ -67,62 +56,15 @@ ShotConfig getShotConfig() {
 	return *config;
 }
 
-void setDefaultSelected(const Window::Theme::EmbeddedType type) {
-	resetCustomSelected();
-	defaultSelected = type;
-}
-
-Window::Theme::EmbeddedType getSelectedFromDefault() {
-	return defaultSelected;
-}
-
-void setDefaultSelectedColor(const QColor color) {
-	resetCustomSelected();
-	defaultSelectedColor = color;
-}
-
-std::optional<QColor> getSelectedColorFromDefault() {
-	return defaultSelectedColor;
-}
-
-void setCustomSelected(const Data::CloudTheme theme) {
-	resetDefaultSelected();
-	customSelected = theme;
-}
-
-std::optional<Data::CloudTheme> getSelectedFromCustom() {
-	return customSelected;
-}
-
-void resetDefaultSelected() {
-	defaultSelected = Window::Theme::EmbeddedType(-1);
-	resetDefaultSelectedStream.fire({});
-}
-
-void resetCustomSelected() {
-	customSelected = std::nullopt;
-	resetCustomSelectedStream.fire({});
-}
-
-rpl::producer<> resetDefaultSelectedEvents() {
-	return resetDefaultSelectedStream.events();
-}
-
-rpl::producer<> resetCustomSelectedEvents() {
-	return resetCustomSelectedStream.events();
-}
-
 bool ignoreRender(RenderPart part) {
 	if (!config) {
 		return false;
 	}
 
-	const auto ignoreDate = !config->showDate;
-	const auto ignoreReactions = !config->showReactions;
-
-	return isTakingShot() &&
-	((part == RenderPart::Date && ignoreDate) ||
-		(part == RenderPart::Reactions && ignoreReactions));
+	const auto &s = AyuSettings::getInstance().messageShotSettings();
+	return isTakingShot()
+		&& ((part == RenderPart::Date && !s.showDate())
+			|| (part == RenderPart::Reactions && !s.showReactions()));
 }
 
 bool isTakingShot() {
@@ -136,22 +78,6 @@ bool setChoosingTheme(bool val) {
 
 bool isChoosingTheme() {
 	return choosingTheme;
-}
-
-rpl::producer<Data::CloudTheme> themeChosen() {
-	return themeChosenStream.events();
-}
-
-void setTheme(Data::CloudTheme theme) {
-	themeChosenStream.fire(std::move(theme));
-}
-
-void setPalette(style::palette &palette) {
-	paletteChosenStream.fire(std::move(palette));
-}
-
-rpl::producer<style::palette> paletteChosen() {
-	return paletteChosenStream.events();
 }
 
 class MessageShotDelegate final : public HistoryView::DefaultElementDelegate
@@ -375,7 +301,7 @@ void Make(not_null<QWidget*> box, const ShotConfig &config, const Fn<void(QImage
 		}
 	}
 
-	const auto showBackground = config.showBackground;
+	const auto showBackground = AyuSettings::getInstance().messageShotSettings().showBackground();
 	auto render = [=, messages = std::move(messages), delegate = std::move(delegate)](bool final)
 	{
 		takingShot = true;
@@ -512,8 +438,55 @@ void Make(not_null<QWidget*> box, const ShotConfig &config, const Fn<void(QImage
 	}
 }
 
-void Wrapper(not_null<HistoryView::ListWidget*> widget, Fn<void()> clearSelected) {
-	const auto items = widget->getSelectedIds();
+namespace {
+
+// 🥀🥀🥀
+
+std::shared_ptr<Ui::ChatStyle> BuildShotChatStyle(
+		not_null<Window::SessionController*> controller) {
+	const auto &shot = AyuSettings::getInstance().messageShotSettings();
+	const auto hasSavedTheme = shot.embeddedThemeType() != -1
+		|| shot.cloudThemeId() != 0;
+	const auto persistedPalette = getPersistedPalette();
+	if (hasSavedTheme && persistedPalette) {
+		return std::make_shared<Ui::ChatStyle>(persistedPalette.get());
+	}
+	return std::make_shared<Ui::ChatStyle>(controller->chatStyle());
+}
+
+template <typename ResolveMessage>
+void ShowMessageShotBox(
+		ResolveMessage resolveMessage,
+		not_null<Window::SessionController*> controller,
+		const MessageIdsList &ids,
+		Fn<void()> clearSelected) {
+	const auto messages = ranges::views::all(ids)
+		| ranges::views::transform([=](const auto item)
+		{
+			return resolveMessage(item);
+		})
+		| ranges::to_vector;
+
+	const AyuFeatures::MessageShot::ShotConfig config = {
+		controller,
+		BuildShotChatStyle(controller),
+		messages,
+	};
+	auto box = Box<MessageShotBox>(config);
+	const auto raw = box.data();
+	raw->boxClosing() | rpl::on_next([=]
+	{
+		if (raw->tookShot()) clearSelected();
+	}, raw->lifetime());
+	Ui::show(std::move(box));
+}
+
+template <typename Widget, typename GetIds>
+void WrapperImpl(
+		not_null<Widget*> widget,
+		GetIds getIds,
+		Fn<void()> clearSelected) {
+	const auto items = getIds(widget);
 	if (items.empty()) {
 		return;
 	}
@@ -524,25 +497,27 @@ void Wrapper(not_null<HistoryView::ListWidget*> widget, Fn<void()> clearSelected
 		return;
 	}
 
-	const auto messages = ranges::views::all(items)
-		| ranges::views::transform([=](const auto item)
-		{
-			return gsl::not_null(session->data().message(item));
-		})
-		| ranges::to_vector;
-
-	const AyuFeatures::MessageShot::ShotConfig config = {
+	ShowMessageShotBox(
+		[=](const auto item) { return gsl::not_null(session->data().message(item)); },
 		controller,
-		std::make_shared<Ui::ChatStyle>(controller->chatStyle()),
-		messages,
-	};
-	auto box = Box<MessageShotBox>(config);
-	const auto raw = box.data();
-	raw->boxClosing() | rpl::on_next([=]
-	{
-		if (raw->tookShot()) clearSelected();
-	}, raw->lifetime());
-	Ui::show(std::move(box));
+		items,
+		std::move(clearSelected));
+}
+
+}
+
+void Wrapper(not_null<HistoryView::ListWidget*> widget, Fn<void()> clearSelected) {
+	WrapperImpl(
+		widget,
+		[](const auto widget) { return widget->getSelectedIds(); },
+		std::move(clearSelected));
+}
+
+void Wrapper(not_null<HistoryInner*> widget, Fn<void()> clearSelected) {
+	WrapperImpl(
+		widget,
+		[](const auto widget) { return widget->getSelectedItems(); },
+		std::move(clearSelected));
 }
 
 }
