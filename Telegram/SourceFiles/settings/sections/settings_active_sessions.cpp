@@ -210,14 +210,14 @@ void RenameBox(not_null<Ui::GenericBox*> box) {
 		return {};
 	};
 
-	if (ranges::contains("materialgram")) {
-		return Type::Materialgram;
-	} else if (ranges::contains("octogram")) {
-		return Type::Octogram;
-	} else if (ranges::contains("swiftgram")) {
-		return Type::Swiftgram;
+	if (info.contains("materialgram")) {
+		return DeviceType::Materialgram;
+	} else if (info.contains("octogram")) {
+		return DeviceType::Octogram;
+	} else if (info.contains("swiftgram")) {
+		return DeviceType::Swiftgram;
 	} else if (ranges::contains(kAndroid, apiId)) {
-		return Type::Android;
+		return DeviceType::Android;
 	} else if (ranges::contains(kDesktop, apiId)) {
 		return detectDesktop().value_or(DeviceType::Linux);
 	} else if (ranges::contains(kMac, apiId)) {
@@ -247,18 +247,18 @@ void RenameBox(not_null<Ui::GenericBox*> box) {
 [[nodiscard]] QBrush GradientForType(DeviceType type, int size) {
 	const auto colors = [&]() -> std::pair<style::color, style::color> {
 		switch (type) {
-		case Type::Windows:
-		case Type::Mac:
-		case Type::Other:
-		case Type::Materialgram:
+		case DeviceType::Windows:
+		case DeviceType::Mac:
+		case DeviceType::Other:
+		case DeviceType::Materialgram:
 			// Blue.
 			return { st::historyPeer4UserpicBg, st::historyPeer4UserpicBg2 };
-		case Type::Ubuntu:
-		case Type::Swiftgram:
+		case DeviceType::Ubuntu:
+		case DeviceType::Swiftgram:
 			// Orange.
 			return { st::historyPeer8UserpicBg, st::historyPeer8UserpicBg2 };
-		case Type::Linux:
-		case Type::Octogram:
+		case DeviceType::Linux:
+		case DeviceType::Octogram:
 			// Purple.
 			return { st::historyPeer5UserpicBg, st::historyPeer5UserpicBg2 };
 		case DeviceType::iPhone:
@@ -311,7 +311,7 @@ void RenameBox(not_null<Ui::GenericBox*> box) {
 	case DeviceType::Other: return &st::sessionBigIconOther;
 	case DeviceType::Materialgram: return &st::sessionBigIconMaterialgram;
 	case DeviceType::Octogram: return &st::sessionBigIconOctogram;
-	case DeviceTypeType::Swiftgram: return &st::sessionBigIconSwiftgram;
+	case DeviceType::Swiftgram: return &st::sessionBigIconSwiftgram;
 	}
 	return nullptr;
 }
