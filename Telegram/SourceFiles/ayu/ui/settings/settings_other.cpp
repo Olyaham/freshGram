@@ -140,7 +140,7 @@ rpl::producer<QString> AyuOther::title() {
 AyuOther::AyuOther(
 	QWidget *parent,
 	not_null<Window::SessionController*> controller)
-	: Section(parent) {
+	: Section(parent, controller) {
 	setupContent(controller);
 }
 

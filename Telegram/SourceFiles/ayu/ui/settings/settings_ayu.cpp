@@ -500,7 +500,7 @@ rpl::producer<QString> AyuGhost::title() {
 AyuGhost::AyuGhost(
 	QWidget *parent,
 	not_null<Window::SessionController*> controller)
-	: Section(parent)
+	: Section(parent, controller)
 	, _controller(controller) {
 	setupContent(controller);
 }
