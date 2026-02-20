@@ -364,6 +364,16 @@ void BuildSectionButtons(SectionBuilder &builder) {
 	const auto controller = builder.controller();
 	const auto showOther = builder.showOther();
 
+	builder.addSectionButton({
+		.title = tr::ayu_AyuPreferences(),
+		.targetSection = AyuMain::Id(),
+		.icon = { &st::menuIconPremium },
+		.keywords = { u"ayu"_q },
+	});
+	builder.addSkip();
+	builder.addDivider();
+	builder.addSkip();
+
 	if (!session->supportMode()) {
 		builder.addSectionButton({
 			.title = tr::lng_settings_my_account(),
