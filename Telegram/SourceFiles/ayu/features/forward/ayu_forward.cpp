@@ -167,6 +167,10 @@ void sendMedia(
 				return SendMediaType::Audio;
 			} else if (document->isVideoMessage()) {
 				return SendMediaType::Round;
+			} else if (document->isVideoFile() || document->isGifv()) {
+				// to send video as video need to pass it as 'photo'
+				// ref: `void HistoryWidget::sendingFilesConfirmed`
+				return SendMediaType::Photo;
 			}
 			return SendMediaType::File;
 		}
