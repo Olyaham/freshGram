@@ -141,6 +141,8 @@ set(ayugram_files
         ayu/ui/utils/palette.h
         ayu/ui/utils/itunes_search.cpp
         ayu/ui/utils/itunes_search.h
+        ayu/ui/settings/ayu_builder.cpp
+        ayu/ui/settings/ayu_builder.h
         ayu/ui/settings/settings_appearance.cpp
         ayu/ui/settings/settings_appearance.h
         ayu/ui/settings/settings_ayu_utils.cpp

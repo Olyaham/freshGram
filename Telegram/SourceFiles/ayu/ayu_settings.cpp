@@ -466,7 +466,7 @@ void AyuSettings::validate() {
 		modified = true;
 	}
 
-	validateRange(_wideMultiplier, 0.5, 3.0, defaults._wideMultiplier);
+	validateRange(_wideMultiplier, 0.5, 4.0, defaults._wideMultiplier);
 	validateRange(_recentStickersCount, 1, 200, defaults._recentStickersCount);
 
 	const auto embeddedType = _messageShotSettings._embeddedThemeType.current();

@@ -6,22 +6,20 @@
 // Copyright @Radolyn, 2026
 #include "ayu/ayu_url_handlers.h"
 
-#include "base/qthelp_url.h"
-
+#include <QDesktopServices>
 #include "lang_auto.h"
 #include "mainwindow.h"
+#include "ayu/ui/settings/settings_main.h"
 #include "ayu/utils/telegram_helpers.h"
+#include "base/qthelp_url.h"
 #include "boxes/abstract_box.h"
 #include "core/application.h"
 #include "data/data_session.h"
 #include "data/data_user.h"
-#include "ui/boxes/confirm_box.h"
-
-#include <QDesktopServices>
-
 #include "main/main_session.h"
+#include "settings/settings_builder.h"
+#include "ui/boxes/confirm_box.h"
 #include "ui/boxes/donate_info_box.h"
-#include "ui/settings/settings_main.h"
 #include "window/window_controller.h"
 
 namespace AyuUrlHandlers {
@@ -143,6 +141,46 @@ bool HandleSupport(
 		Ui::FillDonateInfoBox,
 		controller);
 	Ui::show(std::move(box));
+	return true;
+}
+
+[[nodiscard]] ::Settings::Type SectionForSetting(
+		const QString &controlId,
+		not_null<::Main::Session*> session) {
+	const auto &registry = ::Settings::Builder::SearchRegistry::Instance();
+	const auto entries = registry.collectAll(session);
+	for (const auto &entry : entries) {
+		if (entry.id == controlId && entry.section) {
+			return entry.section;
+		}
+	}
+	return ::Settings::AyuMain::Id();
+}
+
+bool HandleAyuSettings(
+	Window::SessionController *controller,
+	const Match &match,
+	const QVariant &context) {
+	if (!controller) {
+		return false;
+	}
+
+	const auto params = url_parse_params(
+		match->captured(1),
+		qthelp::UrlParamNameTransform::ToLower);
+	const auto settingName = params.value(u"s"_q);
+
+	if (settingName.isEmpty()) {
+		controller->showSettings(::Settings::AyuMain::Id());
+	} else {
+		const auto controlId = u"ayu/"_q + settingName;
+		controller->window().setHighlightControlId(controlId);
+		const auto section = SectionForSetting(
+			controlId,
+			&controller->session());
+		controller->showSettings(section);
+	}
+	controller->window().activate();
 	return true;
 }
 

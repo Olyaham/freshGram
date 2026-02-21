@@ -15,8 +15,7 @@ class SessionController;
 
 namespace Settings {
 
-class AyuFilters : public Section<AyuFilters>
-{
+class AyuFilters : public Section<AyuFilters> {
 public:
 	AyuFilters(QWidget *parent, not_null<Window::SessionController*> controller);
 
@@ -24,7 +23,9 @@ public:
 	void fillTopBarMenu(const Ui::Menu::MenuCallback &addAction) override;
 
 private:
-	void setupContent(not_null<Window::SessionController*> controller);
+	void setupContent();
 };
+
+[[nodiscard]] Type AyuFiltersId();
 
 } // namespace Settings

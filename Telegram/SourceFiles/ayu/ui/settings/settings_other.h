@@ -15,15 +15,16 @@ class SessionController;
 
 namespace Settings {
 
-class AyuOther : public Section<AyuOther>
-{
+class AyuOther : public Section<AyuOther> {
 public:
 	AyuOther(QWidget *parent, not_null<Window::SessionController*> controller);
 
 	[[nodiscard]] rpl::producer<QString> title() override;
 
 private:
-	void setupContent(not_null<Window::SessionController*> controller);
+	void setupContent();
 };
+
+[[nodiscard]] Type AyuOtherId();
 
 } // namespace Settings
