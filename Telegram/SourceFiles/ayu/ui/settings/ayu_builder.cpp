@@ -103,11 +103,18 @@ Fn<void()> AyuSectionBuilder::addCollapsibleToggle(
 
 	_builder.add([&](const Builder::BuildContext &ctx) {
 		v::match(ctx, [&](const Builder::WidgetContext &wctx) {
-			result = AddCollapsibleToggle(
+			auto toggle = AddCollapsibleToggle(
 				wctx.container,
 				std::move(args.title),
 				std::move(checkboxes),
 				toggledWhenAll);
+			result = std::move(toggle.refresh);
+			if (!id.isEmpty() && wctx.highlights && toggle.widget) {
+				wctx.highlights->push_back({
+					id,
+					{ toggle.widget, {} },
+				});
+			}
 		}, [&](const Builder::SearchContext &sctx) {
 			if (!id.isEmpty()) {
 				sctx.entries->push_back({

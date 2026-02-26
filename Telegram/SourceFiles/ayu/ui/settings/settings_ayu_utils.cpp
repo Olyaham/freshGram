@@ -308,7 +308,7 @@ not_null<Ui::RpWidget*> AddInnerToggle(not_null<Ui::VerticalLayout*> container,
 	return button;
 }
 
-Fn<void()> AddCollapsibleToggle(not_null<Ui::VerticalLayout*> container,
+CollapsibleToggleResult AddCollapsibleToggle(not_null<Ui::VerticalLayout*> container,
 						  rpl::producer<QString> title,
 						  std::vector<NestedEntry> checkboxes,
 						  bool toggledWhenAll) {
@@ -438,7 +438,7 @@ Fn<void()> AddCollapsibleToggle(not_null<Ui::VerticalLayout*> container,
 
 	const auto raw = wrap.data();
 	raw->hide(anim::type::instant);
-	AddInnerToggle(
+	const auto toggleWidget = AddInnerToggle(
 		container,
 		st::powerSavingButtonNoIcon,
 		innerChecks,
@@ -455,22 +455,25 @@ Fn<void()> AddCollapsibleToggle(not_null<Ui::VerticalLayout*> container,
 						},
 						raw->lifetime());
 
-	return [cState] {
-		for (auto i = 0u; i < cState->entries.size(); ++i) {
-			cState->entries[i].checkView->setChecked(
-				cState->checkboxes[i].getter(), anim::type::normal);
-			// Refresh lock visuals.
-			const auto &entry = cState->checkboxes[i];
-			if (entry.lockGetter) {
-				if (entry.lockGetter()) {
-					auto *effect = new QGraphicsOpacityEffect(cState->entries[i].checkbox);
-					effect->setOpacity(0.4);
-					cState->entries[i].checkbox->setGraphicsEffect(effect);
-				} else {
-					cState->entries[i].checkbox->setGraphicsEffect(nullptr);
+	return {
+		.refresh = [cState] {
+			for (auto i = 0u; i < cState->entries.size(); ++i) {
+				cState->entries[i].checkView->setChecked(
+					cState->checkboxes[i].getter(), anim::type::normal);
+				// Refresh lock visuals.
+				const auto &entry = cState->checkboxes[i];
+				if (entry.lockGetter) {
+					if (entry.lockGetter()) {
+						auto *effect = new QGraphicsOpacityEffect(cState->entries[i].checkbox);
+						effect->setOpacity(0.4);
+						cState->entries[i].checkbox->setGraphicsEffect(effect);
+					} else {
+						cState->entries[i].checkbox->setGraphicsEffect(nullptr);
+					}
 				}
 			}
-		}
+		},
+		.widget = toggleWidget,
 	};
 }
 

@@ -41,7 +41,12 @@ not_null<Ui::RpWidget*> AddInnerToggle(not_null<Ui::VerticalLayout*> container,
 									   std::vector<Fn<bool()>> lockChecks = {},
 									   rpl::event_stream<> *lockChanges = nullptr);
 
-Fn<void()> AddCollapsibleToggle(not_null<Ui::VerticalLayout*> container,
+struct CollapsibleToggleResult {
+	Fn<void()> refresh;
+	Ui::RpWidget *widget = nullptr;
+};
+
+CollapsibleToggleResult AddCollapsibleToggle(not_null<Ui::VerticalLayout*> container,
 						  rpl::producer<QString> title,
 						  std::vector<NestedEntry> checkboxes,
 						  bool toggledWhenAll);

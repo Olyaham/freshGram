@@ -368,14 +368,26 @@ void BuildGhostEssentials(SectionBuilder &builder) {
 				},
 			};
 
-			state->refreshCheckboxes = AddCollapsibleToggle(
+			auto collapsible = AddCollapsibleToggle(
 				container, tr::ayu_GhostModeToggle(), std::move(checkboxes), true);
+			state->refreshCheckboxes = std::move(collapsible.refresh);
+			if (wctx.highlights && collapsible.widget) {
+				wctx.highlights->push_back(std::make_pair(
+					u"ayu/ghostModeToggle"_q,
+					HighlightEntry{ collapsible.widget, {} }));
+			}
 
-			AddButtonWithIcon(
+			const auto markReadButton = AddButtonWithIcon(
 				container,
 				tr::ayu_MarkReadAfterAction(),
 				st::settingsButtonNoIcon
-			)->toggleOn(
+			);
+			if (wctx.highlights) {
+				wctx.highlights->push_back(std::make_pair(
+					u"ayu/markReadAfterAction"_q,
+					HighlightEntry{ markReadButton.get(), {} }));
+			}
+			markReadButton->toggleOn(
 				state->selectedUserId.value()
 				| rpl::map([](uint64 id) {
 					return AyuSettings::ghost(id).markReadAfterActionChanges();
@@ -398,11 +410,17 @@ void BuildGhostEssentials(SectionBuilder &builder) {
 			AddDividerText(container, tr::ayu_MarkReadAfterActionDescription());
 
 			AddSkip(container);
-			AddButtonWithIcon(
+			const auto scheduleButton = AddButtonWithIcon(
 				container,
 				tr::ayu_UseScheduledMessages(),
 				st::settingsButtonNoIcon
-			)->toggleOn(
+			);
+			if (wctx.highlights) {
+				wctx.highlights->push_back(std::make_pair(
+					u"ayu/useScheduledMessages"_q,
+					HighlightEntry{ scheduleButton.get(), {} }));
+			}
+			scheduleButton->toggleOn(
 				state->selectedUserId.value()
 				| rpl::map([](uint64 id) {
 					return AyuSettings::ghost(id).useScheduledMessagesChanges();
@@ -425,11 +443,17 @@ void BuildGhostEssentials(SectionBuilder &builder) {
 			AddDividerText(container, tr::ayu_UseScheduledMessagesDescription());
 
 			AddSkip(container);
-			AddButtonWithIcon(
+			const auto silentButton = AddButtonWithIcon(
 				container,
 				tr::ayu_SendWithoutSoundByDefault(),
 				st::settingsButtonNoIcon
-			)->toggleOn(
+			);
+			if (wctx.highlights) {
+				wctx.highlights->push_back(std::make_pair(
+					u"ayu/sendWithoutSound"_q,
+					HighlightEntry{ silentButton.get(), {} }));
+			}
+			silentButton->toggleOn(
 				state->selectedUserId.value()
 				| rpl::map([](uint64 id) {
 					return AyuSettings::ghost(id).sendWithoutSoundChanges();
