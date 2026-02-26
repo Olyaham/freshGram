@@ -249,6 +249,7 @@ public:
 	[[nodiscard]] bool localPremium() const { return _localPremium.current(); }
 	[[nodiscard]] bool showChannelReactions() const { return _showChannelReactions.current(); }
 	[[nodiscard]] bool showGroupReactions() const { return _showGroupReactions.current(); }
+	[[nodiscard]] bool showPrivateChatReactions() const { return _showPrivateChatReactions.current(); }
 	[[nodiscard]] const QString &appIcon() const { return _appIcon.current(); }
 	[[nodiscard]] bool simpleQuotesAndReplies() const { return _simpleQuotesAndReplies.current(); }
 	[[nodiscard]] bool hideFastShare() const { return _hideFastShare.current(); }
@@ -325,6 +326,7 @@ public:
 	void setLocalPremium(bool val);
 	void setShowChannelReactions(bool val);
 	void setShowGroupReactions(bool val);
+	void setShowPrivateChatReactions(bool val);
 	void setAppIcon(const QString &val);
 	void setSimpleQuotesAndReplies(bool val);
 	void setHideFastShare(bool val);
@@ -402,6 +404,7 @@ public:
 	[[nodiscard]] rpl::producer<bool> localPremiumChanges() const { return _localPremium.value(); }
 	[[nodiscard]] rpl::producer<bool> showChannelReactionsChanges() const { return _showChannelReactions.value(); }
 	[[nodiscard]] rpl::producer<bool> showGroupReactionsChanges() const { return _showGroupReactions.value(); }
+	[[nodiscard]] rpl::producer<bool> showPrivateChatReactionsChanges() const { return _showPrivateChatReactions.value(); }
 	[[nodiscard]] rpl::producer<QString> appIconChanges() const { return _appIcon.value(); }
 	[[nodiscard]] rpl::producer<bool> simpleQuotesAndRepliesChanges() const { return _simpleQuotesAndReplies.value(); }
 	[[nodiscard]] rpl::producer<bool> hideFastShareChanges() const { return _hideFastShare.value(); }
@@ -487,6 +490,7 @@ private:
 	rpl::variable<bool> _localPremium = false;
 	rpl::variable<bool> _showChannelReactions = true;
 	rpl::variable<bool> _showGroupReactions = true;
+	rpl::variable<bool> _showPrivateChatReactions = true;
 	rpl::variable<QString> _appIcon;
 	rpl::variable<bool> _simpleQuotesAndReplies = false;
 	rpl::variable<bool> _hideFastShare = false;

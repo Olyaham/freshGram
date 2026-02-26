@@ -53,6 +53,9 @@ bool UnreadThings::trackReactions(Data::Thread *thread) const {
 	if (peer->isMegagroup() && !settings.showGroupReactions()) {
 		return false;
 	}
+	if (peer->isUser() && !settings.showPrivateChatReactions()) {
+		return false;
+	}
 	return peer->isUser() || peer->isChat() || peer->isMegagroup();
 }
 

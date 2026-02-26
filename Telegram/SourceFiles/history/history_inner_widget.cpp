@@ -1244,7 +1244,8 @@ void HistoryInner::paintEvent(QPaintEvent *e) {
 				const auto peer = item->history()->peer;
 				const auto &settings = AyuSettings::getInstance();
 				const auto hide = (!settings.showChannelReactions() && peer->isChannel() && !peer->isMegagroup()) ||
-					(!settings.showGroupReactions() && peer->isMegagroup());
+					(!settings.showGroupReactions() && peer->isMegagroup()) ||
+					(!settings.showPrivateChatReactions() && peer->isUser());
 				if (!hide) {
 					startEffects.emplace(view);
 				} else {

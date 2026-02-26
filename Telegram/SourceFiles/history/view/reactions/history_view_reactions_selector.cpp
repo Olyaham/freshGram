@@ -1394,7 +1394,8 @@ AttachSelectorResult AttachSelectorToMenu(
 
 	const auto peer = item->history()->peer;
 	if ((peer->isChannel() && !peer->isMegagroup() && !settings.showChannelReactions())
-		|| (peer->isMegagroup() && !settings.showGroupReactions())) {
+		|| (peer->isMegagroup() && !settings.showGroupReactions())
+		|| (peer->isUser() && !settings.showPrivateChatReactions())) {
 		return AttachSelectorResult::Skipped;
 	}
 

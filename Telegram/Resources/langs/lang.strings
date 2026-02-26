@@ -7669,8 +7669,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_HideChannelReactions" = "Hide Reactions in Channels";
 "ayu_HideGroupReactions" = "Hide Reactions in Groups";
 "ayu_HideReactions" = "Hide Reactions";
-"ayu_HideReactionsInChannels" = "In Channels";
-"ayu_HideReactionsInGroups" = "In Groups";
+"ayu_HideReactionsInChannels" = "Channels";
+"ayu_HideReactionsInGroups" = "Groups";
+"ayu_HideReactionsInPrivateChats" = "Private Chats";
 "ayu_QuickAdminShortcuts" = "Quick Admin Shortcuts";
 "ayu_TranslationProvider" = "Translation Provider";
 "ayu_LinksHeader" = "Links";

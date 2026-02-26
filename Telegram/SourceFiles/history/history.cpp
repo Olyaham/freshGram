@@ -2455,7 +2455,8 @@ Dialogs::UnreadState History::computeUnreadState() const {
 	const auto peer = this->peer.get();
 	const auto &settings = AyuSettings::getInstance();
 	const auto hideReactions = (peer->isChannel() && !peer->isMegagroup() && !settings.showChannelReactions())
-		|| (peer->isMegagroup() && !settings.showGroupReactions());
+		|| (peer->isMegagroup() && !settings.showGroupReactions())
+		|| (peer->isUser() && !settings.showPrivateChatReactions());
 	result.reactions = hideReactions ? 0 : (unreadReactions().has() ? 1 : 0);
 	result.messagesMuted = muted ? result.messages : 0;
 	result.chatsMuted = muted ? result.chats : 0;

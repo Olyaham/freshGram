@@ -854,6 +854,10 @@ InlineListData InlineListDataFromMessage(not_null<Element*> view) {
 		&& item->history()->peer->isMegagroup()) {
 		return InlineListData();
 	}
+	if (!settings.showPrivateChatReactions()
+		&& item->history()->peer->isUser()) {
+		return InlineListData();
+	}
 	auto result = InlineListData();
 	result.reactions = item->reactionsWithLocal();
 

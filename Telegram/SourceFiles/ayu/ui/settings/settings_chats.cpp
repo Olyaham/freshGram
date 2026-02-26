@@ -58,6 +58,11 @@ void BuildStickersAndEmoji(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 				tr::ayu_HideReactionsInGroups(tr::now),
 				[] { return !AyuSettings::getInstance().showGroupReactions(); },
 				[](bool v) { AyuSettings::getInstance().setShowGroupReactions(!v); }
+			},
+			NestedEntry{
+				tr::ayu_HideReactionsInPrivateChats(tr::now),
+				[] { return !AyuSettings::getInstance().showPrivateChatReactions(); },
+				[](bool v) { AyuSettings::getInstance().setShowPrivateChatReactions(!v); }
 			}
 		},
 		.toggledWhenAll = false,
