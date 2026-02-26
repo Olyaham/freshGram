@@ -8,11 +8,13 @@
 
 #include "ayu_worker.h"
 #include "lang_auto.h"
+#include "tray.h"
 #include "ayu/ayu_ui_settings.h"
 #include "ayu/ui/ayu_logo.h"
 #include "core/application.h"
 #include "features/filters/filters_cache_controller.h"
 #include "features/translator/ayu_translator.h"
+#include "main/main_domain.h"
 #include "main/main_session.h"
 #include "rpl/combine.h"
 #include "window/window_controller.h"
@@ -855,6 +857,9 @@ void AyuSettings::setHideNotificationCounters(bool val) {
 void AyuSettings::setHideNotificationBadge(bool val) {
 	if (_hideNotificationBadge.current() == val) return;
 	_hideNotificationBadge = val;
+	Core::App().refreshApplicationIcon();
+	Core::App().tray().updateIconCounters();
+	Core::App().domain().notifyUnreadBadgeChanged();
 	save();
 }
 

@@ -325,18 +325,19 @@ base::unique_qptr<Ui::SideBarButton> FiltersMenu::prepareButton(
 	if (id >= 0) {
 		rpl::combine(
 			Data::UnreadStateValue(&_session->session(), id),
-			Data::IncludeMutedCounterFoldersValue()
+			Data::IncludeMutedCounterFoldersValue(),
+			AyuSettings::getInstance().hideNotificationCountersChanges()
 		) | rpl::on_next([=](
 				const Dialogs::UnreadState &state,
-				bool includeMuted) {
+				bool includeMuted,
+				bool hideCounters) {
 			const auto chats = state.chats;
 			const auto chatsMuted = state.chatsMuted;
 			auto muted = (chatsMuted + state.marksMuted);
 			auto count = (chats + state.marks)
 				- (includeMuted ? 0 : muted);
 
-			const auto &settings = AyuSettings::getInstance();
-			if (settings.hideNotificationCounters()) {
+			if (hideCounters) {
 				count = 0;
 				muted = 0;
 			}

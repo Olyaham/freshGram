@@ -106,7 +106,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QClipboard>
 
 // AyuGram includes
-#include "ayu/ayu_settings.h"
 #include "ayu/ui/utils/ayu_profile_values.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "base/event_filter.h"
@@ -1457,8 +1456,6 @@ void AddRegistrationOrCreationButton(const not_null<Window::SessionController*> 
 }
 
 object_ptr<Ui::RpWidget> DetailsFiller::setupInfo() {
-	const auto &settings = AyuSettings::getInstance();
-
 	auto wrap = object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
 		_wrap,
 		object_ptr<Ui::VerticalLayout>(_wrap));
@@ -1788,7 +1785,7 @@ object_ptr<Ui::RpWidget> DetailsFiller::setupInfo() {
 			).text->setLinksTrusted();
 		}
 
-		if (settings.showPeerId() != PeerIdDisplay::Hidden) {
+		{
 			const auto dataCenter = getPeerDC(_peer);
 			const auto idLabel = dataCenter.isEmpty() ? QString("ID") : dataCenter;
 
@@ -1921,7 +1918,7 @@ object_ptr<Ui::RpWidget> DetailsFiller::setupInfo() {
 			addTranslateToMenu(about.text, AboutWithAdvancedValue(_peer));
 		}
 
-		if (settings.showPeerId() != PeerIdDisplay::Hidden && !_topic) {
+		if (!_topic) {
 			const auto dataCenter = getPeerDC(_peer);
 			const auto idLabel = dataCenter.isEmpty() ? QString("ID") : dataCenter;
 
@@ -1949,7 +1946,7 @@ object_ptr<Ui::RpWidget> DetailsFiller::setupInfo() {
 			AddRegistrationOrCreationButton(controller, _peer, idInfo, fitLabelToButton);
 		}
 
-		if (settings.showPeerId() != PeerIdDisplay::Hidden && _topic) {
+		if (_topic) {
 			auto idDrawableText = IDValue(
 				_peer->forumTopicFor(topicRootId)->topicRootId()
 			) | rpl::map([](TextWithEntities &&text)

@@ -236,13 +236,16 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 		state->reorderLifetime.destroy();
 		const auto &list = session->data().chatsFilters().list();
 		auto includeMuted = Data::IncludeMutedCounterFoldersValue();
+		auto hideCounters = AyuSettings::getInstance().hideNotificationCountersChanges();
 		for (auto i = 0; i < list.size(); i++) {
 			rpl::combine(
 				Data::UnreadStateValue(session, list[i].id()),
-				rpl::duplicate(includeMuted)
+				rpl::duplicate(includeMuted),
+				rpl::duplicate(hideCounters)
 			) | rpl::on_next([=](
 					const Dialogs::UnreadState &state,
-					bool includeMuted) {
+					bool includeMuted,
+					bool hideCounters) {
 				const auto chats = state.chats;
 				const auto chatsMuted = state.chatsMuted;
 				const auto muted = (chatsMuted + state.marksMuted);
@@ -250,8 +253,7 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 					- (includeMuted ? 0 : muted);
 				const auto isMuted = includeMuted && (count == muted);
 
-				const auto &settings = AyuSettings::getInstance();
-				if (settings.hideNotificationCounters()) {
+				if (hideCounters) {
 					count = 0;
 				}
 

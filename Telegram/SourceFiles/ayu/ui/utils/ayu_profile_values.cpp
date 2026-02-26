@@ -33,9 +33,19 @@ QString IDString(MsgId topicRootId) {
 }
 
 rpl::producer<TextWithEntities> IDValue(not_null<PeerData*> peer) {
-	return rpl::single(tr::marked(IDString(peer)));
+	return AyuSettings::getInstance().showPeerIdChanges(
+	) | rpl::map([=](PeerIdDisplay display) {
+		return (display == PeerIdDisplay::Hidden)
+			? TextWithEntities()
+			: tr::marked(IDString(peer));
+	});
 }
 
 rpl::producer<TextWithEntities> IDValue(MsgId topicRootId) {
-	return rpl::single(tr::marked(IDString(topicRootId)));
+	return AyuSettings::getInstance().showPeerIdChanges(
+	) | rpl::map([=](PeerIdDisplay display) {
+		return (display == PeerIdDisplay::Hidden)
+			? TextWithEntities()
+			: tr::marked(IDString(topicRootId));
+	});
 }

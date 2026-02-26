@@ -183,6 +183,11 @@ TopBarWidget::TopBarWidget(
 		);
 	});
 
+	AyuSettings::getInstance().quickAdminShortcutsChanges(
+	) | rpl::on_next([=](bool) {
+		updateControlsVisibility();
+	}, lifetime());
+
 	_back->setAcceptBoth();
 	_back->addClickHandler([=](Qt::MouseButton) {
 		InvokeQueued(_back.data(), [=] { backClicked(); });
