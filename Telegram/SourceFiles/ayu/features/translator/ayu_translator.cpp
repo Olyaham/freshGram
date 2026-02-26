@@ -24,6 +24,21 @@
 // todo: expose available languages from current translator and use in `ChooseTranslateToBox`
 
 namespace Ayu::Translator {
+namespace {
+
+BaseTranslator &translatorForProvider(TranslationProvider provider) {
+	switch (provider) {
+	case TranslationProvider::Telegram:
+		return TelegramTranslator::instance();
+	case TranslationProvider::Yandex:
+		return YandexTranslator::instance();
+	case TranslationProvider::Google:
+		return GoogleTranslator::instance();
+	}
+	return GoogleTranslator::instance();
+}
+
+} // namespace
 
 TranslateManager::Builder::Builder(
 	TranslateManager &manager,
@@ -228,13 +243,7 @@ mtpRequestId TranslateManager::performTranslation(Builder &req) {
 
 	if (const auto it = _pending.find(id); it != _pending.end()) {
 		const auto &settings = AyuSettings::getInstance();
-		if (settings.translationProvider() == "telegram") {
-			it->second.cancel = TelegramTranslator::instance().startTranslation(args);
-		} else if (settings.translationProvider() == "yandex") {
-			it->second.cancel = YandexTranslator::instance().startTranslation(args);
-		} else {
-			it->second.cancel = GoogleTranslator::instance().startTranslation(args);
-		}
+		it->second.cancel = translatorForProvider(settings.translationProvider()).startTranslation(args);
 	}
 
 	return id;

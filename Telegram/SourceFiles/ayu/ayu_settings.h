@@ -38,6 +38,12 @@ enum class ContextMenuVisibility {
 	VisibleWithModifier = 2,
 };
 
+enum class TranslationProvider {
+	Telegram = 0,
+	Google = 1,
+	Yandex = 2,
+};
+
 NLOHMANN_JSON_SERIALIZE_ENUM(PeerIdDisplay, {
 	{PeerIdDisplay::Hidden, 0},
 	{PeerIdDisplay::TelegramApi, 1},
@@ -54,6 +60,12 @@ NLOHMANN_JSON_SERIALIZE_ENUM(ContextMenuVisibility, {
 	{ContextMenuVisibility::Hidden, 0},
 	{ContextMenuVisibility::Visible, 1},
 	{ContextMenuVisibility::VisibleWithModifier, 2},
+})
+
+NLOHMANN_JSON_SERIALIZE_ENUM(TranslationProvider, {
+	{TranslationProvider::Telegram, "telegram"},
+	{TranslationProvider::Google, "google"},
+	{TranslationProvider::Yandex, "yandex"},
 })
 
 class GhostModeAccountSettings {
@@ -285,7 +297,7 @@ public:
 	[[nodiscard]] bool stickerConfirmation() const { return _stickerConfirmation.current(); }
 	[[nodiscard]] bool gifConfirmation() const { return _gifConfirmation.current(); }
 	[[nodiscard]] bool voiceConfirmation() const { return _voiceConfirmation.current(); }
-	[[nodiscard]] const QString &translationProvider() const { return _translationProvider.current(); }
+	[[nodiscard]] TranslationProvider translationProvider() const { return _translationProvider.current(); }
 	[[nodiscard]] bool adaptiveCoverColor() const { return _adaptiveCoverColor.current(); }
 	[[nodiscard]] bool improveLinkPreviews() const { return _improveLinkPreviews.current(); }
 	[[nodiscard]] bool crashReporting() const { return _crashReporting.current(); }
@@ -361,7 +373,7 @@ public:
 	void setStickerConfirmation(bool val);
 	void setGifConfirmation(bool val);
 	void setVoiceConfirmation(bool val);
-	void setTranslationProvider(const QString &val);
+	void setTranslationProvider(TranslationProvider val);
 	void setAdaptiveCoverColor(bool val);
 	void setImproveLinkPreviews(bool val);
 	void setCrashReporting(bool val);
@@ -438,7 +450,7 @@ public:
 	[[nodiscard]] rpl::producer<bool> stickerConfirmationChanges() const { return _stickerConfirmation.value(); }
 	[[nodiscard]] rpl::producer<bool> gifConfirmationChanges() const { return _gifConfirmation.value(); }
 	[[nodiscard]] rpl::producer<bool> voiceConfirmationChanges() const { return _voiceConfirmation.value(); }
-	[[nodiscard]] rpl::producer<QString> translationProviderChanges() const { return _translationProvider.value(); }
+	[[nodiscard]] rpl::producer<TranslationProvider> translationProviderChanges() const { return _translationProvider.value(); }
 	[[nodiscard]] rpl::producer<bool> adaptiveCoverColorChanges() const { return _adaptiveCoverColor.value(); }
 	[[nodiscard]] rpl::producer<bool> improveLinkPreviewsChanges() const { return _improveLinkPreviews.value(); }
 	[[nodiscard]] rpl::producer<bool> crashReportingChanges() const { return _crashReporting.value(); }
@@ -523,7 +535,7 @@ private:
 	rpl::variable<bool> _stickerConfirmation = false;
 	rpl::variable<bool> _gifConfirmation = false;
 	rpl::variable<bool> _voiceConfirmation = false;
-	rpl::variable<QString> _translationProvider = QString("telegram");
+	rpl::variable<TranslationProvider> _translationProvider = TranslationProvider::Telegram;
 	rpl::variable<bool> _adaptiveCoverColor = true;
 	rpl::variable<bool> _improveLinkPreviews = false;
 	rpl::variable<bool> _crashReporting = true;

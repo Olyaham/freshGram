@@ -460,11 +460,7 @@ void AyuSettings::validate() {
 	validateEnum(_showRepeatMessageInContextMenu, defaults._showRepeatMessageInContextMenu);
 	validateEnum(_showAddFilterInContextMenu, defaults._showAddFilterInContextMenu);
 
-	const auto &provider = _translationProvider.current();
-	if (provider != "telegram" && provider != "google" && provider != "yandex") {
-		_translationProvider = defaults._translationProvider.current();
-		modified = true;
-	}
+	validateEnum(_translationProvider, defaults._translationProvider);
 
 	validateRange(_wideMultiplier, 0.5, 4.0, defaults._wideMultiplier);
 	validateRange(_recentStickersCount, 1, 200, defaults._recentStickersCount);
@@ -916,7 +912,7 @@ void AyuSettings::setVoiceConfirmation(bool val) {
 	save();
 }
 
-void AyuSettings::setTranslationProvider(const QString &val) {
+void AyuSettings::setTranslationProvider(TranslationProvider val) {
 	if (_translationProvider.current() == val) return;
 	_translationProvider = val;
 	Ayu::Translator::TranslateManager::currentInstance()->resetCache();

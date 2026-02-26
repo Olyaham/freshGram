@@ -41,11 +41,8 @@ void BuildTranslator(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		QString("Yandex")
 	};
 
-	const auto getIndex = [=](const QString &val) {
-		if (val == "telegram") return 0;
-		if (val == "google") return 1;
-		if (val == "yandex") return 2;
-		return 0;
+	const auto getIndex = [=](TranslationProvider val) {
+		return static_cast<int>(val);
 	};
 
 	auto currentVal = AyuSettings::getInstance().translationProviderChanges()
@@ -62,10 +59,8 @@ void BuildTranslator(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 				controller->show(Box(
 					[=](not_null<Ui::GenericBox*> box) {
 						const auto save = [=](int index) {
-							const auto provider = (index == 0)
-								? "telegram"
-								: (index == 1) ? "google" : "yandex";
-							AyuSettings::getInstance().setTranslationProvider(provider);
+							AyuSettings::getInstance().setTranslationProvider(
+								static_cast<TranslationProvider>(index));
 						};
 						SingleChoiceBox(box, {
 							.title = tr::ayu_TranslationProvider(),

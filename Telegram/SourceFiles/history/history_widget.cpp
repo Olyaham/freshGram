@@ -834,6 +834,21 @@ HistoryWidget::HistoryWidget(
 		this->update();
 	}, lifetime());
 
+	AyuSettings::getInstance().translationProviderChanges(
+	) | rpl::on_next([=](TranslationProvider) {
+		if (_history) {
+			for (const auto &block : _history->blocks) {
+				for (const auto &view : block->messages) {
+					const auto item = view->data();
+					if (item->Has<HistoryMessageTranslation>()) {
+						item->removeTranslationBit();
+						_history->owner().requestItemTextRefresh(item);
+					}
+				}
+			}
+		}
+	}, lifetime());
+
 	using MessageUpdateFlag = Data::MessageUpdate::Flag;
 	session().changes().messageUpdates(
 		MessageUpdateFlag::Destroyed

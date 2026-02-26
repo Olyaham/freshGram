@@ -105,6 +105,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
+#include "history/history_item_components.h"
 
 
 namespace HistoryView {
@@ -2203,6 +2204,21 @@ void ComposeControls::init() {
 		updateControlsVisibility();
 		updateControlsGeometry(_wrap->size());
 		orderControls();
+	}, _wrap->lifetime());
+
+	AyuSettings::getInstance().translationProviderChanges(
+	) | rpl::on_next([=](TranslationProvider) {
+		if (_history) {
+			for (const auto &block : _history->blocks) {
+				for (const auto &view : block->messages) {
+					const auto item = view->data();
+					if (item->Has<HistoryMessageTranslation>()) {
+						item->removeTranslationBit();
+						_history->owner().requestItemTextRefresh(item);
+					}
+				}
+			}
+		}
 	}, _wrap->lifetime());
 
 	orderControls();

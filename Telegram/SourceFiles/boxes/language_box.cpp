@@ -1225,7 +1225,7 @@ void LanguageBox::setupTop(not_null<Ui::VerticalLayout*> container) {
 	auto premium = Data::AmPremiumValue(&_controller->session()) | rpl::map([=](bool val)
 	{
 		// const auto &settings = AyuSettings::getInstance();
-		// if (settings.translationProvider != "telegram") {
+		// if (settings.translationProvider() != TranslationProvider::Telegram) {
 		// 	return true;
 		// }
 		// return val;

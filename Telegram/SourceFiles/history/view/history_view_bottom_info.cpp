@@ -467,7 +467,7 @@ void BottomInfo::layoutDateText() {
 			: _data.scheduleRepeatPeriod
 			? (SchedulePeriodText(_data.scheduleRepeatPeriod) + ' ')
 			: QString();
-		const auto author = _data.author;
+		const auto author = settings.filterZalgo() ? filterZalgo(_data.author) : _data.author;
 		const auto prefix = !author.isEmpty() ? u", "_q : QString();
 		const auto date = edited + ((_data.flags & Data::Flag::ForwardedDate)
 			? Ui::FormatDateTimeSavedFrom(_data.date)
@@ -534,7 +534,7 @@ void BottomInfo::layoutDateText() {
 			edited = TextWithEntities{ SchedulePeriodText(_data.scheduleRepeatPeriod) + ' ' };
 		}
 
-		const auto author = _data.author;
+		const auto author = settings.filterZalgo() ? filterZalgo(_data.author) : _data.author;
 		const auto prefix = !author.isEmpty() ? (_data.flags & Data::Flag::Edited ? u" "_q : u", "_q) : QString();
 
 		const auto dateStr = (_data.flags & Data::Flag::ForwardedDate)

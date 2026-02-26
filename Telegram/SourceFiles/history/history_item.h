@@ -611,6 +611,7 @@ public:
 	[[nodiscard]] int unsupportedTTL() const {
 		return _unsupportedTTL;
 	}
+	void removeTranslationBit();
 
 	[[nodiscard]] int boostsApplied() const {
 		return _boostsApplied;

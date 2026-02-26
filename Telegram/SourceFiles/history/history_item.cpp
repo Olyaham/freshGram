@@ -7773,3 +7773,7 @@ void HistoryItem::overrideMedia(std::unique_ptr<Data::Media> media) {
 
 	_media = std::move(media);
 }
+
+void HistoryItem::removeTranslationBit() {
+	RemoveComponents(HistoryMessageTranslation::Bit());
+}

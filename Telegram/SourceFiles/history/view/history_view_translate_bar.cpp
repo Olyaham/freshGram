@@ -491,7 +491,7 @@ void TranslateBar::showMenu(base::unique_qptr<Ui::PopupMenu> menu) {
 		&st::menuIconCancel);
 
 	const auto &settings = AyuSettings::getInstance();
-	if (settings.translationProvider() == "telegram") {
+	if (settings.translationProvider() == TranslationProvider::Telegram) {
 		_menu->addSeparator();
 		const auto cocoon = ChatHelpers::GenerateLocalTgsSticker(
 			&_history->session(),
