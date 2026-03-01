@@ -44,12 +44,12 @@ namespace {
 
 QString ExtractField(const QByteArray &data, const QString &key) {
 	const auto re = QRegularExpression(
-		u"__%1__\\s*=\\s*[\"']((?:\\\\.|[^\"'\\\\])*)[\"']"_q.arg(key));
+		u"__%1__\\s*=\\s*(?:\"((?:\\\\.|[^\"\\\\])*)\"|'((?:\\\\.|[^'\\\\])*)')"_q.arg(key));
 	const auto match = re.match(QString::fromUtf8(data));
 	if (!match.hasMatch()) {
 		return {};
 	}
-	auto result = match.captured(1);
+	auto result = match.captured(1).isEmpty() ? match.captured(2) : match.captured(1);
 	result.replace(u"\\n"_q, u"\n"_q);
 	result.replace(u"\\t"_q, u"\t"_q);
 	result.replace(u"\\\""_q, u"\""_q);

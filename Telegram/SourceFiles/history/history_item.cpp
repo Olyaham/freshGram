@@ -3504,6 +3504,22 @@ void HistoryItem::setDeleted() {
 	_deleted = true;
 	_deletedAnimated = true;
 
+	// cleanup mentions and reactions as they tend to bug with deleted messages (e.g. can't remove mention)
+	if (isUnreadMention()) {
+		history()->unreadMentions().erase(id);
+		if (const auto topic = this->topic()) {
+			topic->unreadMentions().erase(id);
+		}
+	}
+	if (hasUnreadReaction()) {
+		history()->unreadReactions().erase(id);
+		if (const auto topic = this->topic()) {
+			topic->unreadReactions().erase(id);
+		} else if (const auto sublist = this->savedSublist()) {
+			sublist->unreadReactions().erase(id);
+		}
+	}
+
 	if (isService()) {
 		const auto &settings = AyuSettings::getInstance();
 		setAyuHint(settings.deletedMark());
