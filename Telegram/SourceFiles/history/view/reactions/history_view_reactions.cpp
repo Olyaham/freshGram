@@ -35,6 +35,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ayu/ayu_settings.h"
 #include "ayu/features/message_shot/message_shot.h"
 #include "ayu/ui/ayu_userpic.h"
+#include "ayu/features/filters/filters_controller.h"
 
 
 namespace HistoryView::Reactions {
@@ -929,6 +930,13 @@ InlineListData InlineListDataFromMessage(not_null<Element*> view) {
 					out.push_back(r.peer);
 				}
 			}
+		}
+	}
+	if (AyuSettings::getInstance().filtersEnabled()) {
+		for (auto &[id, peers] : result.recent) {
+			peers.erase(ranges::remove_if(peers, [](not_null<PeerData*> peer) {
+				return FiltersController::isBlocked(peer);
+			}), end(peers));
 		}
 	}
 	result.flags = (view->hasOutLayout() ? Flag::OutLayout : Flag())

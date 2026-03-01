@@ -113,6 +113,15 @@ bool isBlocked(const not_null<HistoryItem*> item) {
 	);
 }
 
+bool isBlocked(const not_null<PeerData*> peer) {
+	const auto &settings = AyuSettings::getInstance();
+	return settings.filtersEnabled() &&
+	(
+		(peer->isUser() && peer->asUser()->isBlocked() && settings.hideFromBlocked()) ||
+		((peer->isUser() || peer->isBroadcast()) && settings.isShadowBanned(getDialogIdFromPeer(peer)))
+	);
+}
+
 bool filtered(const not_null<HistoryItem*> item) {
 	const auto &settings = AyuSettings::getInstance();
 	if (!settings.filtersEnabled()) {

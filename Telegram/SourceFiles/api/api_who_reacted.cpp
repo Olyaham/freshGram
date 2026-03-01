@@ -33,6 +33,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
+#include "ayu/features/filters/filters_controller.h"
 
 
 namespace Api {
@@ -445,6 +446,8 @@ bool UpdateUserpics(
 		};
 	}) | ranges::views::filter([](ResolvedPeer resolved) {
 		return resolved.peer != nullptr;
+	}) | ranges::views::filter([](const ResolvedPeer &resolved) {
+		return !FiltersController::isBlocked(resolved.peer);
 	}) | ranges::to_vector;
 
 	const auto same = ranges::equal(
@@ -605,9 +608,29 @@ rpl::producer<Ui::WhoReadContent> WhoReacted(
 				});
 				return;
 			}
+			auto &owner = item->history()->owner();
+			auto blockedReactionsCount = 0;
+			const auto &settings = AyuSettings::getInstance();
+			if (settings.filtersEnabled()) {
+				peers.list.erase(ranges::remove_if(peers.list, [&](const PeerWithReaction &p) {
+					const auto peer = owner.peerLoaded(p.peerWithDate.peer);
+					if (peer && FiltersController::isBlocked(peer)) {
+						if (!p.reaction.empty()) {
+							++blockedReactionsCount;
+						}
+						return true;
+					}
+					return false;
+				}), end(peers.list));
+				peers.read.erase(ranges::remove_if(peers.read, [&](const WhoReadPeer &p) {
+					const auto peer = owner.peerLoaded(p.peer);
+					return peer && FiltersController::isBlocked(peer);
+				}), end(peers.read));
+			}
+
 			state->current.state = peers.state;
 			state->current.fullReadCount = int(peers.read.size());
-			state->current.fullReactionsCount = peers.fullReactionsCount;
+			state->current.fullReactionsCount = peers.fullReactionsCount - blockedReactionsCount;
 			if (whoReadIds) {
 				const auto reacted = peers.list.size() - ranges::count(
 					peers.list,
