@@ -1509,7 +1509,8 @@ void Message::paintCommentsButton(
 	auto width = g.width();
 
 	if (_comments->ripple) {
-		p.setOpacity(st::historyPollRippleOpacity);
+		const auto was = p.opacity(); // for semi-transparent deleted messages
+		p.setOpacity(was * st::historyPollRippleOpacity);
 		const auto colorOverride = &stm->msgWaveformInactive->c;
 		_comments->ripple->paint(
 			p,
@@ -1520,7 +1521,7 @@ void Message::paintCommentsButton(
 		if (_comments->ripple->empty()) {
 			_comments->ripple.reset();
 		}
-		p.setOpacity(1.);
+		p.setOpacity(was);
 	}
 
 	left += st::historyCommentsSkipLeft;
