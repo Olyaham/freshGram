@@ -4,11 +4,7 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "settings_other.h"
-
-#include <QDesktopServices>
-#include <QGuiApplication>
-#include <QSvgRenderer>
+#include "ayu/ui/settings/settings_other.h"
 
 #include "lang_auto.h"
 #include "ayu/ayu_settings.h"
@@ -19,7 +15,6 @@
 #include "boxes/abstract_box.h"
 #include "core/application.h"
 #include "lang/lang_text_entity.h"
-#include "main/main_session.h"
 #include "settings/settings_builder.h"
 #include "settings/settings_common.h"
 #include "styles/style_menu_icons.h"
@@ -34,6 +29,10 @@
 #include "ui/wrap/vertical_layout.h"
 #include "window/window_session_controller.h"
 #include "window/themes/window_theme.h"
+
+#include <QDesktopServices>
+#include <QGuiApplication>
+#include <QSvgRenderer>
 
 namespace Settings {
 

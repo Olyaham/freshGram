@@ -6,7 +6,6 @@
 // Copyright @Radolyn, 2026
 #include "ayu/ayu_url_handlers.h"
 
-#include <QDesktopServices>
 #include "lang_auto.h"
 #include "mainwindow.h"
 #include "ayu/ui/settings/settings_main.h"
@@ -21,6 +20,8 @@
 #include "ui/boxes/confirm_box.h"
 #include "ui/boxes/donate_info_box.h"
 #include "window/window_controller.h"
+
+#include <QDesktopServices>
 
 namespace AyuUrlHandlers {
 

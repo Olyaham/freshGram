@@ -4,7 +4,7 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "edit_filter.h"
+#include "ayu/ui/settings/filters/edit_filter.h"
 
 #include "lang_auto.h"
 #include "ayu/ayu_settings.h"
@@ -23,9 +23,7 @@
 #include "styles/style_window.h"
 #include "ui/ui_utility.h"
 #include "ui/boxes/confirm_box.h"
-#include "ui/effects/animations.h"
 #include "ui/text/text.h"
-#include "ui/text/text_utilities.h"
 #include "ui/toast/toast.h"
 #include "ui/widgets/checkbox.h"
 #include "ui/widgets/labels.h"

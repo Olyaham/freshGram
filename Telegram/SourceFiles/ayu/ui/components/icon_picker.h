@@ -13,12 +13,19 @@ class IconPicker : public Ui::RpWidget
 {
 public:
 	IconPicker(QWidget *parent);
-	~IconPicker();
+	~IconPicker() = default;
+
+	static constexpr int kColumns = 4;
 
 protected:
 	void paintEvent(QPaintEvent *e) override;
 	void mousePressEvent(QMouseEvent *e) override;
 
-	Ui::Animations::Simple animation;
-	QString wasSelected;
+private:
+	void drawIcon(QPainter &p, const QImage &icon, int x, int y, float strokeOpacity);
+	[[nodiscard]] int cellWidth() const;
+
+	Ui::Animations::Simple _animation;
+	QString _wasSelected;
+	std::unordered_map<QString, QImage> _cachedIcons;
 };

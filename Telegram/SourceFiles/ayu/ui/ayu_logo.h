@@ -24,6 +24,7 @@ ICON(CHIBI2, "chibi2");
 ICON(EXTERA2, "extera2");
 
 void loadAppIco();
+QString appIcoPath();
 
 QImage loadPreview(const QString& name);
 

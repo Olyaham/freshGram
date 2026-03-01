@@ -5,14 +5,14 @@
 //
 // Copyright @Radolyn, 2026
 #pragma once
-#include <QString>
-#include <QtNetwork/QNetworkReply>
 
 #include "ayu/data/entities.h"
 #include "core/application.h"
-
 #include "data/data_session.h"
 #include "history/history_item_components.h"
+
+#include <QString>
+#include <QtNetwork/QNetworkReply>
 
 struct ApplyChanges
 {

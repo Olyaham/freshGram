@@ -4,58 +4,53 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "telegram_helpers.h"
-
-#include <functional>
-#include <latch>
-#include <QTimer>
-
-#include <QtCore/QJsonDocument>
-#include <QtCore/QJsonObject>
+#include "ayu/utils/telegram_helpers.h"
 
 #include "apiwrap.h"
-
 #include "lang_auto.h"
-#include "rc_manager.h"
+#include "api/api_common.h"
+#include "ayu/ayu_settings.h"
+#include "ayu/ayu_state.h"
 #include "ayu/ayu_worker.h"
 #include "ayu/data/entities.h"
+#include "ayu/data/messages_storage.h"
+#include "ayu/features/filters/filters_controller.h"
+#include "ayu/utils/rc_manager.h"
+#include "base/unixtime.h"
 #include "core/mime_type.h"
 #include "data/data_channel.h"
+#include "data/data_chat.h"
+#include "data/data_document.h"
 #include "data/data_forum.h"
 #include "data/data_forum_topic.h"
 #include "data/data_histories.h"
 #include "data/data_peer_id.h"
 #include "data/data_photo.h"
-#include "data/data_user.h"
-
-#include "data/data_document.h"
+#include "data/data_poll.h"
+#include "data/data_saved_sublist.h"
 #include "data/data_session.h"
+#include "data/data_user.h"
+#include "data/stickers/data_custom_emoji.h"
+#include "data/stickers/data_stickers.h"
 #include "history/history.h"
 #include "history/history_item.h"
 #include "history/history_item_components.h"
 #include "history/history_unread_things.h"
-#include "main/main_account.h"
-#include "main/main_session.h"
-#include "ui/text/format_values.h"
-
-#include "api/api_common.h"
-#include "ayu/ayu_settings.h"
-#include "ayu/ayu_state.h"
-#include "ayu/data/messages_storage.h"
-#include "ayu/features/filters/filters_controller.h"
-#include "base/unixtime.h"
-#include "data/data_chat.h"
-#include "data/data_poll.h"
-#include "data/data_saved_sublist.h"
-#include "data/stickers/data_custom_emoji.h"
-#include "data/stickers/data_stickers.h"
 #include "lang/lang_keys.h"
+#include "main/main_account.h"
 #include "main/main_domain.h"
+#include "main/main_session.h"
 #include "styles/style_ayu_styles.h"
-#include "ui/text/text_utilities.h"
+#include "ui/emoji_config.h"
+#include "ui/text/format_values.h"
 #include "ui/text/text_entity.h"
 #include "ui/toast/toast.h"
-#include "ui/emoji_config.h"
+
+#include <functional>
+#include <latch>
+#include <QTimer>
+#include <QtCore/QJsonDocument>
+#include <QtCore/QJsonObject>
 
 namespace {
 

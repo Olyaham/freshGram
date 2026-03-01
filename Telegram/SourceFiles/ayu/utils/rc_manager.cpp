@@ -4,7 +4,7 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "rc_manager.h"
+#include "ayu/utils/rc_manager.h"
 
 #include <QJsonArray>
 #include <qjsondocument.h>

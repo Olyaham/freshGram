@@ -6,9 +6,7 @@
 // Copyright @Radolyn, 2026
 #pragma once
 
-#include "entities.h"
-
-#include "history/history_item_edition.h"
+#include "ayu/data/entities.h"
 
 namespace AyuMessages {
 

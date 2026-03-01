@@ -4,7 +4,9 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "google.h"
+#include "ayu/features/translator/implementations/google.h"
+
+#include "ayu/features/translator/html_parser.h"
 
 #include <memory>
 #include <QtCore/QJsonArray>
@@ -14,12 +16,10 @@
 #include <QtCore/QPointer>
 #include <QtCore/QStringList>
 #include <QtCore/QTimer>
-#include <QtNetwork/QNetworkRequest>
-#include <QtNetwork/QNetworkReply>
 #include <QtCore/QUrl>
 #include <QtGui/QTextDocument>
-
-#include "ayu/features/translator/html_parser.h"
+#include <QtNetwork/QNetworkReply>
+#include <QtNetwork/QNetworkRequest>
 
 namespace Ayu::Translator {
 

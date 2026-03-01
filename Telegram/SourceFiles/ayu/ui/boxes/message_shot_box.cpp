@@ -4,26 +4,26 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "message_shot_box.h"
-
-#include <memory>
-#include <QFileDialog>
-#include <QGuiApplication>
-#include "styles/style_ayu_styles.h"
+#include "ayu/ui/boxes/message_shot_box.h"
 
 #include "lang_auto.h"
-#include "theme_selector_box.h"
 #include "ayu/ayu_settings.h"
+#include "ayu/ui/boxes/theme_selector_box.h"
 #include "ayu/ui/components/image_view.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "boxes/abstract_box.h"
 #include "main/main_session.h"
 #include "settings/settings_common.h"
+#include "styles/style_ayu_styles.h"
 #include "styles/style_layers.h"
 #include "styles/style_settings.h"
 #include "ui/vertical_list.h"
 #include "ui/widgets/buttons.h"
 #include "ui/wrap/vertical_layout.h"
+
+#include <memory>
+#include <QFileDialog>
+#include <QGuiApplication>
 
 MessageShotBox::MessageShotBox(
 	QWidget *parent,

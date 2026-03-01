@@ -4,18 +4,18 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "filters_cache_controller.h"
+#include "ayu/features/filters/filters_cache_controller.h"
 
-#include <unordered_set>
-
-#include "filters_controller.h"
 #include "ayu/data/ayu_database.h"
+#include "ayu/features/filters/filters_controller.h"
 #include "data/data_groups.h"
 #include "data/data_peer.h"
 #include "data/data_session.h"
 #include "history/history.h"
 #include "history/history_item.h"
 #include "rpl/event_stream.h"
+
+#include <unordered_set>
 
 static std::mutex mutex;
 

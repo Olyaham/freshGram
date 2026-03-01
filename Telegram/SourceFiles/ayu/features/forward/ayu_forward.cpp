@@ -4,10 +4,11 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "ayu_forward.h"
+#include "ayu/features/forward/ayu_forward.h"
+
 #include "apiwrap.h"
-#include "ayu_sync.h"
 #include "lang_auto.h"
+#include "ayu/features/forward/ayu_sync.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "base/random.h"
 #include "base/unixtime.h"
@@ -18,7 +19,6 @@
 #include "data/data_photo.h"
 #include "data/data_session.h"
 #include "history/history_item.h"
-#include "storage/file_download.h"
 #include "storage/localimageloader.h"
 #include "storage/storage_account.h"
 #include "storage/storage_media_prepare.h"

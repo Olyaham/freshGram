@@ -4,11 +4,7 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "saved_music.h"
-
-#include "info/profile/info_profile_music_button.h"
-
-#include <QSvgRenderer>
+#include "ayu/ui/components/saved_music.h"
 
 #include "ayu/ayu_settings.h"
 #include "ayu/ui/utils/color_utils.h"
@@ -18,6 +14,7 @@
 #include "data/data_document_media.h"
 #include "data/data_file_origin.h"
 #include "data/data_session.h"
+#include "info/profile/info_profile_music_button.h"
 #include "main/main_session.h"
 #include "main/main_session_settings.h"
 #include "styles/palette.h"
@@ -27,6 +24,8 @@
 #include "ui/image/image.h"
 #include "ui/widgets/labels.h"
 #include "window/themes/window_theme.h"
+
+#include <QSvgRenderer>
 
 namespace Info::Profile {
 

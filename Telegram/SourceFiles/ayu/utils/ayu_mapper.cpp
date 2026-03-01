@@ -4,14 +4,13 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "ayu_mapper.h"
+#include "ayu/utils/ayu_mapper.h"
 
 #include "apiwrap.h"
 #include "api/api_text_entities.h"
 #include "history/history.h"
 #include "history/history_item.h"
 #include "history/history_item_components.h"
-#include "main/main_session.h"
 #include "mtproto/connection_abstract.h"
 #include "mtproto/details/mtproto_dump_to_text.h"
 

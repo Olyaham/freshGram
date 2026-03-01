@@ -4,7 +4,7 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "settings_ayu_utils.h"
+#include "ayu/ui/settings/settings_ayu_utils.h"
 
 #include "lang/lang_text_entity.h"
 #include "settings/settings_common.h"

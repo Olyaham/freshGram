@@ -9,16 +9,12 @@
 #include "ayu/data/ayu_database.h"
 #include "ayu/utils/ayu_mapper.h"
 #include "ayu/utils/telegram_helpers.h"
-
 #include "base/unixtime.h"
-
 #include "data/data_forum_topic.h"
 #include "data/data_session.h"
-
 #include "history/history.h"
 #include "history/history_item.h"
 #include "history/history_item_components.h"
-
 #include "main/main_session.h"
 
 namespace AyuMessages {

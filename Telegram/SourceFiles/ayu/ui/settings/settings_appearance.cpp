@@ -4,12 +4,11 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "settings_appearance.h"
+#include "ayu/ui/settings/settings_appearance.h"
 
-#include "lang_auto.h"
 #include "apiwrap.h"
+#include "lang_auto.h"
 #include "ayu/ayu_settings.h"
-#include "ayu/ayu_ui_settings.h"
 #include "ayu/ui/ayu_userpic.h"
 #include "ayu/ui/boxes/font_selector.h"
 #include "ayu/ui/components/icon_picker.h"
@@ -29,12 +28,11 @@
 #include "styles/style_layers.h"
 #include "styles/style_menu_icons.h"
 #include "styles/style_settings.h"
-#include "ui/boxes/confirm_box.h"
-#include "ui/effects/ripple_animation.h"
 #include "ui/empty_userpic.h"
 #include "ui/painter.h"
 #include "ui/userpic_view.h"
-#include "ui/widgets/buttons.h"
+#include "ui/boxes/confirm_box.h"
+#include "ui/effects/ripple_animation.h"
 #include "ui/widgets/labels.h"
 #include "ui/wrap/padding_wrap.h"
 #include "ui/wrap/vertical_layout.h"
@@ -70,7 +68,7 @@ void BuildAppIcon(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	builder.add([](const WidgetContext &ctx) -> SectionBuilder::WidgetToAdd {
 		return {
 			.widget = object_ptr<IconPicker>(ctx.container),
-			.margin = st::settingsCheckboxPadding,
+			.margin = st::settingsButtonNoIcon.padding,
 		};
 	}, [] {
 		return SearchEntry{
@@ -79,6 +77,7 @@ void BuildAppIcon(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 			.keywords = { u"icon"_q, u"app"_q, u"logo"_q },
 		};
 	});
+	builder.addSkip();
 
 #ifdef Q_OS_WIN
 	builder.addDivider();
@@ -230,9 +229,9 @@ void BuildAvatarCorners(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	const auto mapRadius = [](int val)
 	{
 		if (val == 0) {
-			return tr::ayu_AvatarCornersSquare(tr::now);
+			return tr::ayu_AvatarCornersSquare(tr::now).toUpper();
 		} else if (val == AyuUserpic::kMaxAvatarCorners) {
-			return tr::ayu_AvatarCornersCircle(tr::now);
+			return tr::ayu_AvatarCornersCircle(tr::now).toUpper();
 		}
 		return QString::number(val);
 	};

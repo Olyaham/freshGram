@@ -4,17 +4,17 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "settings_filters_list.h"
+#include "ayu/ui/settings/filters/settings_filters_list.h"
 
-#include "edit_filter.h"
 #include "lang_auto.h"
-#include "per_dialog_filter.h"
 #include "ayu/ayu_settings.h"
 #include "ayu/data/ayu_database.h"
-#include "ayu/ui/settings/settings_ayu_utils.h"
 #include "ayu/features/filters/filters_cache_controller.h"
 #include "ayu/features/filters/filters_utils.h"
 #include "ayu/ui/components/icon_picker.h"
+#include "ayu/ui/settings/settings_ayu_utils.h"
+#include "ayu/ui/settings/filters/edit_filter.h"
+#include "ayu/ui/settings/filters/per_dialog_filter.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "boxes/connection_box.h"
 #include "data/data_channel.h"

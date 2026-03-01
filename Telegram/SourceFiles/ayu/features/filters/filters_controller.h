@@ -6,9 +6,10 @@
 // Copyright @Radolyn, 2026
 #pragma once
 
+#include "unicode/regex.h"
+
 #include <string>
 #include <vector>
-#include "unicode/regex.h"
 
 using namespace icu_78;
 

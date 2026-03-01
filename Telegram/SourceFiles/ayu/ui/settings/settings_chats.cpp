@@ -4,7 +4,7 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "settings_chats.h"
+#include "ayu/ui/settings/settings_chats.h"
 
 #include "lang_auto.h"
 #include "ayu/ayu_settings.h"

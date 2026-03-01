@@ -4,10 +4,7 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "message_shot.h"
-
-#include "styles/style_ayu_styles.h"
-#include "styles/style_layers.h"
+#include "ayu/features/message_shot/message_shot.h"
 
 #include "qguiapplication.h"
 #include "ayu/ayu_settings.h"
@@ -30,7 +27,9 @@
 #include "history/view/history_view_element.h"
 #include "history/view/media/history_view_media.h"
 #include "main/main_session.h"
+#include "styles/style_ayu_styles.h"
 #include "styles/style_chat.h"
+#include "styles/style_layers.h"
 #include "ui/painter.h"
 #include "ui/chat/chat_theme.h"
 #include "ui/effects/path_shift_gradient.h"

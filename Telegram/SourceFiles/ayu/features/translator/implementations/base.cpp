@@ -4,20 +4,19 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include <QtCore/QJsonArray>
-#include <QtCore/QJsonDocument>
-#include <QtCore/QJsonObject>
-#include <QtCore/QJsonValue>
-#include <QtCore/QString>
-#include <QtCore/QTimer>
+#include "ayu/features/translator/implementations/base.h"
 
 #include "base/random.h"
 
 #include <cmath>
 #include <memory>
 #include <vector>
-
-#include "./base.h"
+#include <QtCore/QJsonArray>
+#include <QtCore/QJsonDocument>
+#include <QtCore/QJsonObject>
+#include <QtCore/QJsonValue>
+#include <QtCore/QString>
+#include <QtCore/QTimer>
 
 namespace Ayu::Translator {
 

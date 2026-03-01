@@ -4,7 +4,7 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "itunes_search.h"
+#include "ayu/ui/utils/itunes_search.h"
 
 #include <QtCore/QCache>
 #include <QtCore/QEventLoop>

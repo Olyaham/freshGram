@@ -6,11 +6,11 @@
 // Copyright @Radolyn, 2026
 //
 // Code is based on https://github.com/androidx/androidx
-#include "color_utils.h"
+#include "ayu/ui/utils/color_utils.h"
 
-#include <QColor>
-#include <cmath>
 #include <algorithm>
+#include <cmath>
+#include <QColor>
 
 namespace Ayu::Ui {
 

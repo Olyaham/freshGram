@@ -6,10 +6,11 @@
 // Copyright @Radolyn, 2026
 #pragma once
 
-#include "palette.h"
-#include <vector>
-#include <queue>
+#include "ayu/ui/utils/palette.h"
+
 #include <functional>
+#include <queue>
+#include <vector>
 
 namespace Ayu::Ui {
 

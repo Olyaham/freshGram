@@ -6,8 +6,9 @@
 // Copyright @Radolyn, 2026
 #pragma once
 
-#include <QtCore/QString>
 #include "ui/text/text_entity.h"
+
+#include <QtCore/QString>
 
 namespace Ayu::Translator::Html {
 

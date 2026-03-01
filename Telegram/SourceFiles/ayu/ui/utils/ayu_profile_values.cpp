@@ -4,12 +4,12 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "ayu_profile_values.h"
+#include "ayu/ui/utils/ayu_profile_values.h"
+
 #include "ayu/ayu_settings.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "data/data_peer.h"
 #include "lang/lang_text_entity.h"
-#include "ui/text/text_utilities.h"
 
 constexpr auto kMaxChannelId = -1000000000000;
 

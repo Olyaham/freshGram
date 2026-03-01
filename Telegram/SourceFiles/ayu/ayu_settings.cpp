@@ -4,12 +4,12 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "ayu_settings.h"
+#include "ayu/ayu_settings.h"
 
-#include "ayu_worker.h"
 #include "lang_auto.h"
 #include "tray.h"
 #include "ayu/ayu_ui_settings.h"
+#include "ayu/ayu_worker.h"
 #include "ayu/ui/ayu_logo.h"
 #include "core/application.h"
 #include "features/filters/filters_cache_controller.h"

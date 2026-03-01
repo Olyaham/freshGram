@@ -5,7 +5,7 @@
 //
 // Copyright @Radolyn, 2026
 
-#include "streamer_mode.h"
+#include "ayu/features/streamer_mode/streamer_mode.h"
 
 #include "window/window_controller.h"
 

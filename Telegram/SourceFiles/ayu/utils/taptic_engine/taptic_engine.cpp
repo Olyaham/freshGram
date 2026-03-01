@@ -4,7 +4,7 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "taptic_engine.h"
+#include "ayu/utils/taptic_engine/taptic_engine.h"
 
 #if defined Q_OS_MAC
 #include "ayu/utils/taptic_engine/platform/taptic_engine_mac.h"

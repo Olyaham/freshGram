@@ -6,11 +6,8 @@
 // Copyright @Radolyn, 2026
 #include "ayu/data/ayu_database.h"
 
-#include <ranges>
-
-#include "entities.h"
+#include "ayu/data/entities.h"
 #include "ayu/libs/sqlite/sqlite_orm.h"
-
 #include "base/unixtime.h"
 
 using namespace sqlite_orm;

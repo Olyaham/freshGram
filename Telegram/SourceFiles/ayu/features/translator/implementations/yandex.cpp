@@ -4,7 +4,9 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "yandex.h"
+#include "ayu/features/translator/implementations/yandex.h"
+
+#include "ayu/features/translator/html_parser.h"
 
 #include <memory>
 #include <QtCore/QPointer>
@@ -14,8 +16,6 @@
 #include <QtCore/QUuid>
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QNetworkRequest>
-
-#include "ayu/features/translator/html_parser.h"
 
 namespace Ayu::Translator {
 

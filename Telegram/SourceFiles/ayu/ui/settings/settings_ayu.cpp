@@ -4,13 +4,13 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "settings_ayu.h"
+#include "ayu/ui/settings/settings_ayu.h"
 
 #include "lang_auto.h"
-#include "settings_ayu_utils.h"
 #include "ayu/ayu_settings.h"
 #include "ayu/ui/ayu_userpic.h"
 #include "ayu/ui/settings/ayu_builder.h"
+#include "ayu/ui/settings/settings_ayu_utils.h"
 #include "ayu/ui/settings/settings_main.h"
 #include "boxes/peer_list_box.h"
 #include "core/application.h"

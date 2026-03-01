@@ -6,9 +6,9 @@
 // Copyright @Radolyn, 2026
 #pragma once
 
-#include "entities.h"
-#include <functional>
+#include "ayu/data/entities.h"
 
+#include <functional>
 
 class SchemaVersion
 {

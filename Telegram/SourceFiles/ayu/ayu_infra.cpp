@@ -4,16 +4,21 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "ayu_infra.h"
+#include "ayu/ayu_infra.h"
 
 #include "ayu/ayu_lang.h"
 #include "ayu/ayu_settings.h"
 #include "ayu/ayu_ui_settings.h"
 #include "ayu/ayu_worker.h"
 #include "ayu/data/ayu_database.h"
+#include "ayu/ui/ayu_logo.h"
 #include "features/translator/ayu_translator.h"
 #include "lang/lang_instance.h"
 #include "utils/rc_manager.h"
+
+#ifdef Q_OS_WIN
+#include "ayu/utils/windows_utils.h"
+#endif
 
 namespace AyuInfra {
 
@@ -53,10 +58,18 @@ void initTranslator() {
 	Ayu::Translator::TranslateManager::init();
 }
 
+void initIcon() {
+#ifdef Q_OS_WIN
+	AyuAssets::loadAppIco();
+	reloadAppIconFromTaskBar();
+#endif
+}
+
 void init() {
 	initLang();
 	initDatabase();
 	initUiSettings();
+	initIcon();
 	initWorker();
 	initRCManager();
 	initTranslator();

@@ -6,14 +6,13 @@
 // Copyright @Radolyn, 2026
 #pragma once
 
+#include "ayu/features/translator/implementations/base.h"
 #include "mtproto/sender.h"
 
 #include <functional>
 #include <list>
 #include <unordered_map>
 #include <QtCore/QString>
-
-#include "implementations/base.h"
 
 class QNetworkReply;
 

@@ -4,20 +4,18 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "settings_main.h"
-
-#include <QDesktopServices>
+#include "ayu/ui/settings/settings_main.h"
 
 #include "settings/sections/settings_main.h"
 #include "lang_auto.h"
-#include "settings_appearance.h"
-#include "settings_ayu.h"
-#include "settings_chats.h"
-#include "settings_filters.h"
-#include "settings_general.h"
-#include "settings_other.h"
 #include "ayu/ayu_settings.h"
 #include "ayu/ui/ayu_logo.h"
+#include "ayu/ui/settings/settings_appearance.h"
+#include "ayu/ui/settings/settings_ayu.h"
+#include "ayu/ui/settings/settings_chats.h"
+#include "ayu/ui/settings/settings_filters.h"
+#include "ayu/ui/settings/settings_general.h"
+#include "ayu/ui/settings/settings_other.h"
 #include "core/version.h"
 #include "settings/settings_builder.h"
 #include "settings/settings_common.h"
@@ -31,6 +29,8 @@
 #include "ui/wrap/vertical_layout.h"
 #include "window/window_session_controller.h"
 #include "window/window_session_controller_link_info.h"
+
+#include <QDesktopServices>
 
 namespace Settings {
 

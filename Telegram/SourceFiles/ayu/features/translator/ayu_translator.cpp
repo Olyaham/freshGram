@@ -4,22 +4,22 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "ayu_translator.h"
+#include "ayu/features/translator/ayu_translator.h"
+
+#include "api/api_text_entities.h"
+#include "ayu/ayu_settings.h"
+#include "ayu/features/translator/implementations/google.h"
+#include "ayu/features/translator/implementations/telegram.h"
+#include "ayu/features/translator/implementations/yandex.h"
+#include "data/data_peer.h"
+#include "data/data_session.h"
+#include "history/history_item.h"
+#include "main/main_session.h"
 
 #include <optional>
 #include <QtCore/QCryptographicHash>
 #include <QtCore/QString>
 #include <QtNetwork/QNetworkReply>
-
-#include "api/api_text_entities.h"
-#include "ayu/ayu_settings.h"
-#include "data/data_peer.h"
-#include "data/data_session.h"
-#include "history/history_item.h"
-#include "implementations/google.h"
-#include "implementations/telegram.h"
-#include "implementations/yandex.h"
-#include "main/main_session.h"
 
 // todo: expose available languages from current translator and use in `ChooseTranslateToBox`
 

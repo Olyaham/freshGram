@@ -4,7 +4,7 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "message_shot_theme_state.h"
+#include "ayu/features/message_shot/message_shot_theme_state.h"
 
 #include "lang_auto.h"
 #include "ayu/ayu_settings.h"

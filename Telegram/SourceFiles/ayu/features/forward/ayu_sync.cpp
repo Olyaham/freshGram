@@ -4,9 +4,10 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "ayu_sync.h"
-#include "api/api_sending.h"
+#include "ayu/features/forward/ayu_sync.h"
+
 #include "apiwrap.h"
+#include "api/api_sending.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "core/application.h"
 #include "core/core_settings.h"

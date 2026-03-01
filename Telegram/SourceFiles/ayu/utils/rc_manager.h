@@ -6,9 +6,9 @@
 // Copyright @Radolyn, 2026
 #pragma once
 
-#include <QtNetwork/QNetworkReply>
-
 #include "ayu/data/entities.h"
+
+#include <QtNetwork/QNetworkReply>
 
 extern std::unordered_set<ID> default_developers;
 extern std::unordered_set<ID> default_channels;

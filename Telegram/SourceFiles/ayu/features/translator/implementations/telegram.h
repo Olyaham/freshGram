@@ -6,11 +6,11 @@
 // Copyright @Radolyn, 2026
 #pragma once
 
+#include "ayu/features/translator/implementations/base.h"
+
 #include <QtCore/QObject>
 #include <QtCore/QSet>
 #include <QtCore/QString>
-
-#include "./base.h"
 
 namespace Ayu::Translator {
 

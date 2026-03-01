@@ -4,14 +4,12 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
-#include "per_dialog_filter.h"
-
-#include <utility>
+#include "ayu/ui/settings/filters/per_dialog_filter.h"
 
 #include "lang_auto.h"
-#include "settings_filters_list.h"
 #include "ayu/ayu_settings.h"
 #include "ayu/data/ayu_database.h"
+#include "ayu/ui/settings/filters/settings_filters_list.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "data/data_peer.h"
 #include "data/data_session.h"
@@ -19,6 +17,8 @@
 #include "styles/style_menu_icons.h"
 #include "ui/painter.h"
 #include "window/window_session_controller.h"
+
+#include <utility>
 
 namespace Settings {
 

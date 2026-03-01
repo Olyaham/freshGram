@@ -5,28 +5,20 @@
 //
 // Copyright @Radolyn, 2026
 
-#include "filters_controller.h"
+#include "ayu/features/filters/filters_controller.h"
 
-#include "filters_cache_controller.h"
 #include "ayu/ayu_settings.h"
+#include "ayu/features/filters/filters_cache_controller.h"
+#include "ayu/features/filters/filters_utils.h"
+#include "ayu/utils/telegram_helpers.h"
 #include "data/data_peer.h"
+#include "data/data_peer_id.h"
+#include "data/data_session.h"
 #include "data/data_user.h"
 #include "history/history.h"
 #include "history/history_item.h"
-#include "unicode/regex.h"
-
-#include <QTimer>
-
-#include "ayu/data/entities.h"
-#include "core/mime_type.h"
-#include "data/data_channel.h"
-#include "data/data_peer_id.h"
-
-#include "data/data_session.h"
 #include "history/history_item_components.h"
-
-#include "filters_utils.h"
-#include "ayu/utils/telegram_helpers.h"
+#include "unicode/regex.h"
 
 namespace FiltersController {
 
