@@ -65,6 +65,7 @@ public:
 	struct SliderArgs {
 		QString id;
 		rpl::producer<QString> title;
+		bool showTitle = true;
 		int steps;
 		int current;
 		Fn<int(int)> indexToValue;

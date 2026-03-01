@@ -183,18 +183,20 @@ void AyuSectionBuilder::addSlider(SliderArgs &&args) {
 	_builder.add([&](const Builder::BuildContext &ctx) {
 		v::match(ctx, [&](const Builder::WidgetContext &wctx) {
 			const auto container = wctx.container;
-			container->add(
-				object_ptr<Button>(container,
-					std::move(args.title),
-					st::settingsButtonNoIcon)
-			)->setAttribute(Qt::WA_TransparentForMouseEvents);
+			if (args.showTitle) {
+				container->add(
+					object_ptr<Button>(container,
+						std::move(args.title),
+						st::settingsButtonNoIcon)
+				)->setAttribute(Qt::WA_TransparentForMouseEvents);
+			}
 
 			auto sliderWithLabel = MakeSliderWithLabel(
 				container,
 				st::autoDownloadLimitSlider,
 				st::settingsScaleLabel,
 				0,
-				st::settingsScaleLabel.style.font->width("8%%%"));
+				args.showTitle ? st::settingsScaleLabel.style.font->width("8%%%") : 0);
 			container->add(
 				std::move(sliderWithLabel.widget),
 				st::recentStickersLimitPadding);
@@ -233,7 +235,7 @@ void AyuSectionBuilder::addSlider(SliderArgs &&args) {
 					}
 				});
 		}, [&](const Builder::SearchContext &sctx) {
-			if (!id.isEmpty()) {
+			if (!id.isEmpty() && args.showTitle) {
 				sctx.entries->push_back({
 					.id = id,
 					.title = resolvedTitle,

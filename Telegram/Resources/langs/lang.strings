@@ -7709,6 +7709,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_HideNotificationCounters" = "Hide Notification Counters";
 "ayu_HideNotificationBadge" = "Hide Notification Badge";
 "ayu_HideNotificationBadgeDescription" = "Hides the notification counter on the app icon in the taskbar and tray.";
+"ayu_AvatarCorners" = "Avatar Corners";
+"ayu_AvatarCornersCircle" = "Circle";
+"ayu_AvatarCornersSquare" = "Square";
+"ayu_SingleCornerRadius" = "Single Corner Radius";
+"ayu_SingleCornerRadiusDescription" = "Forums will have the same avatar shape as chats.";
 "ayu_HideAllChats" = "Hide \"All Chats\" Tab";
 "ayu_ChannelBottomButton" = "Channel Bottom Button";
 "ayu_ChannelBottomButtonHide" = "Hide";

@@ -17,6 +17,7 @@
 #include "main/main_domain.h"
 #include "main/main_session.h"
 #include "rpl/combine.h"
+#include "ui/ayu_userpic.h"
 #include "window/window_controller.h"
 
 #include <fstream>
@@ -466,6 +467,7 @@ void AyuSettings::validate() {
 
 	validateRange(_wideMultiplier, 0.5, 4.0, defaults._wideMultiplier);
 	validateRange(_recentStickersCount, 1, 200, defaults._recentStickersCount);
+	validateRange(_avatarCorners, 0, AyuUserpic::kMaxAvatarCorners, defaults._avatarCorners);
 
 	const auto embeddedType = _messageShotSettings._embeddedThemeType.current();
 	auto embeddedTypeValid = (embeddedType == -1) || (embeddedType >= 0 && embeddedType <= 3); // from Window::Theme::EmbeddedType::DayBlue to Window::Theme::EmbeddedType::NightGreen
@@ -948,6 +950,20 @@ void AyuSettings::setCrashReporting(bool val) {
 	save();
 }
 
+void AyuSettings::setAvatarCorners(int val) {
+	if (_avatarCorners.current() == val) return;
+	_avatarCorners = val;
+	AyuUiSettings::setAvatarCorners(val);
+	save();
+}
+
+void AyuSettings::setSingleCornerRadius(bool val) {
+	if (_singleCornerRadius.current() == val) return;
+	_singleCornerRadius = val;
+	repaintApp();
+	save();
+}
+
 void to_json(nlohmann::json &j, const AyuSettings &s) {
 	std::map<std::string, GhostModeAccountSettings> ghostAccounts;
 	for (const auto &[key, value] : s._ghostAccounts) {
@@ -1034,6 +1050,8 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"adaptiveCoverColor", s._adaptiveCoverColor.current()},
 		{"improveLinkPreviews", s._improveLinkPreviews.current()},
 		{"crashReporting", s._crashReporting.current()},
+		{"avatarCorners", s._avatarCorners.current()},
+		{"singleCornerRadius", s._singleCornerRadius.current()},
 		{"messageShotSettings", s._messageShotSettings}
 	};
 }
@@ -1128,6 +1146,8 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._adaptiveCoverColor = j.value("adaptiveCoverColor", defaults._adaptiveCoverColor.current());
 	s._improveLinkPreviews = j.value("improveLinkPreviews", defaults._improveLinkPreviews.current());
 	s._crashReporting = j.value("crashReporting", defaults._crashReporting.current());
+	s._avatarCorners = j.value("avatarCorners", defaults._avatarCorners.current());
+	s._singleCornerRadius = j.value("singleCornerRadius", defaults._singleCornerRadius.current());
 
 	if (j.contains("messageShotSettings") && j["messageShotSettings"].is_object()) {
 		j["messageShotSettings"].get_to(s._messageShotSettings);

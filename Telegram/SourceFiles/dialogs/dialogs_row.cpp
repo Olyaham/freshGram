@@ -37,6 +37,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
+#include "ayu/ui/ayu_userpic.h"
 
 
 namespace Dialogs {
@@ -482,8 +483,11 @@ void Row::PaintCornerBadgeFrame(
 			}
 		}
 		if (peer && (peer->forum() || peer->monoforum())) {
-			const auto radius = context.st->photoSize
-				* Ui::ForumUserpicRadiusMultiplier();
+			const auto &settings = AyuSettings::getInstance();
+			const auto singleRadius = settings.singleCornerRadius();
+			const auto radius = singleRadius
+				? AyuUserpic::ComputeRadiusF(context.st->photoSize)
+				: (context.st->photoSize * Ui::ForumUserpicRadiusMultiplier());
 			Ui::PaintOutlineSegments(q, outline, radius, segments);
 		} else {
 			Ui::PaintOutlineSegments(q, outline, segments);
@@ -549,9 +553,10 @@ void Row::PaintCornerBadgeFrame(
 	q.setBrush(data->active
 		? st::dialogsOnlineBadgeFgActive
 		: st::dialogsOnlineBadgeFg);
+	const auto badge = AyuUserpic::OnlineBadgePosition(photoSize, size);
 	q.drawEllipse(QRectF(
-		photoSize - skip.x() - size,
-		photoSize - skip.y() - size,
+		badge.x(),
+		badge.y(),
 		size,
 		size
 	).marginsRemoved({ shrink, shrink, shrink, shrink }));

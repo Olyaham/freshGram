@@ -9,6 +9,7 @@
 #include "lang_auto.h"
 #include "settings_ayu_utils.h"
 #include "ayu/ayu_settings.h"
+#include "ayu/ui/ayu_userpic.h"
 #include "ayu/ui/settings/ayu_builder.h"
 #include "ayu/ui/settings/settings_main.h"
 #include "boxes/peer_list_box.h"
@@ -181,7 +182,7 @@ private:
 			});
 			p.setPen(Qt::NoPen);
 			p.setBrush(gradient);
-			p.drawEllipse(rect);
+			AyuUserpic::PaintShape(p, rect);
 		}
 		{
 			const auto fontsize = (photoSize * 13) / 33;

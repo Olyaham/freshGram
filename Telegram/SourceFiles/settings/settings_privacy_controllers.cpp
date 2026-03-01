@@ -1182,7 +1182,7 @@ object_ptr<Ui::RpWidget> ProfilePhotoPrivacyController::setupMiddleWidget(
 				Qt::SmoothTransformation);
 			result = Images::Round(
 				std::move(result),
-				ImageRoundRadius::Ellipse);
+				ImageRoundRadius::AyuUserpic);
 			result.setDevicePixelRatio(style::DevicePixelRatio());
 			(local ? localPhoto : photo) = std::move(result);
 			if (local) {

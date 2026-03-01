@@ -7,21 +7,39 @@
 #include "settings_appearance.h"
 
 #include "lang_auto.h"
+#include "apiwrap.h"
 #include "ayu/ayu_settings.h"
+#include "ayu/ayu_ui_settings.h"
+#include "ayu/ui/ayu_userpic.h"
 #include "ayu/ui/boxes/font_selector.h"
 #include "ayu/ui/components/icon_picker.h"
 #include "ayu/ui/settings/ayu_builder.h"
 #include "ayu/ui/settings/settings_main.h"
+#include "core/application.h"
+#include "data/data_peer.h"
+#include "data/data_peer_id.h"
+#include "data/data_session.h"
 #include "inline_bots/bot_attach_web_view.h"
 #include "main/main_session.h"
 #include "settings/settings_builder.h"
 #include "settings/settings_common.h"
 #include "styles/style_ayu_icons.h"
+#include "styles/style_ayu_styles.h"
+#include "styles/style_dialogs.h"
+#include "styles/style_layers.h"
 #include "styles/style_menu_icons.h"
 #include "styles/style_settings.h"
+#include "ui/boxes/confirm_box.h"
+#include "ui/effects/ripple_animation.h"
+#include "ui/empty_userpic.h"
+#include "ui/painter.h"
+#include "ui/userpic_view.h"
 #include "ui/widgets/buttons.h"
+#include "ui/widgets/labels.h"
+#include "ui/wrap/padding_wrap.h"
 #include "ui/wrap/vertical_layout.h"
 #include "window/window_session_controller.h"
+#include "window/window_session_controller_link_info.h"
 
 namespace Settings {
 
@@ -76,6 +94,246 @@ void BuildAppIcon(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	builder.addDividerText(tr::ayu_HideNotificationBadgeDescription());
 	builder.addSkip();
 #endif
+}
+
+class AvatarCornersPreview final : public Ui::RpWidget {
+public:
+	AvatarCornersPreview(
+		QWidget *parent,
+		not_null<Window::SessionController*> controller)
+	: RpWidget(parent)
+	, _controller(controller)
+	, _emptyUserpic(
+		Ui::EmptyUserpic::UserpicColor(
+			Data::DecideColorIndex(
+				peerFromChannel(ChannelId(2331068091)))),
+		u"AyuGram Releases"_q) {
+		const auto &row = st::defaultDialogRow;
+		setFixedHeight(row.height);
+		setCursor(Qt::PointingHandCursor);
+		resolveChannel();
+	}
+
+protected:
+	void paintEvent(QPaintEvent *e) override {
+		auto p = Painter(this);
+
+		const auto &row = st::defaultDialogRow;
+		const auto photoSize = row.photoSize;
+		const auto xShift = st::settingsButtonNoIcon.padding.left()
+			- row.padding.left();
+		const auto userpicX = row.padding.left() + xShift;
+		const auto userpicY = (height() - photoSize) / 2;
+
+		p.fillRect(rect(), st::windowBg);
+
+		if (_ripple) {
+			_ripple->paint(p, 0, 0, width());
+			if (_ripple->empty()) {
+				_ripple.reset();
+			}
+		}
+
+		if (_peer) {
+			_peer->paintUserpicLeft(
+				p, _userpicView, userpicX, userpicY, width(), photoSize);
+		} else {
+			_emptyUserpic.paintCircle(p, userpicX, userpicY, width(), photoSize);
+		}
+
+		const auto nameText = u"AyuGram Releases"_q;
+		p.setPen(st::dialogsNameFg);
+		p.setFont(st::semiboldFont);
+		p.drawText(row.nameLeft + xShift, row.nameTop + st::semiboldFont->ascent, nameText);
+
+		const auto nameWidth = st::semiboldFont->width(nameText);
+		const auto &badge = st::dialogsExteraOfficialIcon.icon;
+		badge.paint(p, row.nameLeft + xShift + nameWidth, row.nameTop, width());
+
+		p.setPen(st::dialogsTextFg);
+		p.setFont(st::dialogsTextFont);
+		p.drawText(row.textLeft + xShift, row.textTop + st::dialogsTextFont->ascent, u"Better late than never"_q);
+	}
+
+	void mousePressEvent(QMouseEvent *e) override {
+		if (e->button() == Qt::LeftButton) {
+			if (!_ripple) {
+				auto mask = Ui::RippleAnimation::RectMask(size());
+				_ripple = std::make_unique<Ui::RippleAnimation>(
+					st::defaultRippleAnimation,
+					std::move(mask),
+					[=] { update(); });
+			}
+			_ripple->add(e->pos());
+		}
+	}
+
+	void mouseReleaseEvent(QMouseEvent *e) override {
+		if (_ripple) {
+			_ripple->lastStop();
+		}
+		if (e->button() == Qt::LeftButton) {
+			_controller->showPeerByLink(Window::PeerByLinkInfo{
+				.usernameOrId = u"AyuGramReleases"_q,
+			});
+		}
+	}
+
+private:
+	void resolveChannel() {
+		const auto session = &_controller->session();
+		_peer = session->data().peerByUsername(u"AyuGramReleases"_q);
+		if (_peer) {
+			_peer->loadUserpic();
+			subscribeToUpdates();
+			return;
+		}
+		const auto weak = base::make_weak(this);
+		session->api().request(MTPcontacts_ResolveUsername(
+			MTP_flags(0),
+			MTP_string(u"AyuGramReleases"_q),
+			MTP_string()
+		)).done([=](const MTPcontacts_ResolvedPeer &result) {
+			if (const auto strong = weak.get()) {
+				session->data().processUsers(result.data().vusers());
+				session->data().processChats(result.data().vchats());
+				strong->_peer = session->data().peerLoaded(
+					peerFromMTP(result.data().vpeer()));
+				if (strong->_peer) {
+					strong->_peer->loadUserpic();
+					strong->subscribeToUpdates();
+				}
+				strong->update();
+			}
+		}).send();
+	}
+
+	void subscribeToUpdates() {
+		if (!_peer) return;
+		_peer->session().downloaderTaskFinished(
+		) | rpl::on_next([=] {
+			update();
+		}, lifetime());
+	}
+
+	const not_null<Window::SessionController*> _controller;
+	Ui::EmptyUserpic _emptyUserpic;
+	PeerData *_peer = nullptr;
+	Ui::PeerUserpicView _userpicView;
+	std::unique_ptr<Ui::RippleAnimation> _ripple;
+};
+
+void BuildAvatarCorners(SectionBuilder &builder, AyuSectionBuilder &ayu) {
+	auto *settings = &AyuSettings::getInstance();
+	const auto controller = builder.controller();
+
+	const auto mapRadius = [](int val)
+	{
+		if (val == 0) {
+			return tr::ayu_AvatarCornersSquare(tr::now);
+		} else if (val == AyuUserpic::kMaxAvatarCorners) {
+			return tr::ayu_AvatarCornersCircle(tr::now);
+		}
+		return QString::number(val);
+	};
+
+	builder.add([=](const WidgetContext &ctx) -> SectionBuilder::WidgetToAdd {
+		const auto container = ctx.container;
+		auto title = object_ptr<Ui::FlatLabel>(
+			container,
+			tr::ayu_AvatarCorners(),
+			st::defaultSubsectionTitle);
+		const auto titleRaw = title.data();
+
+		const auto badge = Ui::CreateChild<Ui::PaddingWrap<Ui::FlatLabel>>(
+			container,
+			object_ptr<Ui::FlatLabel>(
+				container,
+				settings->avatarCornersChanges() | rpl::map(mapRadius),
+				st::settingsPremiumNewBadge),
+			st::ayuBetaBadgePadding);
+		badge->show();
+		badge->setAttribute(Qt::WA_TransparentForMouseEvents);
+		badge->paintRequest() | rpl::on_next([=] {
+			auto p = QPainter(badge);
+			auto hq = PainterHighQualityEnabler(p);
+			p.setPen(Qt::NoPen);
+			p.setBrush(st::windowBgActive);
+			const auto r = st::ayuBetaBadgePadding.left();
+			p.drawRoundedRect(badge->rect(), r, r);
+		}, badge->lifetime());
+
+		titleRaw->geometryValue() | rpl::on_next([=](QRect geometry) {
+			badge->moveToLeft(
+				geometry.x()
+					+ titleRaw->textMaxWidth()
+					+ st::settingsPremiumNewBadgePosition.x(),
+				geometry.y()
+					+ (geometry.height() - badge->height()) / 2);
+		}, badge->lifetime());
+
+		return {
+			.widget = std::move(title),
+			.margin = st::defaultSubsectionTitlePadding,
+		};
+	}, [] {
+		return SearchEntry{
+			.id = u"ayu/avatarCorners"_q,
+			.title = tr::ayu_AvatarCorners(tr::now),
+			.keywords = { u"avatar"_q, u"corners"_q, u"radius"_q },
+		};
+	});
+
+	auto *previewRaw = static_cast<AvatarCornersPreview*>(nullptr);
+	builder.add([&](const Builder::WidgetContext &ctx) -> SectionBuilder::WidgetToAdd {
+		auto preview = object_ptr<AvatarCornersPreview>(
+			ctx.container,
+			controller);
+		previewRaw = preview.data();
+		const auto vMargin = st::settingsButtonNoIcon.padding
+			- st::defaultDialogRow.padding;
+		return {
+			.widget = std::move(preview),
+			.margin = QMargins(0, vMargin.top(), 0, vMargin.bottom()),
+		};
+	});
+
+	ayu.addSlider({
+		.id = u"ayu/avatarCornersSlider"_q,
+		.title = rpl::single(QString()),
+		.showTitle = false,
+		.steps = AyuUserpic::kMaxAvatarCorners + 1,
+		.current = settings->avatarCorners(),
+		.onChanged = [=](int val) {
+			AyuSettings::getInstance().setAvatarCorners(val);
+			if (previewRaw) {
+				previewRaw->update();
+			}
+		},
+		.onFinalChanged = [=](int val) {
+			AyuSettings::getInstance().setAvatarCorners(val);
+			crl::on_main([=] {
+				controller->show(Ui::MakeConfirmBox({
+					.text = tr::lng_settings_need_restart(),
+					.confirmed = [] { Core::Restart(); },
+					.confirmText = tr::lng_settings_restart_now(),
+					.cancelText = tr::lng_settings_restart_later(),
+				}));
+			});
+		},
+	});
+
+	ayu.addSettingToggle({
+		.id = u"ayu/singleCornerRadius"_q,
+		.title = tr::ayu_SingleCornerRadius(),
+		.getter = &AyuSettings::singleCornerRadius,
+		.setter = &AyuSettings::setSingleCornerRadius,
+		.keywords = { u"single"_q, u"corner"_q, u"radius"_q },
+	});
+
+	builder.addSkip();
+	builder.addDividerText(tr::ayu_SingleCornerRadiusDescription());
+	builder.addSkip();
 }
 
 void BuildAppearance(SectionBuilder &builder, AyuSectionBuilder &ayu) {
@@ -296,6 +554,7 @@ const auto kMeta = BuildHelper({
 
 	builder.addSkip();
 	BuildAppIcon(builder, ayu);
+	BuildAvatarCorners(builder, ayu);
 	BuildAppearance(builder, ayu);
 	BuildChatFolders(builder, ayu);
 	BuildTrayElements(builder, ayu);

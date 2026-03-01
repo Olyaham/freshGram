@@ -34,6 +34,7 @@ void initUiSettings() {
 	AyuUiSettings::setMonoFont(settings.monoFont());
 	AyuUiSettings::setWideMultiplier(settings.wideMultiplier());
 	AyuUiSettings::setMaterialSwitches(settings.materialSwitches());
+	AyuUiSettings::setAvatarCorners(settings.avatarCorners());
 }
 
 void initDatabase() {
