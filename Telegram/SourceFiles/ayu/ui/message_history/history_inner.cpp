@@ -346,13 +346,6 @@ InnerWidget::InnerWidget(
 								  },
 								  lifetime());
 
-	controller->adaptive().chatWideValue(
-	) | rpl::on_next([=](bool wide)
-							 {
-								 _isChatWide = wide;
-							 },
-							 lifetime());
-
 	updateEmptyText();
 }
 
@@ -596,8 +589,7 @@ void InnerWidget::elementHandleViaClick(not_null<UserData*> bot) {
 }
 
 HistoryView::ElementChatMode InnerWidget::elementChatMode() {
-	using Mode = HistoryView::ElementChatMode;
-	return _isChatWide ? Mode::Wide : Mode::Default;
+	return HistoryView::ElementChatMode::Wide;
 }
 
 not_null<Ui::PathShiftGradient*> InnerWidget::elementPathShiftGradient() {
@@ -984,7 +976,7 @@ void InnerWidget::paintEvent(QPaintEvent *e) {
 							(dateTop - st::msgServiceMargin.top());
 						const auto width = view->width();
 						if (const auto date = view->Get<HistoryView::DateBadge>()) {
-							date->paint(p, context.st, dateY, width, _isChatWide);
+							date->paint(p, context.st, dateY, width, true);
 						} else {
 							HistoryView::ServiceMessagePainter::PaintDate(
 								p,
@@ -992,7 +984,7 @@ void InnerWidget::paintEvent(QPaintEvent *e) {
 								view->dateTime(),
 								dateY,
 								width,
-								_isChatWide);
+								true);
 						}
 					}
 				}

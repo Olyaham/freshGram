@@ -278,7 +278,6 @@ private:
 	Element *_visibleTopItem = nullptr;
 	int _visibleTopFromItem = 0;
 
-	bool _isChatWide = false;
 	bool _scrollDateShown = false;
 	Ui::Animations::Simple _scrollDateOpacity;
 	SingleQueuedInvokation _scrollDateCheck;
