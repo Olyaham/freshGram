@@ -51,7 +51,7 @@ void RCManager::sendRequest() {
 	}
 
 	const auto url = QString::fromLatin1(_useExteraFallback ? kExteraUrl : kPrimaryUrl);
-	LOG(("RCManager: requesting map").arg(url));
+	LOG(("RCManager: requesting map"));
 
 	clearSentRequest();
 

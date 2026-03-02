@@ -124,11 +124,10 @@ constexpr auto kBlurRadius = 24;
 	const auto fullSize = photoSize;
 	const auto partRect = CornerBadgeTTLRect(fullSize);
 	const auto &partSize = partRect.width();
-	const auto partSkip = fullSize - partSize;
 	auto result = Images::Circle(BlurredDarkenedPart(
 		PeerData::GenerateUserpicImage(peer, view, fullSize * ratio, 0),
 		QRect(
-			QPoint(partSkip, partSkip) * ratio,
+			partRect.topLeft() * ratio,
 			QSize(partSize, partSize) * ratio)));
 	result.setDevicePixelRatio(ratio);
 
@@ -171,9 +170,10 @@ constexpr auto kBlurRadius = 24;
 
 QRect CornerBadgeTTLRect(int photoSize) {
 	const auto &partSize = st::dialogsTTLBadgeSize;
+	const auto pos = AyuUserpic::OnlineBadgePosition(photoSize, partSize);
 	return QRect(
-		photoSize - partSize + st::dialogsTTLBadgeSkip.x(),
-		photoSize - partSize + st::dialogsTTLBadgeSkip.y(),
+		int(pos.x()),
+		int(pos.y()),
 		partSize,
 		partSize);
 }
@@ -553,7 +553,7 @@ void Row::PaintCornerBadgeFrame(
 	q.setBrush(data->active
 		? st::dialogsOnlineBadgeFgActive
 		: st::dialogsOnlineBadgeFg);
-	const auto badge = AyuUserpic::OnlineBadgePosition(photoSize, size);
+	const auto badge = AyuUserpic::OnlineBadgePosition(photoSize, size, stroke);
 	q.drawEllipse(QRectF(
 		badge.x(),
 		badge.y(),

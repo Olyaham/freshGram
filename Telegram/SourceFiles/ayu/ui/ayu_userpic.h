@@ -12,8 +12,6 @@ namespace Media::Streaming { struct FrameRequest; }
 
 namespace AyuUserpic {
 
-inline constexpr int kMaxAvatarCorners = 23;
-
 [[nodiscard]] bool ShouldOverrideShape(Ui::PeerUserpicShape shape);
 [[nodiscard]] int ComputeRadius(int pixelSize);
 [[nodiscard]] double ComputeRadiusF(double size);
@@ -24,7 +22,7 @@ inline constexpr int kMaxAvatarCorners = 23;
 void PaintShape(QPainter &p, int x, int y, int size);
 void PaintShape(QPainter &p, const QRectF &rect);
 
-[[nodiscard]] QPointF OnlineBadgePosition(int photoSize, double badgeSize);
+[[nodiscard]] QPointF OnlineBadgePosition(int photoSize, double badgeSize, double stroke = 0);
 
 void ApplyFrameRounding(
 	::Media::Streaming::FrameRequest &request,

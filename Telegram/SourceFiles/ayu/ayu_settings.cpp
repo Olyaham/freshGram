@@ -467,7 +467,7 @@ void AyuSettings::validate() {
 
 	validateRange(_wideMultiplier, 0.5, 4.0, defaults._wideMultiplier);
 	validateRange(_recentStickersCount, 1, 200, defaults._recentStickersCount);
-	validateRange(_avatarCorners, 0, AyuUserpic::kMaxAvatarCorners, defaults._avatarCorners);
+	validateRange(_avatarCorners, 0, AyuUiSettings::kMaxAvatarCorners, defaults._avatarCorners);
 
 	const auto embeddedType = _messageShotSettings._embeddedThemeType.current();
 	auto embeddedTypeValid = (embeddedType == -1) || (embeddedType >= 0 && embeddedType <= 3); // from Window::Theme::EmbeddedType::DayBlue to Window::Theme::EmbeddedType::NightGreen
