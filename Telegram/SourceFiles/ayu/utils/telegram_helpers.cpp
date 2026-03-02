@@ -977,12 +977,12 @@ static bool prependPseudoReplyImpl(
 	shiftEntities(textWithTags.tags, prefixLength);
 
 	EntitiesInText newEntities;
-	const auto nameLength = name.length();
+	const auto nameLength = int(name.length());
 
 	newEntities.push_back(EntityInText{
 		EntityType::Blockquote,
 		0,
-		prefix.length(),
+		int(prefix.length()),
 		{}
 	});
 

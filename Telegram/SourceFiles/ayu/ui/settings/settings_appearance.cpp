@@ -92,6 +92,9 @@ void BuildAppIcon(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	builder.addSkip();
 	builder.addDividerText(tr::ayu_HideNotificationBadgeDescription());
 	builder.addSkip();
+#else
+    builder.addDivider();
+    builder.addSkip();
 #endif
 }
 
