@@ -208,7 +208,7 @@ set(ayugram_files
         ayu/features/streamer_mode/platform/streamer_mode_win.h
         ayu/features/streamer_mode/platform/streamer_mode_linux.cpp
         ayu/features/streamer_mode/platform/streamer_mode_linux.h
-        ayu/features/streamer_mode/platform/streamer_mode_mac.cpp
+        ayu/features/streamer_mode/platform/streamer_mode_mac.mm
         ayu/features/streamer_mode/platform/streamer_mode_mac.h
         ayu/features/streamer_mode/streamer_mode.cpp
         ayu/features/streamer_mode/streamer_mode.h

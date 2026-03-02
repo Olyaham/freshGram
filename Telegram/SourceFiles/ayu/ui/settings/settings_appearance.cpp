@@ -430,7 +430,7 @@ void BuildTrayElements(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.keywords = { u"ghost"_q, u"tray"_q },
 	});
 
-#ifdef WIN32
+#if defined Q_OS_WIN || defined Q_OS_MAC
 	ayu.addSettingToggle({
 		.id = u"ayu/streamerToggleInTray"_q,
 		.title = tr::ayu_EnableStreamerModeTray(),
@@ -533,7 +533,7 @@ void BuildDrawerElements(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.icon = { &st::ayuGhostIcon },
 	});
 
-#ifdef WIN32
+#if defined Q_OS_WIN || defined Q_OS_MAC
 	ayu.addSettingToggle({
 		.id = u"ayu/streamerToggleInDrawer"_q,
 		.title = tr::ayu_StreamerModeToggle(),
