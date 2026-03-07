@@ -390,6 +390,29 @@ ChatFilters::ChatFilters(not_null<Session*> owner)
 , _moreChatsTimer([=] { checkLoadMoreChatsLists(); }) {
 	_list.emplace_back();
 	crl::on_main(&owner->session(), [=] { load(); });
+
+	AyuSettings::getInstance().hideAllChatsFolderChanges()
+	| rpl::skip(1)
+	| rpl::on_next([=](bool hide) {
+		if (!_loaded) {
+			return;
+		}
+		if (hide) {
+			if (_list.size() <= 1) {
+				return;
+			}
+			const auto it = ranges::find(_list, FilterId(0), &ChatFilter::id);
+			if (it != end(_list)) {
+				_list.erase(it);
+				_listChanged.fire({});
+			}
+		} else {
+			if (!ranges::contains(_list, FilterId(0), &ChatFilter::id)) {
+				_list.insert(begin(_list), ChatFilter());
+				_listChanged.fire({});
+			}
+		}
+	}, _lifetime);
 }
 
 ChatFilters::~ChatFilters() = default;
