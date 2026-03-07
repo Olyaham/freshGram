@@ -409,16 +409,13 @@ void GroupedMedia::draw(Painter &p, const PaintContext &context) const {
 	auto fullRect = QRect();
 	const auto subpartHighlight = IsSubGroupSelection(highlight);
 
-	auto allDeleted = true;
 	auto anyDeleted = false;
-	const auto &ayuSettings = AyuSettings::getInstance();
-	const auto perItemOpacityEnabled = ayuSettings.semiTransparentDeletedMessages();
+	const auto &settings = AyuSettings::getInstance();
+	const auto perItemOpacityEnabled = settings.semiTransparentDeletedMessages();
 	if (perItemOpacityEnabled) {
 		for (const auto &part : _parts) {
 			if (part.item->isDeleted()) {
 				anyDeleted = true;
-			} else {
-				allDeleted = false;
 			}
 		}
 	}

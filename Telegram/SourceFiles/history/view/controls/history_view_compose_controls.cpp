@@ -3390,7 +3390,7 @@ void ComposeControls::updateControlsGeometry(QSize size) {
 		- (commentsShown
 			? (_commentsShown->width() + _st.commentsSkip)
 			: 0)
-		- ((_attachToggle && settings.showAttachButtonInMessageField() || _sendAs) ? _st.padding.left() : _st.fieldLeft)
+		- (((_attachToggle && settings.showAttachButtonInMessageField()) || _sendAs) ? _st.padding.left() : _st.fieldLeft)
 		- (_attachToggle && settings.showAttachButtonInMessageField() ? _attachToggle->width() : 0)
 		- (_sendAs ? _sendAs->width() : 0)
 		- _st.padding.right()

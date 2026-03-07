@@ -2312,7 +2312,7 @@ bool Stories::isQuitPrevent() {
 	}
 
 	const auto &ghost = AyuSettings::ghost(&_owner->session());
-	if (!ghost.sendReadStories() || _markReadRequests.empty() && _incrementViewsRequests.empty()) {
+	if (!ghost.sendReadStories() || (_markReadRequests.empty() && _incrementViewsRequests.empty())) {
 		return false;
 	}
 	LOG(("Stories prevents quit, marking as read..."));
