@@ -296,7 +296,7 @@ void AddJumpToBeginningAction(PeerData *peerData,
 				}
 			}
 		},
-		&st::ayuMenuIconToBeginning);
+		&st::ayuToBeginningMenuIcon);
 }
 
 void AddOpenChannelAction(PeerData *peerData,
