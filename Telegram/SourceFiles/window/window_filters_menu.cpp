@@ -326,7 +326,7 @@ base::unique_qptr<Ui::SideBarButton> FiltersMenu::prepareButton(
 		rpl::combine(
 			Data::UnreadStateValue(&_session->session(), id),
 			Data::IncludeMutedCounterFoldersValue(),
-			AyuSettings::getInstance().hideNotificationCountersChanges()
+			AyuSettings::getInstance().hideNotificationCountersValue()
 		) | rpl::on_next([=](
 				const Dialogs::UnreadState &state,
 				bool includeMuted,

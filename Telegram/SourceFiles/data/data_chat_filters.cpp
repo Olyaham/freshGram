@@ -392,7 +392,6 @@ ChatFilters::ChatFilters(not_null<Session*> owner)
 	crl::on_main(&owner->session(), [=] { load(); });
 
 	AyuSettings::getInstance().hideAllChatsFolderChanges()
-	| rpl::skip(1)
 	| rpl::on_next([=](bool hide) {
 		if (!_loaded) {
 			return;

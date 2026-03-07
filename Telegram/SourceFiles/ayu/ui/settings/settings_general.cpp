@@ -45,7 +45,7 @@ void BuildTranslator(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		return static_cast<int>(val);
 	};
 
-	auto currentVal = AyuSettings::getInstance().translationProviderChanges()
+	auto currentVal = AyuSettings::getInstance().translationProviderValue()
 		| rpl::map(getIndex)
 		| rpl::map([=](int val) { return options[val]; });
 
@@ -87,7 +87,7 @@ void BuildShowPeerId(SectionBuilder &builder) {
 		QString("Bot API")
 	};
 
-	auto currentVal = AyuSettings::getInstance().showPeerIdChanges()
+	auto currentVal = AyuSettings::getInstance().showPeerIdValue()
 		| rpl::map([=](PeerIdDisplay val) {
 			return options[static_cast<int>(val)];
 		});

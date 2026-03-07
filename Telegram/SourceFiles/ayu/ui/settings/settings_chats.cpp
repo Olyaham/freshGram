@@ -172,7 +172,7 @@ void BuildMarks(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 			.id = u"ayu/deletedMark"_q,
 			.title = tr::ayu_DeletedMarkText(),
 			.st = &st::settingsButtonNoIcon,
-			.label = AyuSettings::getInstance().deletedMarkChanges(),
+			.label = AyuSettings::getInstance().deletedMarkValue(),
 			.onClick = [=] {
 				auto box = Box<EditMarkBox>(
 					tr::ayu_DeletedMarkText(),
@@ -190,7 +190,7 @@ void BuildMarks(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 			.id = u"ayu/editedMark"_q,
 			.title = tr::ayu_EditedMarkText(),
 			.st = &st::settingsButtonNoIcon,
-			.label = AyuSettings::getInstance().editedMarkChanges(),
+			.label = AyuSettings::getInstance().editedMarkValue(),
 			.onClick = [=] {
 				auto box = Box<EditMarkBox>(
 					tr::ayu_EditedMarkText(),
@@ -203,7 +203,7 @@ void BuildMarks(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 			},
 			.keywords = { u"edited"_q, u"mark"_q },
 		});
-	}, AyuSettings::getInstance().replaceBottomInfoWithIconsChanges()
+	}, AyuSettings::getInstance().replaceBottomInfoWithIconsValue()
 		| rpl::map([](bool v) { return !v; }));
 
 	ayu.addSettingToggle({

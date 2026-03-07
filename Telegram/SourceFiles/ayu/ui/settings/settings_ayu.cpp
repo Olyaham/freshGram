@@ -391,7 +391,7 @@ void BuildGhostEssentials(SectionBuilder &builder) {
 			markReadButton->toggleOn(
 				state->selectedUserId.value()
 				| rpl::map([](uint64 id) {
-					return AyuSettings::ghost(id).markReadAfterActionChanges();
+					return AyuSettings::ghost(id).markReadAfterActionValue();
 				}) | rpl::flatten_latest()
 			)->toggledValue(
 			) | rpl::filter(
@@ -424,7 +424,7 @@ void BuildGhostEssentials(SectionBuilder &builder) {
 			scheduleButton->toggleOn(
 				state->selectedUserId.value()
 				| rpl::map([](uint64 id) {
-					return AyuSettings::ghost(id).useScheduledMessagesChanges();
+					return AyuSettings::ghost(id).useScheduledMessagesValue();
 				}) | rpl::flatten_latest()
 			)->toggledValue(
 			) | rpl::filter(
@@ -457,7 +457,7 @@ void BuildGhostEssentials(SectionBuilder &builder) {
 			silentButton->toggleOn(
 				state->selectedUserId.value()
 				| rpl::map([](uint64 id) {
-					return AyuSettings::ghost(id).sendWithoutSoundChanges();
+					return AyuSettings::ghost(id).sendWithoutSoundValue();
 				}) | rpl::flatten_latest()
 			)->toggledValue(
 			) | rpl::filter(

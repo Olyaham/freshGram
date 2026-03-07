@@ -844,9 +844,9 @@ void MainMenu::setupMenu() {
 	}
 
 	if (settings.showGhostToggleInDrawer()) {
-		auto ghostActiveChanges = AyuSettings::getInstance().useGlobalGhostModeChanges()
+		auto ghostActiveChanges = AyuSettings::getInstance().useGlobalGhostModeValue()
 			| rpl::map([controller = _controller](bool) {
-				return AyuSettings::ghost(&controller->session()).ghostModeActiveChanges();
+				return AyuSettings::ghost(&controller->session()).ghostModeActiveValue();
 			})
 			| rpl::flatten_latest();
 

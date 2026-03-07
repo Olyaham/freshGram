@@ -117,7 +117,7 @@ void BuildAvatarCorners(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 			container,
 			object_ptr<Ui::FlatLabel>(
 				container,
-				settings->avatarCornersChanges() | rpl::map(mapRadius),
+				settings->avatarCornersValue() | rpl::map(mapRadius),
 				st::settingsPremiumNewBadge),
 			st::ayuBetaBadgePadding);
 		badge->show();

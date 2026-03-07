@@ -105,9 +105,9 @@ void Tray::rebuildMenu() {
 	const auto &settings = AyuSettings::getInstance();
 
 	if (settings.showGhostToggleInTray()) {
-		auto ghostActiveChanges = AyuSettings::getInstance().useGlobalGhostModeChanges()
+		auto ghostActiveChanges = AyuSettings::getInstance().useGlobalGhostModeValue()
 			| rpl::map([](bool) {
-				return AyuSettings::ghost().ghostModeActiveChanges();
+				return AyuSettings::ghost().ghostModeActiveValue();
 			})
 			| rpl::flatten_latest();
 

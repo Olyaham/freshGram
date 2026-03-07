@@ -236,7 +236,7 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 		state->reorderLifetime.destroy();
 		const auto &list = session->data().chatsFilters().list();
 		auto includeMuted = Data::IncludeMutedCounterFoldersValue();
-		auto hideCounters = AyuSettings::getInstance().hideNotificationCountersChanges();
+		auto hideCounters = AyuSettings::getInstance().hideNotificationCountersValue();
 		for (auto i = 0; i < list.size(); i++) {
 			rpl::combine(
 				Data::UnreadStateValue(session, list[i].id()),
