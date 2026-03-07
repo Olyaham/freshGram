@@ -585,16 +585,6 @@ void BuildOther(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.setter = &AyuSettings::setDisableAds,
 		.keywords = { u"ads"_q, u"sponsored"_q },
 	});
-	const auto semiTransparent = ayu.addSettingToggle({
-		.id = u"ayu/translucentDeletedMessages"_q,
-		.title = tr::ayu_SemiTransparentDeletedMessages(),
-		.getter = &AyuSettings::semiTransparentDeletedMessages,
-		.setter = &AyuSettings::setSemiTransparentDeletedMessages,
-		.keywords = { u"semi-transparent"_q, u"transcluent"_q },
-	});
-	if (semiTransparent) {
-		ayu.addBetaBadge(semiTransparent);
-	}
 }
 
 const auto kMeta = BuildHelper({

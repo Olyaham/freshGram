@@ -9,6 +9,7 @@
 #include "lang_auto.h"
 #include "ayu/ayu_settings.h"
 #include "ayu/ui/boxes/edit_mark_box.h"
+#include "ayu/ui/components/message_preview.h"
 #include "ayu/ui/settings/ayu_builder.h"
 #include "ayu/ui/settings/settings_ayu_utils.h"
 #include "ayu/ui/settings/settings_main.h"
@@ -19,7 +20,6 @@
 #include "styles/style_menu_icons.h"
 #include "styles/style_settings.h"
 #include "ui/boxes/confirm_box.h"
-#include "ui/widgets/continuous_sliders.h"
 #include "ui/wrap/vertical_layout.h"
 #include "window/window_session_controller.h"
 
@@ -140,6 +140,7 @@ void BuildGroupsAndChannels(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 
 void BuildMarks(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	auto *settings = &AyuSettings::getInstance();
+	const auto controller = builder.controller();
 
 	builder.addSubsectionTitle({
 		.id = u"ayu/messages"_q,
@@ -147,40 +148,15 @@ void BuildMarks(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.keywords = { u"messages"_q, u"marks"_q },
 	});
 
-	builder.addButton({
-		.id = u"ayu/deletedMark"_q,
-		.title = tr::ayu_DeletedMarkText(),
-		.st = &st::settingsButtonNoIcon,
-		.label = AyuSettings::getInstance().deletedMarkChanges(),
-		.onClick = [=] {
-			auto box = Box<EditMarkBox>(
-				tr::ayu_DeletedMarkText(),
-				settings->deletedMark(),
-				QString("🧹"),
-				[=](const QString &value) {
-					AyuSettings::getInstance().setDeletedMark(value);
-				});
-			Ui::show(std::move(box));
-		},
-		.keywords = { u"deleted"_q, u"mark"_q },
-	});
-
-	builder.addButton({
-		.id = u"ayu/editedMark"_q,
-		.title = tr::ayu_EditedMarkText(),
-		.st = &st::settingsButtonNoIcon,
-		.label = AyuSettings::getInstance().editedMarkChanges(),
-		.onClick = [=] {
-			auto box = Box<EditMarkBox>(
-				tr::ayu_EditedMarkText(),
-				settings->editedMark(),
-				tr::lng_edited(tr::now),
-				[=](const QString &value) {
-					AyuSettings::getInstance().setEditedMark(value);
-				});
-			Ui::show(std::move(box));
-		},
-		.keywords = { u"edited"_q, u"mark"_q },
+	builder.add([=](const WidgetContext &ctx) -> SectionBuilder::WidgetToAdd {
+		return {
+			.widget = object_ptr<MessagePreview>(ctx.container, controller),
+			.margin = style::margins(
+				0,
+				st::defaultVerticalListSkip,
+				0,
+				st::settingsPrivacySkipTop),
+		};
 	});
 
 	ayu.addSettingToggle({
@@ -191,7 +167,52 @@ void BuildMarks(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.keywords = { u"icons"_q, u"marks"_q },
 	});
 
-	ayu.addSectionDivider();
+	builder.scope([&] {
+		builder.addButton({
+			.id = u"ayu/deletedMark"_q,
+			.title = tr::ayu_DeletedMarkText(),
+			.st = &st::settingsButtonNoIcon,
+			.label = AyuSettings::getInstance().deletedMarkChanges(),
+			.onClick = [=] {
+				auto box = Box<EditMarkBox>(
+					tr::ayu_DeletedMarkText(),
+					settings->deletedMark(),
+					QString("🧹"),
+					[=](const QString &value) {
+						AyuSettings::getInstance().setDeletedMark(value);
+					});
+				Ui::show(std::move(box));
+			},
+			.keywords = { u"deleted"_q, u"mark"_q },
+		});
+
+		builder.addButton({
+			.id = u"ayu/editedMark"_q,
+			.title = tr::ayu_EditedMarkText(),
+			.st = &st::settingsButtonNoIcon,
+			.label = AyuSettings::getInstance().editedMarkChanges(),
+			.onClick = [=] {
+				auto box = Box<EditMarkBox>(
+					tr::ayu_EditedMarkText(),
+					settings->editedMark(),
+					tr::lng_edited(tr::now),
+					[=](const QString &value) {
+						AyuSettings::getInstance().setEditedMark(value);
+					});
+				Ui::show(std::move(box));
+			},
+			.keywords = { u"edited"_q, u"mark"_q },
+		});
+	}, AyuSettings::getInstance().replaceBottomInfoWithIconsChanges()
+		| rpl::map([](bool v) { return !v; }));
+
+	ayu.addSettingToggle({
+		.id = u"ayu/removeMessageTail"_q,
+		.title = tr::ayu_RemoveMessageTail(),
+		.getter = &AyuSettings::removeMessageTail,
+		.setter = &AyuSettings::setRemoveMessageTail,
+		.keywords = { u"tail"_q, u"bubble"_q },
+	});
 
 	ayu.addSettingToggle({
 		.id = u"ayu/hideShareButton"_q,
@@ -207,6 +228,17 @@ void BuildMarks(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.setter = &AyuSettings::setSimpleQuotesAndReplies,
 		.keywords = { u"quotes"_q, u"replies"_q, u"simple"_q },
 	});
+
+	const auto semiTransparent = ayu.addSettingToggle({
+		.id = u"ayu/translucentDeletedMessages"_q,
+		.title = tr::ayu_SemiTransparentDeletedMessages(),
+		.getter = &AyuSettings::semiTransparentDeletedMessages,
+		.setter = &AyuSettings::setSemiTransparentDeletedMessages,
+		.keywords = { u"semi-transparent"_q, u"transcluent"_q },
+	});
+	if (semiTransparent) {
+		ayu.addBetaBadge(semiTransparent);
+	}
 
 	ayu.addSectionDivider();
 }

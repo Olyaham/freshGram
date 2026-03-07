@@ -197,6 +197,10 @@ set(ayugram_files
         ayu/ui/components/image_view.h
         ayu/ui/components/icon_picker.cpp
         ayu/ui/components/icon_picker.h
+        ayu/ui/components/avatar_corners_preview.cpp
+        ayu/ui/components/avatar_corners_preview.h
+        ayu/ui/components/message_preview.cpp
+        ayu/ui/components/message_preview.h
         ayu/ui/components/saved_music.cpp
         ayu/ui/components/saved_music.h
         ayu/libs/json.hpp
