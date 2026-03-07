@@ -58,7 +58,8 @@ IconPicker::IconPicker(QWidget *parent)
 	widthValue() | rpl::on_next([=](int w) {
 		const auto cell = w / kColumns;
 		const auto iconSize = st::iconPickerIconSize;
-		const auto h = rows * cell - (cell - iconSize);
+		const auto contentSize = iconSize + st::iconPickerImagePadding * 2;
+		const auto h = rows * cell - (cell - contentSize);
 		resize(w, h);
 	}, lifetime());
 }

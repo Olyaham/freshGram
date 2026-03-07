@@ -70,7 +70,6 @@ void BuildAppIcon(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 			.keywords = { u"icon"_q, u"app"_q, u"logo"_q },
 		};
 	});
-	builder.addSkip();
 
 #ifdef Q_OS_WIN
 	builder.addDivider();
