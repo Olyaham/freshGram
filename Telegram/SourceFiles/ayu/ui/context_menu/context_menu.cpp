@@ -702,6 +702,8 @@ void AddRepeatMessageAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
 				sendOptions.sendAs = nullptr;
 			}
 
+			applyGhostScheduling(session, sendOptions);
+
 			auto action = Api::SendAction(history, sendOptions);
 			action.clearDraft = false;
 
