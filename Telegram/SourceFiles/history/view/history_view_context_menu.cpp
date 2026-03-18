@@ -2079,11 +2079,11 @@ void AddSelectRestrictionAction(
 		st::historyHasCustomEmoji,
 		((addIcon && !user)
 			? st::historySponsoredAboutMenuLabelPosition
-			: st::historyHasCustomEmojiPosition,
+			: st::historyHasCustomEmojiPosition),
 		tr::ayu_UnforwardableContextMenuText(
 			tr::now,
 			tr::rich),
-		(addIcon && !user) ? &st::menuIconCopyright : nullptr));
+		(addIcon && !user) ? &st::menuIconCopyright : nullptr);
 	button->setAttribute(Qt::WA_TransparentForMouseEvents);
 	menu->addAction(std::move(button));
 }

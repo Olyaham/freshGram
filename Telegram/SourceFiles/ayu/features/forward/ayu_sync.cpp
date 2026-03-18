@@ -304,14 +304,15 @@ void sendVoiceSync(not_null<Main::Session*> session,
 			action.options,
 			action.replyTo,
 			action.replaceMediaOf);
-		session->api().fileLoader()->addTask(std::make_unique<FileLoadTask>(
-			session,
-			data,
-			duration,
-			QVector<signed char>(),
-			video,
-			to,
-			message.textWithTags));
+		session->api().fileLoader()->addTask(std::make_unique<FileLoadTask>(FileLoadTask::VoiceArgs{
+			.session = session,
+			.voice = data,
+			.duration = duration,
+			.waveform = QVector<signed char>(),
+			.video = video,
+			.to = to,
+			.caption = message.textWithTags
+		}));
 	});
 	waitForMsgSync(session, action);
 }
