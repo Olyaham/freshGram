@@ -508,7 +508,6 @@ void BuildGhostEssentials(SectionBuilder &builder) {
 			sctx.entries->push_back({
 				.id = u"ayu/ghostModeToggle"_q,
 				.title = tr::ayu_GhostModeToggle(tr::now),
-				.keywords = { u"ghost"_q, u"read"_q, u"online"_q, u"stealth"_q },
 				.section = sctx.sectionId,
 			});
 			sctx.entries->push_back({
@@ -519,13 +518,11 @@ void BuildGhostEssentials(SectionBuilder &builder) {
 			sctx.entries->push_back({
 				.id = u"ayu/useScheduledMessages"_q,
 				.title = tr::ayu_UseScheduledMessages(tr::now),
-				.keywords = { u"schedule"_q },
 				.section = sctx.sectionId,
 			});
 			sctx.entries->push_back({
 				.id = u"ayu/sendWithoutSound"_q,
 				.title = tr::ayu_SendWithoutSoundByDefault(tr::now),
-				.keywords = { u"silent"_q, u"sound"_q },
 				.section = sctx.sectionId,
 			});
 		});
@@ -533,25 +530,19 @@ void BuildGhostEssentials(SectionBuilder &builder) {
 }
 
 void BuildSpyEssentials(SectionBuilder &builder, AyuSectionBuilder &ayu) {
-	builder.addSubsectionTitle({
-		.id = u"ayu/spyEssentials"_q,
-		.title = tr::ayu_SpyEssentialsHeader(),
-		.keywords = { u"spy"_q, u"save"_q },
-	});
+	builder.addSubsectionTitle(tr::ayu_SpyEssentialsHeader());
 
 	ayu.addSettingToggle({
 		.id = u"ayu/saveDeletedMessages"_q,
 		.title = tr::ayu_SaveDeletedMessages(),
 		.getter = &AyuSettings::saveDeletedMessages,
 		.setter = &AyuSettings::setSaveDeletedMessages,
-		.keywords = { u"deleted"_q, u"save"_q },
 	});
 	ayu.addSettingToggle({
 		.id = u"ayu/saveMessagesHistory"_q,
 		.title = tr::ayu_SaveMessagesHistory(),
 		.getter = &AyuSettings::saveMessagesHistory,
 		.setter = &AyuSettings::setSaveMessagesHistory,
-		.keywords = { u"history"_q, u"edit"_q },
 	});
 
 	ayu.addSectionDivider();
@@ -561,36 +552,30 @@ void BuildSpyEssentials(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.title = tr::ayu_MessageSavingSaveForBots(),
 		.getter = &AyuSettings::saveForBots,
 		.setter = &AyuSettings::setSaveForBots,
-		.keywords = { u"bots"_q },
 	});
 }
 
 void BuildOther(SectionBuilder &builder, AyuSectionBuilder &ayu) {
-	builder.addSubsectionTitle({
-		.id = u"ayu/ghostOther"_q,
-		.title = tr::ayu_MessageSavingOtherHeader(),
-	});
+	builder.addSubsectionTitle(tr::ayu_MessageSavingOtherHeader());
 
 	ayu.addSettingToggle({
 		.id = u"ayu/localPremium"_q,
 		.title = tr::ayu_LocalPremium(),
 		.getter = &AyuSettings::localPremium,
 		.setter = &AyuSettings::setLocalPremium,
-		.keywords = { u"premium"_q },
 	});
 	ayu.addSettingToggle({
 		.id = u"ayu/disableAds"_q,
 		.title = tr::ayu_DisableAds(),
 		.getter = &AyuSettings::disableAds,
 		.setter = &AyuSettings::setDisableAds,
-		.keywords = { u"ads"_q, u"sponsored"_q },
 	});
 }
 
 const auto kMeta = BuildHelper({
 	.id = AyuGhost::Id(),
 	.parentId = AyuMain::Id(),
-	.title = &tr::ayu_AyuPreferences,
+	.title = u"AyuGram"_q,
 	.icon = &st::menuIconGroupReactions,
 }, [](SectionBuilder &builder) {
 	auto ayu = AyuSectionBuilder(builder);

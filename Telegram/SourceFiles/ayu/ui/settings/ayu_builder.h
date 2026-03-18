@@ -21,6 +21,7 @@ public:
 
 	struct SettingToggleArgs {
 		QString id;
+		QStringList altIds;
 		rpl::producer<QString> title;
 		BoolGetter getter;
 		BoolSetter setter;
@@ -32,6 +33,7 @@ public:
 
 	struct ToggleArgs {
 		QString id;
+		QStringList altIds;
 		rpl::producer<QString> title;
 		Fn<bool()> getter;
 		Fn<void(bool)> setter;
@@ -43,6 +45,7 @@ public:
 
 	struct CollapsibleToggleArgs {
 		QString id;
+		QStringList altIds;
 		rpl::producer<QString> title;
 		std::vector<NestedEntry> checkboxes;
 		bool toggledWhenAll = true;
@@ -52,6 +55,7 @@ public:
 
 	struct ChooseButtonArgs {
 		QString id;
+		QStringList altIds;
 		rpl::producer<QString> title;
 		rpl::producer<QString> boxTitle;
 		int initialSelection;
@@ -64,6 +68,7 @@ public:
 
 	struct SliderArgs {
 		QString id;
+		QStringList altIds;
 		rpl::producer<QString> title;
 		bool showTitle = true;
 		int steps;

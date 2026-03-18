@@ -45,18 +45,13 @@ void BuildFiltersSettings(SectionBuilder &builder) {
 	auto *settings = &AyuSettings::getInstance();
 
 	builder.addSkip();
-	builder.addSubsectionTitle({
-		.id = u"ayu/regexFilters"_q,
-		.title = tr::ayu_RegexFilters(),
-		.keywords = { u"regex"_q, u"filters"_q },
-	});
+	builder.addSubsectionTitle(tr::ayu_RegexFilters());
 
 	const auto enabledButton = builder.addButton({
 		.id = u"ayu/filtersEnabled"_q,
 		.title = tr::ayu_RegexFiltersEnable(),
 		.st = &st::settingsButtonNoIcon,
 		.toggled = rpl::single(settings->filtersEnabled()),
-		.keywords = { u"regex"_q, u"enable"_q },
 	});
 	if (enabledButton) {
 		enabledButton->toggledValue(
@@ -70,11 +65,11 @@ void BuildFiltersSettings(SectionBuilder &builder) {
 	}
 
 	const auto sharedButton = builder.addButton({
-		.id = u"ayu/filtersInChats"_q,
+		.id = u"ayu/filtersEnabledInChats"_q,
+		.altIds = { u"ayu/filtersInChats"_q },
 		.title = tr::ayu_RegexFiltersEnableSharedInChats(),
 		.st = &st::settingsButtonNoIcon,
 		.toggled = rpl::single(settings->filtersEnabledInChats()),
-		.keywords = { u"shared"_q, u"chats"_q },
 	});
 	if (sharedButton) {
 		sharedButton->toggledValue(
@@ -92,7 +87,6 @@ void BuildFiltersSettings(SectionBuilder &builder) {
 		.title = tr::ayu_FiltersHideFromBlocked(),
 		.st = &st::settingsButtonNoIcon,
 		.toggled = rpl::single(settings->hideFromBlocked()),
-		.keywords = { u"blocked"_q, u"hide"_q },
 	});
 	if (blockedButton) {
 		blockedButton->toggledValue(
@@ -122,7 +116,6 @@ void BuildShared(SectionBuilder &builder) {
 			controller->showExclude = false;
 			controller->showSettings(AyuFiltersList::Id());
 		},
-		.keywords = { u"shared"_q, u"filters"_q },
 	});
 }
 
@@ -130,7 +123,8 @@ void BuildShadowBan(SectionBuilder &builder) {
 	const auto controller = builder.controller();
 
 	builder.addButton({
-		.id = u"ayu/shadowBanList"_q,
+		.id = u"ayu/shadowBanIds"_q,
+		.altIds = { u"ayu/shadowBanList"_q },
 		.title = tr::ayu_FiltersShadowBan(),
 		.st = &st::settingsButtonNoIcon,
 		.onClick = [=] {
@@ -139,7 +133,6 @@ void BuildShadowBan(SectionBuilder &builder) {
 			controller->shadowBan = true;
 			controller->showSettings(AyuFiltersList::Id());
 		},
-		.keywords = { u"shadow"_q, u"ban"_q },
 	});
 }
 

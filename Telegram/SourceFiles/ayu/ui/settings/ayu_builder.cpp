@@ -53,6 +53,7 @@ Ui::SettingsButton *AyuSectionBuilder::addSettingToggle(
 	};
 	return addToggle({
 		.id = std::move(args.id),
+		.altIds = std::move(args.altIds),
 		.title = std::move(args.title),
 		.getter = std::move(getter),
 		.setter = std::move(setter),
@@ -69,6 +70,7 @@ Ui::SettingsButton *AyuSectionBuilder::addToggle(ToggleArgs &&args) {
 
 	const auto button = _builder.addButton({
 		.id = std::move(args.id),
+		.altIds = std::move(args.altIds),
 		.title = std::move(args.title),
 		.st = args.icon.icon ? nullptr : &st::settingsButtonNoIcon,
 		.icon = std::move(args.icon),
@@ -97,6 +99,7 @@ Fn<void()> AyuSectionBuilder::addCollapsibleToggle(
 	auto checkboxes = std::move(args.checkboxes);
 	auto toggledWhenAll = args.toggledWhenAll;
 	auto id = std::move(args.id);
+	auto altIds = std::move(args.altIds);
 	auto keywords = std::move(args.keywords);
 
 	Fn<void()> result;
@@ -119,6 +122,7 @@ Fn<void()> AyuSectionBuilder::addCollapsibleToggle(
 			if (!id.isEmpty()) {
 				sctx.entries->push_back({
 					.id = id,
+					.altIds = altIds,
 					.title = resolvedTitle,
 					.keywords = keywords,
 					.section = sctx.sectionId,
@@ -146,6 +150,7 @@ void AyuSectionBuilder::addChooseButton(ChooseButtonArgs &&args) {
 	auto setter = std::move(args.setter);
 	auto initialSelection = args.initialSelection;
 	auto id = std::move(args.id);
+	auto altIds = std::move(args.altIds);
 	auto keywords = std::move(args.keywords);
 	auto icon = std::move(args.icon);
 	auto resolvedTitle = ResolveTitle(rpl::duplicate(args.title));
@@ -166,6 +171,7 @@ void AyuSectionBuilder::addChooseButton(ChooseButtonArgs &&args) {
 			if (!id.isEmpty()) {
 				sctx.entries->push_back({
 					.id = id,
+					.altIds = altIds,
 					.title = resolvedTitle,
 					.keywords = keywords,
 					.section = sctx.sectionId,
@@ -177,6 +183,7 @@ void AyuSectionBuilder::addChooseButton(ChooseButtonArgs &&args) {
 
 void AyuSectionBuilder::addSlider(SliderArgs &&args) {
 	auto id = std::move(args.id);
+	auto altIds = std::move(args.altIds);
 	auto keywords = std::move(args.keywords);
 	auto resolvedTitle = ResolveTitle(rpl::duplicate(args.title));
 
@@ -238,6 +245,7 @@ void AyuSectionBuilder::addSlider(SliderArgs &&args) {
 			if (!id.isEmpty() && args.showTitle) {
 				sctx.entries->push_back({
 					.id = id,
+					.altIds = altIds,
 					.title = resolvedTitle,
 					.keywords = keywords,
 					.section = sctx.sectionId,

@@ -145,17 +145,34 @@ bool HandleSupport(
 	return true;
 }
 
-[[nodiscard]] ::Settings::Type SectionForSetting(
+struct ResolvedSetting {
+	QString controlId;
+	::Settings::Type section = ::Settings::AyuMain::Id();
+};
+
+[[nodiscard]] ResolvedSetting ResolveSetting(
 		const QString &controlId,
 		not_null<::Main::Session*> session) {
 	const auto &registry = ::Settings::Builder::SearchRegistry::Instance();
 	const auto entries = registry.collectAll(session);
 	for (const auto &entry : entries) {
-		if (entry.id == controlId && entry.section) {
-			return entry.section;
+		if (!entry.section) {
+			continue;
+		}
+		if (entry.id == controlId) {
+			return {
+				.controlId = entry.id,
+				.section = entry.section,
+			};
+		}
+		if (entry.altIds.contains(controlId)) {
+			return {
+				.controlId = entry.id,
+				.section = entry.section,
+			};
 		}
 	}
-	return ::Settings::AyuMain::Id();
+	return { .controlId = controlId };
 }
 
 bool HandleAyuSettings(
@@ -174,12 +191,11 @@ bool HandleAyuSettings(
 	if (settingName.isEmpty()) {
 		controller->showSettings(::Settings::AyuMain::Id());
 	} else {
-		const auto controlId = u"ayu/"_q + settingName;
-		controller->window().setHighlightControlId(controlId);
-		const auto section = SectionForSetting(
-			controlId,
+		const auto resolved = ResolveSetting(
+			u"ayu/"_q + settingName,
 			&controller->session());
-		controller->showSettings(section);
+		controller->window().setHighlightControlId(resolved.controlId);
+		controller->showSettings(resolved.section);
 	}
 	controller->window().activate();
 	return true;

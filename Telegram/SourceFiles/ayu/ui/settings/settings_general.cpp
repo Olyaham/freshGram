@@ -71,7 +71,6 @@ void BuildTranslator(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 					}));
 			}
 		},
-		.keywords = { u"translate"_q, u"translation"_q, u"provider"_q },
 	});
 	if (button) {
 		ayu.addBetaBadge(button);
@@ -94,7 +93,8 @@ void BuildShowPeerId(SectionBuilder &builder) {
 
 	const auto controller = builder.controller();
 	builder.addButton({
-		.id = u"ayu/showIdAndDc"_q,
+		.id = u"ayu/showPeerId"_q,
+		.altIds = { u"ayu/showIdAndDc"_q },
 		.title = tr::ayu_SettingsShowID(),
 		.st = &st::settingsButtonNoIcon,
 		.label = std::move(currentVal),
@@ -113,7 +113,6 @@ void BuildShowPeerId(SectionBuilder &builder) {
 					});
 				}));
 		},
-		.keywords = { u"peer"_q, u"id"_q },
 	});
 }
 
@@ -123,17 +122,14 @@ void BuildQoLToggles(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	BuildTranslator(builder, ayu);
 	ayu.addSectionDivider();
 
-	builder.addSubsectionTitle({
-		.id = u"ayu/generalSection"_q,
-		.title = tr::ayu_CategoryGeneral(),
-	});
+	builder.addSubsectionTitle(tr::ayu_CategoryGeneral());
 
 	ayu.addSettingToggle({
-		.id = u"ayu/hideStories"_q,
+		.id = u"ayu/disableStories"_q,
+		.altIds = { u"ayu/hideStories"_q },
 		.title = tr::ayu_DisableStories(),
 		.getter = &AyuSettings::disableStories,
 		.setter = &AyuSettings::setDisableStories,
-		.keywords = { u"stories"_q },
 	});
 
 	ayu.addCollapsibleToggle({
@@ -152,7 +148,6 @@ void BuildQoLToggles(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 			}
 		},
 		.toggledWhenAll = true,
-		.keywords = { u"similar"_q, u"channels"_q },
 	});
 
 	ayu.addSettingToggle({
@@ -160,7 +155,6 @@ void BuildQoLToggles(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.title = tr::ayu_DisableNotificationsDelay(),
 		.getter = &AyuSettings::disableNotificationsDelay,
 		.setter = &AyuSettings::setDisableNotificationsDelay,
-		.keywords = { u"notifications"_q, u"delay"_q },
 	});
 
 	ayu.addSectionDivider();
@@ -171,7 +165,6 @@ void BuildQoLToggles(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.title = tr::ayu_FilterZalgo(),
 		.st = &st::settingsButtonNoIcon,
 		.toggled = rpl::single(settings->filterZalgo()),
-		.keywords = { u"zalgo"_q, u"filter"_q },
 	});
 	if (zalgoButton) {
 		zalgoButton->toggledValue(
@@ -198,32 +191,26 @@ void BuildQoLToggles(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.title = tr::ayu_ImproveLinkPreviews(),
 		.getter = &AyuSettings::improveLinkPreviews,
 		.setter = &AyuSettings::setImproveLinkPreviews,
-		.keywords = { u"link"_q, u"preview"_q },
 	});
 	ayu.addSettingToggle({
-		.id = u"ayu/formatTimeWithSeconds"_q,
+		.id = u"ayu/showMessageSeconds"_q,
+		.altIds = { u"ayu/formatTimeWithSeconds"_q },
 		.title = tr::ayu_SettingsShowMessageSeconds(),
 		.getter = &AyuSettings::showMessageSeconds,
 		.setter = &AyuSettings::setShowMessageSeconds,
-		.keywords = { u"seconds"_q, u"time"_q },
 	});
 
 	BuildShowPeerId(builder);
 
 	ayu.addSectionDivider();
 
-	builder.addSubsectionTitle({
-		.id = u"ayu/webviewSection"_q,
-		.title = rpl::single(QString("Webview")),
-		.keywords = { u"webview"_q },
-	});
+	builder.addSubsectionTitle(rpl::single(QString("Webview")));
 
 	ayu.addSettingToggle({
 		.id = u"ayu/spoofWebviewAsAndroid"_q,
 		.title = tr::ayu_SettingsSpoofWebviewAsAndroid(),
 		.getter = &AyuSettings::spoofWebviewAsAndroid,
 		.setter = &AyuSettings::setSpoofWebviewAsAndroid,
-		.keywords = { u"webview"_q, u"android"_q, u"spoof"_q },
 	});
 
 	ayu.addCollapsibleToggle({
@@ -242,37 +229,29 @@ void BuildQoLToggles(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 			}
 		},
 		.toggledWhenAll = false,
-		.keywords = { u"webview"_q, u"window"_q, u"size"_q },
 	});
 
 	ayu.addSectionDivider();
 
-	builder.addSubsectionTitle({
-		.id = u"ayu/confirmationsSection"_q,
-		.title = tr::ayu_ConfirmationsTitle(),
-		.keywords = { u"confirmation"_q },
-	});
+	builder.addSubsectionTitle(tr::ayu_ConfirmationsTitle());
 
 	ayu.addSettingToggle({
 		.id = u"ayu/stickerConfirmation"_q,
 		.title = tr::ayu_StickerConfirmation(),
 		.getter = &AyuSettings::stickerConfirmation,
 		.setter = &AyuSettings::setStickerConfirmation,
-		.keywords = { u"sticker"_q, u"confirmation"_q },
 	});
 	ayu.addSettingToggle({
 		.id = u"ayu/gifConfirmation"_q,
 		.title = tr::ayu_GIFConfirmation(),
 		.getter = &AyuSettings::gifConfirmation,
 		.setter = &AyuSettings::setGifConfirmation,
-		.keywords = { u"gif"_q, u"confirmation"_q },
 	});
 	ayu.addSettingToggle({
 		.id = u"ayu/voiceConfirmation"_q,
 		.title = tr::ayu_VoiceConfirmation(),
 		.getter = &AyuSettings::voiceConfirmation,
 		.setter = &AyuSettings::setVoiceConfirmation,
-		.keywords = { u"voice"_q, u"confirmation"_q },
 	});
 }
 

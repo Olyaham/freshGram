@@ -104,37 +104,31 @@ void BuildCategories(SectionBuilder &builder) {
 		.title = rpl::single(QString("AyuGram")),
 		.targetSection = AyuGhost::Id(),
 		.icon = { &st::menuIconGroupReactions },
-		.keywords = { u"ghost"_q, u"ayugram"_q },
 	});
 	builder.addSectionButton({
 		.title = tr::ayu_CategoryFilters(),
 		.targetSection = AyuFilters::Id(),
 		.icon = { &st::menuIconTagFilter },
-		.keywords = { u"filters"_q, u"regex"_q },
 	});
 	builder.addSectionButton({
 		.title = tr::ayu_CategoryGeneral(),
 		.targetSection = AyuGeneral::Id(),
 		.icon = { &st::menuIconShowAll },
-		.keywords = { u"general"_q },
 	});
 	builder.addSectionButton({
 		.title = tr::ayu_CategoryAppearance(),
 		.targetSection = AyuAppearance::Id(),
 		.icon = { &st::menuIconPalette },
-		.keywords = { u"appearance"_q, u"theme"_q },
 	});
 	builder.addSectionButton({
 		.title = tr::ayu_CategoryChats(),
 		.targetSection = AyuChats::Id(),
 		.icon = { &st::menuIconChatBubble },
-		.keywords = { u"chats"_q, u"messages"_q },
 	});
 	builder.addSectionButton({
 		.title = tr::ayu_CategoryOther(),
 		.targetSection = AyuOther::Id(),
 		.icon = { &st::menuIconFave },
-		.keywords = { u"other"_q, u"donate"_q },
 	});
 }
 
@@ -148,6 +142,7 @@ void BuildLinks(SectionBuilder &builder) {
 	const auto controller = builder.controller();
 
 	builder.addButton({
+		.id = u"ayu/channel"_q,
 		.title = tr::ayu_LinksChannel(),
 		.icon = { &st::menuIconChannel },
 		.label = rpl::single(QString("@ayugram")),
@@ -158,6 +153,7 @@ void BuildLinks(SectionBuilder &builder) {
 		},
 	});
 	builder.addButton({
+		.id = u"ayu/chat"_q,
 		.title = tr::ayu_LinksChats(),
 		.icon = { &st::menuIconChats },
 		.label = rpl::single(QString("@ayugramchat")),
@@ -168,6 +164,7 @@ void BuildLinks(SectionBuilder &builder) {
 		},
 	});
 	builder.addButton({
+		.id = u"ayu/crowdin"_q,
 		.title = tr::ayu_LinksTranslate(),
 		.icon = { &st::menuIconTranslate },
 		.label = rpl::single(QString("Crowdin")),
@@ -177,6 +174,7 @@ void BuildLinks(SectionBuilder &builder) {
 		},
 	});
 	builder.addButton({
+		.id = u"ayu/website"_q,
 		.title = tr::ayu_LinksDocumentation(),
 		.icon = { &st::menuIconIpAddress },
 		.label = rpl::single(QString("docs.ayugram.one")),

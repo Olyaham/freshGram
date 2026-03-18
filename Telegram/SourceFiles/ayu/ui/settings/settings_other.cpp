@@ -169,7 +169,6 @@ void BuildDonations(SectionBuilder &builder) {
 			sctx.entries->push_back({
 				.id = u"ayu/donate"_q,
 				.title = tr::ayu_SupportHeader(tr::now),
-				.keywords = { u"donate"_q, u"support"_q, u"boosty"_q, u"crypto"_q },
 				.section = sctx.sectionId,
 			});
 		});
@@ -179,18 +178,15 @@ void BuildDonations(SectionBuilder &builder) {
 void BuildCrashReporting(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 #ifndef TDESKTOP_DISABLE_AUTOUPDATE
 	builder.addSkip();
-	builder.addSubsectionTitle({
-		.id = u"ayu/otherSection"_q,
-		.title = tr::ayu_CategoryOther(),
-	});
+	builder.addSubsectionTitle(tr::ayu_CategoryOther());
 
 	ayu.addSettingToggle({
-		.id = u"ayu/crashlytics"_q,
+		.id = u"ayu/crashReporting"_q,
+		.altIds = { u"ayu/crashlytics"_q },
 		.title = tr::ayu_CrashReporting(),
 		.getter = &AyuSettings::crashReporting,
 		.setter = &AyuSettings::setCrashReporting,
 		.icon = { &st::menuIconReport },
-		.keywords = { u"crash"_q, u"report"_q },
 	});
 	builder.addSkip();
 	builder.addDividerText(tr::ayu_CrashReportingDescription());
@@ -209,7 +205,6 @@ void BuildOtherThings(SectionBuilder &builder) {
 			Core::Application::RegisterUrlScheme();
 			controller->showToast(tr::lng_box_done(tr::now));
 		},
-		.keywords = { u"url"_q, u"scheme"_q, u"register"_q },
 	});
 	builder.addButton({
 		.id = u"ayu/resetSettings"_q,
@@ -226,7 +221,6 @@ void BuildOtherThings(SectionBuilder &builder) {
 				.confirmText = tr::lng_box_yes(),
 			}));
 		},
-		.keywords = { u"reset"_q, u"settings"_q },
 	});
 	builder.addSkip();
 }
