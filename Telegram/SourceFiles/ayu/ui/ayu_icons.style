@@ -17,6 +17,7 @@ ayuLReadMenuIcon: icon {{ "ayu/lread", menuIconColor }};
 ayuSReadMenuIcon: icon {{ "ayu/sread", menuIconColor }};
 ayuStreamerModeMenuIcon: icon {{ "ayu/streamer", menuIconColor }};
 ayuToBeginningMenuIcon: icon {{ "ayu/to_beginning", menuIconColor }};
+ayuRepeatMenuIcon: icon {{ "ayu/repeat", menuIconColor }};
 
 messageFieldAttachIcon: icon {{ "ayu/message_field/attach", menuIconColor }};
 messageFieldCommandsIcon: icon {{ "ayu/message_field/commands", menuIconColor }};

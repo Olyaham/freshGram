@@ -735,7 +735,7 @@ void AddRepeatMessageAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
 				session->api().forwardMessages(std::move(resolvedDraft), action, [] {});
 			}
 		},
-		&st::menuIconRestore);
+		&st::ayuRepeatMenuIcon);
 }
 
 void AddReadUntilAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
