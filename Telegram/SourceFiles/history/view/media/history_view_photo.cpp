@@ -360,7 +360,7 @@ void Photo::draw(Painter &p, const PaintContext &context) const {
 			p.setBrush(over ? st->msgDateImgBgOver() : st->msgDateImgBg());
 		}
 	}
-	if (paintInCenter) {
+	if (paintInCenter && !AyuFeatures::MessageShot::isTakingShot()) {
 		const auto radialOpacity = (radial && loaded && !_data->uploading())
 			? _animation->radial.opacity() :
 			1.;
@@ -796,7 +796,7 @@ void Photo::drawGrouped(
 		&& (radial
 			|| (!loaded && !_data->loading())
 			|| _data->waitingForAlbum());
-	if (paintInCenter) {
+	if (paintInCenter && !AyuFeatures::MessageShot::isTakingShot()) {
 		const auto radialOpacity = radial
 			? _animation->radial.opacity()
 			: 1.;

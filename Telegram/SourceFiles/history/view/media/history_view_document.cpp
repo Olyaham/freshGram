@@ -43,6 +43,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
+#include "ayu/features/message_shot/message_shot.h"
 
 
 namespace HistoryView {
@@ -685,7 +686,7 @@ void Document::draw(
 			FillThumbnailOverlay(p, rthumb, rounding, context);
 		}
 
-		if (radial || (!loaded && !_data->loading()) || _data->waitingForAlbum()) {
+		if ((radial || (!loaded && !_data->loading()) || _data->waitingForAlbum()) && !AyuFeatures::MessageShot::isTakingShot()) {
 			const auto backOpacity = (loaded && !_data->uploading()) ? radialOpacity : 1.;
 			p.setPen(Qt::NoPen);
 			p.setBrush(sti->msgDateImgBg);
@@ -1081,7 +1082,8 @@ void Document::drawCornerDownload(
 		LayoutMode mode) const {
 	if (dataLoaded()
 		|| _data->loadedInMediaCache()
-		|| !downloadInCorner()) {
+		|| !downloadInCorner()
+		|| AyuFeatures::MessageShot::isTakingShot()) {
 		return;
 	}
 	auto topMinus = isBubbleTop() ? 0 : st::msgFileTopMinus;
