@@ -2280,11 +2280,13 @@ void Controller::saveUsernamesOrder() {
 		_api.request(MTPchannels_DeactivateAllUsernames(
 			channel->inputChannel()
 		)).done([=] {
-			channel->setUsernames(channel->editableUsername().isEmpty()
-				? Data::Usernames()
-				: Data::Usernames{
+			if (channel->editableUsername().isEmpty()) {
+				channel->setUsernames({});
+			} else {
+				channel->setUsernames({
 					{ channel->editableUsername(), true, true }
 				});
+			}
 			continueSave();
 		}).send();
 	} else {
@@ -2740,9 +2742,12 @@ void Controller::saveForwards() {
 		|| *_savingData.noForwards == _peer->isAyuNoForwards()) {
 		return continueSave();
 	}
+	using Flag = MTPmessages_ToggleNoForwards::Flag;
 	_api.request(MTPmessages_ToggleNoForwards(
+		MTP_flags(Flag()),
 		_peer->input(),
-		MTP_bool(*_savingData.noForwards)
+		MTP_bool(*_savingData.noForwards),
+		MTPint()
 	)).done([=](const MTPUpdates &result) {
 		_peer->session().api().applyUpdates(result);
 		continueSave();
