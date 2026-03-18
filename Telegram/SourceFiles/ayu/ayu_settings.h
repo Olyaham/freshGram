@@ -228,10 +228,11 @@ public:
 	[[nodiscard]] static GhostModeAccountSettings &ghost(uint64 userId);
 	[[nodiscard]] static GhostModeAccountSettings &ghost();
 
-	[[nodiscard]] MessageShotSettings &messageShotSettings() { return _messageShotSettings; }
-	[[nodiscard]] const MessageShotSettings &messageShotSettings() const { return _messageShotSettings; }
 	[[nodiscard]] bool useGlobalGhostMode() const { return _useGlobalGhostMode.current(); }
 	void setUseGlobalGhostMode(bool val);
+
+	[[nodiscard]] MessageShotSettings &messageShotSettings() { return _messageShotSettings; }
+	[[nodiscard]] const MessageShotSettings &messageShotSettings() const { return _messageShotSettings; }
 
 	void addShadowBan(int64 id);
 	void removeShadowBan(int64 id);
