@@ -8,6 +8,8 @@
 
 #include "ui/userpic_view.h"
 
+#include <QRect>
+
 namespace Media::Streaming { struct FrameRequest; }
 
 namespace AyuUserpic {
@@ -23,6 +25,10 @@ void PaintShape(QPainter &p, int x, int y, int size);
 void PaintShape(QPainter &p, const QRectF &rect);
 
 [[nodiscard]] QPointF OnlineBadgePosition(int photoSize, double badgeSize, double stroke = 0);
+[[nodiscard]] QRect OnlineBadgeRect(
+	int photoSize,
+	int badgeSize,
+	int stroke = 0);
 
 void ApplyFrameRounding(
 	::Media::Streaming::FrameRequest &request,

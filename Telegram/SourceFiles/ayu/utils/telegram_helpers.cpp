@@ -994,25 +994,20 @@ static bool prependPseudoReplyImpl(
 			QString()
 		});
 
-		auto accessHash = uint64(0);
 		if (const auto user = from->asUser()) {
-			accessHash = user->accessHash();
-		} else if (const auto channel = from->asChannel()) {
-			accessHash = channel->accessHash();
-		}
+			if (const auto accessHash = user->accessHash()) {
+				const auto mentionData = QStringLiteral("%1.%2:%3")
+					.arg(user->id.value)
+					.arg(accessHash)
+					.arg(session->userId().bare);
 
-		if (accessHash != 0) {
-			const auto mentionData = QStringLiteral("%1.%2:%3")
-				.arg(from->id.value)
-				.arg(accessHash)
-				.arg(session->userId().bare);
-
-			newEntities.push_back(EntityInText{
-				EntityType::MentionName,
-				0,
-				nameLength,
-				mentionData
-			});
+				newEntities.push_back(EntityInText{
+					EntityType::MentionName,
+					0,
+					nameLength,
+					mentionData
+				});
+			}
 		}
 	}
 

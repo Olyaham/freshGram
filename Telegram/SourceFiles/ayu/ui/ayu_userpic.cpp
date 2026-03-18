@@ -11,6 +11,7 @@
 #include "media/streaming/media_streaming_common.h"
 #include "ui/image/image_prepare.h"
 #include "ui/style/style_core.h"
+#include "base/algorithm.h"
 
 #include <QRectF>
 
@@ -86,6 +87,15 @@ QPointF OnlineBadgePosition(int photoSize, double badgeSize, double stroke) {
 		: double(photoSize) - badgeSize;
 	const auto pos = std::min(edge - badgeSize / 2.0, maxPos);
 	return QPointF(pos, pos);
+}
+
+QRect OnlineBadgeRect(int photoSize, int badgeSize, int stroke) {
+	const auto pos = OnlineBadgePosition(photoSize, badgeSize, stroke);
+	return QRect(
+		int(base::SafeRound(pos.x())),
+		int(base::SafeRound(pos.y())),
+		badgeSize,
+		badgeSize);
 }
 
 void ApplyFrameRounding(
