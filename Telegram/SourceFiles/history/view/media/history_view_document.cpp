@@ -426,7 +426,7 @@ QSize Document::countOptimalSize() {
 		const auto history = _realParent->history();
 		const auto session = &history->session();
 		const auto transcribes = &session->api().transcribes();
-		if (_parent->data()->media()->ttlSeconds()
+		if ((_parent->data()->media() && _parent->data()->media()->ttlSeconds())
 			|| _realParent->isScheduled()
 			|| _realParent->isAdminLogEntry()
 			|| (!session->premium()

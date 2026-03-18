@@ -47,6 +47,12 @@ deletedIcon: IconEmoji{
     useIconColor: false;
 }
 
+burntIcon: IconEmoji{
+    icon: icon{{ "ayu/burnt", windowFg }};
+    padding: margins(0px, 0px, 0px, 0px);
+    useIconColor: false;
+}
+
 dialogsExteraOfficialIcon: ThreeStateIcon {
 	icon: icon {{ "ayu/dialogs_extera_official", dialogsVerifiedIconBg }};
 	over: icon {{ "ayu/dialogs_extera_official", dialogsVerifiedIconBgOver }};

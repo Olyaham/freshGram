@@ -739,11 +739,7 @@ void AddRepeatMessageAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
 }
 
 void AddReadUntilAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
-	if (item->isLocal() || item->isService() || item->out() || item->isDeleted()) {
-		return;
-	}
-
-	if (item->history()->peer->isSelf()) {
+	if (item->isLocal() || item->out() || item->isDeleted() || item->history()->peer->isSelf()) {
 		return;
 	}
 
@@ -754,11 +750,10 @@ void AddReadUntilAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
 
 	menu->addAction(
 		tr::ayu_ReadUntilMenuText(tr::now),
-		[=]()
+		[=]
 		{
 			readHistory(item);
-			if (item->media() && item->media()->ttlSeconds() <= 0 && item->unsupportedTTL() <= 0 && !item->out() && item
-				->isUnreadMedia()) {
+			if (item->media() && item->media()->ttlSeconds() <= 0 && item->unsupportedTTL() <= 0 && !item->out()) {
 				const auto ids = MTP_vector<MTPint>(1, MTP_int(item->id));
 				if (const auto channel = item->history()->peer->asChannel()) {
 					item->history()->session().api().request(MTPchannels_ReadMessageContents(
@@ -789,38 +784,19 @@ void AddBurnAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
 
 	menu->addAction(
 		tr::ayu_ExpireMediaContextMenuText(tr::now),
-		[=]()
+		[=]
 		{
 			const auto ids = MTP_vector<MTPint>(1, MTP_int(item->id));
-			const auto callback = [=]()
-			{
-				if (const auto window = Core::App().activeWindow()) {
-					if (const auto controller = window->sessionController()) {
-						controller->showToast(tr::lng_box_ok(tr::now));
-					}
-				}
-			};
 
-			if (const auto channel = item->history()->peer->asChannel()) {
-				item->history()->session().api().request(MTPchannels_ReadMessageContents(
-					channel->inputChannel(),
-					ids
-				)).done([=]()
-				{
-					callback();
-				}).send();
-			} else {
-				item->history()->session().api().request(MTPmessages_ReadMessageContents(
+			item->history()->session().api().request(MTPmessages_ReadMessageContents(
 					ids
 				)).done([=](const MTPmessages_AffectedMessages &result)
 				{
 					item->history()->session().api().applyAffectedMessages(
 						item->history()->peer,
 						result);
-					callback();
+					item->markContentsRead();
 				}).send();
-			}
-			item->markContentsRead();
 		},
 		&st::menuIconTTLAny);
 }

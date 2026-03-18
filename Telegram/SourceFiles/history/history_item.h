@@ -436,7 +436,8 @@ public:
 		bool isForumPost);
 	void setPostAuthor(const QString &author);
 	void setDeleted();
-	bool isDeleted() const;
+	[[nodiscard]] bool isDeleted() const;
+	[[nodiscard]] bool isBurnt() const;
 	[[nodiscard]] bool wasDeletedAnimated() const;
 	void markDeletedAnimated();
 	void applyTTL(TimeId destroyAt);

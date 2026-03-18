@@ -509,6 +509,10 @@ void BottomInfo::layoutDateText() {
 				.textColor = false,
 			})).append("  ");
 		}
+		if (_data.flags & Data::Flag::AyuBurnt) {
+			marked.append(Ui::Text::IconEmoji(&st::burntIcon));
+			marked.append(' ');
+		}
 		marked.append(full);
 		_authorEditedDate.setMarkedText(
 			st::msgDateTextStyle,
@@ -516,6 +520,15 @@ void BottomInfo::layoutDateText() {
 			Ui::NameTextOptions(),
 			helper.context());
 	} else {
+		TextWithEntities burnt;
+		if (_data.flags & Data::Flag::AyuBurnt) {
+			burnt = Ui::Text::IconEmoji(&st::burntIcon);
+			if (!(_data.flags & Data::Flag::AyuDeleted)
+				&& !(_data.flags & Data::Flag::Edited)) {
+				burnt.append(' ');
+			}
+		}
+
 		TextWithEntities deleted;
 		if (_data.flags & Data::Flag::AyuDeleted) {
 			deleted = Ui::Text::IconEmoji(&st::deletedIcon);
@@ -559,11 +572,11 @@ void BottomInfo::layoutDateText() {
 		if (_data.flags & Data::Flag::Sponsored) {
 			// ...
 		} else if (_data.flags & Data::Flag::Imported) {
-			full.append(deleted).append(date).append(' ').append(tr::lng_imported(tr::now));
+			full.append(burnt).append(deleted).append(date).append(' ').append(tr::lng_imported(tr::now));
 		} else if (name.isEmpty()) {
-			full.append(deleted).append(date);
+			full.append(burnt).append(deleted).append(date);
 		} else {
-			full.append(deleted).append(name).append(afterAuthor);
+			full.append(burnt).append(deleted).append(name).append(afterAuthor);
 		}
 
 		auto helper = Ui::Text::CustomEmojiHelper(
@@ -774,6 +787,9 @@ BottomInfo::Data BottomInfoDataFromMessage(not_null<Message*> message) {
 	}
 	if (item->isDeleted()) {
 		result.flags |= Flag::AyuDeleted;
+	}
+	if (item->isBurnt()) {
+		result.flags |= Flag::AyuBurnt;
 	}
 	if (!forwarded) {
 		return result;
