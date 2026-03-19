@@ -119,7 +119,7 @@ int mapItemFlagsToMTPFlags(not_null<HistoryItem*> item) {
 		flags |= kMessageFlagMention;
 	}
 
-	if (item->isUnreadMedia()) {
+	if (item->hasUnreadMediaFlag()) {
 		flags |= kMessageFlagContentUnread;
 	}
 

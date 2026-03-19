@@ -778,7 +778,7 @@ void AddReadUntilAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
 
 void AddBurnAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
 	if (!item->media() || (item->media()->ttlSeconds() <= 0 && item->unsupportedTTL() <= 0) || item->out() ||
-		!item->isUnreadMedia()) {
+		!item->hasUnreadMediaFlag()) {
 		return;
 	}
 

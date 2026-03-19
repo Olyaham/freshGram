@@ -358,12 +358,12 @@ void readHistory(not_null<HistoryItem*> message) {
 	}
 }
 
-QString formatTTL(int time) {
+QString formatTTL(int time, bool isDoc) {
 	if (time == 0x7FFFFFFF) {
-		return QString("👀 %1").arg(tr::ayu_OneViewTTL(tr::now));
+		return isDoc ? tr::ayu_OnePlayTTL(tr::now) : tr::ayu_OneViewTTL(tr::now);
 	}
 
-	return QString("🕓 %1s").arg(time);
+	return QString("%1s").arg(time);
 }
 
 QString getDCName(int dc) {

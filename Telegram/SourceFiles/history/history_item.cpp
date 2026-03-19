@@ -472,7 +472,7 @@ HistoryItem::HistoryItem(
 						}
 
 						const auto time = media.vttl_seconds()->v;
-						setAyuHint(formatTTL(time));
+						setAyuHint(formatTTL(time, false));
 						_unsupportedTTL = time;
 					},
 					[&](const MTPDmessageMediaDocument &media)
@@ -483,30 +483,10 @@ HistoryItem::HistoryItem(
 						}
 
 						const auto time = media.vttl_seconds()->v;
-						setAyuHint(formatTTL(time));
+						setAyuHint(formatTTL(time, true));
 						_unsupportedTTL = time;
 					},
-					[&](const MTPDmessageMediaWebPage &media)
-					{
-					},
-					[&](const MTPDmessageMediaGame &media)
-					{
-					},
-					[&](const MTPDmessageMediaInvoice &media)
-					{
-					},
-					[&](const MTPDmessageMediaPoll &media)
-					{
-					},
-					[&](const MTPDmessageMediaDice &media)
-					{
-					},
-					[&](const MTPDmessageMediaStory &media)
-					{
-					},
-					[&](const auto &)
-					{
-					});
+					[](const auto &) {});
 			}
 		}
 		auto textWithEntities = TextWithEntities{
@@ -1714,7 +1694,7 @@ bool HistoryItem::markContentsRead(bool fromThisClient) {
 		}
 		markReactionsRead();
 		return true;
-	} else if (isUnreadMention() || isIncomingUnreadMedia()) {
+	} else if (isUnreadMention() || isIncomingUnreadMedia() || (unsupportedTTL() && hasUnreadMediaFlag())) {
 		markMediaAndMentionRead();
 		return true;
 	}
@@ -3567,7 +3547,7 @@ bool HistoryItem::isDeleted() const {
 }
 
 bool HistoryItem::isBurnt() const {
-	return ((media() && media()->ttlSeconds()) || unsupportedTTL()) && !isUnreadMedia();
+	return ((media() && media()->ttlSeconds()) || unsupportedTTL()) && !hasUnreadMediaFlag();
 }
 
 bool HistoryItem::wasDeletedAnimated() const {
