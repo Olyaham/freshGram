@@ -348,6 +348,19 @@ bool hasDeletedMessages(ID userId, ID dialogId, ID topicId) {
 	}
 }
 
+void clearDeletedMessages(ID userId, ID dialogId, ID topicId) {
+	try {
+		storage.remove_all<DeletedMessage>(
+			where(
+				column<DeletedMessage>(&DeletedMessage::userId) == userId and
+				column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId and
+				(column<DeletedMessage>(&DeletedMessage::topicId) == topicId or topicId == 0)
+			)
+		);
+	} catch (std::exception &) {
+	}
+}
+
 template<typename T>
 std::vector<T> getAllT() {
 	try {

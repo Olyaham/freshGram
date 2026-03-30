@@ -29,6 +29,7 @@
 #include "data/data_search_controller.h"
 #include "data/data_session.h"
 #include "data/data_user.h"
+#include "history/history.h"
 #include "history/history_item_components.h"
 #include "history/view/history_view_context_menu.h"
 #include "history/view/history_view_element.h"
@@ -45,6 +46,33 @@
 namespace AyuUi {
 
 namespace {
+
+Fn<void()> ClearDeletedMessagesHandler(not_null<Window::SessionController*> controller, not_null<PeerData*> peer, ID topicId) {
+	return [=] {
+		controller->show(Ui::MakeConfirmBox({
+			.text = tr::ayu_ClearDeletedMessagesText(tr::now),
+			.confirmed = [=](Fn<void()> &&close) {
+				auto items = std::vector<not_null<HistoryItem*>>();
+				for (const auto &block : peer->owner().history(peer)->blocks) {
+					for (const auto &view : block->messages) {
+						const auto item = view->data();
+						if (item->isDeleted() && (!topicId || (item->topicRootId().bare == topicId))) {
+							items.push_back(item);
+						}
+					}
+				}
+				AyuMessages::clearDeletedMessages(peer, topicId);
+				for (const auto item : items) {
+					item->destroy();
+				}
+				close();
+			},
+			.confirmText = tr::ayu_ClearDeletedMessagesActionText(tr::now),
+			.cancelText = tr::lng_cancel(),
+			.confirmStyle = &st::attentionBoxButton,
+		}));
+	};
+}
 
 void DeleteMyMessagesAfterConfirm(not_null<PeerData*> peer) {
 	const auto session = &peer->session();
@@ -211,6 +239,10 @@ void AddDeletedMessagesActions(PeerData *peerData,
 				->showSection(std::make_shared<MessageHistory::SectionMemento>(peerData, nullptr, topicId));
 		},
 		&st::menuIconArchive);
+	addCallback(
+		tr::ayu_ClearDeletedMenuText(tr::now),
+		ClearDeletedMessagesHandler(sessionController, peerData, topicId),
+		&st::menuIconDelete);
 	// todo view filters
 }
 
