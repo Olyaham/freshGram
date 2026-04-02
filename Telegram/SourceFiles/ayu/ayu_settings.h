@@ -186,6 +186,7 @@ public:
 	[[nodiscard]] bool showBackground() const { return _showBackground.current(); }
 	[[nodiscard]] bool showDate() const { return _showDate.current(); }
 	[[nodiscard]] bool showReactions() const { return _showReactions.current(); }
+	[[nodiscard]] bool showHeaderDecorations() const { return _showHeaderDecorations.current(); }
 	[[nodiscard]] bool showColorfulReplies() const { return _showColorfulReplies.current(); }
 	[[nodiscard]] bool revealSpoilers() const { return _revealSpoilers.current(); }
 	[[nodiscard]] int embeddedThemeType() const { return _embeddedThemeType.current(); }
@@ -199,6 +200,7 @@ public:
 	void setShowBackground(bool val);
 	void setShowDate(bool val);
 	void setShowReactions(bool val);
+	void setShowHeaderDecorations(bool val);
 	void setShowColorfulReplies(bool val);
 	void setRevealSpoilers(bool val);
 
@@ -217,6 +219,7 @@ private:
 	rpl::variable<bool> _showBackground = true;
 	rpl::variable<bool> _showDate = false;
 	rpl::variable<bool> _showReactions = false;
+	rpl::variable<bool> _showHeaderDecorations = true;
 	rpl::variable<bool> _showColorfulReplies = true;
 	rpl::variable<bool> _revealSpoilers = true;
 

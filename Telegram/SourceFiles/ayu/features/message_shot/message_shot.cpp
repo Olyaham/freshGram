@@ -63,7 +63,9 @@ bool ignoreRender(RenderPart part) {
 	const auto &s = AyuSettings::getInstance().messageShotSettings();
 	return isTakingShot()
 		&& ((part == RenderPart::Date && !s.showDate())
-			|| (part == RenderPart::Reactions && !s.showReactions()));
+			|| (part == RenderPart::Reactions && !s.showReactions())
+			|| (part == RenderPart::HeaderDecorations
+				&& !s.showHeaderDecorations()));
 }
 
 bool isTakingShot() {

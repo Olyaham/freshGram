@@ -8314,6 +8314,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_MessageShotShowBackground" = "Show background";
 "ayu_MessageShotShowDate" = "Show date";
 "ayu_MessageShotShowReactions" = "Show reactions";
+"ayu_MessageShotShowHeaderDecorations" = "Show header decorations";
 "ayu_MessageShotShowColorfulReplies" = "Show colorful replies";
 "ayu_MessageShotRevealSpoilers" = "Reveal spoilers";
 "ayu_SendAsSticker" = "Send as Sticker";
