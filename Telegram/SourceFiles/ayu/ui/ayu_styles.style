@@ -65,6 +65,10 @@ exteraBadgeToast: Toast(defaultToast) {
 	padding: margins(54px, 13px, 19px, 12px);
 }
 
+exteraBadgeToastBadge: InfoPeerBadge(infoPeerBadge) {
+	premiumFg: toastFg;
+}
+
 supportLogoSize: 96px;
 
 unreadPillPadding: 12px;
