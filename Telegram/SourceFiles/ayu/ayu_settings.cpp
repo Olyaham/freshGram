@@ -16,8 +16,8 @@
 #include "features/translator/ayu_translator.h"
 #include "main/main_domain.h"
 #include "main/main_session.h"
+#include "platform/platform_translate_provider.h"
 #include "rpl/combine.h"
-#include "ui/ayu_userpic.h"
 #include "window/window_controller.h"
 
 #include <fstream>
@@ -453,9 +453,9 @@ void AyuSettings::validate() {
 		}
 	};
 
-	auto validateEnum = [&](auto &var, const auto &defaultVar) {
+	auto validateEnum = [&](auto &var, const auto &defaultVar, int max = 2) {
 		auto intVal = static_cast<int>(var.current());
-		if (intVal < 0 || intVal > 2) {
+		if (intVal < 0 || intVal > max) {
 			var = defaultVar.current();
 			modified = true;
 		}
@@ -471,7 +471,12 @@ void AyuSettings::validate() {
 	validateEnum(_showRepeatMessageInContextMenu, defaults._showRepeatMessageInContextMenu);
 	validateEnum(_showAddFilterInContextMenu, defaults._showAddFilterInContextMenu);
 
-	validateEnum(_translationProvider, defaults._translationProvider);
+	validateEnum(_translationProvider, defaults._translationProvider, 3);
+	if ((_translationProvider.current() == TranslationProvider::Native)
+		&& !Platform::IsTranslateProviderAvailable()) {
+		_translationProvider = defaults._translationProvider.current();
+		modified = true;
+	}
 
 	validateRange(_messageBubbleRadius, 0, 16, defaults._messageBubbleRadius);
 	validateRange(_wideMultiplier, 0.5, 4.0, defaults._wideMultiplier);
@@ -953,9 +958,15 @@ void AyuSettings::setVoiceConfirmation(bool val) {
 }
 
 void AyuSettings::setTranslationProvider(TranslationProvider val) {
+	if ((val == TranslationProvider::Native)
+		&& !Platform::IsTranslateProviderAvailable()) {
+		val = TranslationProvider::Telegram;
+	}
 	if (_translationProvider.current() == val) return;
 	_translationProvider = val;
-	Ayu::Translator::TranslateManager::currentInstance()->resetCache();
+	if (const auto manager = Ayu::Translator::TranslateManager::currentInstance()) {
+		manager->resetCache();
+	}
 	save();
 }
 

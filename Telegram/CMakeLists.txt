@@ -229,14 +229,14 @@ set(ayugram_files
         ayu/features/forward/ayu_sync.h
         ayu/features/translator/ayu_translator.cpp
         ayu/features/translator/ayu_translator.h
+        ayu/features/translator/ayu_translate_provider.cpp
+        ayu/features/translator/ayu_translate_provider.h
         ayu/features/translator/html_parser.cpp
         ayu/features/translator/html_parser.h
         ayu/features/translator/implementations/google.cpp
         ayu/features/translator/implementations/google.h
         ayu/features/translator/implementations/yandex.cpp
         ayu/features/translator/implementations/yandex.h
-        ayu/features/translator/implementations/telegram.cpp
-        ayu/features/translator/implementations/telegram.h
         ayu/features/translator/implementations/base.cpp
         ayu/features/translator/implementations/base.h
         ayu/features/filters/filters_controller.cpp

@@ -42,6 +42,7 @@ enum class TranslationProvider {
 	Telegram = 0,
 	Google = 1,
 	Yandex = 2,
+	Native = 3,
 };
 
 NLOHMANN_JSON_SERIALIZE_ENUM(PeerIdDisplay, {
@@ -66,6 +67,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM(TranslationProvider, {
 	{TranslationProvider::Telegram, "telegram"},
 	{TranslationProvider::Google, "google"},
 	{TranslationProvider::Yandex, "yandex"},
+	{TranslationProvider::Native, "native"},
 })
 
 class GhostModeAccountSettings {

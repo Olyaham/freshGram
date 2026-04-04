@@ -24,10 +24,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/multi_select.h"
 #include "ui/text/text_utilities.h"
 
-// AyuGram includes
-#include "ayu/features/translator/ayu_translator.h"
-
-
 namespace Ui {
 namespace {
 

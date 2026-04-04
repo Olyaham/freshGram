@@ -25,7 +25,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "spellcheck/platform/platform_language.h"
 
 // AyuGram includes
-#include "ayu/features/translator/ayu_translator.h"
+#include "ayu/ayu_settings.h"
 
 
 namespace HistoryView {
@@ -81,6 +81,11 @@ void TranslateTracker::setup() {
 				migrated->translateTo({});
 			}
 		}
+	}, _lifetime);
+
+	AyuSettings::getInstance().translationProviderChanges(
+	) | rpl::on_next([=](TranslationProvider) {
+		resetProvider();
 	}, _lifetime);
 }
 
@@ -246,6 +251,32 @@ void TranslateTracker::cancelSentRequest() {
 		}
 		++_requestToken;
 		_requestInProcess = false;
+	}
+}
+
+void TranslateTracker::resetProvider() {
+	cancelToRequest();
+	cancelSentRequest();
+	_provider = Ui::CreateTranslateProvider(&_history->session());
+	invalidateTranslations();
+}
+
+void TranslateTracker::invalidateTranslations() {
+	const auto clear = [&](not_null<History*> history) {
+		for (const auto &block : history->blocks) {
+			for (const auto &view : block->messages) {
+				const auto item = view->data();
+				if (!item->Has<HistoryMessageTranslation>()) {
+					continue;
+				}
+				item->removeTranslationBit();
+				history->owner().requestItemTextRefresh(item);
+			}
+		}
+	};
+	clear(_history);
+	if (const auto migrated = _history->migrateFrom()) {
+		clear(migrated);
 	}
 }
 
