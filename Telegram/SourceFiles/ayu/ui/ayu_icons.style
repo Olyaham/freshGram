@@ -8,6 +8,7 @@
  */
 
 using "ui/colors.palette";
+using "ui/chat/chat.style";
 using "ui/widgets/widgets.style";
 using "dialogs/dialogs.style";
 
@@ -71,3 +72,8 @@ dialogsExteraSupporterIcon: ThreeStateIcon {
 	over: icon {{ "ayu/dialogs_extera_supporter", dialogsVerifiedIconBgOver }};
 	active: icon {{ "ayu/dialogs_extera_supporter", dialogsVerifiedIconBgActive }};
 }
+
+ayuHistoryFileInPlugin: icon {{ "ayu/history_file_plugin", historyFileInIconFg }};
+ayuHistoryFileInPluginSelected: icon {{ "ayu/history_file_plugin", historyFileInIconFgSelected }};
+ayuHistoryFileOutPlugin: icon {{ "ayu/history_file_plugin", historyFileOutIconFg }};
+ayuHistoryFileOutPluginSelected: icon {{ "ayu/history_file_plugin", historyFileOutIconFgSelected }};
