@@ -50,6 +50,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtCore/QJsonDocument>
 #include <QtGui/QGuiApplication>
 
+// AyuGram includes
+#include "ayu/ui/settings/settings_main.h"
+#include "settings/settings_builder.h"
+
+
 namespace Settings {
 namespace {
 
@@ -58,6 +63,11 @@ const auto kOptionsClipboardPrefix = u"tdesktop-flags:"_q;
 struct DecodeOptionsResult {
 	bool ok = false;
 	QString json;
+};
+
+struct ResolvedReferrer {
+	QString controlId;
+	Type section = AyuMain::Id();
 };
 
 [[nodiscard]] QString EncodeOptionsToText(const QString &json) {
@@ -96,8 +106,52 @@ struct DecodeOptionsResult {
 	return result;
 }
 
+[[nodiscard]] ResolvedReferrer ResolveReferrer(
+		const QString &controlId,
+		not_null<Main::Session*> session) {
+	const auto &registry = Builder::SearchRegistry::Instance();
+	const auto entries = registry.collectAll(session);
+	for (const auto &entry : entries) {
+		if (!entry.section) {
+			continue;
+		}
+		if (entry.id == controlId) {
+			return {
+				.controlId = entry.id,
+				.section = entry.section,
+			};
+		}
+		if (entry.altIds.contains(controlId)) {
+			return {
+				.controlId = entry.id,
+				.section = entry.section,
+			};
+		}
+	}
+	return {
+		.controlId = controlId,
+	};
+}
+
+[[nodiscard]] QString OptionReferrer(const base::options::option<bool> &option) {
+	const auto &id = option.id();
+	if (id == u"tabbed-panel-show-on-click"_q) {
+		return u"ayu/showEmojiPopup"_q;
+	} else if (id == u"show-peer-id-below-about"_q) {
+		return u"ayu/showPeerId"_q;
+	} else if (id == u"use-small-msg-bubble-radius"_q) {
+		return u"ayu/messageBubbleRadius"_q;
+	} else if (id == u"unlimited-recent-stickers"_q) {
+		return u"ayu/recentStickersCount"_q;
+	} else if (id == u"hide-ai-button"_q) {
+		return u"ayu/showAiEditorButtonInMessageField"_q;
+	}
+	return QString();
+}
+
 void AddOption(
 		not_null<Window::Controller*> window,
+		not_null<Window::SessionController*> controller,
 		not_null<Ui::VerticalLayout*> container,
 		base::options::option<bool> &option,
 		rpl::producer<> resetClicks,
@@ -114,15 +168,34 @@ void AddOption(
 		toggles->fire_copy(option.value());
 	}, lifetime);
 
-	const auto button = container->add(object_ptr<Button>(
-		container,
-		rpl::single(name),
-		(option.relevant()
-			? st::settingsButtonNoIcon
-			: st::settingsOptionDisabled)
-	))->toggleOn(toggles->events_starting_with(option.value()));
+	const auto referrer = OptionReferrer(option);
+	Button *button = nullptr;
+	if (!referrer.isEmpty()) {
+		button = container->add(object_ptr<Button>(
+			container,
+			rpl::single(name),
+			st::settingsButtonNoIcon));
+		button->addClickHandler([=] {
+			const auto resolved = ResolveReferrer(
+				referrer,
+				&controller->session());
+			controller->setHighlightControlId(resolved.controlId);
+			controller->showSettings(resolved.section);
+			window->activate();
+		});
+	} else {
+		button = container->add(object_ptr<Button>(
+			container,
+			rpl::single(name),
+			(option.relevant()
+				? st::settingsButtonNoIcon
+				: st::settingsOptionDisabled)
+		))->toggleOn(toggles->events_starting_with(option.value()));
+	}
 
-	const auto restarter = (option.relevant() && option.restartRequired())
+	const auto restarter = (referrer.isEmpty()
+		&& option.relevant()
+		&& option.restartRequired())
 		? button->lifetime().make_state<base::Timer>()
 		: nullptr;
 	if (restarter) {
@@ -135,19 +208,21 @@ void AddOption(
 			}));
 		});
 	}
-	button->toggledChanges(
-	) | rpl::on_next([=, &option](bool toggled) {
-		if (!option.relevant() && toggled != option.defaultValue()) {
-			toggles->fire_copy(option.defaultValue());
-			window->showToast(
-				tr::lng_settings_experimental_irrelevant(tr::now));
-			return;
-		}
-		option.set(toggled);
-		if (restarter) {
-			restarter->callOnce(st::settingsButtonNoIcon.toggle.duration);
-		}
-	}, container->lifetime());
+	if (referrer.isEmpty()) {
+		button->toggledChanges(
+		) | rpl::on_next([=, &option](bool toggled) {
+			if (!option.relevant() && toggled != option.defaultValue()) {
+				toggles->fire_copy(option.defaultValue());
+				window->showToast(
+					tr::lng_settings_experimental_irrelevant(tr::now));
+				return;
+			}
+			option.set(toggled);
+			if (restarter) {
+				restarter->callOnce(st::settingsButtonNoIcon.toggle.duration);
+			}
+		}, container->lifetime());
+	}
 
 	const auto &description = option.description();
 	if (!description.isEmpty()) {
@@ -159,6 +234,7 @@ void AddOption(
 
 void SetupExperimental(
 		not_null<Window::Controller*> window,
+		not_null<Window::SessionController*> controller,
 		not_null<Ui::VerticalLayout*> container,
 		rpl::producer<> reloadOptionsRequests) {
 	Ui::AddSkip(container, st::settingsCheckboxesSkip);
@@ -196,6 +272,7 @@ void SetupExperimental(
 	const auto addToggle = [&](const char name[]) {
 		AddOption(
 			window,
+			controller,
 			container,
 			base::options::lookup<bool>(name),
 			(reset
@@ -204,13 +281,13 @@ void SetupExperimental(
 			rpl::duplicate(reloadOptionsRequests));
 	};
 
-	// addToggle(ChatHelpers::kOptionTabbedPanelShowOnClick);
+	addToggle(ChatHelpers::kOptionTabbedPanelShowOnClick);
 	addToggle(Dialogs::kOptionForumHideChatsList);
 	addToggle(Dialogs::Ui::kOptionDialogsMuteIcon);
 	addToggle(Core::kOptionFractionalScalingEnabled);
 	addToggle(Core::kOptionHighDpiDownscale);
 	addToggle(Window::kOptionViewProfileInChatsListContextMenu);
-	// addToggle(Info::Profile::kOptionShowPeerIdBelowAbout);
+	addToggle(Info::Profile::kOptionShowPeerIdBelowAbout);
 	addToggle(Info::Profile::kOptionShowChannelJoinedBelowAbout);
 	addToggle(Ui::kOptionUseSmallMsgBubbleRadius);
 	addToggle(Media::Player::kOptionDisableAutoplayNext);
@@ -290,6 +367,7 @@ void Experimental::setupContent() {
 
 	SetupExperimental(
 		&controller()->window(),
+		controller(),
 		content,
 		_reloadOptionsRequests.events());
 

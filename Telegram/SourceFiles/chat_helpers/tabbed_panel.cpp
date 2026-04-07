@@ -30,7 +30,6 @@ base::options::toggle TabbedPanelShowOnClick({
 	.id = kOptionTabbedPanelShowOnClick,
 	.name = "Show tabbed panel by click",
 	.description = "Show Emoji / Stickers / GIFs panel only after a click.",
-	.scope = static_cast<base::options::details::ScopeFlag>(0),
 });
 
 } // namespace
@@ -38,7 +37,7 @@ base::options::toggle TabbedPanelShowOnClick({
 const char kOptionTabbedPanelShowOnClick[] = "tabbed-panel-show-on-click";
 
 bool ShowPanelOnClick() {
-	return TabbedPanelShowOnClick.value();
+	return !AyuSettings::getInstance().showEmojiPopup();
 }
 
 TabbedPanel::TabbedPanel(
@@ -487,7 +486,7 @@ void TabbedPanel::showStarted() {
 bool TabbedPanel::eventFilter(QObject *obj, QEvent *e) {
 	const auto &settings = AyuSettings::getInstance();
 
-	if (TabbedPanelShowOnClick.value() || !settings.showEmojiPopup()) {
+	if (!settings.showEmojiPopup()) {
 		return false;
 	} else if (e->type() == QEvent::Enter) {
 		otherEnter();
