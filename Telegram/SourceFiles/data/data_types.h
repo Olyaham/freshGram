@@ -365,6 +365,8 @@ enum class MessageFlag : uint64 {
 	CanBeSummarized       = (1ULL << 58),
 	HasUnreadPollVote     = (1ULL << 59),
 
+	TextAppearing         = (1ULL << 60),
+
 	AyuNoForwards         = (1ULL << 63),
 };
 inline constexpr bool is_flag_type(MessageFlag) { return true; }
