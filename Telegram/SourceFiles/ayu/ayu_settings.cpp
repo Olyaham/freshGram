@@ -777,6 +777,12 @@ void AyuSettings::setShowAutoDeleteButtonInMessageField(bool val) {
 	save();
 }
 
+void AyuSettings::setShowGiftButtonInMessageField(bool val) {
+	if (_showGiftButtonInMessageField.current() == val) return;
+	_showGiftButtonInMessageField = val;
+	save();
+}
+
 void AyuSettings::setShowAiEditorButtonInMessageField(bool val) {
 	if (_showAiEditorButtonInMessageField.current() == val) return;
 	_showAiEditorButtonInMessageField = val;
@@ -1063,6 +1069,7 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"showEmojiButtonInMessageField", s._showEmojiButtonInMessageField.current()},
 		{"showMicrophoneButtonInMessageField", s._showMicrophoneButtonInMessageField.current()},
 		{"showAutoDeleteButtonInMessageField", s._showAutoDeleteButtonInMessageField.current()},
+		{"showGiftButtonInMessageField", s._showGiftButtonInMessageField.current()},
 		{"showAiEditorButtonInMessageField", s._showAiEditorButtonInMessageField.current()},
 		{"showAttachPopup", s._showAttachPopup.current()},
 		{"showEmojiPopup", s._showEmojiPopup.current()},
@@ -1162,6 +1169,7 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._showEmojiButtonInMessageField = j.value("showEmojiButtonInMessageField", defaults._showEmojiButtonInMessageField.current());
 	s._showMicrophoneButtonInMessageField = j.value("showMicrophoneButtonInMessageField", defaults._showMicrophoneButtonInMessageField.current());
 	s._showAutoDeleteButtonInMessageField = j.value("showAutoDeleteButtonInMessageField", defaults._showAutoDeleteButtonInMessageField.current());
+	s._showGiftButtonInMessageField = j.value("showGiftButtonInMessageField", defaults._showGiftButtonInMessageField.current());
 	s._showAiEditorButtonInMessageField = j.value("showAiEditorButtonInMessageField", defaults._showAiEditorButtonInMessageField.current());
 	s._showAttachPopup = j.value("showAttachPopup", defaults._showAttachPopup.current());
 	s._showEmojiPopup = j.value("showEmojiPopup", defaults._showEmojiPopup.current());

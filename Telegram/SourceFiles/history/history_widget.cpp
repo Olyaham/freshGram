@@ -541,7 +541,7 @@ HistoryWidget::HistoryWidget(
 			_ttlInfo->setVisible(!hide && settings.showAutoDeleteButtonInMessageField());
 		}
 		if (_giftToUser) {
-			_giftToUser->setVisible(!hide);
+			_giftToUser->setVisible(!hide && settings.showGiftButtonInMessageField());
 		}
 		if (_scheduled) {
 			_scheduled->setVisible(!hide);
@@ -833,12 +833,14 @@ HistoryWidget::HistoryWidget(
 		AyuSettings::getInstance().showEmojiButtonInMessageFieldChanges() | rpl::to_empty,
 		AyuSettings::getInstance().showMicrophoneButtonInMessageFieldChanges() | rpl::to_empty,
 		AyuSettings::getInstance().showAutoDeleteButtonInMessageFieldChanges() | rpl::to_empty,
+		AyuSettings::getInstance().showGiftButtonInMessageFieldChanges() | rpl::to_empty,
 		AyuSettings::getInstance().showAiEditorButtonInMessageFieldChanges() | rpl::to_empty,
 		AyuSettings::getInstance().showAttachPopupChanges() | rpl::to_empty,
 		AyuSettings::getInstance().showEmojiPopupChanges() | rpl::to_empty,
 		AyuSettings::getInstance().channelBottomButtonChanges() | rpl::to_empty,
 		AyuSettings::getInstance().removeMessageTailChanges() | rpl::to_empty
 	) | rpl::on_next([=] {
+		refreshSendGiftToggle();
 		refreshAttachBotsMenu();
 		updateHistoryGeometry();
 		updateControlsVisibility();
@@ -3415,6 +3417,8 @@ void HistoryWidget::refreshScheduledToggle() {
 
 void HistoryWidget::refreshSendGiftToggle() {
 	using Type = Api::DisallowedGiftType;
+
+	const auto &settings = AyuSettings::getInstance();
 	const auto user = _peer ? _peer->asUser() : nullptr;
 	const auto disallowed = user ? user->disallowedGiftTypes() : Type();
 	const auto all = Type::Premium
@@ -3426,6 +3430,7 @@ void HistoryWidget::refreshSendGiftToggle() {
 		&& !user->isServiceUser()
 		&& !user->isSelf()
 		&& !user->isBot()
+		&& settings.showGiftButtonInMessageField()
 		&& ((disallowed & Type::SendHide)
 			|| (session().user()->disallowedGiftTypes() & Type::SendHide)
 			|| Data::IsBirthdayToday(user->birthday()))
@@ -3784,7 +3789,9 @@ void HistoryWidget::updateControlsVisibility() {
 			}
 			if (_giftToUser) {
 				const auto was = _giftToUser->isVisible();
-				const auto now = (!_editMsgId) && (!hideExtraButtons);
+				const auto now = (!_editMsgId)
+					&& (!hideExtraButtons)
+					&& settings.showGiftButtonInMessageField();
 				if (was != now) {
 					_giftToUser->setVisible(now);
 					rightButtonsChanged = true;
