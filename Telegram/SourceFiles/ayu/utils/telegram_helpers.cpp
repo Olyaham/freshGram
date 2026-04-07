@@ -1122,6 +1122,8 @@ TextWithEntities reverseLocalPremiumEmoji(const TextWithEntities &text, not_null
 	const auto set = sets
 		? sets->find(channel->mgInfo->emojiSet.id)
 		: decltype(sets->cend()){};
+	const auto premium = (history->owner().session().user()->flags()
+		& UserDataFlag::Premium);
 	const auto emojiAllowed = [=](const EntityInText& entity)
 	{
 		if (!sets || set == sets->cend()) {
@@ -1144,14 +1146,22 @@ TextWithEntities reverseLocalPremiumEmoji(const TextWithEntities &text, not_null
 
 	auto result = text;
 	for (auto &entity : result.entities) {
-		if (entity.type() == EntityType::CustomEmoji && entity.isLocal()) {
-			if (isForQuote || (!history->peer->isSelf() && !(history->owner().session().user()->flags() & UserDataFlag::Premium) && !emojiAllowed(entity))) {
-				entity = EntityInText(
-					EntityType::CustomUrl,
-					entity.offset(),
-					entity.length(),
-					u"tg://emoji?id="_q + entity.data());
-			}
+		if (entity.type() != EntityType::CustomEmoji) {
+			continue;
+		}
+		const auto shouldConvert = entity.isLocal()
+			? (isForQuote
+				|| (!history->peer->isSelf() && !premium && !emojiAllowed(entity)))
+			: (!isForQuote
+				&& !history->peer->isSelf()
+				&& !premium
+				&& !emojiAllowed(entity));
+		if (shouldConvert) {
+			entity = EntityInText(
+				EntityType::CustomUrl,
+				entity.offset(),
+				entity.length(),
+				u"tg://emoji?id="_q + entity.data());
 		}
 	}
 	return result;
