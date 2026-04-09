@@ -1150,7 +1150,9 @@ not_null<PeerData*> Session::processChat(const MTPChat &data) {
 		channel->setName(qs(data.vtitle()), QString());
 
 		channel->setAccessHash(data.vaccess_hash().v);
-		channel->setPhoto(MTP_chatPhotoEmpty());
+		if (channel->userpicPhotoUnknown()) {
+			channel->setPhoto(MTP_chatPhotoEmpty());
+		}
 		channel->date = 0;
 		channel->setMembersCount(0);
 
