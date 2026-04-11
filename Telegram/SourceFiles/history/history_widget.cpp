@@ -398,7 +398,8 @@ HistoryWidget::HistoryWidget(
 				MTP_vector<MTPTextWithEntities>(1, MTP_textWithEntities(
 					MTP_string(_field->getTextWithTags().text),
 					MTP_vector<MTPMessageEntity>())),
-				MTP_string(_history->translateOfferedFrom().twoLetterCode())
+				MTP_string(_history->translateOfferedFrom().twoLetterCode()),
+				MTPstring()
 			)).done([=](const MTPmessages_TranslatedText& result) {
 				setFieldText(
 					{ result.data().vresult().v[0].data().vtext().v, TextWithTags::Tags() },

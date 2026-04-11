@@ -767,7 +767,7 @@ FillMenuResult FillSendMenu(
 		menu->addAction(
 			tr::lng_context_translate(tr::now),
 			[=] { action({ .type = ActionType::Translate }, details); },
-			&icons.menuIconTranslate);
+			&st::menuIconTranslate);
 	}
 
 	if ((type != Type::Disabled)
