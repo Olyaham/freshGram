@@ -23,6 +23,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "platform/platform_text_recognition.h"
 
 class History;
+struct PollAnswer;
 
 namespace anim {
 enum class activation : uchar;
@@ -158,6 +159,7 @@ private:
 		Share,
 		Rotate,
 		More,
+		Draw,
 		Recognize,
 		Icon,
 		Video,
@@ -221,6 +223,7 @@ private:
 	bool handleTouchEvent(not_null<QTouchEvent*> e);
 	void handleWheelEvent(not_null<QWheelEvent*> e);
 	void handleKeyPress(not_null<QKeyEvent*> e);
+	void handleKeyRelease(not_null<QKeyEvent*> e);
 
 	void toggleApplicationEventFilter(bool install);
 	bool filterApplicationEvent(
@@ -287,6 +290,7 @@ private:
 	void showMediaOverview();
 	void copyMedia();
 	void recognize();
+	void draw();
 	void receiveMouse();
 	void showAttachedStickers();
 	[[nodiscard]] auto scaledRecognitionRect(QPoint position)
@@ -374,6 +378,9 @@ private:
 
 	void refreshFromLabel();
 	void refreshCaption();
+	void refreshTimestampDividers(
+		const TextWithEntities &caption,
+		TimeId duration);
 	void refreshMediaViewer();
 	void refreshNavVisibility();
 	void refreshGroupThumbs();
@@ -434,6 +441,12 @@ private:
 	void initSponsoredButton();
 	void refreshSponsoredButtonGeometry();
 	void refreshSponsoredButtonWidth();
+
+	void refreshVoteButton();
+	void refreshVoteButtonGeometry();
+	void refreshPollVotersWidget();
+	void refreshPollVotersWidgetGeometry();
+	[[nodiscard]] const PollAnswer *currentPollAnswer() const;
 
 	void documentUpdated(not_null<DocumentData*> document);
 	void changingMsgId(FullMsgId newId, MsgId oldId);
@@ -504,6 +517,18 @@ private:
 		float64 progress,
 		bool nonbright = false) const;
 	[[nodiscard]] bool isSaveMsgShown() const;
+
+	void showChapterIndicator(const QString &name, int direction);
+	void paintChapterContent(Painter &p, QRect outer, QRect clip);
+	[[nodiscard]] bool isChapterShown() const;
+	void updateChapter();
+
+	void startSpeedBoost();
+	void stopSpeedBoost();
+	void updateSpeedBoostRect();
+	void paintSpeedBoostContent(Painter &p, QRect outer, QRect clip);
+	[[nodiscard]] bool isSpeedBoostShown() const;
+	void updateSpeedBoost();
 
 	void updateOverRect(Over state);
 	bool updateOverState(Over newState);
@@ -594,6 +619,7 @@ private:
 	QRect _headerNav, _nameNav, _dateNav, _separatorNav;
 	QRect _rotateNav, _rotateNavOver, _rotateNavIcon;
 	QRect _shareNav, _shareNavOver, _shareNavIcon;
+	QRect _drawNav, _drawNavOver, _drawNavIcon;
 	QRect _recognizeNav, _recognizeNavOver, _recognizeNavIcon;
 	QRect _saveNav, _saveNavOver, _saveNavIcon;
 	QRect _moreNav, _moreNavOver, _moreNavIcon;
@@ -602,6 +628,8 @@ private:
 	bool _saveVisible = false;
 	bool _shareVisible = false;
 	bool _rotateVisible = false;
+	bool _drawButtonEnabled = true;
+	bool _drawVisible = false;
 	bool _recognizeVisible = false;
 	bool _headerHasLink = false;
 	QString _dateText;
@@ -736,6 +764,9 @@ private:
 	base::Timer _dropdownShowTimer;
 
 	base::unique_qptr<SponsoredButton> _sponsoredButton;
+	object_ptr<Ui::RoundButton> _voteButton = { nullptr };
+	object_ptr<Ui::RpWidget> _pollVotersWidget = { nullptr };
+	rpl::lifetime _pollUpdateLifetime;
 
 	bool _receiveMouse = true;
 	bool _processingKeyPress = false;
@@ -755,6 +786,28 @@ private:
 	// _saveMsgAnimation -> _saveMsgTimer -> _saveMsgAnimation.
 	Ui::Animations::Simple _saveMsgAnimation;
 	base::Timer _saveMsgTimer;
+
+	QString _chapterText;
+	QRect _chapterRect;
+	Ui::Animations::Simple _chapterAnimation;
+	base::Timer _chapterTimer;
+	struct ChapterArrow {
+		Ui::Animations::Simple animation;
+		int direction = 0;
+	};
+	std::vector<std::unique_ptr<ChapterArrow>> _chapterArrows;
+
+	bool _speedBoostActive = false;
+	bool _speedBoostFromMouse = false;
+	float64 _speedBoostSavedSpeed = 1.;
+	float64 _speedBoostSpeed = 2.;
+	float64 _speedBoostDragAccum = 0.;
+	QRect _speedBoostRect;
+	Ui::Animations::Simple _speedBoostAnimation;
+	base::Timer _speedBoostHoldTimer;
+	Ui::Animations::Basic _speedBoostTicker;
+	float64 _speedBoostPhase = 0.;
+	crl::time _speedBoostLastFrame = 0;
 
 	base::flat_map<Over, crl::time> _animations;
 	base::flat_map<Over, anim::value> _animationOpacities;

@@ -163,7 +163,8 @@ public:
 	void listMarkContentsRead(
 		const base::flat_set<not_null<HistoryItem*>> &items) override;
 	MessagesBarData listMessagesBar(
-		const std::vector<not_null<Element*>> &elements) override;
+		const std::vector<not_null<Element*>> &elements,
+		bool markLastAsRead) override;
 	void listContentRefreshed() override;
 	void listUpdateDateLink(
 		ClickHandlerPtr &link,
@@ -291,6 +292,15 @@ private:
 
 	[[nodiscard]] Api::SendAction prepareSendAction(
 		Api::SendOptions options) const;
+	void sendTextWithTags(
+		TextWithTags textWithTags,
+		bool useCurrentWebPageDraft,
+		Api::SendOptions options,
+		Fn<void()> done);
+	void sendWithTextOverride(
+		TextWithEntities text,
+		Api::SendOptions options,
+		Fn<void()> done);
 	void send();
 	void send(Api::SendOptions options);
 	void sendVoice(const Controls::VoiceToSend &data);

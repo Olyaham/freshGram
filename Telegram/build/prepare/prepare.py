@@ -1582,7 +1582,7 @@ mac:
     make install
 """)
 else: # qt > '6'
-    branch = 'v$QT' + ('-lts-lgpl' if qt.startswith('6.2.') else '-rc1')
+    branch = 'v$QT' + ('-lts-lgpl' if qt.startswith('6.2.') else '')
     stage('qt_' + qt, """
     git clone -b """ + branch + """ https://github.com/qt/qt5.git qt_$QT
     cd qt_$QT
@@ -1680,7 +1680,7 @@ win:
 stage('tg_owt', """
     git clone https://github.com/desktop-app/tg_owt.git
     cd tg_owt
-    git checkout 5c5c71258777d0196dbb3a09cc37d2f56ead28ab
+    git checkout 89df288dd6ba5b2ec95b3c5eaf1e7e0c3a870fc4
     git submodule update --init --recursive
 win:
     SET MOZJPEG_PATH=$LIBS_DIR/mozjpeg

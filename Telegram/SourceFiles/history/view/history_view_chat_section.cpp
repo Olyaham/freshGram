@@ -23,6 +23,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/view/history_view_translate_bar.h"
 #include "history/view/history_view_translate_tracker.h"
 #include "history/view/history_view_self_forwards_tagger.h"
+#include "history/view/history_view_draw_to_reply.h"
 #include "history/history.h"
 #include "history/history_drag_area.h"
 #include "history/history_item_components.h"
@@ -62,6 +63,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/mime_type.h"
 #include "main/main_session.h"
 #include "main/main_session_settings.h"
+#include "menu/menu_timecode_action.h"
 #include "data/components/scheduled_messages.h"
 #include "data/data_histories.h"
 #include "data/data_saved_messages.h"
@@ -395,6 +397,12 @@ ChatWidget::ChatWidget(
 		}
 	}, _inner->lifetime());
 
+	_inner->setInsertTextCallback([=](const QString &text) {
+		if (const auto field = _composeControls->fieldForMention()) {
+			Menu::InsertTextAtCursor(field, text);
+		}
+	});
+
 	_composeControls->sendActionUpdates(
 	) | rpl::on_next([=](ComposeControls::SendActionUpdate &&data) {
 		if (!_repliesRootId) {
@@ -449,6 +457,36 @@ ChatWidget::ChatWidget(
 			}
 		}, lifetime());
 	}
+
+	session().data().drawToReplyRequests(
+	) | rpl::on_next([=](Data::DrawToReplyRequest request) {
+		if (request.messageId.peer != _peer->id) {
+			return;
+		}
+		auto image = ResolveDrawToReplyImage(
+			&session().data(),
+			request);
+		if (image.isNull()) {
+			return;
+		}
+		const auto replyTo = request.messageId;
+		OpenDrawToReplyEditor(
+			controller,
+			std::move(image),
+			crl::guard(this, [=](QImage &&result) {
+				if (result.isNull()) {
+					return;
+				}
+				if (replyTo) {
+					replyToMessage({ .messageId = replyTo });
+				}
+				auto list = Storage::PrepareMediaFromImage(
+					std::move(result),
+					QByteArray(),
+					st::sendMediaPreviewSize);
+				confirmSendingFiles(std::move(list));
+			}));
+	}, lifetime());
 
 	_selfForwardsTagger = std::make_unique<HistoryView::SelfForwardsTagger>(
 		controller,
@@ -635,9 +673,13 @@ void ChatWidget::subscribeToTopic() {
 		_topic,
 		(Flag::UnreadMentions
 			| Flag::UnreadReactions
+			| Flag::UnreadPollVotes
 			| Flag::CloudDraft)
 	) | rpl::on_next([=](const Data::TopicUpdate &update) {
-		if (update.flags & (Flag::UnreadMentions | Flag::UnreadReactions)) {
+		if (update.flags
+			& (Flag::UnreadMentions
+				| Flag::UnreadReactions
+				| Flag::UnreadPollVotes)) {
 			_cornerButtons.updateUnreadThingsVisibility();
 		}
 		if (update.flags & Flag::CloudDraft) {
@@ -803,6 +845,12 @@ void ChatWidget::setupComposeControls() {
 		.monoforumPeerId = _monoforumPeerId,
 		.showSlowmodeError = [=] { return showSlowmodeError(); },
 		.sendActionFactory = [=] { return prepareSendAction({}); },
+		.sendWithText = [=](
+				TextWithEntities &&text,
+				Api::SendOptions options,
+				Fn<void()> done) {
+			sendWithTextOverride(std::move(text), options, std::move(done));
+		},
 		.slowmodeSecondsLeft = SlowmodeSecondsLeft(_peer),
 		.sendDisabledBySlowmode = SendDisabledBySlowmode(_peer),
 		.writeRestriction = std::move(writeRestriction),
@@ -867,6 +915,12 @@ void ChatWidget::setupComposeControls() {
 			this,
 			[=] { chooseAttach(overrideCompress); });
 	}, lifetime());
+
+	_composeControls->setSendAsFileConfirmed(crl::guard(this, [=](
+			std::shared_ptr<Ui::PreparedBundle> bundle,
+			Api::SendOptions options) {
+		sendingFilesConfirmed(std::move(bundle), options);
+	}));
 
 	_composeControls->fileChosen(
 	) | rpl::on_next([=](ChatHelpers::FileChosen data) {
@@ -1044,6 +1098,7 @@ void ChatWidget::setupSwipeReplyAndBack() {
 			return result;
 		}
 
+		_inner->hideElementOverlay();
 		result.msgBareId = view->data()->fullId().msg.bare;
 		result.callback = [=, itemId = view->data()->fullId()] {
 			const auto still = show->session().data().message(itemId);
@@ -1059,6 +1114,7 @@ void ChatWidget::setupSwipeReplyAndBack() {
 				.quote = selected.highlight.quote,
 				.quoteOffset = selected.highlight.quoteOffset,
 				.todoItemId = selected.highlight.todoItemId,
+				.pollOption = selected.highlight.pollOption,
 			});
 		};
 		return result;
@@ -1362,13 +1418,27 @@ void ChatWidget::send(Api::SendOptions options) {
 		return;
 	}
 
+	sendTextWithTags(
+		_composeControls->getTextWithAppliedMarkdown(),
+		true,
+		options,
+		nullptr);
+}
+
+void ChatWidget::sendTextWithTags(
+		TextWithTags textWithTags,
+		bool useCurrentWebPageDraft,
+		Api::SendOptions options,
+		Fn<void()> done) {
 	if (!options.scheduled) {
 		_cornerButtons.clearReplyReturns();
 	}
 
 	auto message = Api::MessageToSend(prepareSendAction(options));
-	message.textWithTags = _composeControls->getTextWithAppliedMarkdown();
-	message.webPage = _composeControls->webPageDraft();
+	message.textWithTags = textWithTags;
+	if (useCurrentWebPageDraft) {
+		message.webPage = _composeControls->webPageDraft();
+	}
 
 	auto request = SendingErrorRequest{
 		.topicRootId = _topic ? _topic->rootId() : MsgId(0),
@@ -1386,7 +1456,7 @@ void ChatWidget::send(Api::SendOptions options) {
 		const auto withPaymentApproved = [=](int approved) {
 			auto copy = options;
 			copy.starsApproved = approved;
-			send(copy);
+			sendTextWithTags(textWithTags, useCurrentWebPageDraft, copy, done);
 		};
 		const auto checked = checkSendPayment(
 			request.messagesCount,
@@ -1398,9 +1468,10 @@ void ChatWidget::send(Api::SendOptions options) {
 	}
 
 	const auto nextLocalMessageId = session().data().nextLocalMessageId();
+	const auto hasText = !message.textWithTags.text.trimmed().isEmpty();
 
 	if (const auto field = _composeControls->fieldForMention(); field
-		&& HasSendText(field)
+		&& hasText
 		&& message.webPage.url.isEmpty()
 		&& (field->document()->size().height() <= field->height())) {
 		controller()->sendingAnimation().appendSending({
@@ -1427,6 +1498,21 @@ void ChatWidget::send(Api::SendOptions options) {
 	//onDraftSave();
 
 	finishSending();
+	if (done) {
+		done();
+	}
+}
+
+void ChatWidget::sendWithTextOverride(
+		TextWithEntities text,
+		Api::SendOptions options,
+		Fn<void()> done) {
+	const auto useCurrentWebPageDraft
+		= (text.text == _composeControls->prepareTextForEditMsg().text);
+	sendTextWithTags({
+		text.text,
+		TextUtilities::ConvertEntitiesToTextTags(text.entities),
+	}, useCurrentWebPageDraft, options, std::move(done));
 }
 
 void ChatWidget::edit(
@@ -2145,6 +2231,9 @@ void ChatWidget::refreshPinnedBarButton(bool many, HistoryItem *item) {
 	auto button = object_ptr<Ui::IconButton>(
 		this,
 		close ? st::historyReplyCancel : st::historyPinnedShowAll);
+	button->setAccessibleName(close
+		? tr::lng_cancel(tr::now)
+		: tr::lng_settings_events_pinned(tr::now));
 	button->clicks(
 	) | rpl::on_next([=] {
 		if (close) {
@@ -2549,12 +2638,16 @@ void ChatWidget::subscribeToSublist() {
 	using Flag = Data::SublistUpdate::Flag;
 	session().changes().sublistUpdates(
 		_sublist,
-		Flag::UnreadView | Flag::UnreadReactions | Flag::CloudDraft
+		(Flag::UnreadView
+			| Flag::UnreadReactions
+			| Flag::UnreadPollVotes
+			| Flag::CloudDraft)
 	) | rpl::on_next([=](const Data::SublistUpdate &update) {
 		if (update.flags & Flag::UnreadView) {
 			unreadCountUpdated();
 		}
-		if (update.flags & Flag::UnreadReactions) {
+		if (update.flags
+			& (Flag::UnreadReactions | Flag::UnreadPollVotes)) {
 			_cornerButtons.updateUnreadThingsVisibility();
 		}
 		if (update.flags & Flag::CloudDraft) {
@@ -2642,6 +2735,9 @@ void ChatWidget::updateControlsGeometry() {
 	const auto tabsLeftSkip = _subsectionTabs
 		? _subsectionTabs->leftSkip()
 		: 0;
+	const auto tabsBottomSkip = _subsectionTabs
+		? _subsectionTabs->bottomSkip()
+		: 0;
 	const auto innerWidth = contentWidth - tabsLeftSkip;
 	const auto subsectionTabsTop = _topBar->bottomNoMargins();
 	_topBars->move(tabsLeftSkip, subsectionTabsTop
@@ -2679,6 +2775,8 @@ void ChatWidget::updateControlsGeometry() {
 	} else {
 		bottom -= _composeControls->heightCurrent();
 	}
+	const auto composeTop = bottom;
+	bottom -= tabsBottomSkip;
 
 	_topBars->resize(innerWidth, top + st::lineWidth);
 	top += _topBars->y();
@@ -2701,12 +2799,14 @@ void ChatWidget::updateControlsGeometry() {
 		}
 		updateInnerVisibleArea();
 	}
-	_composeControls->move(0, bottom);
+	_composeControls->move(0, composeTop);
 	_composeControls->setAutocompleteBoundingRect(_scroll->geometry());
 
 	if (_subsectionTabs) {
 		const auto scrollBottom = _scroll->y() + scrollHeight;
-		const auto areaHeight = scrollBottom - subsectionTabsTop;
+		const auto areaHeight = scrollBottom
+			+ tabsBottomSkip
+			- subsectionTabsTop;
 		_subsectionTabs->setBoundingRect(
 			{ 0, subsectionTabsTop, width(), areaHeight });
 	}
@@ -3019,7 +3119,8 @@ void ChatWidget::listMarkContentsRead(
 }
 
 MessagesBarData ChatWidget::listMessagesBar(
-		const std::vector<not_null<Element*>> &elements) {
+		const std::vector<not_null<Element*>> &elements,
+		bool markLastAsRead) {
 	if ((!_sublist && !_replies) || elements.empty()) {
 		return {};
 	}
@@ -3030,7 +3131,15 @@ MessagesBarData ChatWidget::listMessagesBar(
 	for (auto i = 0, count = int(elements.size()); i != count; ++i) {
 		const auto item = elements[i]->data();
 		if (item->isRegular() && item->id > till) {
-			if (item->out() || (_replies && !item->replyToId())) {
+			if (markLastAsRead
+				|| item->out()
+				|| (_replies && !item->replyToId())) {
+				if (markLastAsRead) {
+					if (item->isUnreadMention() && !item->isUnreadMedia()) {
+						session().api().markContentsRead(item);
+					}
+					item->markClientSideAsRead();
+				}
 				if (_replies) {
 					_replies->readTill(item);
 				} else {
@@ -3195,19 +3304,25 @@ void ChatWidget::listShowPremiumToast(not_null<DocumentData*> document) {
 void ChatWidget::listOpenPhoto(
 		not_null<PhotoData*> photo,
 		FullMsgId context) {
+	const auto showDrawButton = _topic
+		? Data::CanSendAnyOf(_topic, Data::FilesSendRestrictions())
+		: Data::CanSendAnyOf(_peer, Data::FilesSendRestrictions());
 	controller()->openPhoto(
 		photo,
-		{ context, _repliesRootId, _monoforumPeerId });
+		{ context, _repliesRootId, _monoforumPeerId, showDrawButton });
 }
 
 void ChatWidget::listOpenDocument(
 		not_null<DocumentData*> document,
 		FullMsgId context,
 		bool showInMediaView) {
+	const auto showDrawButton = _topic
+		? Data::CanSendAnyOf(_topic, Data::FilesSendRestrictions())
+		: Data::CanSendAnyOf(_peer, Data::FilesSendRestrictions());
 	controller()->openDocument(
 		document,
 		showInMediaView,
-		{ context, _repliesRootId, _monoforumPeerId });
+		{ context, _repliesRootId, _monoforumPeerId, showDrawButton });
 }
 
 void ChatWidget::listPaintEmpty(
@@ -3407,6 +3522,7 @@ bool ChatWidget::searchInChatEmbedded(
 		_history,
 		sublist->sublistPeer(),
 		query);
+	_composeSearch->setCalendarChat(Dialogs::Key(sublist));
 
 	updateControlsGeometry();
 	setInnerFocus();
