@@ -763,10 +763,10 @@ FillMenuResult FillSendMenu(
 				details); },
 			&icons.menuWhenOnline);
 	}
-	if (sending && details.translationAllowed) {
+	if (sending && details.aiComposeAllowed) {
 		menu->addAction(
-			tr::lng_context_translate(tr::now),
-			[=] { action({ .type = ActionType::Translate }, details); },
+			tr::lng_ai_compose_title(tr::now),
+			[=] { action({ .type = ActionType::AiCompose }, details); },
 			&st::menuIconTranslate);
 	}
 

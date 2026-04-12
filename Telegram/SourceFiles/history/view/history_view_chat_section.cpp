@@ -80,6 +80,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_shared_media.h"
 #include "data/data_send_action.h"
 #include "data/data_premium_limits.h"
+#include "main/main_app_config.h"
 #include "storage/storage_media_prepare.h"
 #include "storage/storage_account.h"
 #include "storage/localimageloader.h"
@@ -1843,7 +1844,13 @@ SendMenu::Details ChatWidget::sendMenuDetails() const {
 	const auto type = (_topic && !_peer->starsPerMessageChecked())
 		? Type::Scheduled
 		: Type::SilentOnly;
-	return SendMenu::Details{ .type = type };
+	const auto aiComposeAllowed =
+		!_composeControls->getTextWithAppliedMarkdown().text.isEmpty()
+		&& !session().appConfig().aiComposeStyles().empty();
+	return SendMenu::Details{
+		.type = type,
+		.aiComposeAllowed = aiComposeAllowed,
+	};
 }
 
 FullReplyTo ChatWidget::replyTo() const {

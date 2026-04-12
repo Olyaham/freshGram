@@ -388,26 +388,8 @@ HistoryWidget::HistoryWidget(
 	setupSendMenu(_send.get(), [=](SendMenu::Action action, SendMenu::Details) {
 		if (action.type == SendMenu::ActionType::Send) {
 			send(action.options);
-		} else if (action.type == SendMenu::ActionType::Translate) {
-			auto session = &_history->session();
-			using Flag = MTPmessages_TranslateText::Flag;
-			session->api().request(MTPmessages_TranslateText(
-				MTP_flags(Flag::f_text),
-				MTPInputPeer(),
-				MTP_vector<MTPint>(),
-				MTP_vector<MTPTextWithEntities>(1, MTP_textWithEntities(
-					MTP_string(_field->getTextWithTags().text),
-					MTP_vector<MTPMessageEntity>())),
-				MTP_string(_history->translateOfferedFrom().twoLetterCode()),
-				MTPstring()
-			)).done([=](const MTPmessages_TranslatedText& result) {
-				setFieldText(
-					{ result.data().vresult().v[0].data().vtext().v, TextWithTags::Tags() },
-					TextUpdateEvent::SaveDraft,
-					Ui::InputField::HistoryAction::NewEntry);
-				}).fail([=] {
-					Ui::Toast::Show("Translation error");
-					}).send();
+		} else if (action.type == SendMenu::ActionType::AiCompose) {
+			showAiComposeBox();
 		} else {
 			sendScheduled(action.options);
 		}
@@ -5166,8 +5148,13 @@ SendMenu::Details HistoryWidget::sendMenuDetails() const {
 		? SendMenu::Type::ScheduledToUser
 		: SendMenu::Type::Scheduled;
 	const auto effectAllowed = _peer && _peer->isUser();
-	const auto translationAllowed = _field->hasText();
-	return { .type = type, .effectAllowed = effectAllowed, .translationAllowed = translationAllowed };
+	const auto aiComposeAllowed = _field->hasText()
+		&& !session().appConfig().aiComposeStyles().empty();
+	return {
+		.type = type,
+		.effectAllowed = effectAllowed,
+		.aiComposeAllowed = aiComposeAllowed,
+	};
 }
 
 SendMenu::Details HistoryWidget::saveMenuDetails() const {
@@ -6375,9 +6362,7 @@ bool HistoryWidget::textExceedsMaxSize() const {
 }
 
 void HistoryWidget::updateAiButtonVisibility() {
-	const auto hidden = !hasEnoughLinesForAi()
-		|| !_send->isVisible()
-		|| !_field->isVisible();
+	const auto hidden = true;
 	if (_aiButton->isHidden() == hidden) {
 		return;
 	}

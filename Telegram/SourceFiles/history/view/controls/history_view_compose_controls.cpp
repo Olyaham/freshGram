@@ -2946,7 +2946,9 @@ void ComposeControls::setupSendMenu(
 		Fn<void(Api::SendOptions)> send) {
 	using namespace SendMenu;
 	const auto sendAction = [=](Action action, Details details) {
-		if (action.type == ActionType::ChangePrice) {
+		if (action.type == ActionType::AiCompose) {
+			showAiComposeBox();
+		} else if (action.type == ActionType::ChangePrice) {
 			_chosenStarsCount = details.price.value_or(0);
 			updateSendButtonType();
 		} else if (action.type == ActionType::CaptionUp
@@ -3662,10 +3664,7 @@ void ComposeControls::updateControlsVisibility() {
 }
 
 void ComposeControls::updateAiButtonVisibility() {
-	const auto hidden = !hasEnoughLinesForAi()
-		|| !_wrap->isVisible()
-		|| _recording.current()
-		|| !_field->isVisible();
+	const auto hidden = true;
 	if (_aiButton->isHidden() == hidden) {
 		return;
 	}

@@ -146,7 +146,6 @@ SendMenu::Details MediaEditManager::sendMenuDetails(
 			: _invertCaption
 			? SendMenu::CaptionState::Above
 			: SendMenu::CaptionState::Below),
-		.translationAllowed = false
 	};
 }
 
