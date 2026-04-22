@@ -31,6 +31,7 @@ jobs:
         with:
           operate_async: "True"
           general_include: ".+"
+          general_exclude: "^(VisualStudio/(2022|All)|DotNet|VCPkg)"
 
       - name: Prepare directories.
         run: |
