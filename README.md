@@ -161,4 +161,4 @@ Enjoy using **AyuGram**? Consider sending us a tip!
 
 ### Bots
 
-- [TelegramDB](https://t.me/tgdatabase) for username lookup by ID
+- [TelegramDB](https://t.me/tgdatabase) for username lookup by ID (until closing free inline mode at 2 April 2026)

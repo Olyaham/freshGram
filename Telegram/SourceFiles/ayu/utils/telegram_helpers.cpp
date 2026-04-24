@@ -877,7 +877,8 @@ void searchPeerInner(const QString &peerId, Main::Session *session, const Userna
 }
 
 void searchPeer(const QString &peerId, Main::Session *session, const UsernameResolverCallback &callback) {
-	if (!session) {
+	callback(QString(), nullptr);
+	/*if (!session) {
 		callback(QString(), nullptr);
 		return;
 	}
@@ -893,7 +894,7 @@ void searchPeer(const QString &peerId, Main::Session *session, const UsernameRes
 			{
 				searchPeerInner(peerId, session, callback);
 			});
-	}
+	}*/
 }
 
 void searchUserById(ID userId, Main::Session *session, const UsernameResolverCallback &callback) {

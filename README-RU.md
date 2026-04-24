@@ -159,4 +159,4 @@ Flatpak: https://github.com/0FL01/AyuGramDesktop-flatpak
 
 ### Боты
 
-- [TelegramDB](https://t.me/tgdatabase) для получения юзернейма по ID
+- [TelegramDB](https://t.me/tgdatabase) для получения юзернейма по ID (до закрытия бесплатной версии 2 апреля 2026)
