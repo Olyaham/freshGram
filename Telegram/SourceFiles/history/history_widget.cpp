@@ -712,7 +712,6 @@ HistoryWidget::HistoryWidget(
 		item->mainView()->itemDataChanged();
 	}, lifetime());
 
-
 	rpl::merge(
 		session().changes().peerUpdates(
 			Data::PeerUpdate::Flag::IsBlocked
