@@ -62,7 +62,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QGuiApplication>
 
 // AyuGram includes
-#include "ayu/ayu_settings.h"
 #include "ayu/features/filters/filters_controller.h"
 
 namespace {
@@ -533,18 +532,6 @@ void HistoryMessageReply::updateData(
 		&& (asExternal || _fields.manualQuote);
 	_multiline = !_fields.storyId && (asExternal || nonEmptyQuote);
 
-	const auto &settings = AyuSettings::getInstance();
-	const auto author = resolvedMessage
-							? resolvedMessage->from().get()
-							: resolvedStory
-								  ? resolvedStory->peer().get()
-								  : nullptr;
-	const auto blocked = settings.hideFromBlocked()
-		&& author
-		&& author->isUser()
-		&& author->asUser()->isBlocked();
-
-
 	const auto filtered = resolvedMessage &&
 			!resolvedMessage.empty() &&
 			FiltersController::filtered(resolvedMessage.get());
@@ -553,12 +540,12 @@ void HistoryMessageReply::updateData(
 		|| resolvedStory
 		|| ((nonEmptyQuote || _fields.externalMedia)
 			&& (!_fields.messageId || force));
-	_displaying = displaying && !blocked && !filtered ? 1 : 0;
+	_displaying = displaying && !filtered ? 1 : 0;
 
 	const auto unavailable = !resolvedMessage
 		&& !resolvedStory
 		&& ((!_fields.storyId && !_fields.messageId) || force);
-	_unavailable = unavailable && !blocked && !filtered ? 1 : 0;
+	_unavailable = (unavailable || filtered) ? 1 : 0;
 
 	if (force) {
 		if (!_displaying && (_fields.messageId || _fields.storyId)) {

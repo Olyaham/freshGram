@@ -51,6 +51,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_window.h"
 
 // AyuGram includes
+#include "ayu/features/filters/filters_controller.h"
 #include "styles/style_ayu_icons.h"
 
 
@@ -427,6 +428,11 @@ void PaintRow(
 	const auto history = entry->asHistory();
 	const auto thread = entry->asThread();
 	const auto sublist = entry->asSublist();
+	const auto itemIsFiltered = item && FiltersController::filtered(item);
+	const auto itemIsEmpty = item && (item->isEmpty() || itemIsFiltered);
+	const auto showFilteredItem = !fakeRow
+		&& itemIsEmpty
+		&& itemIsFiltered;
 
 	auto bg = context.active
 		? st::dialogsBgActive
@@ -517,7 +523,9 @@ void PaintRow(
 		PaintExpandedTopicsBar(p, context.topicsExpanded);
 	}
 	if (context.narrow) {
-		if (!draft && item && !item->isEmpty()) {
+		if (!draft
+			&& item
+			&& (!itemIsEmpty || showFilteredItem)) {
 			PaintNarrowCounter(p, context, badgesState);
 		}
 		return;
@@ -738,7 +746,7 @@ void PaintRow(
 				context.now)) {
 			// Empty history
 		}
-	} else if (!item->isEmpty()) {
+	} else if (!itemIsEmpty || showFilteredItem) {
 		if ((thread || sublist) && !promoted) {
 			PaintDialogDate(p, entry, fakeRow, date, rectForName, context);
 		}
@@ -1201,21 +1209,28 @@ void RowPainter::Paint(
 		not_null<const FakeRow*> row,
 		const PaintContext &context) {
 	const auto item = row->item();
+	const auto itemIsFiltered = FiltersController::filtered(item);
 	const auto topic = context.forum ? row->topic() : nullptr;
 	const auto history = topic ? nullptr : item->history().get();
 	const auto entry = topic ? (Entry*)topic : (Entry*)history;
 	auto cloudDraft = nullptr;
 	const auto from = [&] {
 		const auto in = row->searchInChat();
-		return (topic && (in.topic() != topic))
-			? nullptr
-			: in
-			? item->displayFrom()
-			: history->peer->migrateTo()
+		if (topic && (in.topic() != topic)) {
+			return (PeerData*)nullptr;
+		} else if (in && !itemIsFiltered) {
+			return item->displayFrom();
+		} else if (!history) {
+			return (PeerData*)nullptr;
+		}
+		return history->peer->migrateTo()
 			? history->peer->migrateTo()
 			: history->peer.get();
 	}();
 	const auto hiddenSenderInfo = [&]() -> const HiddenSenderInfo* {
+		if (itemIsFiltered) {
+			return nullptr;
+		}
 		if (const auto searchChat = row->searchInChat()) {
 			if (const auto peer = searchChat.peer()) {
 				if (const auto forwarded = item->Get<HistoryMessageForwarded>()) {

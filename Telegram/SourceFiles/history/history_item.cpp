@@ -75,6 +75,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
+#include "ayu/features/filters/filters_controller.h"
 #include "ayu/features/message_shot/message_shot.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "ui/emoji_config.h"
@@ -4329,6 +4330,10 @@ TextWithEntities HistoryItem::notificationText(
 }
 
 ItemPreview HistoryItem::toPreview(ToPreviewOptions options) const {
+	if (FiltersController::filtered(const_cast<HistoryItem*>(this))) {
+		return {};
+	}
+
 	if (isService()) {
 		const_cast<HistoryItem*>(this)->resolveDependent();
 
