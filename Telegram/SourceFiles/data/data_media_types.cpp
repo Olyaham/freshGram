@@ -1031,7 +1031,7 @@ std::unique_ptr<HistoryView::Media> MediaPhoto::createView(
 					message,
 					_chat,
 					_photo,
-					st::msgServicePhotoWidth));
+					st::msgServiceUserpicSuggestionPhotoWidth));
 		}
 		return std::make_unique<HistoryView::Photo>(
 			message,

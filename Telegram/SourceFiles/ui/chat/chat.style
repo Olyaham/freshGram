@@ -18,6 +18,7 @@ msgNameStyle: semiboldTextStyle;
 msgServiceFont: semiboldFont;
 msgServiceNameFont: semiboldFont;
 msgServicePhotoWidth: 100px;
+msgServiceUserpicSuggestionPhotoWidth: 100px;
 msgDateFont: font(13px);
 msgMinWidth: 160px;
 msgPhotoSize: 33px;
