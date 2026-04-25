@@ -372,7 +372,11 @@ void BuildGhostEssentials(SectionBuilder &builder) {
 			};
 
 			auto collapsible = AddCollapsibleToggle(
-				container, tr::ayu_GhostModeToggle(), std::move(checkboxes), true);
+				container,
+				tr::ayu_GhostModeToggle(),
+				std::move(checkboxes),
+				true,
+				tr::ayu_GhostModeOptionShiftDescription(tr::now));
 			state->refreshCheckboxes = std::move(collapsible.refresh);
 			if (wctx.highlights && collapsible.widget) {
 				wctx.highlights->push_back(std::make_pair(
