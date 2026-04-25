@@ -614,7 +614,7 @@ bool ShouldSendSilent(
 		not_null<PeerData*> peer,
 		const Api::SendOptions &options) {
 	const auto &ghost = AyuSettings::ghost(&peer->session());
-	if (ghost.sendWithoutSound()) {
+	if (ghost.shouldSendWithoutSound()) {
 		return !options.silent;
 	}
 

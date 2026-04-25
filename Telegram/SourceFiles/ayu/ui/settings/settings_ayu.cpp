@@ -27,6 +27,7 @@
 #include "styles/style_menu_icons.h"
 #include "styles/style_settings.h"
 #include "ui/painter.h"
+#include "ui/boxes/single_choice_box.h"
 #include "ui/vertical_list.h"
 #include "ui/text/text.h"
 #include "ui/toast/toast.h"
@@ -445,31 +446,45 @@ void BuildGhostEssentials(SectionBuilder &builder) {
 			AddDividerText(container, tr::ayu_UseScheduledMessagesDescription());
 
 			AddSkip(container);
-			const auto silentButton = AddButtonWithIcon(
+			const auto silentOptions = std::vector<QString>{
+				tr::ayu_SendWithoutSoundByDefaultNever(tr::now),
+				tr::ayu_SendWithoutSoundByDefaultInGhostMode(tr::now),
+				tr::ayu_SendWithoutSoundByDefaultAlways(tr::now),
+			};
+			const auto silentOptionText = state->selectedUserId.value(
+			) | rpl::map([=](uint64 id) {
+				return AyuSettings::ghost(id).sendWithoutSoundValue(
+				) | rpl::map([=](SendWithoutSoundOption value) {
+					return silentOptions[static_cast<int>(value)];
+				});
+			}) | rpl::flatten_latest();
+			const auto silentButton = AddButtonWithLabel(
 				container,
 				tr::ayu_SendWithoutSoundByDefault(),
-				st::settingsButtonNoIcon
-			);
+				std::move(silentOptionText),
+				st::settingsButtonNoIcon);
 			if (wctx.highlights) {
 				wctx.highlights->push_back(std::make_pair(
 					u"ayu/sendWithoutSound"_q,
 					HighlightEntry{ silentButton.get(), {} }));
 			}
-			silentButton->toggleOn(
-				state->selectedUserId.value()
-				| rpl::map([](uint64 id) {
-					return AyuSettings::ghost(id).sendWithoutSoundValue();
-				}) | rpl::flatten_latest()
-			)->toggledValue(
-			) | rpl::filter(
-				[=](bool enabled) {
-					return enabled != AyuSettings::ghost(state->selectedUserId.current()).sendWithoutSound();
-				}
-			) | on_next(
-				[=](bool enabled) {
-					AyuSettings::ghost(state->selectedUserId.current()).setSendWithoutSound(enabled);
-				},
-				container->lifetime());
+			silentButton->addClickHandler([=] {
+				controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+					const auto save = [=](int index) {
+						AyuSettings::ghost(state->selectedUserId.current()
+						).setSendWithoutSound(
+							static_cast<SendWithoutSoundOption>(index));
+					};
+					SingleChoiceBox(box, {
+						.title = tr::ayu_SendWithoutSoundByDefault(),
+						.options = silentOptions,
+						.initialSelection = static_cast<int>(
+							AyuSettings::ghost(state->selectedUserId.current()
+							).sendWithoutSound()),
+						.callback = save,
+					});
+				}));
+			});
 			AddSkip(container);
 			AddDividerText(container, tr::ayu_SendWithoutSoundByDefaultDescription());
 

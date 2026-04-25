@@ -109,7 +109,20 @@ void GhostModeAccountSettings::setUseScheduledMessages(bool val) {
 	AyuSettings::save();
 }
 
-void GhostModeAccountSettings::setSendWithoutSound(bool val) {
+bool GhostModeAccountSettings::shouldSendWithoutSound() const {
+	switch (_sendWithoutSound.current()) {
+	case SendWithoutSoundOption::Never:
+		return false;
+	case SendWithoutSoundOption::InGhostMode:
+		return isGhostModeActive();
+	case SendWithoutSoundOption::Always:
+		return true;
+	}
+	Unexpected("Value in GhostModeAccountSettings::shouldSendWithoutSound.");
+}
+
+void GhostModeAccountSettings::setSendWithoutSound(
+		SendWithoutSoundOption val) {
 	if (_sendWithoutSound.current() == val) return;
 	_sendWithoutSound = val;
 	AyuSettings::save();
@@ -195,7 +208,14 @@ void from_json(const nlohmann::json &j, GhostModeAccountSettings &s) {
 	s._sendOfflinePacketAfterOnline = j.value("sendOfflinePacketAfterOnline", false);
 	s._markReadAfterAction = j.value("markReadAfterAction", true);
 	s._useScheduledMessages = j.value("useScheduledMessages", false);
-	s._sendWithoutSound = j.value("sendWithoutSound", false);
+	const auto sendWithoutSound = j.find("sendWithoutSound");
+	s._sendWithoutSound = (sendWithoutSound == j.end())
+		? SendWithoutSoundOption::Never
+		: sendWithoutSound->is_boolean()
+		? (sendWithoutSound->get<bool>()
+			? SendWithoutSoundOption::Always
+			: SendWithoutSoundOption::Never)
+		: sendWithoutSound->get<SendWithoutSoundOption>();
 	s._suggestGhostModeBeforeViewingStory = j.value("suggestGhostModeBeforeViewingStory", true);
 	s._sendReadMessagesLocked = j.value("sendReadMessagesLocked", false);
 	s._sendReadStoriesLocked = j.value("sendReadStoriesLocked", false);

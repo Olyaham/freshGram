@@ -105,7 +105,6 @@ private:
 	QAction *_ghostMode = nullptr;
 	QAction *_readOnInteract = nullptr;
 	QAction *_scheduleMessages = nullptr;
-	QAction *_sendWithoutSound = nullptr;
 
 	NSPasteboard *_pasteboard = nullptr;
 	int _pasteboardChangeCount = -1;
@@ -237,9 +236,6 @@ void Manager::retranslate() {
 	if (_scheduleMessages) {
 		_scheduleMessages->setText(tr::ayu_UseScheduledMessages(tr::now));
 	}
-	if (_sendWithoutSound) {
-		_sendWithoutSound->setText(tr::ayu_SendWithoutSoundByDefault(tr::now));
-	}
 }
 
 void Manager::ensureLanguageBound() {
@@ -336,7 +332,6 @@ void Manager::recomputeState() {
 	ForceDisabled(_ghostMode, ghostInactive);
 	ForceDisabled(_readOnInteract, ghostInactive);
 	ForceDisabled(_scheduleMessages, ghostInactive);
-	ForceDisabled(_sendWithoutSound, ghostInactive);
 	const auto setChecked = [](QAction *action, bool checked) {
 		const auto wasBlocked = action->blockSignals(true);
 		action->setChecked(checked);
@@ -348,12 +343,10 @@ void Manager::recomputeState() {
 			: tr::ayu_EnableGhostMode(tr::now));
 		setChecked(_readOnInteract, ghost->markReadAfterAction());
 		setChecked(_scheduleMessages, ghost->useScheduledMessages());
-		setChecked(_sendWithoutSound, ghost->sendWithoutSound());
 	} else {
 		_ghostMode->setText(tr::ayu_EnableGhostMode(tr::now));
 		setChecked(_readOnInteract, false);
 		setChecked(_scheduleMessages, false);
-		setChecked(_sendWithoutSound, false);
 	}
 }
 
@@ -592,13 +585,6 @@ void Manager::buildGhostModeMenu(QMenu *ghostMode) {
 			}
 		});
 
-	_sendWithoutSound = addToggle(
-		u"Send without Sound"_q,
-		[this](bool enabled) {
-			if (const auto ghost = resolveGhostSettings()) {
-				ghost->setSendWithoutSound(enabled);
-			}
-		});
 }
 
 void Manager::buildWindowMenu(QMenu *window) {
@@ -720,8 +706,7 @@ void Manager::destroy() {
 		= _strikeOut = _blockquote = _monospace = _clearFormat
 		= nullptr;
 	_ghostModeMenu = nullptr;
-	_ghostMode = _readOnInteract = _scheduleMessages = _sendWithoutSound
-		= nullptr;
+	_ghostMode = _readOnInteract = _scheduleMessages = nullptr;
 	_pasteboard = nullptr;
 	_pasteboardChangeCount = -1;
 	_pasteboardHasText = false;
