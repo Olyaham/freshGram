@@ -890,6 +890,8 @@ void AddCreateFilterAction(not_null<Ui::PopupMenu*> menu,
 		{
 			RegexFilter filter;
 			filter.text = selectedText.toStdString();
+			filter.enabled = true;
+			filter.caseInsensitive = true;
 			filter.reversed = false;
 
 			controller->show(Settings::RegexEditBox(&filter, {}, getDialogIdFromPeer(item->history()->peer), true));

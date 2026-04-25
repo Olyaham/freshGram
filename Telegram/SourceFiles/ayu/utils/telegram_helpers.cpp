@@ -15,8 +15,11 @@
 #include "ayu/data/entities.h"
 #include "ayu/data/messages_storage.h"
 #include "ayu/features/filters/filters_controller.h"
+#include "ayu/ui/boxes/donate_info_box.h"
+#include "ayu/ui/toasts.h"
 #include "ayu/utils/rc_manager.h"
 #include "core/core_settings.h"
+#include "core/application.h"
 #include "base/unixtime.h"
 #include "core/mime_type.h"
 #include "data/data_channel.h"
@@ -44,9 +47,11 @@
 #include "styles/style_ayu_styles.h"
 #include "styles/style_info.h"
 #include "ui/emoji_config.h"
+#include "ui/layers/generic_box.h"
 #include "ui/text/format_values.h"
 #include "ui/text/text_entity.h"
 #include "ui/toast/toast.h"
+#include "window/window_controller.h"
 
 #include <functional>
 #include <latch>
@@ -259,13 +264,31 @@ Fn<void()> badgeClickHandler(not_null<PeerData*> peer) {
 			return;
 		}
 
-		Ui::Toast::Show({
+		auto config = Ui::Toast::Config{
 			.text = text,
 			.iconContent = MakeBadgeToastIcon(peer, badge),
 			.st = &st::exteraBadgeToast,
 			.adaptive = true,
 			.duration = 3 * crl::time(1000),
-		});
+		};
+		if (badge.badge == Info::Profile::BadgeType::ExteraSupporter) {
+			Ayu::Ui::ShowToastWithAction(
+				std::move(config),
+				tr::lng_collectible_learn_more(tr::now),
+				[=] {
+					const auto window = Core::App().activeWindow();
+					const auto controller = window
+						? window->sessionController()
+						: nullptr;
+					if (!controller) {
+						return;
+					}
+					controller->show(Box(Ui::FillDonateInfoBox, controller));
+					window->activate();
+				});
+		} else {
+			Ui::Toast::Show(std::move(config));
+		}
 	};
 }
 

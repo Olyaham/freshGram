@@ -134,6 +134,8 @@ set(ayugram_files
         ayu/utils/taptic_engine/platform/taptic_engine_mac.h
         ayu/ui/ayu_logo.cpp
         ayu/ui/ayu_logo.h
+        ayu/ui/toasts.cpp
+        ayu/ui/toasts.h
         ayu/ui/ayu_userpic.cpp
         ayu/ui/ayu_userpic.h
         ayu/ui/utils/ayu_profile_values.cpp
