@@ -134,10 +134,12 @@ void RegexEditBuilder(
 	RegexFilter data;
 
 	if (filter) {
-		box->setTitle(tr::ayu_RegexFiltersEdit());
+		box->setTitle(showToast ? tr::ayu_RegexFiltersAdd() : tr::ayu_RegexFiltersEdit());
 		data = *filter;
 	} else {
 		box->setTitle(tr::ayu_RegexFiltersAdd());
+		data.enabled = true;
+		data.caseInsensitive = true;
 		data.reversed = false;
 	}
 

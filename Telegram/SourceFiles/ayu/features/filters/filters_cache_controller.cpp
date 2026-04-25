@@ -111,6 +111,20 @@ std::optional<bool> isFiltered(not_null<HistoryItem*> item) {
 	return it->second;
 }
 
+bool hasFilteredMessages(not_null<PeerData*> peer) {
+	std::lock_guard lock(mutex);
+	const auto dialogIt = filteredMessages.find(peer->id.value);
+	if (dialogIt == filteredMessages.end()) {
+		return false;
+	}
+	for (const auto &entry : dialogIt->second) {
+		if (entry.second == true) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void putFiltered(not_null<HistoryItem*> item, const Data::Group *group, bool res) {
 	std::lock_guard lock(mutex);
 	filteredMessages[item->history()->peer->id.value][item->id.bare] = res;

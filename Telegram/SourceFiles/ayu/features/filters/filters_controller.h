@@ -8,6 +8,7 @@
 
 #include "unicode/regex.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -19,6 +20,8 @@ bool isEnabled(PeerData *peer);
 bool isBlocked(not_null<HistoryItem*> item);
 bool isBlocked(not_null<PeerData*> peer);
 bool filtered(not_null<HistoryItem*> historyItem);
+std::optional<bool> filteredMessagesShown(not_null<PeerData*> peer);
+void toggleFilteredMessagesShown(not_null<PeerData*> peer);
 
 void invalidate(not_null<HistoryItem*> item);
 

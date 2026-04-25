@@ -20,7 +20,11 @@
 #include "history/history_item_components.h"
 #include "unicode/regex.h"
 
+#include <unordered_set>
+
 namespace FiltersController {
+
+std::unordered_set<long long> showingFilteredMessages;
 
 bool filterBlocked(const not_null<HistoryItem*> item) {
 	if (item->from() != item->history()->peer) {
@@ -123,6 +127,10 @@ bool isBlocked(const not_null<PeerData*> peer) {
 }
 
 bool filtered(const not_null<HistoryItem*> item) {
+	if (showingFilteredMessages.contains(item->history()->peer->id.value)) {
+		return false;
+	}
+
 	const auto &settings = AyuSettings::getInstance();
 	if (!settings.filtersEnabled()) {
 		return false;
@@ -151,6 +159,23 @@ bool filtered(const not_null<HistoryItem*> item) {
 		return res.value();
 	}
 	return false;
+}
+
+std::optional<bool> filteredMessagesShown(not_null<PeerData*> peer) {
+	if (!showingFilteredMessages.contains(peer->id.value)
+		&& !FiltersCacheController::hasFilteredMessages(peer)) {
+		return std::nullopt;
+	}
+	return showingFilteredMessages.contains(peer->id.value);
+}
+
+void toggleFilteredMessagesShown(not_null<PeerData*> peer) {
+	if (showingFilteredMessages.contains(peer->id.value)) {
+		showingFilteredMessages.erase(peer->id.value);
+	} else {
+		showingFilteredMessages.insert(peer->id.value);
+	}
+	FiltersCacheController::fireUpdate();
 }
 
 void invalidate(not_null<HistoryItem*> item) {

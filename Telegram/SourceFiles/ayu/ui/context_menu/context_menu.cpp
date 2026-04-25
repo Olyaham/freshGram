@@ -13,10 +13,12 @@
 #include "ayu/ayu_settings.h"
 #include "ayu/ayu_state.h"
 #include "ayu/data/messages_storage.h"
+#include "ayu/features/filters/filters_controller.h"
 #include "ayu/features/forward/ayu_forward.h"
 #include "ayu/ui/context_menu/menu_item_subtext.h"
 #include "ayu/ui/message_history/history_section.h"
 #include "ayu/ui/settings/filters/edit_filter.h"
+#include "ayu/ui/settings/filters/settings_filters_list.h"
 #include "ayu/utils/qt_key_modifiers_extended.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "base/call_delayed.h"
@@ -215,7 +217,7 @@ bool needToShowItem(ContextMenuVisibility state) {
 		|| (state == ContextMenuVisibility::VisibleWithModifier && base::IsExtendedContextMenuModifierPressed());
 }
 
-void AddDeletedMessagesActions(PeerData *peerData,
+void AddAyuGramActions(PeerData *peerData,
 							   Data::Thread *thread,
 							   not_null<Window::SessionController*> sessionController,
 							   const Window::PeerMenuCallback &addCallback) {
@@ -223,27 +225,72 @@ void AddDeletedMessagesActions(PeerData *peerData,
 		return;
 	}
 
+	const auto &settings = AyuSettings::getInstance();
+	const auto user = peerData->asUser();
+	const auto showFilters = settings.filtersEnabled()
+		&& (!user || user->isBot());
+	const auto saveDeletedMessages = settings.saveDeletedMessages();
+	if (!showFilters && !saveDeletedMessages) {
+		return;
+	}
+
 	const auto topic = peerData->isForum() ? thread->asTopic() : nullptr;
 	const auto topicId = topic ? topic->rootId().bare : 0;
 
-	// const auto has = AyuMessages::hasDeletedMessages(peerData, topicId);
-	// if (!has) {
-	// 	return;
-	// }
-
-	addCallback(
-		tr::ayu_ViewDeletedMenuText(tr::now),
-		[=]
-		{
-			sessionController->session().tryResolveWindow()
-				->showSection(std::make_shared<MessageHistory::SectionMemento>(peerData, nullptr, topicId));
+	addCallback(Window::PeerMenuCallback::Args{
+		.text = u"AyuGram"_q,
+		.handler = nullptr,
+		.icon = &st::menuIconGroupReactions,
+		.fillSubmenu = [=](not_null<Ui::PopupMenu*> menu) {
+			const auto addAction = Ui::Menu::CreateAddActionCallback(menu);
+			if (showFilters) {
+				addAction(
+					tr::ayu_ViewFiltersMenuText(tr::now),
+					[=]
+					{
+						sessionController->dialogId = getDialogIdFromPeer(peerData);
+						sessionController->showExclude = true;
+						sessionController->shadowBan = false;
+						sessionController->showSettings(Settings::AyuFiltersList::Id());
+					},
+					&st::menuIconAddToFolder);
+			}
+			const auto filteredToggleShown = FiltersController::filteredMessagesShown(peerData);
+			if (filteredToggleShown) {
+				addAction(
+					*filteredToggleShown
+						? tr::ayu_HideFilteredMessagesMenuText(tr::now)
+						: tr::ayu_ShowFilteredMessagesMenuText(tr::now),
+					[=]
+					{
+						FiltersController::toggleFilteredMessagesShown(peerData);
+					},
+					*filteredToggleShown
+						? &st::menuIconCaptionHide
+						: &st::menuIconCaptionShow);
+			}
+			if (saveDeletedMessages) {
+				addAction(
+					tr::ayu_ViewDeletedMenuText(tr::now),
+					[=]
+					{
+						sessionController->session().tryResolveWindow()
+							->showSection(std::make_shared<MessageHistory::SectionMemento>(
+								peerData,
+								nullptr,
+								topicId));
+					},
+					&st::menuIconArchive);
+				if (showFilters || filteredToggleShown.value_or(false)) addAction({ .isSeparator = true });
+				addAction({
+					.text = tr::ayu_ClearDeletedMenuText(tr::now),
+					.handler = ClearDeletedMessagesHandler(sessionController, peerData, topicId),
+					.icon = &st::menuIconClearAttention,
+					.isAttention = true,
+				});
+			}
 		},
-		&st::menuIconArchive);
-	addCallback(
-		tr::ayu_ClearDeletedMenuText(tr::now),
-		ClearDeletedMessagesHandler(sessionController, peerData, topicId),
-		&st::menuIconDelete);
-	// todo view filters
+	});
 }
 
 void AddJumpToBeginningAction(PeerData *peerData,
