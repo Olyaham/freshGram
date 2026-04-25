@@ -16,6 +16,7 @@
 #include "ayu/data/messages_storage.h"
 #include "ayu/features/filters/filters_controller.h"
 #include "ayu/utils/rc_manager.h"
+#include "core/core_settings.h"
 #include "base/unixtime.h"
 #include "core/mime_type.h"
 #include "data/data_channel.h"
@@ -1569,7 +1570,7 @@ QString getBetterLinkPreview(const QString &url) {
 	} else if (host == u"reddit.com"_q || host == u"www.reddit.com"_q) {
 		parsed.setHost(u"vxreddit.com"_q);
 	} else if (host == u"instagram.com"_q || host == u"www.instagram.com"_q) {
-		parsed.setHost(u"kkinstagram.com"_q);
+		parsed.setHost(u"kkclip.com"_q);
 	} else if (host == u"pixiv.net"_q || host == u"www.pixiv.net"_q) {
 		parsed.setHost(u"phixiv.net"_q);
 	} else {
@@ -1585,6 +1586,9 @@ void applyGhostScheduling(
 		int delaySeconds) {
 	const auto &ghost = AyuSettings::ghost(session);
 	if (ghost.isUseScheduledMessages() && !options.scheduled) {
-		options.scheduled = base::unixtime::now() + delaySeconds;
+		const auto delay = Core::App().settings().proxy().isEnabled()
+			? (delaySeconds * 6 + 4) / 5 //ceil(delaySeconds * 1.2)
+			: delaySeconds;
+		options.scheduled = base::unixtime::now() + delay;
 	}
 }
