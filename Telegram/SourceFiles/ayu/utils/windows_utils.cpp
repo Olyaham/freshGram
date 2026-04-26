@@ -139,16 +139,21 @@ void processNewShortcuts(const QString &iconPath) {
 		return;
 	}
 
-	const auto shortcut = path + u"AyuGram Desktop/AyuGram.lnk"_q;
-	const auto native = QDir::toNativeSeparators(path).toStdWString();
+	const auto shortcuts = {
+		path + u"AyuGram Desktop/AyuGram.lnk"_q,
+		path + u"AyuGram/AyuGram.lnk"_q,
+		path + u"AyuGram.lnk"_q,
+	};
+	for (const auto &shortcut : shortcuts) {
+		const auto native = QDir::toNativeSeparators(shortcut).toStdWString();
 
-	DWORD attributes = GetFileAttributes(native.c_str());
-	if (attributes >= 0xFFFFFFF) {
-		return; // file does not exist
+		DWORD attributes = GetFileAttributes(native.c_str());
+		if (attributes >= 0xFFFFFFF) {
+			continue;
+		}
+
+		processIcon(QString::fromStdWString(native), iconPath);
 	}
-
-	const auto normalizedPath = QString::fromStdWString(native);
-	processIcon(normalizedPath, iconPath);
 }
 
 void reloadAppIconFromTaskBar() {
