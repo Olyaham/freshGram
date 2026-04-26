@@ -31,13 +31,11 @@ void processIcon(QString shortcut, QString iconPath) {
 	if (SUCCEEDED(hr)) {
 		hr = pShellLink->QueryInterface(IID_IPersistFile, (void**) &pPersistFile);
 		if (SUCCEEDED(hr)) {
-			WCHAR wszShortcutPath[MAX_PATH];
-			shortcut.toWCharArray(wszShortcutPath);
-			wszShortcutPath[shortcut.length()] = '\0';
+			const auto shortcutPath = shortcut.toStdWString();
 
-			if (SUCCEEDED(pPersistFile->Load(wszShortcutPath, STGM_READWRITE))) {
+			if (SUCCEEDED(pPersistFile->Load(shortcutPath.c_str(), STGM_READWRITE))) {
 				pShellLink->SetIconLocation(iconPath.toStdWString().c_str(), 0);
-				pPersistFile->Save(wszShortcutPath, TRUE);
+				pPersistFile->Save(shortcutPath.c_str(), TRUE);
 			}
 
 			pPersistFile->Release();

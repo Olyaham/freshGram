@@ -53,6 +53,7 @@
 #include "ui/toast/toast.h"
 #include "window/window_controller.h"
 
+#include <atomic>
 #include <functional>
 #include <latch>
 #include <QTimer>
@@ -1221,49 +1222,6 @@ void applyLocalPremiumEmoji(TextWithEntities &text) {
 			}
 		}
 	}
-}
-
-void resolveAllChats(const std::map<long long, QString> &peers) {
-	auto session = currentSession();
-
-	crl::async([=, &session]
-	{
-		while (!peers.empty()) {
-			for (const auto &[id, username] : peers) {
-                auto latch = std::make_shared<TimedCountDownLatch>(1);
-
-				auto onSuccess = [=, &latch](const MTPChatInvite &invite)
-				{
-					invite.match([=](const MTPDchatInvite &data)
-								 {
-								 },
-								 [=](const MTPDchatInviteAlready &data)
-								 {
-									 if (const auto chat = session->data().processChat(data.vchat())) {
-										 if (const auto channel = chat->asChannel()) {
-											 channel->clearInvitePeek();
-										 }
-									 }
-								 },
-								 [=](const MTPDchatInvitePeek &data)
-								 {
-								 });
-
-					latch->countDown();
-				};
-				auto onFail = [=, &latch](const MTP::Error &error)
-				{
-					if (MTP::IsFloodError(error.type())) {
-						std::this_thread::sleep_for(std::chrono::seconds(20));
-					}
-					latch->countDown();
-				};
-
-				session->api().checkChatInvite(username, onSuccess, onFail);
-				latch->await(std::chrono::seconds(20));
-			}
-		}
-	});
 }
 
 not_null<Main::Session*> currentSession() {

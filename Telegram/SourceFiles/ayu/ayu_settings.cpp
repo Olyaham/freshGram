@@ -1051,9 +1051,9 @@ void AyuSettings::setSingleCornerRadius(bool val) {
 }
 
 void to_json(nlohmann::json &j, const AyuSettings &s) {
-	std::map<std::string, GhostModeAccountSettings> ghostAccounts;
+	auto ghostAccounts = nlohmann::json::object();
 	for (const auto &[key, value] : s._ghostAccounts) {
-		ghostAccounts[std::to_string(key)] = std::move(*value);
+		ghostAccounts[std::to_string(key)] = *value;
 	}
 
 	j = nlohmann::json{

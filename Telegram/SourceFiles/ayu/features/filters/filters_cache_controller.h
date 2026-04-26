@@ -10,18 +10,33 @@
 #include "ayu/features/filters/filters_controller.h"
 #include "rpl/producer.h"
 
+#include <memory>
+#include <unordered_map>
+#include <unordered_set>
+
 namespace Data {
 struct Group;
 }
 
-using namespace FiltersController;
-
 namespace FiltersCacheController {
+
+using HashablePattern = FiltersController::HashablePattern;
+using PatternHasher = FiltersController::PatternHasher;
+using ReversiblePattern = FiltersController::ReversiblePattern;
 
 void fireUpdate();
 [[nodiscard]] rpl::producer<> updates();
 
 void rebuildCache();
+
+struct Cache
+{
+	std::vector<HashablePattern> sharedPatterns;
+	std::unordered_map<ID, std::vector<ReversiblePattern>> patternsByDialogId;
+	std::unordered_map<ID, std::unordered_set<HashablePattern, PatternHasher>> exclusionsByDialogId;
+};
+
+[[nodiscard]] std::shared_ptr<const Cache> snapshot();
 
 std::unordered_map<long long, std::unordered_set<HashablePattern, PatternHasher>> buildExclusions(
 	const std::vector<RegexFilterGlobalExclusion> &exclusions,
@@ -29,12 +44,13 @@ std::unordered_map<long long, std::unordered_set<HashablePattern, PatternHasher>
 
 std::optional<bool> isFiltered(not_null<HistoryItem*> item);
 bool hasFilteredMessages(not_null<PeerData*> peer);
-void putFiltered(not_null<HistoryItem*> item, const Data::Group *group, bool res);
+void putHiddenBlockedMessage(not_null<HistoryItem*> item);
+void putFiltered(
+	not_null<HistoryItem*> item,
+	const Data::Group *group,
+	bool res,
+	const std::shared_ptr<const Cache> &matchedCache);
 
 void invalidate(not_null<HistoryItem*> item);
-
-std::optional<std::vector<ReversiblePattern>> getPatternsByDialogId(uint64 dialogId);
-std::optional<const std::unordered_set<HashablePattern, PatternHasher>> getExclusionsByDialogId(long long dialogId);
-const std::vector<HashablePattern> &getSharedPatterns();
 
 }

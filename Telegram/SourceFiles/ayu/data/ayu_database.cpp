@@ -248,6 +248,10 @@ void addEditedMessage(const EditedMessage &message) {
 		storage.insert(message);
 		storage.commit();
 	} catch (std::exception &ex) {
+		try {
+			storage.rollback();
+		} catch (...) {
+		}
 		LOG(("Failed to save edited message for some reason: %1").arg(ex.what()));
 	}
 }
@@ -289,6 +293,10 @@ void addDeletedMessage(const DeletedMessage &message) {
 		storage.insert(message);
 		storage.commit();
 	} catch (std::exception &ex) {
+		try {
+			storage.rollback();
+		} catch (...) {
+		}
 		LOG(("Failed to save edited message for some reason: %1").arg(ex.what()));
 	}
 }
@@ -442,7 +450,10 @@ void addRegexFilter(const RegexFilter &filter) {
 		storage.replace(filter); // we're using replace as we set std::vector<char> as primary key
 		storage.commit();
 	} catch (std::exception &ex) {
-		storage.rollback();
+		try {
+			storage.rollback();
+		} catch (...) {
+		}
 		LOG(("Failed to save regex filter for some reason: %1").arg(ex.what()));
 	}
 }
@@ -453,6 +464,10 @@ void addRegexExclusion(const RegexFilterGlobalExclusion &exclusion) {
 		storage.insert(exclusion);
 		storage.commit();
 	} catch (std::exception &ex) {
+		try {
+			storage.rollback();
+		} catch (...) {
+		}
 		LOG(("Failed to save regex filter exclusion for some reason: %1").arg(ex.what()));
 	}
 }

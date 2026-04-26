@@ -234,7 +234,7 @@ void AddAyuGramActions(PeerData *peerData,
 		return;
 	}
 
-	const auto topic = peerData->isForum() ? thread->asTopic() : nullptr;
+	const auto topic = peerData->isForum() && thread ? thread->asTopic() : nullptr;
 	const auto topicId = topic ? topic->rootId().bare : 0;
 
 	addCallback(Window::PeerMenuCallback::Args{
@@ -274,11 +274,12 @@ void AddAyuGramActions(PeerData *peerData,
 					tr::ayu_ViewDeletedMenuText(tr::now),
 					[=]
 					{
-						sessionController->session().tryResolveWindow()
-							->showSection(std::make_shared<MessageHistory::SectionMemento>(
+						if (const auto window = sessionController->session().tryResolveWindow()) {
+							window->showSection(std::make_shared<MessageHistory::SectionMemento>(
 								peerData,
 								nullptr,
 								topicId));
+						}
 					},
 					&st::menuIconArchive);
 				if (showFilters || filteredToggleShown.value_or(false)) addAction({ .isSeparator = true });
@@ -478,9 +479,10 @@ void AddHistoryAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
 		tr::ayu_EditsHistoryMenuText(tr::now),
 		[=]
 		{
-			item->history()->session().tryResolveWindow()
-				->showSection(
+			if (const auto window = item->history()->session().tryResolveWindow()) {
+				window->showSection(
 					std::make_shared<MessageHistory::SectionMemento>(item->history()->peer, item, 0));
+			}
 		},
 		&st::ayuEditsHistoryIcon);
 }
