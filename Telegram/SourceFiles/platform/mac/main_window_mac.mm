@@ -44,6 +44,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <IOKit/IOKitLib.h>
 #include <IOKit/hidsystem/ev_keymap.h>
 
+// AyuGram includes
+#include "ayu/ayu_settings.h"
+
+
 @interface MainWindowObserver : NSObject {
 }
 
@@ -311,7 +315,9 @@ void MainWindow::unreadCounterChangedHook() {
 }
 
 void MainWindow::updateDockCounter() {
-	const auto counter = Core::App().unreadBadge();
+	const auto counter = AyuSettings::getInstance().hideNotificationBadge()
+		? 0
+		: Core::App().unreadBadge();
 
 	const auto string = !counter
 		? QString()
