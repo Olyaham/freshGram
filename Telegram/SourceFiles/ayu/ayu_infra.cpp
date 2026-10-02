@@ -6,7 +6,6 @@
 // Copyright @Radolyn, 2026
 #include "ayu/ayu_infra.h"
 
-#include "ayu/ayu_lang.h"
 #include "ayu/ayu_settings.h"
 #include "ayu/ayu_ui_settings.h"
 #include "ayu/ayu_worker.h"
@@ -21,17 +20,6 @@
 #endif
 
 namespace AyuInfra {
-
-void initLang() {
-	QString id = Lang::GetInstance().id();
-	QString baseId = Lang::GetInstance().baseId();
-	if (id.isEmpty()) {
-		LOG(("Language is not loaded"));
-		return;
-	}
-	AyuLanguage::init();
-	AyuLanguage::currentInstance()->fetchLanguage(id, baseId);
-}
 
 void initUiSettings() {
 	const auto &settings = AyuSettings::getInstance();
@@ -63,7 +51,6 @@ void initIcon() {
 }
 
 void init() {
-	initLang();
 	initDatabase();
 	initUiSettings();
 	initIcon();
