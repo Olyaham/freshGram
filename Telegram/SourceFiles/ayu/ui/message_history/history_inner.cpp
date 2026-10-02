@@ -11,6 +11,7 @@
 #include "mainwindow.h"
 #include "api/api_attached_stickers.h"
 #include "ayu/data/messages_storage.h"
+#include "ayu/utils/telegram_helpers.h"
 #include "ayu/ui/message_history/history_section.h"
 #include "base/call_delayed.h"
 #include "base/unixtime.h"
@@ -745,19 +746,25 @@ void InnerWidget::preloadMore(Direction direction) {
 
 	const auto reqNum = ++_loadRequestNum;
 
-	const auto item = _item;
-	const auto peer = _peer;
+	const auto viewingEdited = (_item != nullptr);
+	const auto userId = AyuMessages::storageUserId(_peer);
+	const auto dialogId = getDialogIdFromPeer(_peer);
+	const auto messageId = _item ? ID(_item->id.bare) : ID(0);
 	const auto topicId = _topicId;
-	const auto searchQuery = _searchQuery;
+	const auto searchQuery = _searchQuery.toStdString();
 
 	const auto weak = base::make_weak(this);
 
 	crl::async([=] {
 		std::vector<AyuMessageBase> messages;
-		if (item) { // viewing edited history
-			messages = AyuMessages::getEditedMessages(item, minId, maxId, perPage);
-		} else { // viewing deleted messages
-			messages = AyuMessages::getDeletedMessages(peer, topicId, minId, maxId, perPage, searchQuery);
+		try {
+			if (viewingEdited) {
+				messages = AyuMessages::loadEditedMessages(userId, dialogId, messageId, minId, maxId, perPage);
+			} else {
+				messages = AyuMessages::loadDeletedMessages(userId, dialogId, topicId, minId, maxId, perPage, searchQuery);
+			}
+		} catch (...) {
+			messages.clear();
 		}
 
 		crl::on_main([=, messages = std::move(messages)]() mutable

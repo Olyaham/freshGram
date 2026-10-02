@@ -10,6 +10,7 @@
 #include "ayu/utils/ayu_mapper.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "base/unixtime.h"
+#include "crl/crl_on_main.h"
 #include "data/data_forum_topic.h"
 #include "data/data_session.h"
 #include "history/history.h"
@@ -18,6 +19,23 @@
 #include "main/main_session.h"
 
 namespace AyuMessages {
+
+namespace {
+
+std::vector<DeletedMessage> PendingDeleted;
+bool FlushScheduled = false;
+
+void flushPendingDeleted() {
+	FlushScheduled = false;
+	if (PendingDeleted.empty()) {
+		return;
+	}
+	auto batch = std::move(PendingDeleted);
+	PendingDeleted.clear();
+	AyuDatabase::addDeletedMessages(batch);
+}
+
+}
 
 template<typename DerivedMessage>
 std::vector<AyuMessageBase> convertToBase(const std::vector<DerivedMessage> &messages) {
@@ -95,12 +113,12 @@ void addEditedMessage(not_null<HistoryItem *> item) {
 	AyuDatabase::addEditedMessage(message);
 }
 
-std::vector<AyuMessageBase> getEditedMessages(not_null<HistoryItem*> item, ID minId, ID maxId, int totalLimit) {
-	const ID userId = item->history()->owner().session().userId().bare & PeerId::kChatTypeMask;
-	const auto dialogId = getDialogIdFromPeer(item->history()->peer);
-	const auto msgId = item->id.bare;
+ID storageUserId(not_null<PeerData*> peer) {
+	return peer->session().userId().bare & PeerId::kChatTypeMask;
+}
 
-	return convertToBase(AyuDatabase::getEditedMessages(userId, dialogId, msgId, minId, maxId, totalLimit));
+std::vector<AyuMessageBase> loadEditedMessages(ID userId, ID dialogId, ID messageId, ID minId, ID maxId, int totalLimit) {
+	return convertToBase(AyuDatabase::getEditedMessages(userId, dialogId, messageId, minId, maxId, totalLimit));
 }
 
 bool hasRevisions(not_null<HistoryItem*> item) {
@@ -119,28 +137,38 @@ void addDeletedMessage(not_null<HistoryItem*> item) {
 		return;
 	}
 
-	AyuDatabase::addDeletedMessage(message);
+	PendingDeleted.push_back(std::move(message));
+	if (!FlushScheduled) {
+		FlushScheduled = true;
+		crl::on_main(flushPendingDeleted);
+	}
 }
 
-std::vector<AyuMessageBase>
-getDeletedMessages(not_null<PeerData*> peer, ID topicId, ID minId, ID maxId, int totalLimit, const QString &searchQuery) {
-	const ID userId = peer->session().userId().bare & PeerId::kChatTypeMask;
-	return convertToBase(
-		AyuDatabase::getDeletedMessages(userId, getDialogIdFromPeer(peer), topicId, minId, maxId, totalLimit, searchQuery.toStdString()));
+std::vector<AyuMessageBase> loadDeletedMessages(
+		ID userId,
+		ID dialogId,
+		ID topicId,
+		ID minId,
+		ID maxId,
+		int totalLimit,
+		const std::string &searchQuery) {
+	return convertToBase(AyuDatabase::getDeletedMessages(userId, dialogId, topicId, minId, maxId, totalLimit, searchQuery));
 }
 
 bool hasDeletedMessages(not_null<PeerData*> peer, ID topicId) {
-	const ID userId = peer->session().userId().bare & PeerId::kChatTypeMask;
-	return AyuDatabase::hasDeletedMessages(userId, getDialogIdFromPeer(peer), topicId);
+	flushPendingDeleted();
+	return AyuDatabase::hasDeletedMessages(storageUserId(peer), getDialogIdFromPeer(peer), topicId);
 }
 
 void removeDeletedMessage(not_null<HistoryItem*> item) {
+	flushPendingDeleted();
 	const auto peer = item->history()->peer;
 	const ID userId = peer->session().userId().bare & PeerId::kChatTypeMask;
 	AyuDatabase::removeDeletedMessage(userId, getDialogIdFromPeer(peer), item->id.bare);
 }
 
 void clearDeletedMessages(not_null<PeerData*> peer, ID topicId) {
+	flushPendingDeleted();
 	const ID userId = peer->session().userId().bare & PeerId::kChatTypeMask;
 	AyuDatabase::clearDeletedMessages(userId, getDialogIdFromPeer(peer), topicId);
 }
