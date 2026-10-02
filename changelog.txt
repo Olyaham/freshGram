@@ -1,3 +1,10 @@
+7.2.12 beta (03.10.26)
+
+- Keep deleted messages, photos and media in chats after a restart.
+- Fix a crash when opening the deleted messages viewer in some chats.
+- Make bold text heavier for custom fonts with a single face.
+- Round media corners inside message bubbles.
+
 7.2.11 beta (02.10.26)
 
 - Make the deleted messages storage and viewer stable.
