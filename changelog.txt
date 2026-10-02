@@ -1,3 +1,11 @@
+7.2.11 beta (02.10.26)
+
+- Make the deleted messages storage and viewer stable.
+- Save deleted messages that contain only media.
+- Save self-destructing media and cache media at deletion time.
+- Move scheduled messages into the Ghost Mode options.
+- Fix bold text weight.
+
 7.2.10 beta (25.09.26)
 
 - Update emoji to Unicode 17.
