@@ -1336,11 +1336,7 @@ void HistoryWidget::refreshGiftToChannelShown() {
 	}
 	// AyuGram: hide gift button almost everywhere
 	// still accessible via the menu in peer window
-	const auto channel = _peer->asChannel();
-	_giftToChannel->setVisible(channel
-		&& channel->isBroadcast()
-		&& channel->stargiftsAvailable()
-		&& isExteraPeer(getBareID(channel)));
+	_giftToChannel->setVisible(false);
 }
 
 void HistoryWidget::refreshDirectMessageShown() {

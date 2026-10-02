@@ -98,7 +98,7 @@ QString parseRegistrationTime(QString prefix, long long regTime) {
 		.toString(QLocale::system().dateFormat(QLocale::ShortFormat));
 }
 
-QString findRegistrationTime(long long userId) {
+RegistrationEstimate EstimateRegistration(long long userId) {
 	struct UserData {
 		long long id;
 		long long registrationTime;
@@ -237,16 +237,27 @@ QString findRegistrationTime(long long userId) {
 		if (userId >= userData[i - 1].id && userId <= userData[i].id) {
 			double t = static_cast<double>(userId - userData[i - 1].id) / (userData[i].id - userData[i - 1].id);
 
-			return parseRegistrationTime("~ ", userData[i - 1].registrationTime + t *
-				(userData[i].registrationTime - userData[i - 1].registrationTime));
+			return {
+				RegistrationEstimate::Kind::Approximate,
+				static_cast<long long>(userData[i - 1].registrationTime + t *
+					(userData[i].registrationTime - userData[i - 1].registrationTime)),
+			};
 		}
 	}
 	if (userId <= 1000000) {
-		return parseRegistrationTime("< ", 1380326400);
+		return { RegistrationEstimate::Kind::Earlier, 1380326400 };
 	}
-	else {
-		return parseRegistrationTime("> ", 1711889200);
-	}
+	return { RegistrationEstimate::Kind::Later, 1711889200 };
+}
+
+QString findRegistrationTime(long long userId) {
+	const auto estimate = EstimateRegistration(userId);
+	const auto prefix = (estimate.kind == RegistrationEstimate::Kind::Approximate)
+		? "~ "
+		: (estimate.kind == RegistrationEstimate::Kind::Earlier)
+		? "< "
+		: "> ";
+	return parseRegistrationTime(prefix, estimate.time);
 }
 
 rpl::producer<TextWithEntities> RegistrationValue(not_null<PeerData*> peer) {
