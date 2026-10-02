@@ -2,7 +2,7 @@
 
 ## In progress
 
-- Stability of viewing and saving deleted messages: database access, media without text, self-destructing media and background caching of media are done, manual testing is pending.
+- Stability of viewing and saving deleted messages: database access, media without text, self-destructing media, background caching of media and restoring deleted messages in chats after a restart are done, manual testing is pending.
 
 ## Planned
 
@@ -13,6 +13,8 @@
 5. Explicit schema versioning and safe migrations of the local AyuGram database.
 6. Split `ayu_settings.cpp` and `telegram_helpers.cpp` by topic.
 7. Remove the dead `unsupportedTTL()` field and the code that reads it.
+8. Keep the link to the original message when restoring deleted replies and forwards in chats after a restart.
+9. Restore deleted messages in forums (chats with topics) after a restart.
 
 ## Later
 
