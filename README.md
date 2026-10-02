@@ -74,6 +74,15 @@ and uses the materialgram look as the default value of the corresponding AyuGram
 freshGram needs your own Telegram `api_id` and `api_hash`, see [API credentials](docs/api_credentials.md).
 Autoupdate is disabled by default because freshGram has no update server.
 
+### GitHub Actions
+
+1. Add the repository secrets `API_ID` and `API_HASH`.
+2. Run the `Build environment` workflow once, it builds the library image and pushes it to GitHub Packages.
+3. The `Build` workflow builds Linux x86_64 on every push and pull request.
+   Run it manually with `release_tag` (for example `v7.2.10`) or push a `v*` tag to publish a release.
+
+See [docs/upstream-merge.md](docs/upstream-merge.md) for the upstream merge procedure.
+
 ## Credits
 
 ### Telegram clients

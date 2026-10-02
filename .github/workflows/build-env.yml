@@ -1,0 +1,124 @@
+name: Build environment
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'Telegram/build/docker/centos_env/**'
+      - '.github/workflows/build-env.yml'
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  DOCKER_DIR: Telegram/build/docker/centos_env
+
+jobs:
+  libs:
+    name: ${{ matrix.group }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: qt
+            targets: qt
+          - group: webrtc
+            targets: webrtc
+          - group: ffmpeg
+            targets: ffmpeg
+          - group: codecs
+            targets: zlib xz lcms2 brotli highway mozjpeg opus dav1d openh264 vpx webp avif heif jxl rnnoise
+          - group: system
+            targets: xcb xcb-wm xcb-util xcb-image xcb-keysyms xcb-render-util xcb-cursor xext xfixes xv xtst xrandr xrender xdamage xcomposite openal openssl xkbcommon boost breakpad ada tde2e tlottie
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v4
+
+      - name: Free up disk space
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: true
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Dockerfile
+        run: |
+          pip install jinja2
+          cd "$DOCKER_DIR"
+          DEBUG= LTO= python3 gen_dockerfile.py > Dockerfile.generated
+
+      - name: Build stages
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          cache="ghcr.io/$owner/freshgram-build-cache"
+          cd "$DOCKER_DIR"
+          for target in ${{ matrix.targets }}; do
+            echo "::group::$target"
+            docker buildx build \
+              --file Dockerfile.generated \
+              --target "$target" \
+              --cache-from "type=registry,ref=$cache:$target" \
+              --cache-to "type=registry,ref=$cache:$target,mode=max,image-manifest=true,oci-mediatypes=true" \
+              --output type=cacheonly \
+              .
+            echo "::endgroup::"
+          done
+
+  image:
+    name: Final image
+    needs: libs
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v4
+
+      - name: Free up disk space
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: true
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Dockerfile
+        run: |
+          pip install jinja2
+          cd "$DOCKER_DIR"
+          DEBUG= LTO= python3 gen_dockerfile.py > Dockerfile.generated
+
+      - name: Build and push image
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          cache="ghcr.io/$owner/freshgram-build-cache"
+          cache_from=""
+          for target in qt webrtc ffmpeg zlib xz lcms2 brotli highway mozjpeg opus dav1d openh264 vpx webp avif heif jxl rnnoise xcb xcb-wm xcb-util xcb-image xcb-keysyms xcb-render-util xcb-cursor xext xfixes xv xtst xrandr xrender xdamage xcomposite openal openssl xkbcommon boost breakpad ada tde2e tlottie; do
+            cache_from="$cache_from --cache-from type=registry,ref=$cache:$target"
+          done
+          cd "$DOCKER_DIR"
+          docker buildx build \
+            --file Dockerfile.generated \
+            $cache_from \
+            --tag "ghcr.io/$owner/freshgram-build-env:latest" \
+            --push \
+            .

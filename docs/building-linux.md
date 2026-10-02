@@ -17,9 +17,9 @@ Go to ***BuildPath*/freshGram** and run (using [your **api_id** and **api_hash**
 
     docker run --rm -it \
         -u $(id -u) \
-        -v "$PWD:/usr/src/freshGram" \
-        freshGram:centos_env \
-        /usr/src/freshGram/Telegram/build/docker/centos_env/build.sh \
+        -v "$PWD:/usr/src/tdesktop" \
+        freshgram:centos_env \
+        /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
         -D TDESKTOP_API_ID=YOUR_API_ID \
         -D TDESKTOP_API_HASH=YOUR_API_HASH
 
@@ -27,10 +27,10 @@ Or, to create a debug build, run
 
     docker run --rm -it \
         -u $(id -u) \
-        -v "$PWD:/usr/src/freshGram" \
+        -v "$PWD:/usr/src/tdesktop" \
         -e CONFIG=Debug \
-        freshGram:centos_env \
-        /usr/src/freshGram/Telegram/build/docker/centos_env/build.sh \
+        freshgram:centos_env \
+        /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
         -D TDESKTOP_API_ID=YOUR_API_ID \
         -D TDESKTOP_API_HASH=YOUR_API_HASH
 

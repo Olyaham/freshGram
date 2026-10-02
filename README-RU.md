@@ -72,6 +72,15 @@ freshGram — форк [Telegram Desktop](https://github.com/telegramdesktop/tde
 * [GNU/Linux через Docker](docs/building-linux.md)
 
 Для сборки нужны ваши собственные `api_id` и `api_hash` Telegram, см. [API credentials](docs/api_credentials.md).
+
+### GitHub Actions
+
+1. Добавьте секреты репозитория `API_ID` и `API_HASH`.
+2. Один раз запустите workflow `Build environment`, он соберёт образ с библиотеками и отправит его в GitHub Packages.
+3. Workflow `Build` собирает Linux x86_64 на каждый push и pull request.
+   Для релиза запустите его вручную с `release_tag` (например `v7.2.10`) или запушьте тег `v*`.
+
+Порядок слияния с upstream описан в [docs/upstream-merge.md](docs/upstream-merge.md).
 Автообновление по умолчанию отключено, так как у freshGram нет сервера обновлений.
 
 ## Благодарности
