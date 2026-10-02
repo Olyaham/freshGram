@@ -17,6 +17,10 @@
 #include <QtGui/QFontInfo>
 #include <QtGui/QFontDatabase>
 
+#include <array>
+#include <cstdlib>
+#include <optional>
+
 #if __has_include(<glib.h>)
 #include <glib.h>
 #endif // __has_include(<glib.h>)
@@ -332,6 +336,111 @@ struct Metrics {
 	}
 }
 
+[[nodiscard]] QString StripWeightWord(QString family) {
+	static const auto words = std::array{
+		u"Thin"_q,
+		u"ExtraLight"_q,
+		u"UltraLight"_q,
+		u"Extra Light"_q,
+		u"Light"_q,
+		u"Regular"_q,
+		u"Medium"_q,
+		u"SemiBold"_q,
+		u"DemiBold"_q,
+		u"Semi Bold"_q,
+		u"Demi Bold"_q,
+		u"Bold"_q,
+		u"ExtraBold"_q,
+		u"UltraBold"_q,
+		u"Extra Bold"_q,
+		u"Black"_q,
+		u"Heavy"_q,
+	};
+	for (auto changed = true; changed;) {
+		changed = false;
+		for (const auto &word : words) {
+			const auto suffix = ' ' + word;
+			if (family.size() > suffix.size()
+				&& family.endsWith(suffix, Qt::CaseInsensitive)) {
+				family.chop(suffix.size());
+				changed = true;
+				break;
+			}
+		}
+	}
+	return family;
+}
+
+struct BoldFace {
+	QString family;
+	int weight = 0;
+};
+
+[[nodiscard]] std::optional<BoldFace> FindBoldFace(const QFont &font) {
+	static auto Cache = base::flat_map<QString, std::optional<BoldFace>>();
+
+	const auto family = font.family();
+	const auto regular = [&] {
+		auto result = int(QFont::Normal);
+		auto distance = 10000;
+		for (const auto &style : QFontDatabase::styles(family)) {
+			if (QFontDatabase::italic(family, style)) {
+				continue;
+			}
+			const auto weight = QFontDatabase::weight(family, style);
+			const auto delta = std::abs(weight - int(QFont::Normal));
+			if (delta < distance) {
+				distance = delta;
+				result = weight;
+			}
+		}
+		return result;
+	}();
+	const auto key = family + QChar('|') + QString::number(regular);
+	if (const auto i = Cache.find(key); i != end(Cache)) {
+		return i->second;
+	}
+
+	const auto base = StripWeightWord(family);
+	const auto desired = std::min(
+		int(QFont::Black),
+		std::max(int(QFont::Bold), regular + 200));
+	const auto rank = [&](int weight) {
+		return (weight >= desired) ? (2000 - weight) : weight;
+	};
+
+	auto result = std::optional<BoldFace>();
+	auto bestRank = rank(regular);
+	const auto consider = [&](const QString &candidate) {
+		for (const auto &style : QFontDatabase::styles(candidate)) {
+			if (QFontDatabase::italic(candidate, style)) {
+				continue;
+			}
+			const auto weight = QFontDatabase::weight(candidate, style);
+			if (weight <= regular) {
+				continue;
+			}
+			if (const auto value = rank(weight); value > bestRank) {
+				bestRank = value;
+				result = BoldFace{ candidate, weight };
+			}
+		}
+	};
+	consider(base);
+	consider(family);
+	const auto prefix = base + ' ';
+	for (const auto &candidate : QFontDatabase::families()) {
+		if (candidate.startsWith(prefix, Qt::CaseInsensitive)
+			&& StripWeightWord(candidate).compare(
+				base,
+				Qt::CaseInsensitive) == 0) {
+			consider(candidate);
+		}
+	}
+	Cache.emplace(key, result);
+	return result;
+}
+
 [[nodiscard]] FontResolveResult ResolveFont(
 		const QString &family,
 		FontFlags flags,
@@ -361,9 +470,18 @@ struct Metrics {
 			int(base::SafeRound(metrics.pixelSize * kSubSuperMultiplier)));
 	}
 	if (!monospace) {
-		font.setWeight((flags & FontFlag::Bold)
-			? QFont::Bold
-			: QFont::Normal);
+		font.setWeight(QFont::Normal);
+		if (flags & FontFlag::Bold) {
+			const auto face = (overriden || system)
+				? FindBoldFace(font)
+				: std::nullopt;
+			if (face) {
+				font.setFamily(face->family);
+				font.setWeight(QFont::Weight(face->weight));
+			} else {
+				font.setWeight(QFont::Bold);
+			}
+		}
 
 		font.setItalic(flags & FontFlag::Italic);
 		font.setUnderline(flags & FontFlag::Underline);

@@ -85,6 +85,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "ayu/ayu_settings.h"
 #include "ayu/ayu_state.h"
+#include "ayu/data/deleted_restore.h"
 
 
 namespace {
@@ -4185,6 +4186,10 @@ void History::insertMessageToBlocks(not_null<HistoryItem*> item) {
 }
 
 void History::checkLocalMessages() {
+	if (!_ayuRestore) {
+		_ayuRestore = std::make_unique<AyuRestore::State>(this);
+	}
+	_ayuRestore->checkLoaded();
 	if (isEmpty() && (!loadedAtTop() || !loadedAtBottom())) {
 		return;
 	}
@@ -4197,6 +4202,7 @@ void History::checkLocalMessages() {
 	const auto goodDate = [&](TimeId date) {
 		return (date >= firstDate && date < lastDate);
 	};
+	_ayuRestore->materialize(firstDate, lastDate);
 	for (const auto &item : _clientSideMessages) {
 		if (!item->mainView() && goodDate(item->date())) {
 			insertMessageToBlocks(item);

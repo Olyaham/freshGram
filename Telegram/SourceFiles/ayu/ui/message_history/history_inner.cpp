@@ -823,11 +823,16 @@ void InnerWidget::addMessages(Direction direction, const std::vector<AyuMessageB
 			addToItems.push_back(std::move(item));
 			++count;
 		};
-		GenerateItems(
-			this,
-			_history,
-			message,
-			addOne);
+		try {
+			GenerateItems(
+				this,
+				_history,
+				message,
+				addOne);
+		} catch (...) {
+			LOG(("MessageHistory: failed to restore a saved message"));
+			continue;
+		}
 		if (count > 1) {
 			// Reverse the inner order of the added messages, because we load messages
 			// from bottom to top but inside one message they go from top to bottom.

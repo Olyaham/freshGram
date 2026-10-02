@@ -26,6 +26,10 @@ class HistoryMainElementDelegateMixin;
 class HistoryStreamedDrafts;
 struct LanguageId;
 
+namespace AyuRestore {
+class State;
+} // namespace AyuRestore
+
 namespace Data {
 struct Draft;
 class CommunityInfo;
@@ -686,6 +690,7 @@ private:
 	std::optional<HistoryItem*> _lastMessage;
 	std::optional<HistoryItem*> _lastServerMessage;
 	base::flat_set<not_null<HistoryItem*>> _clientSideMessages;
+	std::unique_ptr<AyuRestore::State> _ayuRestore;
 	std::unordered_set<std::unique_ptr<HistoryItem>> _items;
 
 	std::unique_ptr<Data::HistoryMessages> _messages;

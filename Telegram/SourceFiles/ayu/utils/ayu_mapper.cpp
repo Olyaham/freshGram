@@ -56,17 +56,31 @@ std::vector<char> serializeObject(MTPObject object) {
 }
 
 template<typename MTPObject>
-MTPObject deserializeObject(std::vector<char> serialized) {
-	gsl::span<char> span(serialized.data(), serialized.size());
+std::optional<MTPObject> tryDeserializeObject(const std::vector<char> &serialized) {
+	if (serialized.empty() || serialized.size() % sizeof(mtpPrime) != 0) {
+		return std::nullopt;
+	}
+	auto buffer = mtpBuffer(serialized.size() / sizeof(mtpPrime));
+	memcpy(buffer.data(), serialized.data(), serialized.size());
 
-	auto from = reinterpret_cast<const mtpPrime*>(span.data());
-	const auto end = from + span.size() / sizeof(mtpPrime);
+	auto from = static_cast<const mtpPrime*>(buffer.data());
+	const auto end = from + buffer.size();
 
-	MTPObject data;
-	if (!data.read(from, end)) {
-		LOG(("AyuMapper: Failed to deserialize object"));
+	auto data = MTPObject();
+	if (!data.read(from, end) || from != end) {
+		return std::nullopt;
 	}
 	return data;
+}
+
+template<typename MTPObject>
+MTPObject deserializeObject(std::vector<char> serialized) {
+	auto result = tryDeserializeObject<MTPObject>(serialized);
+	if (!result) {
+		LOG(("AyuMapper: Failed to deserialize object"));
+		return MTPObject();
+	}
+	return std::move(*result);
 }
 
 std::pair<std::string, std::vector<char>> serializeTextWithEntities(not_null<HistoryItem*> item) {
@@ -90,7 +104,8 @@ std::pair<std::string, std::vector<char>> serializeTextWithEntities(not_null<His
 }
 
 MTPVector<MTPMessageEntity> deserializeTextWithEntities(std::vector<char> serialized) {
-	return deserializeObject<MTPVector<MTPMessageEntity>>(serialized);
+	auto result = tryDeserializeObject<MTPVector<MTPMessageEntity>>(serialized);
+	return result ? std::move(*result) : MTP_vector<MTPMessageEntity>();
 }
 
 std::vector<char> serializeSavableMedia(const MTPMessageMedia &media) {
@@ -134,10 +149,29 @@ std::vector<char> serializeSavableMedia(const MTPMessageMedia &media) {
 }
 
 MTPMessageMedia deserializeMedia(const std::vector<char> &serialized) {
-	if (serialized.empty()) {
+	auto result = tryDeserializeObject<MTPMessageMedia>(serialized);
+	if (!result) {
+		if (!serialized.empty()) {
+			LOG(("AyuMapper: Failed to deserialize saved media"));
+		}
 		return MTP_messageMediaEmpty();
 	}
-	return deserializeObject<MTPMessageMedia>(serialized);
+	const auto valid = result->match([](const MTPDmessageMediaPhoto &data) {
+		return data.vphoto() != nullptr;
+	}, [](const MTPDmessageMediaDocument &data) {
+		return data.vdocument() != nullptr;
+	}, [](const MTPDmessageMediaGeo &) {
+		return true;
+	}, [](const MTPDmessageMediaVenue &) {
+		return true;
+	}, [](const MTPDmessageMediaContact &) {
+		return true;
+	}, [](const MTPDmessageMediaDice &) {
+		return true;
+	}, [](const auto &) {
+		return false;
+	});
+	return valid ? std::move(*result) : MTP_messageMediaEmpty();
 }
 
 int mapItemFlagsToMTPFlags(not_null<HistoryItem*> item) {
