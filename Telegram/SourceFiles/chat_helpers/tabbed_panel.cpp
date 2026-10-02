@@ -19,7 +19,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/options.h"
 #include "styles/style_chat_helpers.h"
 
-// AyuGram includes
 #include "ayu/ayu_settings.h"
 
 

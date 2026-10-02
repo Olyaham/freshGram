@@ -19,7 +19,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <set>
 
-// AyuGram includes
 #include "ayu/ui/ayu_userpic.h"
 
 

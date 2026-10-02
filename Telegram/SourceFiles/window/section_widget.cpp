@@ -39,7 +39,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <rpl/range.h>
 
-// AyuGram includes
 #include "ayu/ayu_settings.h"
 
 

@@ -64,7 +64,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QScreen>
 #include <QSvgRenderer>
 
-// AyuGram includes
 #include "ayu/ui/ayu_userpic.h"
 
 

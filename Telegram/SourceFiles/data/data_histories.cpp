@@ -34,7 +34,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/application.h"
 #include "apiwrap.h"
 
-// AyuGram includes
 #include "ayu/ayu_settings.h"
 #include "ayu/ayu_worker.h"
 #include "ayu/data/messages_storage.h"
@@ -697,7 +696,6 @@ void Histories::reportPendingDeliveries() {
 void Histories::sendReadRequests() {
 	DEBUG_LOG(("Reading: send requests with count %1.").arg(_states.size()));
 
-	// AyuGram sendReadMessages
 	const auto &ghost = AyuSettings::ghost(&_owner->session());
 	if (!ghost.sendReadMessages()) {
 		DEBUG_LOG(("[AyuGram] Don't read messages"));

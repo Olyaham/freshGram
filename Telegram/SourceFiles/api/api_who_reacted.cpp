@@ -30,7 +30,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "apiwrap.h"
 #include "styles/style_chat_helpers.h"
 
-// AyuGram includes
 #include "ayu/ayu_settings.h"
 #include "ayu/features/filters/filters_controller.h"
 

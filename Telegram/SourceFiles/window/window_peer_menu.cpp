@@ -139,7 +139,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QAction>
 #include <QtWidgets/QApplication>
 
-// AyuGram includes
 #include "ayu/utils/telegram_helpers.h"
 #include "styles/style_ayu_icons.h"
 #include "ayu/ui/context_menu/context_menu.h"
@@ -3719,7 +3718,6 @@ base::weak_qptr<Ui::BoxContent> ShowForwardMessagesBox(
 		if ((!state->submit || ayuForwarding) && successCallback) {
 			successCallback();
 		}
-		// AyuGram-changed
 	};
 
 	const auto sendMenuType = [=] {

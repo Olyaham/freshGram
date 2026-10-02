@@ -20,7 +20,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "webrtc/webrtc_video_track.h"
 #include "styles/style_calls.h"
 
-// AyuGram includes
 #include "ayu/ui/ayu_userpic.h"
 
 

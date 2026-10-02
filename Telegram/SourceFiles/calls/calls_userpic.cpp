@@ -20,7 +20,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "apiwrap.h" // requestFullPeer.
 #include "styles/style_calls.h"
 
-// AyuGram includes
 #include "ayu/ui/ayu_userpic.h"
 #include "ui/image/image_prepare.h"
 

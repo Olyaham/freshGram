@@ -21,7 +21,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/wrap/vertical_layout.h"
 #include "ui/vertical_list.h"
 
-// AyuGram includes
 #include "lang_auto.h"
 #include "ayu/ayu_settings.h"
 #include "ayu/ui/components/saved_music.h"

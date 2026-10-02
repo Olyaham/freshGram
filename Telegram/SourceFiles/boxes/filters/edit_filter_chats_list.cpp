@@ -25,7 +25,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_window.h"
 #include "styles/style_boxes.h"
 
-// AyuGram includes
 #include "ayu/ui/ayu_userpic.h"
 
 

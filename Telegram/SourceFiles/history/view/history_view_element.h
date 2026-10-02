@@ -14,7 +14,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "iv/iv_rich_page.h"
 #include "ui/userpic_view.h"
 
-// AyuGram includes
 #include "ui/effects/animations.h"
 
 

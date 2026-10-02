@@ -55,7 +55,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "storage/storage_facade.h"
 #include "storage/storage_shared_media.h"
 
-// AyuGram includes
 #include "ayu/ui/ayu_userpic.h"
 
 

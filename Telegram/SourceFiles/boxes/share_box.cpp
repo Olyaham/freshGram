@@ -67,7 +67,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QGuiApplication>
 #include <QtGui/QClipboard>
 
-// AyuGram includes
 #include "ayu/features/forward/ayu_forward.h"
 
 
@@ -1866,7 +1865,6 @@ ShareBox::SubmitCallback ShareBox::DefaultForwardCallback(
 			&& result.front()->peer()->isSelf()
 			&& history->session().premium();
 
-		// AyuGram-changed
 		const auto dismiss = [=]
 		{
 			if (show->valid()) {
@@ -1901,7 +1899,6 @@ ShareBox::SubmitCallback ShareBox::DefaultForwardCallback(
 			dismiss();
 			return;
 		}
-		// AyuGram-changed
 
 		for (const auto &thread : result) {
 			const auto peer = thread->peer();

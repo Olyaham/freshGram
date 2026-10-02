@@ -22,7 +22,6 @@
 #endif // __has_include(<glib.h>)
 
 
-// AyuGram includes
 #include "ayu/ayu_ui_settings.h"
 
 

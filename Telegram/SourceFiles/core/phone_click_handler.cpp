@@ -27,7 +27,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_chat.h" // popupMenuExpandedSeparator.
 #include "styles/style_menu_icons.h"
 
-// AyuGram includes
 #include "ayu/utils/telegram_helpers.h"
 
 
