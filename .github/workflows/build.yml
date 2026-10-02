@@ -111,7 +111,14 @@ jobs:
             -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
             -D DESKTOP_APP_DISABLE_CRASH_REPORTS=ON \
             -D TDESKTOP_API_ID="$API_ID" \
-            -D TDESKTOP_API_HASH="$API_HASH"
+            -D TDESKTOP_API_HASH="$API_HASH" 2>&1 | tee build.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Show build errors
+        if: failure()
+        run: |
+          grep -n -E "FAILED:|error:|Error [0-9]|undefined reference" build.log | head -100 || true
+          grep -n -A12 "FAILED:" build.log | head -300 || true
 
       - name: Save compiler cache
         if: always() && steps.ccache.outcome == 'success'
