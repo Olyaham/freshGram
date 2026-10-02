@@ -23,6 +23,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/core_settings.h"
 #include "core/file_utilities.h"
 #include "core/launcher.h"
+#include "core/update_channel.h"
 #include "core/update_checker.h"
 #include "data/data_auto_download.h"
 #include "data/data_session.h"
@@ -65,6 +66,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/wrap/slide_wrap.h"
 #include "ui/wrap/vertical_layout.h"
 #include "window/window_controller.h"
+#include "window/window_saved_windows.h"
 #include "window/window_session_controller.h"
 #include "styles/style_layers.h"
 #include "styles/style_menu_icons.h"
@@ -745,6 +747,28 @@ void BuildSystemIntegrationSection(SectionBuilder &builder) {
 		}
 	}
 
+	const auto restoreWindows = builder.addCheckbox({
+		.id = u"advanced/restore_windows"_q,
+		.title = tr::lng_settings_restore_windows(),
+		.checked = Core::App().savedWindows()->restoreOnLaunch(),
+		.keywords = {
+			u"restore"_q,
+			u"windows"_q,
+			u"launch"_q,
+			u"startup"_q,
+			u"reopen"_q,
+			u"session"_q,
+		},
+	});
+	if (restoreWindows) {
+		restoreWindows->checkedChanges(
+		) | rpl::filter([=](bool checked) {
+			return (checked != Core::App().savedWindows()->restoreOnLaunch());
+		}) | rpl::on_next([=](bool checked) {
+			Core::App().savedWindows()->setRestoreOnLaunch(checked);
+		}, restoreWindows->lifetime());
+	}
+
 	if (Platform::IsWindows() && !Platform::IsWindowsStoreBuild()) {
 		const auto sendto = builder.addCheckbox({
 			.id = u"advanced/sendto"_q,
@@ -1062,7 +1086,9 @@ void BuildUpdateSection(SectionBuilder &builder, bool atTop) {
 	auto install = (Ui::SettingsButton*)nullptr;
 	auto check = (Ui::SettingsButton*)nullptr;
 	builder.scope([&] {
-		install = (cAlphaVersion() || KSandbox::isInside())
+		install = (cAlphaVersion()
+			|| Core::BuildIsCanary
+			|| KSandbox::isInside())
 			? nullptr
 			: builder.addButton({
 				.id = u"advanced/install_beta"_q,
@@ -1485,7 +1511,9 @@ void SetupUpdate(not_null<Ui::VerticalLayout*> container) {
 			container,
 			object_ptr<Ui::VerticalLayout>(container)));
 	const auto inner = options->entity();
-	const auto install = (cAlphaVersion() || KSandbox::isInside())
+	const auto install = (cAlphaVersion()
+		|| Core::BuildIsCanary
+		|| KSandbox::isInside())
 		? nullptr
 		: inner->add(object_ptr<Button>(
 			inner,

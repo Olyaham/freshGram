@@ -11,6 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/event_filter.h"
 #include "base/qt_signal_producer.h"
 #include "boxes/about_box.h"
+#include "core/update_channel.h"
 #include "boxes/peer_list_controllers.h"
 #include "boxes/premium_preview_box.h"
 #include "calls/group/calls_group_common.h"
@@ -385,12 +386,15 @@ MainMenu::MainMenu(
 		u"freshGram"_q,
 		u"https://github.com/Snowy-Fluffy/freshGram"_q));
 	_telegram->setLinksTrusted();
+	// The canary version is too long for the "Version {version}" form.
 	_version->setMarkedText(
 		tr::link(
-			tr::lng_settings_current_version(
-				tr::now,
-				lt_version,
-				currentVersionText()),
+			Core::BuildIsCanary
+				? currentVersionShortText()
+				: tr::lng_settings_current_version(
+					tr::now,
+					lt_version,
+					currentVersionShortText()),
 			1) // Link 1.
 		.append(QChar(' '))
 		.append(QChar(8211))
@@ -669,7 +673,7 @@ void MainMenu::setupMenu() {
 				{ &st::menuIconProfile })
 		)->setClickedCallback([=] {
 			controller->showSection(
-				Info::Stories::Make(controller->session().user()));
+				Info::Stories::MakeMyProfile(controller->session().user()));
 		});
 
 		if (settings.showBotsInDrawer())
@@ -1036,7 +1040,7 @@ void MainMenu::initResetScaleButton() {
 
 OthersUnreadState OtherAccountsUnreadStateCurrent(
 		not_null<Main::Account*> current) {
-	auto &domain = Core::App().domain();
+	const auto &domain = Core::App().domain();
 	auto counter = 0;
 	auto allMuted = true;
 	for (const auto &[index, account] : domain.accounts()) {

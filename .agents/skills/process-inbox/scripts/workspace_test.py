@@ -18,6 +18,51 @@ import workspace
 TASK_ID = "2026/07/19/correct-recent-search-peer-actions"
 
 
+class CommitHashArtifactTests(unittest.TestCase):
+	def test_rejects_explicit_commit_references(self):
+		values = (
+			"Commit: abcdef1",
+			"commit hash = `abcdef1234567890abcdef1234567890abcdef1234`",
+			"commit id: 1234567",
+			"Commit SHA-1: abcdef1",
+			"**Revision:** `abcdef1`",
+			'{"revision": "abcdef1"}',
+			json.dumps({"log": '{"revision": "abcdef1"}'}),
+			"SHA-1: abcdef1",
+			"sha: " + "a" * 64,
+			"Task-Base-SHA: none",
+			"Implementation-SHA: none",
+		)
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary)
+			path = root / "result.md"
+			for value in values:
+				with self.subTest(value=value):
+					path.write_text(value, encoding="utf-8")
+					with self.assertRaises(workspace.WorkspaceError):
+						workspace.ensure_no_persisted_commit_hashes(root)
+
+	def test_preserves_runtime_values_and_content_digests(self):
+		values = (
+			'{"revision":3,"amount":1430000000}',
+			json.dumps({"log": '{"revision":3,"amount":1430000000}'}),
+			json.dumps({"log": '{"revision":3},{"amount":1430000000}'}),
+			'revision and box generation - {"amount":2460000000',
+			"revision-and-box-generation amount2460000000",
+			"SHA-256 (not a commit reference): " + "a" * 64,
+			"source-content SHA-256: " + "b" * 64,
+			"commit #1234567",
+			"revision3 amount1430000000",
+		)
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary)
+			path = root / "raw.log"
+			for value in values:
+				with self.subTest(value=value):
+					path.write_text(value, encoding="utf-8")
+					workspace.ensure_no_persisted_commit_hashes(root)
+
+
 class FrozenDate(datetime.date):
 	@classmethod
 	def today(cls):
@@ -114,6 +159,15 @@ def git(repo, *args):
 		stderr=subprocess.PIPE,
 		text=True,
 	).stdout.strip()
+
+
+def git_bytes(repo, *args):
+	return subprocess.run(
+		["git", "-C", str(repo), *args],
+		check=True,
+		stdout=subprocess.PIPE,
+		stderr=subprocess.PIPE,
+	).stdout
 
 
 def git_repo(path):
@@ -407,6 +461,65 @@ class WorkspaceTest(unittest.TestCase):
 			self.assertTrue((main / "projects" / "legacy").is_dir())
 			self.assertFalse((main / "projects" / "archive" / "legacy").exists())
 
+	def test_inbox_publish_stages_a_removed_non_ascii_publication_path(self):
+		name = "\u00e9\u6587.md"
+		self.assertEqual(name.encode("utf-8"), b"\xc3\xa9\xe6\x96\x87.md")
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary)
+			config = inbox_worktrees(root)
+			main = Path(config["ai_main"])
+			project = main / "projects" / "sample"
+			project.mkdir(parents=True)
+			(project / name).write_text("# Sample note\n", encoding="utf-8")
+			git(main, "add", "projects/sample")
+			git(main, "commit", "-m", "Add sample project")
+
+			prepared = io.StringIO()
+			with (
+				mock.patch.object(
+					workspace,
+					"inbox_worktree_config",
+					return_value=config,
+				),
+				contextlib.redirect_stdout(prepared),
+			):
+				workspace.command_prepare(SimpleNamespace())
+			result = json.loads(prepared.getvalue())
+
+			worktree = Path(config["inbox_worktree"])
+			(worktree / "projects" / "sample" / name).unlink()
+			(worktree / "projects" / "sample").rmdir()
+			receipt = "receipts/2026/07/19/removed-note.md"
+			receipt_path = worktree / receipt
+			receipt_path.parent.mkdir(parents=True)
+			receipt_path.write_text(
+				f"# Inbox receipt\n\nInbox digest: {result['digest']}\n",
+				encoding="utf-8",
+			)
+			with (
+				mock.patch.object(
+					workspace,
+					"inbox_worktree_config",
+					return_value=config,
+				),
+				contextlib.redirect_stdout(io.StringIO()),
+			):
+				workspace.command_inbox_publish(SimpleNamespace(
+					transaction=result["transaction"],
+					receipt=receipt,
+					paths=["projects/sample", receipt],
+				))
+
+			self.assertFalse((main / "projects" / "sample").exists())
+			self.assertEqual(
+				git_bytes(
+					main,
+					"-c", "core.quotePath=false",
+					"show", "--name-status", "--format=", "HEAD",
+				).decode("utf-8").strip().splitlines(),
+				["D\tprojects/sample/" + name, "A\t" + receipt],
+			)
+
 	def test_finalize_rejects_receipt_outside_master(self):
 		with tempfile.TemporaryDirectory() as temporary:
 			root = Path(temporary)
@@ -523,9 +636,433 @@ class WorkspaceTest(unittest.TestCase):
 		}
 		states = {task["id"]: task for task in (approved, blocked)}
 
-		resolved = workspace.resolve_task(states, "correct-recent-search-peer-actions")
+		with tempfile.TemporaryDirectory() as temporary:
+			resolved = workspace.resolve_task(
+				Path(temporary),
+				states,
+				"correct-recent-search-peer-actions",
+			)
 
 		self.assertEqual(resolved["id"], TASK_ID)
+
+	def test_resolve_follows_durable_superseded_task_alias(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary)
+			git_repo(root)
+			write_task(root, status="todo", claimed_by=None)
+			old_id = "2026/07/18/old-recent-search-task"
+			old = root / "tasks" / old_id
+			old.mkdir(parents=True)
+			(old / "task.md").write_text("# Old task\n", encoding="utf-8")
+			git(root, "add", "-A")
+			git(root, "commit", "-m", "Retain the old task")
+			content_digest = workspace.retained_task_digest(old)
+			(old / "superseded.yaml").write_text(
+				f"""superseded_by: {TASK_ID}
+receipt: receipts/2026/07/20/consolidation.md
+type: implement
+project: null
+content_sha256: {content_digest}
+""",
+				encoding="utf-8",
+			)
+			states = workspace.load_states(root)
+
+			resolved = workspace.resolve_task(root, states, old_id)
+
+			self.assertEqual(resolved["id"], TASK_ID)
+			self.assertEqual(resolved["superseded_from"], old_id)
+
+	def test_dependency_validation_rejects_missing_and_cyclic_edges(self):
+		first = {**task_state("todo", None), "depends_on": ["missing"]}
+		with self.assertRaisesRegex(workspace.WorkspaceError, "missing dependencies"):
+			workspace.validate_dependency_graph({TASK_ID: first})
+
+		other_id = "2026/07/20/other-task"
+		first = {**task_state("todo", None), "depends_on": [other_id]}
+		other = {
+			**task_state("todo", None),
+			"id": other_id,
+			"depends_on": [TASK_ID],
+		}
+		with self.assertRaisesRegex(workspace.WorkspaceError, "dependency cycle"):
+			workspace.validate_dependency_graph({TASK_ID: first, other_id: other})
+
+	def test_queue_inventory_finds_pending_consolidation_markers(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary)
+			directory = write_task(root, status="approved")
+			marker = directory / workspace.CONSOLIDATION_PENDING
+			marker.write_text("Created: one\n", encoding="utf-8")
+
+			self.assertEqual(workspace.pending_consolidations(root), [{
+				"source_task": TASK_ID,
+				"marker": f"tasks/{TASK_ID}/{workspace.CONSOLIDATION_PENDING}",
+			}])
+
+	def test_generic_publish_recognizes_consolidation_validation(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary)
+			git_repo(root)
+			directory = write_task(root, status="approved")
+			pending = directory / workspace.CONSOLIDATION_PENDING
+			pending.write_text("pending\n", encoding="utf-8")
+			git(root, "add", ".")
+			git(root, "commit", "-m", "Seed completed task")
+			pending.unlink()
+			complete = directory / workspace.CONSOLIDATION_COMPLETE
+			complete.write_text(
+				f"# Consolidation\n\nSource: {TASK_ID}\nSTATUS: NO_MERGE\n",
+				encoding="utf-8",
+			)
+			git(root, "add", "-A")
+			git(
+				root,
+				"commit",
+				"-m",
+				f"Consolidate pending tasks after {TASK_ID}",
+			)
+
+			validate = workspace.consolidation_validation_for_head(root)
+
+			self.assertIsNotNone(validate)
+			validate(root)
+
+	def test_consolidation_validation_rejects_a_non_ascii_superseded_path(self):
+		slug = "\u00e9\u6587"
+		self.assertEqual(slug.encode("utf-8"), b"\xc3\xa9\xe6\x96\x87")
+		planted = f"tasks/2026/07/19/{slug}/work/superseded.yaml"
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary)
+			git_repo(root)
+			directory = write_task(root, status="approved")
+			pending = directory / workspace.CONSOLIDATION_PENDING
+			pending.write_text("pending\n", encoding="utf-8")
+			git(root, "add", ".")
+			git(root, "commit", "-m", "Seed completed task")
+			pending.unlink()
+			complete = directory / workspace.CONSOLIDATION_COMPLETE
+			complete.write_text(
+				f"# Consolidation\n\nSource: {TASK_ID}\nSTATUS: NO_MERGE\n",
+				encoding="utf-8",
+			)
+			alias = root / planted
+			alias.parent.mkdir(parents=True)
+			alias.write_text(
+				"superseded_by: 2026/07/20/successor-task\n"
+				"receipt: receipts/2026/07/19/test.md\n"
+				"type: implement\n"
+				"project: null\n"
+				"content_sha256: " + "0" * 64 + "\n",
+				encoding="utf-8",
+			)
+			git(root, "add", "-A")
+			git(
+				root,
+				"commit",
+				"-m",
+				f"Consolidate pending tasks after {TASK_ID}",
+			)
+			self.assertEqual(
+				git_bytes(
+					root,
+					"-c", "core.quotePath=false",
+					"diff-tree", "--no-commit-id", "--name-only", "-r",
+					"HEAD^", "HEAD",
+				).decode("utf-8").splitlines().count(planted),
+				1,
+			)
+			self.assertEqual(workspace.superseded_paths(root), [])
+
+			with self.assertRaises(workspace.WorkspaceError) as caught:
+				workspace.consolidation_validation_for_head(root)
+
+			self.assertEqual(
+				str(caught.exception),
+				"Invalid superseded path in consolidation commit: " + planted,
+			)
+
+	def test_no_merge_consolidation_publishes_durable_completion(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary)
+			config = inbox_worktrees(root)
+			main = Path(config["ai_main"])
+			slot = Path(config["slot_worktree"])
+			source_task = "2026/07/18/active-task"
+			directory = main / "tasks" / source_task
+			state = directory / "state.yaml"
+			state.write_text(
+				state.read_text(encoding="utf-8")
+				.replace("status: todo", "status: approved")
+				.replace("phase: null", "phase: complete"),
+				encoding="utf-8",
+			)
+			pending = directory / workspace.CONSOLIDATION_PENDING
+			pending.parent.mkdir()
+			pending.write_text("# Pending task consolidation\n", encoding="utf-8")
+			git(main, "add", f"tasks/{source_task}")
+			git(main, "commit", "-m", "Route follow-ups")
+			git(slot, "merge", "--ff-only", "master")
+			slot_directory = slot / "tasks" / source_task
+			(slot_directory / workspace.CONSOLIDATION_PENDING).unlink()
+			(slot_directory / workspace.CONSOLIDATION_COMPLETE).write_text(
+				f"# Consolidation\n\nSource: {source_task}\nSTATUS: NO_MERGE\n",
+				encoding="utf-8",
+			)
+			out = io.StringIO()
+			with (
+				mock.patch.object(workspace, "worktree_config", return_value=config),
+				contextlib.redirect_stdout(out),
+			):
+				workspace.command_consolidate_publish(SimpleNamespace(
+					source_task=source_task,
+					mappings=[],
+					receipt=None,
+					paths=[f"tasks/{source_task}"],
+				))
+
+			result = json.loads(out.getvalue())
+			self.assertTrue(result["committed"])
+			self.assertTrue(result["published"])
+			self.assertFalse(
+				(main / "tasks" / source_task / workspace.CONSOLIDATION_PENDING).exists()
+			)
+			self.assertTrue(
+				(main / "tasks" / source_task / workspace.CONSOLIDATION_COMPLETE).is_file()
+			)
+
+	def test_merged_consolidation_publishes_a_removed_directory(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary)
+			config = inbox_worktrees(root)
+			main = Path(config["ai_main"])
+			slot = Path(config["slot_worktree"])
+			source_task = "2026/07/18/active-task"
+			old_ids = ["2026/07/18/first-task", "2026/07/18/second-task"]
+			new_id = "2026/07/20/combined-task"
+			receipt = "receipts/2026/07/20/consolidation.md"
+			directory = main / "tasks" / source_task
+			state = directory / "state.yaml"
+			state.write_text(
+				state.read_text(encoding="utf-8")
+				.replace("status: todo", "status: approved")
+				.replace("phase: null", "phase: complete"),
+				encoding="utf-8",
+			)
+			pending = directory / workspace.CONSOLIDATION_PENDING
+			pending.parent.mkdir()
+			pending.write_text("# Pending task consolidation\n", encoding="utf-8")
+			for old_id in old_ids:
+				old = main / "tasks" / old_id
+				old.mkdir(parents=True)
+				(old / "task.md").write_text(f"# {old_id}\n", encoding="utf-8")
+				(old / "state.yaml").write_text(
+					"""status: todo
+type: implement
+created: 2026-07-18
+project: null
+depends_on: []
+claimed_by: null
+claimed_at: null
+claim_order: null
+lease_until: null
+phase: null
+inbox_receipt: receipts/2026/07/18/seed.md
+""",
+					encoding="utf-8",
+				)
+			retired = main / "projects" / "legacy"
+			retired.mkdir(parents=True)
+			(retired / "project.md").write_text("# Legacy project\n", encoding="utf-8")
+			(retired / "tasks.md").write_text("# Tasks\n", encoding="utf-8")
+			git(main, "add", "-A")
+			git(main, "commit", "-m", "Route follow-ups")
+			git(slot, "merge", "--ff-only", "master")
+			slot_directory = slot / "tasks" / source_task
+			(slot_directory / workspace.CONSOLIDATION_PENDING).unlink()
+			(slot_directory / workspace.CONSOLIDATION_COMPLETE).write_text(
+				f"# Consolidation\n\nSource: {source_task}\nSTATUS: MERGED\n",
+				encoding="utf-8",
+			)
+			for old_id in old_ids:
+				old = slot / "tasks" / old_id
+				digest = workspace.retained_task_digest(old)
+				(old / "state.yaml").unlink()
+				(old / "superseded.yaml").write_text(
+					f"""superseded_by: {new_id}
+receipt: {receipt}
+type: implement
+project: null
+content_sha256: {digest}
+""",
+					encoding="utf-8",
+				)
+			new = slot / "tasks" / new_id
+			new.mkdir(parents=True)
+			(new / "task.md").write_text("# Combined task\n", encoding="utf-8")
+			(new / "state.yaml").write_text(
+				f"""status: todo
+type: implement
+created: 2026-07-20
+project: null
+depends_on: []
+claimed_by: null
+claimed_at: null
+claim_order: null
+lease_until: null
+phase: null
+inbox_receipt: {receipt}
+""",
+				encoding="utf-8",
+			)
+			receipt_path = slot / receipt
+			receipt_path.parent.mkdir(parents=True)
+			receipt_path.write_text(
+				"\n".join(old_ids + [new_id]) + "\n",
+				encoding="utf-8",
+			)
+			git(slot, "rm", "-r", "-q", "--", "projects/legacy")
+			self.assertEqual(git(slot, "ls-files", "--", "projects/legacy"), "")
+
+			out = io.StringIO()
+			with (
+				mock.patch.object(workspace, "worktree_config", return_value=config),
+				contextlib.redirect_stdout(out),
+			):
+				workspace.command_consolidate_publish(SimpleNamespace(
+					source_task=source_task,
+					mappings=[f"{old_id}={new_id}" for old_id in old_ids],
+					receipt=receipt,
+					paths=[
+						f"tasks/{source_task}",
+						f"tasks/{old_ids[0]}",
+						f"tasks/{old_ids[1]}",
+						f"tasks/{new_id}",
+						receipt,
+						"projects/legacy",
+					],
+				))
+
+			result = json.loads(out.getvalue())
+			self.assertTrue(result["committed"])
+			self.assertTrue(result["published"])
+			self.assertIn(
+				"D\tprojects/legacy/project.md",
+				git(slot, "show", "--name-status", "--no-renames", "--format=", "HEAD"),
+			)
+			self.assertFalse((main / "projects" / "legacy").exists())
+			self.assertTrue((main / "tasks" / new_id / "state.yaml").is_file())
+
+	def test_merged_consolidation_validates_aliases_and_dependencies(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary)
+			git_repo(root)
+			source = write_task(root, status="approved")
+			(source / workspace.CONSOLIDATION_COMPLETE).write_text(
+				f"# Consolidation\n\nSource: {TASK_ID}\nSTATUS: MERGED\n",
+				encoding="utf-8",
+			)
+			old_ids = ["2026/07/18/first-task", "2026/07/18/second-task"]
+			new_id = "2026/07/20/combined-task"
+			receipt = "receipts/2026/07/20/consolidation.md"
+			for old_id in old_ids:
+				directory = root / "tasks" / old_id
+				directory.mkdir(parents=True)
+				(directory / "task.md").write_text(
+					f"# {old_id}\n", encoding="utf-8",
+				)
+				git(root, "add", "-A")
+				git(root, "commit", "-m", f"Retain {old_id}")
+				content_digest = workspace.retained_task_digest(directory)
+				(directory / "superseded.yaml").write_text(
+					f"""superseded_by: {new_id}
+receipt: {receipt}
+type: implement
+project: null
+content_sha256: {content_digest}
+""",
+					encoding="utf-8",
+				)
+			new = root / "tasks" / new_id
+			new.mkdir(parents=True)
+			(new / "task.md").write_text("# Combined task\n", encoding="utf-8")
+			(new / "state.yaml").write_text(
+				f"""status: todo
+type: implement
+created: 2026-07-20
+project: null
+depends_on: []
+claimed_by: null
+claimed_at: null
+claim_order: null
+lease_until: null
+phase: null
+inbox_receipt: {receipt}
+""",
+				encoding="utf-8",
+			)
+			receipt_path = root / receipt
+			receipt_path.parent.mkdir(parents=True)
+			receipt_path.write_text(
+				"\n".join(old_ids + [new_id]) + "\n",
+				encoding="utf-8",
+			)
+			mappings = {old_id: new_id for old_id in old_ids}
+
+			workspace.validate_consolidation_tree(
+				root,
+				TASK_ID,
+				mappings,
+				receipt,
+			)
+			(root / "tasks" / old_ids[0] / "task.md").write_text(
+				"# Late changed acceptance\n", encoding="utf-8",
+			)
+			git(root, "add", "-A")
+			git(root, "commit", "-m", "Change retained content")
+			with self.assertRaisesRegex(
+				workspace.WorkspaceError,
+				"retained content changed",
+			):
+				workspace.validate_consolidation_tree(
+					root,
+					TASK_ID,
+					mappings,
+					receipt,
+				)
+			(root / "tasks" / old_ids[0] / "task.md").write_text(
+				f"# {old_ids[0]}\n", encoding="utf-8",
+			)
+			git(root, "add", "-A")
+			git(root, "commit", "-m", "Restore retained content")
+
+			dependent = root / "tasks" / "2026/07/20/racing-dependent"
+			dependent.mkdir(parents=True)
+			(dependent / "task.md").write_text(
+				"# Racing dependent\n", encoding="utf-8",
+			)
+			(dependent / "state.yaml").write_text(
+				f"""status: todo
+type: implement
+created: 2026-07-20
+project: null
+depends_on: [{old_ids[0]}]
+claimed_by: null
+claimed_at: null
+claim_order: null
+lease_until: null
+phase: null
+inbox_receipt: receipts/2026/07/20/race.md
+""",
+				encoding="utf-8",
+			)
+			with self.assertRaisesRegex(workspace.WorkspaceError, "missing dependencies"):
+				workspace.validate_consolidation_tree(
+					root,
+					TASK_ID,
+					mappings,
+					receipt,
+				)
 
 	def test_retry_reopens_owned_blocked_task_and_resets_routing_marker(self):
 		with tempfile.TemporaryDirectory() as temporary:
@@ -533,6 +1070,10 @@ class WorkspaceTest(unittest.TestCase):
 			directory = write_task(slot)
 			routed = directory / "work" / "discovered-routed.md"
 			routed.write_text("routed\n", encoding="utf-8")
+			pending = directory / workspace.CONSOLIDATION_PENDING
+			pending.write_text("pending\n", encoding="utf-8")
+			complete = directory / workspace.CONSOLIDATION_COMPLETE
+			complete.write_text("complete\n", encoding="utf-8")
 			config = {
 				"checkout_tag": "macbook-twork",
 				"slot_worktree": str(slot),
@@ -540,6 +1081,11 @@ class WorkspaceTest(unittest.TestCase):
 			with (
 				mock.patch.object(workspace, "worktree_config", return_value=config),
 				mock.patch.object(workspace, "sync_canonical"),
+				mock.patch.object(
+					workspace,
+					"source_lineage_report",
+					return_value={"current_satisfies": True},
+				),
 				mock.patch.object(workspace, "commit_paths") as commit,
 				contextlib.redirect_stdout(io.StringIO()),
 			):
@@ -549,6 +1095,8 @@ class WorkspaceTest(unittest.TestCase):
 			self.assertEqual(state["status"], "in-progress")
 			self.assertEqual(state["phase"], "resume")
 			self.assertFalse(routed.exists())
+			self.assertFalse(pending.exists())
+			self.assertFalse(complete.exists())
 			commit.assert_not_called()
 
 	def test_start_atomically_assigns_unclaimed_todo(self):
@@ -562,6 +1110,11 @@ class WorkspaceTest(unittest.TestCase):
 			with (
 				mock.patch.object(workspace, "worktree_config", return_value=config),
 				mock.patch.object(workspace, "sync_canonical"),
+				mock.patch.object(
+					workspace,
+					"source_lineage_report",
+					return_value={"current_satisfies": True},
+				),
 				mock.patch.object(workspace, "commit_paths", return_value=True) as commit,
 				contextlib.redirect_stdout(io.StringIO()),
 			):
@@ -577,6 +1130,139 @@ class WorkspaceTest(unittest.TestCase):
 				commit.call_args.args[2],
 				f"Start {TASK_ID} on macbook-twork",
 			)
+
+	def test_start_refuses_source_dependency_absent_from_branch(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			slot = Path(temporary)
+			directory = write_task(slot, status="todo", claimed_by=None)
+			config = {
+				"checkout_tag": "macbook-twork",
+				"slot_worktree": str(slot),
+			}
+			report = {
+				"current_satisfies": False,
+				"missing_source_tasks": ["2026/07/18/source-task"],
+				"compatible_local_branches": ["layer229"],
+			}
+			with (
+				mock.patch.object(workspace, "worktree_config", return_value=config),
+				mock.patch.object(workspace, "sync_canonical"),
+				mock.patch.object(
+					workspace,
+					"source_lineage_report",
+					return_value=report,
+				) as lineage,
+				mock.patch.object(workspace, "commit_paths") as commit,
+			):
+				with self.assertRaisesRegex(
+					workspace.WorkspaceError,
+					"compatible local branches: layer229",
+				):
+					workspace.command_start(SimpleNamespace(
+						task=TASK_ID,
+						require=["2026/07/18/source-task"],
+					))
+
+			state = workspace.load_state(slot, directory / "state.yaml")
+			self.assertEqual(state["status"], "todo")
+			self.assertIsNone(state["claimed_by"])
+			lineage.assert_called_once_with(
+				config,
+				slot,
+				TASK_ID,
+				["2026/07/18/source-task"],
+			)
+			commit.assert_not_called()
+
+	def test_source_lineage_finds_compatible_local_branch(self):
+		dependency_id = "2026/07/18/source-task"
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary)
+			source = root / "source"
+			slot = root / "slot"
+			git_repo(source)
+			tracked = source / "tracked.txt"
+			tracked.write_text("base\n", encoding="utf-8")
+			git(source, "add", "tracked.txt")
+			git(source, "commit", "-m", "Create baseline")
+			git(source, "branch", "without-dependency")
+			tracked.write_text("source task\n", encoding="utf-8")
+			git(
+				source,
+				"commit",
+				"-am",
+				"Add source behavior",
+				"-m",
+				f"Task: {dependency_id}",
+			)
+			git(source, "branch", "with-dependency")
+			git(source, "switch", "without-dependency")
+
+			dependency = slot / "tasks" / dependency_id
+			dependency.mkdir(parents=True)
+			(dependency / "task.md").write_text(
+				"# Add source behavior\n",
+				encoding="utf-8",
+			)
+			(dependency / "state.yaml").write_text(
+				"""status: approved
+type: implement
+created: 2026-07-18
+project: null
+depends_on: []
+claimed_by: macbook-twork
+claimed_at: 2026-07-18T10:00:00+04:00
+claim_order: 1
+lease_until: null
+phase: complete
+inbox_receipt: receipts/2026/07/18/test.md
+""",
+				encoding="utf-8",
+			)
+			target = write_task(slot, status="todo", claimed_by=None)
+			state_path = target / "state.yaml"
+			state_path.write_text(
+				state_path.read_text(encoding="utf-8").replace(
+					"depends_on: []",
+					f"depends_on: [{dependency_id}]",
+				),
+				encoding="utf-8",
+			)
+
+			config = {"source_root": str(source)}
+			report = workspace.source_lineage_report(
+				config,
+				slot,
+				TASK_ID,
+			)
+			self.assertFalse(report["current_satisfies"])
+			self.assertEqual(report["missing_source_tasks"], [dependency_id])
+			self.assertEqual(report["unavailable_source_tasks"], [])
+			self.assertIn("with-dependency", report["compatible_local_branches"])
+
+			result_path = dependency / "work" / "result.md"
+			result_path.parent.mkdir()
+			result_path.write_text(
+				"Outcome: already-satisfied\n",
+				encoding="utf-8",
+			)
+			report = workspace.source_lineage_report(
+				config,
+				slot,
+				TASK_ID,
+			)
+			self.assertTrue(report["current_satisfies"])
+			self.assertEqual(report["required_source_tasks"], [])
+			result_path.unlink()
+
+			git(source, "switch", "with-dependency")
+			report = workspace.source_lineage_report(
+				config,
+				slot,
+				TASK_ID,
+			)
+			self.assertTrue(report["current_satisfies"])
+			self.assertEqual(report["missing_source_tasks"], [])
 
 	def test_checkpoint_updates_only_local_task_state(self):
 		with tempfile.TemporaryDirectory() as temporary:
@@ -622,6 +1308,11 @@ class WorkspaceTest(unittest.TestCase):
 			with (
 				mock.patch.object(workspace, "worktree_config", return_value=config),
 				mock.patch.object(workspace, "sync_canonical"),
+				mock.patch.object(
+					workspace,
+					"source_lineage_report",
+					return_value={"current_satisfies": True},
+				),
 				mock.patch.object(workspace, "commit_paths", side_effect=record_commit),
 				contextlib.redirect_stdout(io.StringIO()),
 			):
@@ -643,9 +1334,16 @@ class WorkspaceTest(unittest.TestCase):
 			(directory / "work" / "result.md").write_text(
 				f"""# Task result: {TASK_ID}
 STATUS: DONE
+Outcome: changed
+Touched: tracked.txt
 Verdict: APPROVED
+Test-Report: work/test.md
 Checkout: clean-buildable
 """,
+				encoding="utf-8",
+			)
+			(directory / "work" / "test.md").write_text(
+				"# Adaptive evidence\n",
 				encoding="utf-8",
 			)
 			with (
@@ -654,14 +1352,18 @@ Checkout: clean-buildable
 					"task_action_config",
 					return_value=(config, slot),
 				),
-				mock.patch.object(workspace, "ensure_clean"),
+				mock.patch.object(workspace, "ensure_source_clean"),
 				mock.patch.object(workspace, "validate_source_state"),
 				mock.patch.object(workspace, "delete_source_refs"),
 				mock.patch.object(workspace, "commit_paths", side_effect=record_commit),
 				contextlib.redirect_stdout(io.StringIO()),
 			):
 				workspace.command_finish(
-					SimpleNamespace(task=TASK_ID, status="approved")
+					SimpleNamespace(
+						task=TASK_ID,
+						status="approved",
+						model="gpt-5.6-sol",
+					)
 				)
 
 			self.assertEqual(subjects, [
@@ -699,6 +1401,11 @@ inbox_receipt: receipts/2026/07/19/test.md
 			with (
 				mock.patch.object(workspace, "worktree_config", return_value=config),
 				mock.patch.object(workspace, "sync_canonical"),
+				mock.patch.object(
+					workspace,
+					"source_lineage_report",
+					return_value={"current_satisfies": True},
+				),
 			):
 				with self.assertRaisesRegex(workspace.WorkspaceError, "already in progress"):
 					workspace.command_retry(SimpleNamespace(task=TASK_ID))
@@ -905,6 +1612,23 @@ def write_complete_markers_exe(path):
 	))
 
 
+def write_dump_after_complete_exe(path, dump, tail, windows_tail):
+	directory = dump.parent
+	return write_fake_exe(path, (
+		'LOG="$TDESKTOP_TEST_EVIDENCE_DIR/test_log.txt"\n'
+		'echo "TEST_COMPLETE" >> "$LOG"\n'
+		f'mkdir -p "{directory}"\n'
+		f'echo "MDMP fresh minidump" > "{dump}"\n'
+		+ tail
+	), (
+		'set "LOG=%TDESKTOP_TEST_EVIDENCE_DIR%\\test_log.txt"\n'
+		'echo TEST_COMPLETE>>"%LOG%"\n'
+		f'if not exist "{directory}" mkdir "{directory}"\n'
+		f'echo MDMP fresh minidump>"{dump}"\n'
+		+ windows_tail
+	))
+
+
 def make_portable_root(root):
 	debug = root / "out" / "Debug"
 	golden = debug / workspace.PORTABLE_GOLDEN
@@ -957,6 +1681,46 @@ inbox_receipt: receipts/2026/07/19/test.md
 	return source, slot, work, config
 
 
+def overlay_bundle_bytes(work):
+	result = {}
+	for relative in (
+		workspace.OVERLAY_PATCH_FILE,
+		workspace.OVERLAY_SUBMODULES_FILE,
+	):
+		path = work / relative
+		if path.is_file():
+			result[relative] = path.read_bytes()
+	patches = work / workspace.OVERLAY_SUBMODULES_DIR
+	if patches.is_dir():
+		for path in sorted(patches.rglob("*")):
+			if path.is_file():
+				result[path.relative_to(work).as_posix()] = path.read_bytes()
+	return result
+
+
+def overlay_repo_with_nested_module(root):
+	root = Path(root)
+	source, slot, work, config = source_repo_with_task(root)
+	dependency = root.resolve() / "dependency"
+	git_repo(dependency)
+	(dependency / "tracked.txt").write_text("module-base\n", encoding="utf-8")
+	git(dependency, "add", "tracked.txt")
+	git(dependency, "commit", "-m", "Create module")
+	git(
+		source, "-c", "protocol.file.allow=always", "submodule", "add",
+		str(dependency), "dep",
+	)
+	git(source, "commit", "-am", "Record dependency")
+	git(
+		source, "update-ref",
+		workspace.source_task_ref(TASK_ID, "run"), "HEAD",
+	)
+	(work / workspace.OVERLAY_PATHS_FILE).write_text(
+		"tracked.txt\ndep/tracked.txt\n", encoding="utf-8",
+	)
+	return source, slot, work, config, source / "dep"
+
+
 def run_command(handler, **kwargs):
 	out = io.StringIO()
 	with contextlib.redirect_stdout(out):
@@ -978,9 +1742,273 @@ def run_test_run(exe, run_dir, **overrides):
 	return run_command(workspace.command_test_run, **arguments)
 
 
+class SourcePreparationTest(unittest.TestCase):
+	def make_repo(self, path):
+		git_repo(path)
+		(path / "tracked.txt").write_text("base\n", encoding="utf-8")
+		git(path, "add", "tracked.txt")
+		git(path, "commit", "-m", "Create fixture")
+		return path
+
+	def add_module(self, source, dependency, name="dep space"):
+		git(
+			source, "-c", "protocol.file.allow=always", "submodule", "add",
+			str(dependency), name,
+		)
+		git(source, "commit", "-am", "Record dependency")
+		return source / name
+
+	def test_linked_worktrees_are_ignored_only_by_source_checks(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary).resolve()
+			source = self.make_repo(root / "source")
+			other = self.make_repo(root / "other")
+			name = "nested space" if os.name == "nt" else "nested 'quote'\nleaf"
+			for owner, name in ((source, name), (other, "other-linked")):
+				linked = source / name
+				git(owner, "worktree", "add", "--detach", str(linked))
+				(linked / "tracked.txt").write_text("elsewhere\n", encoding="utf-8")
+				(linked / "new.txt").write_text("preserve\n", encoding="utf-8")
+				git(linked, "add", "tracked.txt")
+			self.assertEqual(workspace.source_changed_paths(source), [])
+			self.assertFalse(workspace.prepare_source(source))
+			with self.assertRaises(workspace.WorkspaceError):
+				workspace.ensure_clean(source, "AI workspace")
+			(source / "ordinary.txt").write_text("stray\n", encoding="utf-8")
+			(source / "tracked.txt").write_text("local\n", encoding="utf-8")
+			self.assertEqual(
+				workspace.source_changed_paths(source), ["ordinary.txt", "tracked.txt"],
+			)
+			with self.assertRaises(workspace.WorkspaceError):
+				workspace.prepare_source(source)
+			self.assertEqual((linked / "new.txt").read_text(), "preserve\n")
+			self.assertEqual(git(linked, "diff", "--cached", "--name-only"), "tracked.txt")
+
+	def test_unregistered_repositories_and_moved_worktrees_still_block(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary).resolve()
+			source = self.make_repo(root / "source")
+			self.make_repo(source / "ordinary-repo")
+			git(source, "worktree", "add", "--detach", str(source / "registered"))
+			(source / "registered").rename(source / "moved")
+			(source / "registered").mkdir()
+			(source / "registered/file.txt").write_text("unregistered\n", encoding="utf-8")
+			self.assertEqual(workspace.source_changed_paths(source), [
+				"moved/", "ordinary-repo/", "registered/file.txt",
+			])
+			with self.assertRaises(workspace.WorkspaceError):
+				workspace.prepare_source(source)
+
+	@unittest.skipIf(os.name == "nt", "Requires unprivileged directory symlinks")
+	def test_symlink_to_linked_worktree_is_not_ignored(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary).resolve()
+			source = self.make_repo(root / "source")
+			linked = root / "linked"
+			git(source, "worktree", "add", "--detach", str(linked))
+			(source / "shortcut").symlink_to(linked, target_is_directory=True)
+			self.assertEqual(workspace.source_changed_paths(source), ["shortcut"])
+
+	def test_nested_module_worktree_does_not_make_parent_dirty(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary).resolve()
+			source = self.make_repo(root / "source")
+			module = self.add_module(source, self.make_repo(root / "dependency"))
+			linked = module / "nested worktree"
+			git(module, "worktree", "add", "--detach", str(linked))
+			(linked / "tracked.txt").write_text("elsewhere\n", encoding="utf-8")
+			self.assertIn("dep space", workspace.literal_paths(
+				source, "diff", "--name-only", "--ignore-submodules=none"
+			))
+			self.assertEqual(workspace.source_changed_paths(source), [])
+			self.assertEqual(workspace.initialized_submodule_paths(source), ["dep space"])
+			self.assertFalse(workspace.prepare_source(source))
+			(module / "tracked.txt").write_text("owned overlay\n", encoding="utf-8")
+			self.assertEqual(workspace.source_changed_paths(source), ["dep space"])
+			with self.assertRaises(workspace.WorkspaceError):
+				workspace.prepare_source(source)
+			self.assertEqual((module / "tracked.txt").read_text(), "owned overlay\n")
+
+	def test_preparation_updates_recursive_recorded_pins_without_following_remote(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary).resolve()
+			leaf = self.make_repo(root / "leaf")
+			old_leaf = git(leaf, "rev-parse", "HEAD")
+			(leaf / "tracked.txt").write_text("recorded\n", encoding="utf-8")
+			git(leaf, "commit", "-am", "Recorded version")
+			pinned_leaf = git(leaf, "rev-parse", "HEAD")
+			dependency = self.make_repo(root / "dependency")
+			old_dependency = git(dependency, "rev-parse", "HEAD")
+			self.add_module(dependency, leaf, "nested leaf")
+			pinned_dependency = git(dependency, "rev-parse", "HEAD")
+			source = self.make_repo(root / "source")
+			module = self.add_module(source, dependency)
+			git(module, "checkout", "--detach", old_dependency)
+			(source / "Telegram/build").mkdir(parents=True)
+			git(leaf, "worktree", "add", "--detach", str(module / "scratch"), old_leaf)
+			(leaf / "tracked.txt").write_text("remote tip\n", encoding="utf-8")
+			git(leaf, "commit", "-am", "Newer remote version")
+			source_tip = git(source, "rev-parse", "HEAD")
+			with mock.patch.dict(os.environ, {"GIT_ALLOW_PROTOCOL": "file"}):
+				result = run_command(
+					workspace.command_source_prepare, source_root=str(source),
+				)
+				self.assertTrue(result["source_clean"])
+				self.assertTrue(result["submodules_updated"])
+				self.assertEqual(git(module, "rev-parse", "HEAD"), pinned_dependency)
+				self.assertEqual(git(module / "nested leaf", "rev-parse", "HEAD"), pinned_leaf)
+				git(module / "nested leaf", "checkout", "--detach", old_leaf)
+				self.assertTrue(workspace.prepare_source(source))
+				self.assertEqual(git(module / "nested leaf", "rev-parse", "HEAD"), pinned_leaf)
+				self.assertFalse(workspace.prepare_source(source))
+			self.assertEqual(git(source, "rev-parse", "HEAD"), source_tip)
+			self.assertEqual((module / "scratch/tracked.txt").read_text(), "base\n")
+			self.assertEqual(workspace.source_changed_paths(source), [])
+			self.assertEqual(workspace.mismatched_submodules(source), [])
+
+	def test_preparation_preserves_local_and_staged_changes_before_any_update(self):
+		for kind in ("tracked", "untracked", "staged-module", "staged-gitlink", "staged-source"):
+			with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temporary:
+				root = Path(temporary).resolve()
+				dependency = self.make_repo(root / "dependency")
+				old = git(dependency, "rev-parse", "HEAD")
+				(dependency / "tracked.txt").write_text("new version\n", encoding="utf-8")
+				git(dependency, "commit", "-am", "Advance dependency")
+				source = self.make_repo(root / "source")
+				module = self.add_module(source, dependency)
+				git(module, "checkout", "--detach", old)
+				if kind == "staged-gitlink":
+					git(source, "add", "dep space")
+				elif kind == "staged-source":
+					(source / "tracked.txt").write_text("staged\n", encoding="utf-8")
+					git(source, "add", "tracked.txt")
+				else:
+					name = "new.txt" if kind == "untracked" else "tracked.txt"
+					(module / name).write_text("local edit\n", encoding="utf-8")
+					if kind == "staged-module":
+						git(module, "add", name)
+				before = [git_bytes(p, "diff", "--binary", "HEAD") for p in (source, module)]
+				indexes = [git_bytes(p, "ls-files", "--stage", "-z") for p in (source, module)]
+				with self.assertRaises(workspace.WorkspaceError):
+					workspace.prepare_source(source)
+				self.assertEqual(git(module, "rev-parse", "HEAD"), old)
+				self.assertEqual(before, [git_bytes(p, "diff", "--binary", "HEAD") for p in (source, module)])
+				self.assertEqual(indexes, [git_bytes(p, "ls-files", "--stage", "-z") for p in (source, module)])
+				if kind == "untracked":
+					self.assertEqual((module / "new.txt").read_text(), "local edit\n")
+
+	def test_registered_worktree_at_gitlink_path_is_never_updated(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary).resolve()
+			dependency = self.make_repo(root / "dependency")
+			old = git(dependency, "rev-parse", "HEAD")
+			(dependency / "tracked.txt").write_text("new version\n", encoding="utf-8")
+			git(dependency, "commit", "-am", "Advance dependency")
+			source = self.make_repo(root / "source")
+			module = self.add_module(source, dependency)
+			git(source, "submodule", "deinit", "-f", "--", "dep space")
+			module.rmdir()
+			git(dependency, "worktree", "add", "--detach", str(module), old)
+			before = git_bytes(module, "ls-files", "--stage", "-z")
+			self.assertTrue(workspace.is_linked_worktree(source, "dep space/"))
+			with self.assertRaises(workspace.WorkspaceError):
+				workspace.prepare_source(source)
+			with self.assertRaises(workspace.WorkspaceError):
+				workspace.initialized_submodule_paths(source)
+			self.assertEqual(git(module, "rev-parse", "HEAD"), old)
+			self.assertEqual(before, git_bytes(module, "ls-files", "--stage", "-z"))
+			self.assertEqual((module / "tracked.txt").read_text(), "base\n")
+
+	def test_submodule_target_cannot_enter_an_existing_linked_worktree(self):
+		for kind in ("gitlink", "file", "ignored-file"):
+			with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temporary:
+				root = Path(temporary).resolve()
+				child = self.make_repo(root / "child")
+				parent = self.make_repo(root / "parent")
+				if kind == "ignored-file":
+					(parent / ".gitignore").write_text("nested/\n", encoding="utf-8")
+					git(parent, "add", ".gitignore")
+					git(parent, "commit", "-m", "Ignore nested directory")
+				old_parent = git(parent, "rev-parse", "HEAD")
+				if kind == "gitlink":
+					self.add_module(parent, child, "nested")
+				else:
+					(parent / "nested").mkdir()
+					name = "tracked.txt" if kind == "ignored-file" else "addition.txt"
+					(parent / "nested" / name).write_text("parent target\n", encoding="utf-8")
+					git(parent, "add", "-f", "nested")
+					git(parent, "commit", "-m", "Add target path")
+				source = self.make_repo(root / "source")
+				module = self.add_module(source, parent)
+				git(module, "checkout", "--detach", old_parent)
+				linked = module / "nested"
+				if linked.exists():
+					linked.rmdir()
+				git(child, "worktree", "add", "--detach", str(linked))
+				(linked / "tracked.txt").write_text("other owner's edit\n", encoding="utf-8")
+				before = git_bytes(linked, "ls-files", "--stage", "-z")
+				with self.assertRaises(workspace.WorkspaceError):
+					workspace.prepare_source(source)
+				self.assertEqual(git(module, "rev-parse", "HEAD"), old_parent)
+				self.assertEqual(before, git_bytes(linked, "ls-files", "--stage", "-z"))
+				self.assertEqual((linked / "tracked.txt").read_text(), "other owner's edit\n")
+				self.assertFalse((linked / "addition.txt").exists())
+
+	def test_preflight_is_read_only_and_fresh_baseline_updates_modules(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary).resolve()
+			source, slot, _, config = source_repo_with_task(root)
+			dependency = self.make_repo(root / "dependency")
+			old = git(dependency, "rev-parse", "HEAD")
+			(dependency / "tracked.txt").write_text("new\n", encoding="utf-8")
+			git(dependency, "commit", "-am", "Advance dependency")
+			pinned = git(dependency, "rev-parse", "HEAD")
+			module = self.add_module(source, dependency)
+			git(module, "checkout", "--detach", old)
+			with mock.patch.object(workspace, "task_action_config", return_value=(config, slot)):
+				result = run_command(workspace.command_source_preflight, task=TASK_ID, exe=None)
+				self.assertFalse(result["source_clean"])
+				self.assertTrue(result["submodules_dirty"])
+				self.assertEqual(git(module, "rev-parse", "HEAD"), old)
+				run_command(workspace.command_source_begin, task=TASK_ID)
+				self.assertEqual(git(module, "rev-parse", "HEAD"), pinned)
+
+	def test_source_lifecycle_overlay_and_carry_checks_ignore_linked_worktree(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary).resolve()
+			source, slot, work, config = source_repo_with_task(root)
+			linked = source / "tmp"
+			git(source, "worktree", "add", "--detach", str(linked))
+			(linked / "tracked.txt").write_text("other owner\n", encoding="utf-8")
+			(work / "owned-paths.txt").write_text("tracked.txt\n", encoding="utf-8")
+			with mock.patch.object(workspace, "task_action_config", return_value=(config, slot)):
+				run_command(workspace.command_source_begin, task=TASK_ID)
+				(source / "tracked.txt").write_text("retained\n", encoding="utf-8")
+				preflight = run_command(workspace.command_source_preflight, task=TASK_ID, exe=None)
+				self.assertEqual(preflight["dirty"], ["tracked.txt"])
+				self.assertEqual(preflight["dirty_outside_owned"], [])
+				run_command(
+					workspace.command_source_commit, task=TASK_ID,
+					subject="Correct recent search", mark_green=True,
+				)
+				self.assertNotIn("tmp", git(source, "ls-files").splitlines())
+				(source / "tracked.txt").write_text("overlay\n", encoding="utf-8")
+				(work / "test-overlay.paths").write_text("tracked.txt\n", encoding="utf-8")
+				snapshot = workspace.source_worktree_snapshot(config, slot, TASK_ID)
+				self.assertEqual(snapshot["owned_dirty_paths"], ["tracked.txt"])
+				self.assertEqual(snapshot["outside_owned_paths"], [])
+				run_command(workspace.command_overlay_save, task=TASK_ID, restore="run")
+				run_command(workspace.command_overlay_apply, task=TASK_ID)
+				run_command(workspace.command_overlay_save, task=TASK_ID, restore="run")
+			workspace.ensure_source_clean(source)
+			self.assertEqual((linked / "tracked.txt").read_text(), "other owner\n")
+
+
 class MechanicsTest(unittest.TestCase):
 	def test_build_lock_recovery_selects_only_exact_owned_processes(self):
-		build = Path("C:/Telegram/twin/out")
+		build = Path(
+			"C:/Telegram/twin/out" if os.name == "nt" else "/Telegram/twin/out"
+		)
 		exe = build / "Debug/Telegram.exe"
 		records = [
 			{
@@ -988,7 +2016,7 @@ class MechanicsTest(unittest.TestCase):
 				"parent_pid": 1,
 				"name": "cmake.exe",
 				"executable": "C:/Tools/cmake.exe",
-				"command_line": "cmake --build C:/Telegram/twin/out",
+				"command_line": f"cmake --build {build.as_posix()}",
 			},
 			{
 				"pid": 11,
@@ -1033,13 +2061,18 @@ class MechanicsTest(unittest.TestCase):
 			{12, 13},
 		)
 		self.assertEqual(
-			{process["pid"] for process in selected},
-			{10, 11, 12, 14},
+			{process["pid"]: process["reason"] for process in selected},
+			{
+				10: "exact-build-tree-command",
+				11: "verified-build-process-descendant",
+				12: "direct-build-artifact-holder",
+				14: "exact-checkout-executable",
+			},
 		)
 
 	def test_build_lock_recovery_deletes_only_named_build_artifacts(self):
 		with tempfile.TemporaryDirectory() as temporary:
-			root = Path(temporary)
+			root = Path(temporary).resolve()
 			source, _, _, _ = source_repo_with_task(root)
 			build = source / "out"
 			debug = build / "Debug"
@@ -1208,6 +2241,151 @@ class MechanicsTest(unittest.TestCase):
 			self.assertEqual(result["markers"]["screenshots"], ["/tmp/fake.png"])
 			self.assertFalse(result["crash_report_fresh"])
 
+	def test_parse_test_log_lists_skipped_rows_beside_pass_and_fail(self):
+		markers = workspace.parse_test_log("\n".join([
+			"TEST_STEP: gated stage self-test: arm",
+			"TEST_RESULT: N/A: skipped stage - applies=0",
+			"TEST_RESULT: PASS: applied stage - ran=1",
+			"TEST_RESULT: FAIL: other stage - ran=0",
+			"SCREENSHOT: /tmp/fake.png",
+		]))
+		self.assertEqual(markers["skipped"], ["skipped stage - applies=0"])
+		self.assertEqual(markers["pass"], ["applied stage - ran=1"])
+		self.assertEqual(markers["fail"], ["other stage - ran=0"])
+		self.assertEqual(markers["steps"], ["gated stage self-test: arm"])
+		self.assertEqual(markers["screenshots"], ["/tmp/fake.png"])
+
+	def test_log_marks_complete_reads_the_marker_as_a_whole_line(self):
+		for text in [
+			"TEST_COMPLETE",
+			"TEST_COMPLETE\n",
+			"TEST_COMPLETE\r\n",
+			"TEST_COMPLETE  ",
+			"TEST_STEP: open settings\nTEST_COMPLETE\n",
+			"NOTE: waiting\nTEST_COMPLETE",
+		]:
+			self.assertTrue(workspace.log_marks_complete(text), repr(text))
+		for text in [
+			"",
+			"NOTE: waiting for TEST_COMPLETE\n",
+			"NOTE: mtp: rpc retry code=500 type=TEST_COMPLETE "
+			"request=0x0000002d\n",
+			"TEST_COMPLETED\n",
+			"TEST_COMPLETE_LATER\n",
+			"  TEST_COMPLETE\n",
+			"TEST_RESULT: PASS: TEST_COMPLETE\n",
+		]:
+			self.assertFalse(workspace.log_marks_complete(text), repr(text))
+
+	def test_test_run_reports_a_death_after_complete(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary)
+			debug = make_portable_root(root)
+			exe = write_fake_exe(debug / "Telegram", (
+				'LOG="$TDESKTOP_TEST_EVIDENCE_DIR/test_log.txt"\n'
+				'echo "TEST_RESULT: PASS: row painted" >> "$LOG"\n'
+				'echo "TEST_COMPLETE" >> "$LOG"\n'
+				"exit 3\n"
+			), (
+				'set "LOG=%TDESKTOP_TEST_EVIDENCE_DIR%\\test_log.txt"\n'
+				'echo TEST_RESULT: PASS: row painted>>"%LOG%"\n'
+				'echo TEST_COMPLETE>>"%LOG%"\n'
+				"exit /b 3\n"
+			))
+			result = run_test_run(exe, root / "run1")
+			self.assertEqual(result["outcome"], "exited")
+			self.assertEqual(result["verdict_hint"], "died-after-complete")
+			self.assertTrue(result["test_complete"])
+			self.assertEqual(result["exit_code"], 3)
+			self.assertEqual(result["death_signals"], ["exit_code"])
+			self.assertEqual(result["crashpad_dumps_added"], [])
+			self.assertFalse(result["crash_report_fresh"])
+			self.assertEqual(result["dumps"], [])
+
+	def test_test_run_reports_both_death_signals_after_complete(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary).resolve()
+			debug = make_portable_root(root)
+			fresh = (
+				debug / workspace.PORTABLE_LIVE / "tdata" / "dumps"
+				/ workspace.CRASHPAD_COMPLETED_DIR / "both.dmp"
+			)
+			exe = write_dump_after_complete_exe(
+				debug / "Telegram", fresh, "exit 11\n", "exit /b 11\n",
+			)
+			result = run_test_run(exe, root / "run1")
+			self.assertEqual(result["verdict_hint"], "died-after-complete")
+			self.assertEqual(result["exit_code"], 11)
+			self.assertEqual(
+				result["death_signals"],
+				["crashpad_dump", "exit_code"],
+			)
+			self.assertEqual(result["crashpad_dumps_added"], [str(fresh)])
+
+	def test_test_run_counts_a_crashpad_dump_written_during_the_run(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary).resolve()
+			debug = make_portable_root(root)
+			fresh = (
+				debug / workspace.PORTABLE_LIVE / "tdata" / "dumps"
+				/ workspace.CRASHPAD_COMPLETED_DIR / "fresh.dmp"
+			)
+			exe = write_dump_after_complete_exe(
+				debug / "Telegram", fresh, "exit 0\n", "exit /b 0\n",
+			)
+			result = run_test_run(exe, root / "run1")
+			self.assertEqual(result["outcome"], "exited")
+			self.assertEqual(result["exit_code"], 0)
+			self.assertTrue(result["test_complete"])
+			self.assertEqual(result["verdict_hint"], "died-after-complete")
+			self.assertEqual(result["death_signals"], ["crashpad_dump"])
+			self.assertEqual(result["crashpad_dumps_added"], [str(fresh)])
+			self.assertEqual(result["dumps"], [])
+
+	def test_test_run_counts_a_breakpad_dump_written_during_the_run(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary).resolve()
+			debug = make_portable_root(root)
+			fresh = (
+				debug / workspace.PORTABLE_LIVE / "tdata" / "dumps"
+				/ "breakpad.dmp"
+			)
+			exe = write_dump_after_complete_exe(
+				debug / "Telegram", fresh, "exit 0\n", "exit /b 0\n",
+			)
+			result = run_test_run(exe, root / "run1")
+			self.assertEqual(result["outcome"], "exited")
+			self.assertEqual(result["exit_code"], 0)
+			self.assertTrue(result["test_complete"])
+			self.assertEqual(result["verdict_hint"], "died-after-complete")
+			self.assertEqual(result["death_signals"], ["breakpad_dump"])
+			self.assertEqual(result["dumps"], [str(fresh)])
+			self.assertEqual(result["crashpad_dumps_added"], [])
+
+	def test_test_run_ignores_a_crashpad_dump_from_before_the_run(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary).resolve()
+			debug = make_portable_root(root)
+			self.assertEqual(workspace.setup_test_account(debug), "fresh-copy")
+			completed = (
+				debug / workspace.PORTABLE_LIVE / "tdata" / "dumps"
+				/ workspace.CRASHPAD_COMPLETED_DIR
+			)
+			completed.mkdir(parents=True)
+			old = completed / "old.dmp"
+			old.write_bytes(b"MDMP old minidump\n")
+			exe = write_complete_markers_exe(debug / "Telegram")
+			run_dir = root / "run1"
+			result = run_test_run(exe, run_dir)
+			self.assertEqual(result["account"], "reused-marked-live")
+			self.assertEqual(result["verdict_hint"], "complete")
+			self.assertEqual(result["exit_code"], 0)
+			self.assertEqual(result["death_signals"], [])
+			self.assertEqual(result["crashpad_dumps_added"], [])
+			self.assertEqual(result["stale_crash_cleared"], [])
+			self.assertEqual(old.read_bytes(), b"MDMP old minidump\n")
+			self.assertFalse((run_dir / workspace.STALE_CRASH_DIR).exists())
+
 	def test_test_run_reports_crash_diagnostics(self):
 		with tempfile.TemporaryDirectory() as temporary:
 			root = Path(temporary)
@@ -1298,6 +2476,77 @@ class MechanicsTest(unittest.TestCase):
 			self.assertEqual(result["outcome"], "deadline-killed")
 			self.assertEqual(result["verdict_hint"], "hang")
 			self.assertFalse(result["test_complete"])
+
+	def test_test_run_keeps_a_grace_kill_complete(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary)
+			debug = make_portable_root(root)
+			exe = write_fake_exe(debug / "Telegram", (
+				'LOG="$TDESKTOP_TEST_EVIDENCE_DIR/test_log.txt"\n'
+				'echo "TEST_COMPLETE" >> "$LOG"\n'
+				"sleep 30\n"
+			), (
+				'set "LOG=%TDESKTOP_TEST_EVIDENCE_DIR%\\test_log.txt"\n'
+				'echo TEST_COMPLETE>>"%LOG%"\n'
+				":loop\ngoto loop\n"
+			))
+			result = run_test_run(exe, root / "run1", grace=1.0)
+			self.assertEqual(result["outcome"], "killed-after-complete")
+			self.assertEqual(result["verdict_hint"], "complete")
+			self.assertTrue(result["test_complete"])
+			self.assertIsNone(result["exit_code"])
+			self.assertEqual(result["death_signals"], [])
+
+	def test_test_run_refuses_a_line_that_only_contains_the_marker(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary)
+			debug = make_portable_root(root)
+			line = (
+				"NOTE: mtp: rpc retry code=500 type=TEST_COMPLETE"
+				" request=0x0000002d"
+			)
+			exe = write_fake_exe(debug / "Telegram", (
+				'LOG="$TDESKTOP_TEST_EVIDENCE_DIR/test_log.txt"\n'
+				f'echo "{line}" >> "$LOG"\n'
+				"sleep 30\n"
+			), (
+				'set "LOG=%TDESKTOP_TEST_EVIDENCE_DIR%\\test_log.txt"\n'
+				f'echo {line}>>"%LOG%"\n'
+				":loop\ngoto loop\n"
+			))
+			result = run_test_run(
+				exe, root / "run1", quiet=2.0, grace=1.0,
+			)
+			self.assertEqual(result["outcome"], "quiet-killed")
+			self.assertEqual(result["verdict_hint"], "hang")
+			self.assertFalse(result["test_complete"])
+			self.assertIsNone(result["exit_code"])
+			self.assertEqual(result["death_signals"], [])
+			self.assertEqual(
+				Path(result["log_path"]).read_text(
+					encoding="utf-8", errors="replace"
+				).splitlines(),
+				[line],
+			)
+
+	def test_test_run_reports_a_grace_kill_with_a_dump(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary).resolve()
+			debug = make_portable_root(root)
+			dump = (
+				debug / workspace.PORTABLE_LIVE / "tdata" / "dumps"
+				/ workspace.CRASHPAD_COMPLETED_DIR / "grace.dmp"
+			)
+			exe = write_dump_after_complete_exe(
+				debug / "Telegram", dump, "sleep 30\n", ":loop\ngoto loop\n",
+			)
+			result = run_test_run(exe, root / "run1", grace=1.0)
+			self.assertEqual(result["outcome"], "killed-after-complete")
+			self.assertEqual(result["verdict_hint"], "died-after-complete")
+			self.assertTrue(result["test_complete"])
+			self.assertIsNone(result["exit_code"])
+			self.assertEqual(result["death_signals"], ["crashpad_dump"])
+			self.assertEqual(result["crashpad_dumps_added"], [str(dump)])
 
 	def test_test_run_clears_and_preserves_stale_crash_state(self):
 		with tempfile.TemporaryDirectory() as temporary:
@@ -1415,6 +2664,33 @@ class MechanicsTest(unittest.TestCase):
 				(live / "tdata" / "dumps" / "golden.dmp").read_bytes(),
 				b"golden dump\n",
 			)
+
+	def test_test_run_ignores_a_stale_crash_report_copied_from_golden(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary).resolve()
+			debug = make_portable_root(root)
+			golden = debug / workspace.PORTABLE_GOLDEN
+			(golden / "tdata" / "dumps").mkdir(parents=True)
+			report = golden / "tdata" / "working"
+			report.write_bytes(b"Assertion: last month\n")
+			dump = golden / "tdata" / "dumps" / "golden.dmp"
+			dump.write_bytes(b"MDMP old minidump\n")
+			for path in (report, dump):
+				os.utime(path, (1600000000, 1600000000))
+			exe = write_complete_markers_exe(debug / "Telegram")
+			result = run_test_run(exe, root / "run1")
+			live = debug / workspace.PORTABLE_LIVE
+			working = live / "tdata" / "working"
+			self.assertEqual(result["account"], "fresh-copy")
+			self.assertTrue(result["test_complete"])
+			self.assertEqual(working.read_bytes(), b"Assertion: last month\n")
+			self.assertEqual(working.stat().st_mtime, report.stat().st_mtime)
+			self.assertEqual(result["crash_report"], str(working))
+			self.assertFalse(result["crash_report_fresh"])
+			self.assertIsNone(result["crash_report_excerpt"])
+			self.assertEqual(result["dumps"], [])
+			self.assertEqual(result["death_signals"], [])
+			self.assertEqual(result["verdict_hint"], "complete")
 
 	def test_test_run_refuses_to_launch_when_the_stale_report_cannot_move(self):
 		with tempfile.TemporaryDirectory() as temporary:
@@ -1587,6 +2863,56 @@ class MechanicsTest(unittest.TestCase):
 				"base\noverlay\n",
 			)
 
+	def test_overlay_apply_reports_a_non_ascii_conflict_literally(self):
+		name = "\u00e9\u6587.txt"
+		self.assertEqual(name.encode("utf-8"), b"\xc3\xa9\xe6\x96\x87.txt")
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary)
+			source, slot, work, config = source_repo_with_task(root)
+			target = source / name
+			target.write_text("base\n", encoding="utf-8")
+			git(source, "add", "-A")
+			git(source, "commit", "-m", "Add the non-ASCII sample")
+			git(
+				source, "update-ref",
+				workspace.source_task_ref(TASK_ID, "run"), "HEAD",
+			)
+			(work / workspace.OVERLAY_PATHS_FILE).write_text(
+				name + "\n", encoding="utf-8",
+			)
+			target.write_text("overlay\n", encoding="utf-8")
+			with mock.patch.object(
+				workspace, "task_action_config", return_value=(config, slot),
+			):
+				saved = run_command(
+					workspace.command_overlay_save,
+					task=TASK_ID,
+					restore="run",
+				)
+			self.assertEqual(saved["restored"], [name])
+			self.assertEqual(target.read_text(encoding="utf-8"), "base\n")
+			target.write_text("diverged\n", encoding="utf-8")
+			git(source, "add", "-A")
+			git(source, "commit", "-m", "Diverge the non-ASCII sample")
+			with mock.patch.object(
+				workspace, "task_action_config", return_value=(config, slot),
+			):
+				applied = run_command(
+					workspace.command_overlay_apply,
+					task=TASK_ID,
+				)
+			self.assertEqual(applied["conflicts"], [name])
+			self.assertFalse(applied["applied"])
+			self.assertEqual(applied["outside_inventory"], [])
+			self.assertEqual(
+				git_bytes(
+					source,
+					"-c", "core.quotePath=false",
+					"diff", "--name-only", "--diff-filter=U",
+				).decode("utf-8").splitlines(),
+				[name],
+			)
+
 	def test_overlay_save_rejects_uninventoried_and_untracked_paths(self):
 		with tempfile.TemporaryDirectory() as temporary:
 			root = Path(temporary)
@@ -1599,7 +2925,10 @@ class MechanicsTest(unittest.TestCase):
 			with mock.patch.object(
 				workspace, "task_action_config", return_value=(config, slot),
 			):
-				with self.assertRaisesRegex(workspace.WorkspaceError, "untracked"):
+				with self.assertRaisesRegex(
+					workspace.WorkspaceError,
+					r"outside the overlay inventory: stray\.txt",
+				):
 					run_command(
 						workspace.command_overlay_save,
 						task=TASK_ID,
@@ -1620,6 +2949,343 @@ class MechanicsTest(unittest.TestCase):
 						task=TASK_ID,
 						restore="run",
 					)
+
+	def test_overlay_save_preserves_bundle_when_repeat_save_is_empty(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			source, slot, work, config, module = overlay_repo_with_nested_module(
+				temporary,
+			)
+			(source / "tracked.txt").write_text(
+				"base\nroot-overlay\n", encoding="utf-8",
+			)
+			(module / "tracked.txt").write_text(
+				"module-base\nnested-overlay\n", encoding="utf-8",
+			)
+			with mock.patch.object(
+				workspace, "task_action_config", return_value=(config, slot),
+			):
+				saved = run_command(
+					workspace.command_overlay_save,
+					task=TASK_ID,
+					restore="run",
+				)
+			self.assertGreater(saved["patch_bytes"], 0)
+			self.assertEqual(saved["submodules"], ["dep"])
+			self.assertEqual(
+				(source / "tracked.txt").read_text(encoding="utf-8"),
+				"base\n",
+			)
+			self.assertEqual(
+				(module / "tracked.txt").read_text(encoding="utf-8"),
+				"module-base\n",
+			)
+			snapshot = overlay_bundle_bytes(work)
+			self.assertIn(workspace.OVERLAY_PATCH_FILE, snapshot)
+			self.assertIn(workspace.OVERLAY_SUBMODULES_FILE, snapshot)
+			self.assertTrue(any(
+				path.startswith(workspace.OVERLAY_SUBMODULES_DIR + "/")
+				for path in snapshot
+			))
+			with mock.patch.object(
+				workspace, "task_action_config", return_value=(config, slot),
+			):
+				with self.assertRaisesRegex(
+					workspace.WorkspaceError,
+					r"The overlay diff is empty; nothing to save",
+				):
+					run_command(
+						workspace.command_overlay_save,
+						task=TASK_ID,
+						restore="run",
+					)
+			self.assertEqual(overlay_bundle_bytes(work), snapshot)
+			self.assertEqual(
+				(source / "tracked.txt").read_text(encoding="utf-8"),
+				"base\n",
+			)
+			self.assertEqual(
+				(module / "tracked.txt").read_text(encoding="utf-8"),
+				"module-base\n",
+			)
+
+	def test_overlay_save_preserves_bundle_when_candidate_collection_fails(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			source, slot, work, config, module = overlay_repo_with_nested_module(
+				temporary,
+			)
+			(source / "tracked.txt").write_text(
+				"base\nroot-overlay\n", encoding="utf-8",
+			)
+			(module / "tracked.txt").write_text(
+				"module-base\nnested-overlay\n", encoding="utf-8",
+			)
+			with mock.patch.object(
+				workspace, "task_action_config", return_value=(config, slot),
+			):
+				run_command(
+					workspace.command_overlay_save,
+					task=TASK_ID,
+					restore="run",
+				)
+			snapshot = overlay_bundle_bytes(work)
+			(source / "tracked.txt").write_text(
+				"base\nroot-overlay\n", encoding="utf-8",
+			)
+			(module / "tracked.txt").write_text(
+				"module-base\nnested-overlay\n", encoding="utf-8",
+			)
+			real = workspace.run_git_binary
+
+			def fail_binary_diff(path, *args):
+				if len(args) >= 2 and args[0] == "diff" and args[1] == "--binary":
+					raise workspace.WorkspaceError("git failed")
+				return real(path, *args)
+
+			with mock.patch.object(
+				workspace, "task_action_config", return_value=(config, slot),
+			), mock.patch.object(
+				workspace, "run_git_binary", side_effect=fail_binary_diff,
+			):
+				with self.assertRaisesRegex(workspace.WorkspaceError, "git failed"):
+					run_command(
+						workspace.command_overlay_save,
+						task=TASK_ID,
+						restore="run",
+					)
+			self.assertEqual(overlay_bundle_bytes(work), snapshot)
+			self.assertEqual(
+				(source / "tracked.txt").read_text(encoding="utf-8"),
+				"base\nroot-overlay\n",
+			)
+			self.assertEqual(
+				(module / "tracked.txt").read_text(encoding="utf-8"),
+				"module-base\nnested-overlay\n",
+			)
+
+	def test_overlay_save_preserves_bundle_when_patch_does_not_verify(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			source, slot, work, config, module = overlay_repo_with_nested_module(
+				temporary,
+			)
+			(source / "tracked.txt").write_text(
+				"base\nroot-overlay\n", encoding="utf-8",
+			)
+			(module / "tracked.txt").write_text(
+				"module-base\nnested-overlay\n", encoding="utf-8",
+			)
+			with mock.patch.object(
+				workspace, "task_action_config", return_value=(config, slot),
+			):
+				run_command(
+					workspace.command_overlay_save,
+					task=TASK_ID,
+					restore="run",
+				)
+			snapshot = overlay_bundle_bytes(work)
+			(source / "tracked.txt").write_text(
+				"base\nroot-overlay\n", encoding="utf-8",
+			)
+			(module / "tracked.txt").write_text(
+				"module-base\nnested-overlay\n", encoding="utf-8",
+			)
+			real_run = subprocess.run
+
+			def fail_reverse_check(args, **kwargs):
+				if (
+					isinstance(args, (list, tuple))
+					and "apply" in args
+					and "--check" in args
+					and "--reverse" in args
+				):
+					return subprocess.CompletedProcess(
+						args, 1, stdout="", stderr="patch failed\n",
+					)
+				return real_run(args, **kwargs)
+
+			with mock.patch.object(
+				workspace, "task_action_config", return_value=(config, slot),
+			), mock.patch.object(
+				workspace.subprocess, "run", side_effect=fail_reverse_check,
+			):
+				with self.assertRaisesRegex(
+					workspace.WorkspaceError,
+					r"The saved overlay patch does not verify",
+				):
+					run_command(
+						workspace.command_overlay_save,
+						task=TASK_ID,
+						restore="run",
+					)
+			self.assertEqual(overlay_bundle_bytes(work), snapshot)
+			self.assertEqual(
+				(source / "tracked.txt").read_text(encoding="utf-8"),
+				"base\nroot-overlay\n",
+			)
+			self.assertEqual(
+				(module / "tracked.txt").read_text(encoding="utf-8"),
+				"module-base\nnested-overlay\n",
+			)
+
+	def test_overlay_save_replacement_removes_obsolete_nested_entries(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			source, slot, work, config, module = overlay_repo_with_nested_module(
+				temporary,
+			)
+			(source / "tracked.txt").write_text(
+				"base\nroot-overlay\n", encoding="utf-8",
+			)
+			(module / "tracked.txt").write_text(
+				"module-base\nnested-overlay\n", encoding="utf-8",
+			)
+			with mock.patch.object(
+				workspace, "task_action_config", return_value=(config, slot),
+			):
+				first = run_command(
+					workspace.command_overlay_save,
+					task=TASK_ID,
+					restore="run",
+				)
+			previous = overlay_bundle_bytes(work)
+			self.assertEqual(first["submodules"], ["dep"])
+			(source / "tracked.txt").write_text(
+				"base\nroot-overlay-v2\n", encoding="utf-8",
+			)
+			with mock.patch.object(
+				workspace, "task_action_config", return_value=(config, slot),
+			):
+				replaced = run_command(
+					workspace.command_overlay_save,
+					task=TASK_ID,
+					restore="run",
+				)
+			self.assertGreater(replaced["patch_bytes"], 0)
+			self.assertEqual(replaced["submodules"], [])
+			self.assertIsNotNone(replaced["patch"])
+			self.assertFalse((work / workspace.OVERLAY_SUBMODULES_FILE).exists())
+			self.assertFalse((work / workspace.OVERLAY_SUBMODULES_DIR).exists())
+			self.assertNotEqual(
+				overlay_bundle_bytes(work)[workspace.OVERLAY_PATCH_FILE],
+				previous[workspace.OVERLAY_PATCH_FILE],
+			)
+			self.assertEqual(
+				(module / "tracked.txt").read_text(encoding="utf-8"),
+				"module-base\n",
+			)
+			with mock.patch.object(
+				workspace, "task_action_config", return_value=(config, slot),
+			):
+				applied = run_command(
+					workspace.command_overlay_apply,
+					task=TASK_ID,
+				)
+			self.assertTrue(applied["applied"])
+			self.assertEqual(
+				(source / "tracked.txt").read_text(encoding="utf-8"),
+				"base\nroot-overlay-v2\n",
+			)
+			self.assertEqual(
+				(module / "tracked.txt").read_text(encoding="utf-8"),
+				"module-base\n",
+			)
+
+	def test_overlay_save_nested_only_replacement_unlinks_root_patch(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			source, slot, work, config, module = overlay_repo_with_nested_module(
+				temporary,
+			)
+			(source / "tracked.txt").write_text(
+				"base\nroot-overlay\n", encoding="utf-8",
+			)
+			(module / "tracked.txt").write_text(
+				"module-base\nnested-overlay\n", encoding="utf-8",
+			)
+			with mock.patch.object(
+				workspace, "task_action_config", return_value=(config, slot),
+			):
+				run_command(
+					workspace.command_overlay_save,
+					task=TASK_ID,
+					restore="run",
+				)
+			self.assertTrue((work / workspace.OVERLAY_PATCH_FILE).is_file())
+			(module / "tracked.txt").write_text(
+				"module-base\nnested-overlay-v2\n", encoding="utf-8",
+			)
+			with mock.patch.object(
+				workspace, "task_action_config", return_value=(config, slot),
+			):
+				replaced = run_command(
+					workspace.command_overlay_save,
+					task=TASK_ID,
+					restore="run",
+				)
+			self.assertIsNone(replaced["patch"])
+			self.assertEqual(replaced["submodules"], ["dep"])
+			self.assertFalse((work / workspace.OVERLAY_PATCH_FILE).exists())
+			self.assertTrue((work / workspace.OVERLAY_SUBMODULES_FILE).is_file())
+			self.assertEqual(
+				(source / "tracked.txt").read_text(encoding="utf-8"),
+				"base\n",
+			)
+			with mock.patch.object(
+				workspace, "task_action_config", return_value=(config, slot),
+			):
+				applied = run_command(
+					workspace.command_overlay_apply,
+					task=TASK_ID,
+				)
+			self.assertTrue(applied["applied"])
+			self.assertEqual(
+				(source / "tracked.txt").read_text(encoding="utf-8"),
+				"base\n",
+			)
+			self.assertEqual(
+				(module / "tracked.txt").read_text(encoding="utf-8"),
+				"module-base\nnested-overlay-v2\n",
+			)
+
+	def test_overlay_save_inventory_refusal_preserves_existing_bundle(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			source, slot, work, config, module = overlay_repo_with_nested_module(
+				temporary,
+			)
+			(source / "tracked.txt").write_text(
+				"base\nroot-overlay\n", encoding="utf-8",
+			)
+			(module / "tracked.txt").write_text(
+				"module-base\nnested-overlay\n", encoding="utf-8",
+			)
+			with mock.patch.object(
+				workspace, "task_action_config", return_value=(config, slot),
+			):
+				run_command(
+					workspace.command_overlay_save,
+					task=TASK_ID,
+					restore="run",
+				)
+			snapshot = overlay_bundle_bytes(work)
+			(source / "stray.txt").write_text("stray\n", encoding="utf-8")
+			with mock.patch.object(
+				workspace, "task_action_config", return_value=(config, slot),
+			):
+				with self.assertRaisesRegex(
+					workspace.WorkspaceError,
+					r"outside the overlay inventory: stray\.txt",
+				):
+					run_command(
+						workspace.command_overlay_save,
+						task=TASK_ID,
+						restore="run",
+					)
+			self.assertEqual(overlay_bundle_bytes(work), snapshot)
+			self.assertEqual(
+				(source / "tracked.txt").read_text(encoding="utf-8"),
+				"base\n",
+			)
+			self.assertEqual(
+				(module / "tracked.txt").read_text(encoding="utf-8"),
+				"module-base\n",
+			)
 
 	def test_source_commit_stages_owned_paths_and_marks_green(self):
 		with tempfile.TemporaryDirectory() as temporary:
@@ -1671,6 +3337,87 @@ class MechanicsTest(unittest.TestCase):
 			self.assertTrue(verified["valid"])
 			self.assertEqual(verified["subject"], "Correct peer actions")
 
+	def test_source_commit_stages_a_removed_tracked_file(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary)
+			source, slot, work, config = source_repo_with_task(root)
+			(work / "owned-paths.txt").write_text(
+				"tracked.txt\n", encoding="utf-8",
+			)
+			git(source, "rm", "-q", "tracked.txt")
+			with mock.patch.object(
+				workspace, "task_action_config", return_value=(config, slot),
+			):
+				result = run_command(
+					workspace.command_source_commit,
+					task=TASK_ID,
+					subject="Remove the orphaned tracked file",
+					mark_green=False,
+				)
+			self.assertEqual(result["committed"], ["tracked.txt"])
+			self.assertEqual(
+				git(source, "show", "--name-status", "--format=", "HEAD"),
+				"D\ttracked.txt",
+			)
+			self.assertEqual(
+				git(source, "show", "-s", "--format=%B", "HEAD"),
+				f"Remove the orphaned tracked file\n\nTask: {TASK_ID}",
+			)
+			self.assertFalse((source / "tracked.txt").exists())
+			self.assertEqual(git(source, "status", "--porcelain"), "")
+			self.assertEqual(git(source, "rev-list", "--count", "HEAD"), "2")
+
+	def test_source_commit_stages_a_non_ascii_tracked_file(self):
+		name = "\u00e9\u6587.txt"
+		self.assertEqual(name.encode("utf-8"), b"\xc3\xa9\xe6\x96\x87.txt")
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary)
+			source, slot, work, config = source_repo_with_task(root)
+			(source / name).write_text("base\n", encoding="utf-8")
+			git(source, "add", "-A")
+			git(source, "commit", "-m", "Add the non-ASCII sample")
+			(work / "owned-paths.txt").write_text(
+				name + "\n", encoding="utf-8",
+			)
+			(source / name).write_text("task\n", encoding="utf-8")
+			covered = workspace.path_is_covered
+			compared = []
+
+			def record_covered(path, roots):
+				compared.append(path)
+				return covered(path, roots)
+
+			with (
+				mock.patch.object(
+					workspace, "task_action_config", return_value=(config, slot),
+				),
+				mock.patch.object(
+					workspace, "path_is_covered", side_effect=record_covered,
+				),
+			):
+				result = run_command(
+					workspace.command_source_commit,
+					task=TASK_ID,
+					subject="Correct the non-ASCII sample",
+					mark_green=False,
+				)
+			self.assertEqual(compared, [name])
+			self.assertEqual(result["committed"], [name])
+			self.assertEqual(
+				git_bytes(
+					source,
+					"-c", "core.quotePath=false",
+					"show", "--name-status", "--format=", "HEAD",
+				).decode("utf-8").strip(),
+				"M\t" + name,
+			)
+			self.assertEqual(
+				git(source, "show", "-s", "--format=%B", "HEAD"),
+				f"Correct the non-ASCII sample\n\nTask: {TASK_ID}",
+			)
+			self.assertEqual(git(source, "status", "--porcelain"), "")
+			self.assertEqual(git(source, "rev-list", "--count", "HEAD"), "3")
+
 	def test_source_commit_rejects_paths_outside_owned_set(self):
 		with tempfile.TemporaryDirectory() as temporary:
 			root = Path(temporary)
@@ -1705,70 +3452,118 @@ class MechanicsTest(unittest.TestCase):
 						mark_green=False,
 					)
 
-	def test_verification_task_cannot_commit_telegram_source(self):
+	def test_already_satisfied_source_state_requires_baseline(self):
 		with tempfile.TemporaryDirectory() as temporary:
 			root = Path(temporary)
-			source, slot, work, config = source_repo_with_task(root, kind="verify")
-			(work / "owned-paths.txt").write_text(
-				"tracked.txt\n", encoding="utf-8",
-			)
-			(source / "tracked.txt").write_text("task\n", encoding="utf-8")
-			with mock.patch.object(
-				workspace, "task_action_config", return_value=(config, slot),
-			):
-				with self.assertRaisesRegex(workspace.WorkspaceError, "follow-up"):
-					run_command(
-						workspace.command_source_commit,
-						task=TASK_ID,
-						subject="Correct peer actions",
-						mark_green=False,
-					)
-			self.assertEqual(
-				git(source, "show", "-s", "--format=%s", "HEAD"),
-				"Create baseline",
-			)
-
-	def test_verification_source_state_requires_an_untouched_baseline(self):
-		with tempfile.TemporaryDirectory() as temporary:
-			root = Path(temporary)
-			source, _, _, config = source_repo_with_task(root, kind="verify")
+			source, _, _, config = source_repo_with_task(root)
 			for name in ("base", "run"):
 				git(source, "update-ref", workspace.source_task_ref(TASK_ID, name), "HEAD")
-			workspace.validate_source_state(config, TASK_ID, True, "verify")
+			workspace.validate_source_state(config, TASK_ID, False)
 
 			(source / "tracked.txt").write_text("task\n", encoding="utf-8")
 			git(source, "commit", "-am", "Correct peer actions", "-m", f"Task: {TASK_ID}")
-			git(source, "update-ref", workspace.source_task_ref(TASK_ID, "run"), "HEAD")
-			with self.assertRaisesRegex(workspace.WorkspaceError, "local baseline"):
-				workspace.validate_source_state(config, TASK_ID, True, "verify")
-
-			git(source, "update-ref", workspace.source_task_ref(TASK_ID, "green"), "HEAD")
-			with self.assertRaisesRegex(workspace.WorkspaceError, "implementation commit"):
-				workspace.validate_source_state(config, TASK_ID, True, "verify")
+			for name in ("green", "run"):
+				git(source, "update-ref", workspace.source_task_ref(TASK_ID, name), "HEAD")
+			with self.assertRaisesRegex(workspace.WorkspaceError, "already-satisfied"):
+				workspace.validate_source_state(config, TASK_ID, False)
 			workspace.validate_source_state(config, TASK_ID, True)
 
-	def test_verification_result_contract(self):
+	def test_adaptive_outcome_result_contract(self):
 		path = Path("work/result.md")
+		workspace.validate_outcome_result([
+			"Outcome: changed",
+			"Touched: tracked.txt",
+			"Test-Report: work/test.md",
+		], path, True)
+		workspace.validate_outcome_result([
+			"Outcome: already-satisfied",
+			"Touched: none",
+			"Test-Report: work/test.md",
+		], path, True)
+		workspace.validate_outcome_result([
+			"Outcome: blocked",
+			"Touched: none",
+		], path, False)
 
-		def check(lines, approved=True):
-			workspace.validate_verify_result(lines, path, approved)
-
-		check(["Touched: none", "Finding: confirmed"])
-		check(["Touched: none", "Finding: deviation", "Discovered: present"])
-		check(["Touched: none", "Finding: inconclusive"], approved=False)
-
+		with self.assertRaisesRegex(workspace.WorkspaceError, "adaptive evidence"):
+			workspace.validate_outcome_result([
+				"Outcome: changed",
+				"Touched: tracked.txt",
+			], path, True)
+		with self.assertRaisesRegex(workspace.WorkspaceError, "touched paths"):
+			workspace.validate_outcome_result([
+				"Outcome: changed",
+				"Touched: none",
+				"Test-Report: work/test.md",
+			], path, True)
 		with self.assertRaisesRegex(workspace.WorkspaceError, "Touched: none"):
-			check(["Touched: Telegram/SourceFiles/main.cpp", "Finding: confirmed"])
-		with self.assertRaisesRegex(workspace.WorkspaceError, "exactly one Finding"):
-			check(["Touched: none"])
-		with self.assertRaisesRegex(workspace.WorkspaceError, "exactly one Finding"):
-			check(["Touched: none", "Finding: probably-fine"])
-		with self.assertRaisesRegex(workspace.WorkspaceError, "discovered follow-up"):
-			check(["Touched: none", "Finding: deviation", "Discovered: none"])
-		with self.assertRaisesRegex(workspace.WorkspaceError, "never approved"):
-			check(["Touched: none", "Finding: inconclusive"])
-		with self.assertRaisesRegex(workspace.WorkspaceError, "could not measure"):
-			check(["Touched: none", "Finding: deviation"], approved=False)
+			workspace.validate_outcome_result([
+				"Outcome: already-satisfied",
+				"Touched: tracked.txt",
+				"Test-Report: work/test.md",
+			], path, True)
+		with self.assertRaisesRegex(workspace.WorkspaceError, "Outcome must be"):
+			workspace.validate_outcome_result([
+				"Outcome: blocked",
+				"Touched: none",
+				"Test-Report: work/test.md",
+			], path, True)
+
+
+	def test_test_block_requires_real_recovery_exhaustion(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			task = Path(temporary) / "task"
+			work = task / "work"
+			work.mkdir(parents=True)
+			result = work / "result.md"
+
+			def check(verdict, unverified="full presentation"):
+				workspace.validate_blocked_result([
+					f"Verdict: {verdict}",
+					"Blocker-Type: test",
+					f"Unverified: {unverified}",
+				], result)
+
+			(work / "test.md").write_text(
+				"## Recovery exhaustion\n\n| Strategy | Evidence |\n",
+				encoding="utf-8",
+			)
+			check("recovery-exhausted: fixture unavailable")
+
+			for verdict in (
+				"TEST_FLAW at MAX_TEST_RUNS",
+				"blank-capture at run cap",
+				"missing screenshot",
+			):
+				with self.assertRaisesRegex(
+					workspace.WorkspaceError,
+					"recoverable harness or evidence failure",
+				):
+					check(verdict)
+
+			with self.assertRaisesRegex(
+				workspace.WorkspaceError,
+				"exact unverified behavior",
+			):
+				check("recovery-exhausted: fixture unavailable", "none")
+
+			(work / "test.md").unlink()
+			with self.assertRaisesRegex(
+				workspace.WorkspaceError,
+				"Recovery exhaustion",
+			):
+				check("recovery-exhausted: fixture unavailable")
+
+			with self.assertRaisesRegex(
+				workspace.WorkspaceError,
+				"capability report",
+			):
+				check("computer-use-unavailable: exact app identity")
+			(task / "computer-use-capability.md").write_text(
+				"unavailable\n",
+				encoding="utf-8",
+			)
+			check("computer-use-unavailable: exact app identity")
 
 	def test_task_type_defaults_to_implementation(self):
 		with tempfile.TemporaryDirectory() as temporary:
@@ -1778,12 +3573,16 @@ class MechanicsTest(unittest.TestCase):
 			self.assertEqual(state["type"], "implement")
 
 			workspace.update_state(directory / "state.yaml", {"type": "verify"})
+			with self.assertRaisesRegex(workspace.WorkspaceError, "Only type 'implement'"):
+				workspace.load_state(slot, directory / "state.yaml")
+
+			workspace.update_state(directory / "state.yaml", {"status": "approved"})
 			state = workspace.load_state(slot, directory / "state.yaml")
 			self.assertEqual(state["type"], "verify")
 			text = (directory / "state.yaml").read_text(encoding="utf-8")
 			self.assertEqual(
 				text.splitlines()[:2],
-				["status: todo", "type: verify"],
+				["status: approved", "type: verify"],
 			)
 
 			workspace.update_state(directory / "state.yaml", {"type": "guess"})
@@ -1850,6 +3649,226 @@ class MechanicsTest(unittest.TestCase):
 			self.assertTrue(result["exe_present"])
 			self.assertTrue(result["golden_account_present"])
 			self.assertFalse(result["live_marker_present"])
+
+	def test_finish_publishes_split_required_with_carried_work(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary)
+			source, slot, work, config = source_repo_with_task(root)
+			config["slot_worktree"] = str(slot)
+			for name in ("base", "run"):
+				git(
+					source,
+					"update-ref",
+					workspace.source_task_ref(TASK_ID, name),
+					"HEAD",
+				)
+			(work / "owned-paths.txt").write_text(
+				"tracked.txt\n", encoding="utf-8",
+			)
+			(work / "split-proposal.md").write_text(
+				"# Split proposal\n\nTwo independent boundaries.\n",
+				encoding="utf-8",
+			)
+			(work / "result.md").write_text(
+				"""STATUS: SPLIT_REQUIRED
+Outcome: split-required
+Verdict: SPLIT_REQUIRED
+Implementation: retained
+Touched: tracked.txt
+Split-Proposal: work/split-proposal.md
+Checkout: source-state-retained
+""",
+				encoding="utf-8",
+			)
+			(source / "tracked.txt").write_text("carried\n", encoding="utf-8")
+			with (
+				mock.patch.object(
+					workspace,
+					"task_action_config",
+					return_value=(config, slot),
+				),
+				mock.patch.object(workspace, "commit_paths", return_value=True),
+			):
+				result = run_command(
+					workspace.command_finish,
+					task=TASK_ID,
+					status="split-required",
+					model="gpt-5.6-sol",
+				)
+
+			state = workspace.load_state(slot, work.parent / "state.yaml")
+			self.assertEqual(result["status"], "split-required")
+			self.assertEqual(state["status"], "split-required")
+			self.assertEqual(state["phase"], "split-required")
+			carried = json.loads((work / "carried-work.json").read_text(
+				encoding="utf-8-sig",
+			))
+			self.assertEqual(carried["implementation"], "retained")
+			self.assertEqual(carried["owned_dirty_paths"], ["tracked.txt"])
+			self.assertEqual((source / "tracked.txt").read_text(), "carried\n")
+
+	def test_carried_work_snapshot_seals_owned_submodule_changes(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary)
+			source, slot, work, config = source_repo_with_task(root)
+			nested = source / "nested"
+			git_repo(nested)
+			(nested / "owned.txt").write_text("base\n", encoding="utf-8")
+			git(nested, "add", "owned.txt")
+			git(nested, "commit", "-m", "Create nested baseline")
+			nested_head = git(nested, "rev-parse", "HEAD")
+			git(
+				source,
+				"update-index",
+				"--add",
+				"--cacheinfo",
+				f"160000,{nested_head},nested",
+			)
+			git(source, "commit", "-m", "Track nested repository")
+			(work / "owned-paths.txt").write_text(
+				"nested/owned.txt\n", encoding="utf-8",
+			)
+			(nested / "owned.txt").write_text("carried\n", encoding="utf-8")
+
+			snapshot = workspace.source_worktree_snapshot(
+				config, slot, TASK_ID,
+			)
+
+			self.assertEqual(snapshot["owned_dirty_paths"], ["nested"])
+			self.assertEqual(snapshot["outside_owned_paths"], [])
+			self.assertNotEqual(snapshot["worktree_digest"], "0" * 64)
+
+	def test_split_publish_routes_and_starts_implementation_carrier(self):
+		with tempfile.TemporaryDirectory() as temporary:
+			root = Path(temporary)
+			config = inbox_worktrees(root)
+			main = Path(config["ai_main"])
+			slot = Path(config["slot_worktree"])
+			source = root / "source"
+			git_repo(source)
+			(source / "Telegram" / "build").mkdir(parents=True)
+			(source / "tracked.txt").write_text("base\n", encoding="utf-8")
+			git(source, "add", "-A")
+			git(source, "commit", "-m", "Create baseline")
+			config["source_root"] = str(source)
+			source_task = "2026/07/18/active-task"
+			source_dir = main / "tasks" / source_task
+			state_path = source_dir / "state.yaml"
+			state_path.write_text(
+				state_path.read_text(encoding="utf-8")
+				.replace("status: todo", "status: split-required")
+				.replace("claimed_by: null", "claimed_by: macbook-twork")
+				.replace("claimed_at: null", "claimed_at: 2026-07-18T10:00:00+04:00")
+				.replace("claim_order: null", "claim_order: 1")
+				.replace("phase: null", "phase: split-required")
+				.replace(
+					"inbox_receipt:",
+					"model: gpt-5.6-sol\ninbox_receipt:",
+				),
+				encoding="utf-8",
+			)
+			work = source_dir / "work"
+			work.mkdir()
+			(work / "owned-paths.txt").write_text(
+				"tracked.txt\n", encoding="utf-8",
+			)
+			for name in ("base", "run"):
+				git(
+					source,
+					"update-ref",
+					workspace.source_task_ref(source_task, name),
+					"HEAD",
+				)
+			(source / "tracked.txt").write_text("carried\n", encoding="utf-8")
+			snapshot = workspace.source_worktree_snapshot(
+				config, main, source_task,
+			)
+			(work / "carried-work.json").write_text(
+				json.dumps({"implementation": "retained", **snapshot}) + "\n",
+				encoding="utf-8",
+			)
+			git(main, "add", f"tasks/{source_task}")
+			git(main, "commit", "-m", f"Split-required {source_task}")
+			git(slot, "merge", "--ff-only", "master")
+
+			replacements = [
+				"2026/07/20/adopt-active-task-implementation",
+				"2026/07/20/finish-active-task-integration",
+			]
+			receipt = "receipts/2026/07/20/split-active-task.md"
+			for task_id in replacements:
+				directory = slot / "tasks" / task_id
+				directory.mkdir(parents=True)
+				(directory / "task.md").write_text(
+					f"# {task_id.rsplit('/', 1)[-1]}\n",
+					encoding="utf-8",
+				)
+				(directory / "state.yaml").write_text(
+					f"""status: todo
+type: implement
+created: 2026-07-20
+project: null
+depends_on: []
+claimed_by: null
+claimed_at: null
+claim_order: null
+lease_until: null
+phase: null
+inbox_receipt: {receipt}
+""",
+					encoding="utf-8",
+				)
+			receipt_path = slot / receipt
+			receipt_path.parent.mkdir(parents=True)
+			receipt_path.write_text(
+				"\n".join([source_task, *replacements]) + "\n",
+				encoding="utf-8",
+			)
+			with mock.patch.object(
+				workspace, "worktree_config", return_value=config,
+			):
+				result = run_command(
+					workspace.command_split_publish,
+					source_task=source_task,
+					replacements=replacements,
+					receipt=receipt,
+					implementation_carrier=replacements[0],
+					paths=[
+						f"tasks/{source_task}",
+						*(f"tasks/{task_id}" for task_id in replacements),
+						receipt,
+					],
+				)
+			self.assertEqual(result["status"], "split")
+			self.assertTrue((main / "tasks" / source_task / "split.yaml").is_file())
+			self.assertFalse((main / "tasks" / source_task / "state.yaml").exists())
+			resolved = workspace.resolve_task(
+				main, workspace.load_states(main), source_task,
+			)
+			self.assertEqual(resolved["status"], "split")
+			self.assertEqual(resolved["split_into"], replacements)
+			carrier = workspace.load_states(main)[replacements[0]]
+			self.assertEqual(carrier["claimed_by"], "macbook-twork")
+			self.assertEqual(carrier["carried_from"], source_task)
+			self.assertEqual((source / "tracked.txt").read_text(), "carried\n")
+
+			with mock.patch.object(
+				workspace, "worktree_config", return_value=config,
+			):
+				started = run_command(
+					workspace.command_start,
+					task=replacements[0],
+					require=[],
+				)
+			self.assertEqual(started["status"], "in-progress")
+			self.assertIsNotNone(workspace.resolved_ref(
+				source,
+				workspace.source_task_ref(replacements[0], "base"),
+			))
+			self.assertIsNone(workspace.resolved_ref(
+				source,
+				workspace.source_task_ref(source_task, "base"),
+			))
 
 
 if __name__ == "__main__":
