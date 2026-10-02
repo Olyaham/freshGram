@@ -82,7 +82,7 @@ void GenerateItems(
 		return callback(OwnedItem(delegate, item), sentDate, realId);
 	};
 
-	const auto makeSimpleTextMessage = [&](TextWithEntities &&text)
+	const auto makeSimpleTextMessage = [&](TextWithEntities &&text, const MTPMessageMedia &media)
 	{
 		base::flags<MessageFlag> flags = MessageFlag::AdminLogEntry;
 		if (from) {
@@ -106,19 +106,19 @@ void GenerateItems(
 																: QString("unknown user: %1").arg(message.fromId),
 									},
 									std::move(text),
-									MTP_messageMediaEmpty());
+									media);
 	};
 
-	const auto addSimpleTextMessage = [&](TextWithEntities &&text)
+	const auto addSimpleTextMessage = [&](TextWithEntities &&text, const MTPMessageMedia &media)
 	{
-		addPart(makeSimpleTextMessage(std::move(text)));
+		addPart(makeSimpleTextMessage(std::move(text), media));
 	};
 
 	const auto text = QString::fromStdString(message.text);
 	auto textAndEntities = Ui::Text::WithEntities(text);
 	const auto entities = AyuMapper::deserializeTextWithEntities(message.textEntities);
 	textAndEntities.entities = Api::EntitiesFromMTP(&history->session(), entities.v);
-	addSimpleTextMessage(std::move(textAndEntities));
+	addSimpleTextMessage(std::move(textAndEntities), AyuMapper::deserializeMedia(message.documentSerialized));
 }
 
 } // namespace MessageHistory

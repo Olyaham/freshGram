@@ -83,6 +83,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_dialogs.h"
 
 #include "ayu/ayu_settings.h"
+#include "ayu/utils/ayu_mapper.h"
 #include "ayu/features/filters/filters_controller.h"
 #include "ayu/features/message_shot/message_shot.h"
 #include "ayu/utils/telegram_helpers.h"
@@ -5607,6 +5608,7 @@ void HistoryItem::refreshMedia(const MTPMessageMedia *media) {
 		}
 	}
 	_media = nullptr;
+	_ayuSavedMedia.clear();
 	if (media) {
 		setMedia(*media);
 	}
@@ -6106,6 +6108,7 @@ void HistoryItem::createServiceFromMtp(const MTPDmessageService &message) {
 }
 
 void HistoryItem::setMedia(const MTPMessageMedia &media) {
+	_ayuSavedMedia = AyuMapper::serializeSavableMedia(media);
 	_media = CreateMedia(this, media);
 	checkStoryForwardInfo();
 	checkBuyButton();

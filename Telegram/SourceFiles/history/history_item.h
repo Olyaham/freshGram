@@ -684,6 +684,9 @@ public:
 	[[nodiscard]] int unsupportedTTL() const {
 		return _unsupportedTTL;
 	}
+	[[nodiscard]] const std::vector<char> &ayuSavedMedia() const {
+		return _ayuSavedMedia;
+	}
 	void removeTranslationBit();
 
 	[[nodiscard]] int boostsApplied() const {
@@ -834,6 +837,7 @@ private:
 	bool _deleted = false;
 	bool _deletedAnimated = false;
 	int _unsupportedTTL = 0;
+	std::vector<char> _ayuSavedMedia;
 
 	TimeId _date = 0;
 	TimeId _ttlDestroyAt = 0;

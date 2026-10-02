@@ -93,6 +93,35 @@ MTPVector<MTPMessageEntity> deserializeTextWithEntities(std::vector<char> serial
 	return deserializeObject<MTPVector<MTPMessageEntity>>(serialized);
 }
 
+std::vector<char> serializeSavableMedia(const MTPMessageMedia &media) {
+	const auto savable = media.match([](const MTPDmessageMediaPhoto &data) {
+		return data.vphoto() && !data.vttl_seconds();
+	}, [](const MTPDmessageMediaDocument &data) {
+		return data.vdocument() && !data.vttl_seconds();
+	}, [](const MTPDmessageMediaGeo &) {
+		return true;
+	}, [](const MTPDmessageMediaVenue &) {
+		return true;
+	}, [](const MTPDmessageMediaContact &) {
+		return true;
+	}, [](const MTPDmessageMediaDice &) {
+		return true;
+	}, [](const auto &) {
+		return false;
+	});
+	if (!savable) {
+		return {};
+	}
+	return serializeObject(media);
+}
+
+MTPMessageMedia deserializeMedia(const std::vector<char> &serialized) {
+	if (serialized.empty()) {
+		return MTP_messageMediaEmpty();
+	}
+	return deserializeObject<MTPMessageMedia>(serialized);
+}
+
 int mapItemFlagsToMTPFlags(not_null<HistoryItem*> item) {
 	int flags = 0;
 

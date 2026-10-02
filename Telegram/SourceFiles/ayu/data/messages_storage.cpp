@@ -93,9 +93,10 @@ void map(not_null<HistoryItem*> item, AyuMessageBase &message) {
 	message.textEntities = serializedText.second;
 
 	// todo: implement mapping
+	message.documentSerialized = item->ayuSavedMedia();
 	message.mediaPath = "/";
 	// message.hqThumbPath
-	message.documentType = 0; // document type none
+	message.documentType = message.documentSerialized.empty() ? 0 : 1;
 	// message.documentSerialized
 	// message.thumbsSerialized
 	// message.documentAttributesSerialized
@@ -133,7 +134,10 @@ void addDeletedMessage(not_null<HistoryItem*> item) {
 	DeletedMessage message;
 	map(item, message);
 
-	if (message.text.empty()) {
+	if (message.text.empty() && message.documentSerialized.empty() && item->media()) {
+		message.text = item->notificationText().text.toStdString();
+	}
+	if (message.text.empty() && message.documentSerialized.empty()) {
 		return;
 	}
 
