@@ -114,7 +114,7 @@ jobs:
             -D TDESKTOP_API_HASH="$API_HASH"
 
       - name: Save compiler cache
-        if: always()
+        if: always() && steps.ccache.outcome == 'success'
         uses: actions/cache/save@v4
         with:
           path: ${{ env.CCACHE_DIR }}
