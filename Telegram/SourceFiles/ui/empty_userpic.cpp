@@ -60,7 +60,7 @@ void PaintSavedMessagesInner(
 	// X XX          XX X   |      |
 	// XX              XX  ---    ---
 
-	const auto thinkness = base::SafeRound(size * 0.055);
+	const auto thinkness = base::SafeRound(size * 0.045);
 	const auto increment = int(thinkness) % 2 + (size % 2);
 	const auto width = base::SafeRound(size * 0.15) * 2 + increment;
 	const auto height = base::SafeRound(size * 0.19) * 2 + increment;
@@ -308,29 +308,25 @@ void EmptyUserpic::paint(
 
 	PainterHighQualityEnabler hq(p);
 	{
-		auto gradient = QLinearGradient(x, y, x, y + size);
-		gradient.setStops({
-			{ 0., _colors.color1->c },
-			{ 1., _colors.color2->c }
-		});
-		p.setBrush(gradient);
+		auto bg = QColor(st::sideBarBg->c);
+		p.setBrush(bg);
 	}
 	p.setPen(Qt::NoPen);
 	paintBackground();
 
 	if (IsExternal(_string)) {
-		PaintExternalMessagesInner(p, x, y, size, st::historyPeerUserpicFg);
+		PaintExternalMessagesInner(p, x, y, size, st::windowBgActive);
 	} else if (IsInaccessible(_string)) {
 		PaintInaccessibleAccountInner(
 			p,
 			x,
 			y,
 			size,
-			st::historyPeerUserpicFg);
+			st::windowBgActive);
 	} else {
 		p.setFont(font);
 		p.setBrush(Qt::NoBrush);
-		p.setPen(st::historyPeerUserpicFg);
+		p.setPen(st::windowBgActive);
 		p.drawText(
 			QRect(x, y, size, size),
 			_string,
@@ -397,12 +393,8 @@ void EmptyUserpic::PaintSavedMessages(
 		int y,
 		int outerWidth,
 		int size) {
-	auto bg = QLinearGradient(x, y, x, y + size);
-	bg.setStops({
-		{ 0., st::historyPeerSavedMessagesBg->c },
-		{ 1., st::historyPeerSavedMessagesBg2->c }
-	});
-	const auto &fg = st::historyPeerUserpicFg;
+	auto bg = QColor(st::sideBarBg->c);
+	const auto &fg = st::windowBgActive;
 	PaintSavedMessages(p, x, y, outerWidth, size, QBrush(bg), fg);
 }
 
@@ -436,12 +428,8 @@ void EmptyUserpic::PaintRepliesMessages(
 		int y,
 		int outerWidth,
 		int size) {
-	auto bg = QLinearGradient(x, y, x, y + size);
-	bg.setStops({
-		{ 0., st::historyPeerSavedMessagesBg->c },
-		{ 1., st::historyPeerSavedMessagesBg2->c }
-	});
-	const auto &fg = st::historyPeerUserpicFg;
+	auto bg = QColor(st::sideBarBg->c);
+	const auto &fg = st::windowBgActive;
 	PaintRepliesMessages(p, x, y, outerWidth, size, QBrush(bg), fg);
 }
 
@@ -475,12 +463,8 @@ void EmptyUserpic::PaintHiddenAuthor(
 		int y,
 		int outerWidth,
 		int size) {
-	auto bg = QLinearGradient(x, y, x, y + size);
-	bg.setStops({
-		{ 0., st::premiumButtonBg2->c },
-		{ 1., st::premiumButtonBg3->c },
-	});
-	const auto &fg = st::premiumButtonFg;
+	auto bg = QColor(st::sideBarBg->c);
+	const auto &fg = st::windowBgActive;
 	PaintHiddenAuthor(p, x, y, outerWidth, size, QBrush(bg), fg);
 }
 
@@ -514,12 +498,8 @@ void EmptyUserpic::PaintMyNotes(
 		int y,
 		int outerWidth,
 		int size) {
-	auto bg = QLinearGradient(x, y, x, y + size);
-	bg.setStops({
-		{ 0., st::historyPeerSavedMessagesBg->c },
-		{ 1., st::historyPeerSavedMessagesBg2->c }
-	});
-	const auto &fg = st::historyPeerUserpicFg;
+	auto bg = QColor(st::sideBarBg->c);
+	const auto &fg = st::windowBgActive;
 	PaintMyNotes(p, x, y, outerWidth, size, QBrush(bg), fg);
 }
 

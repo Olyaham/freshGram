@@ -773,6 +773,12 @@ FillMenuResult FillSendMenu(
 				details); },
 			&icons.menuWhenOnline);
 	}
+	if (sending && details.aiComposeAllowed) {
+		menu->addAction(
+			tr::lng_ai_compose_title(tr::now),
+			[=] { action({ .type = ActionType::AiCompose }, details); },
+			&st::menuIconTranslate);
+	}
 
 	if ((type != Type::Disabled)
 		&& ((details.spoiler != SpoilerState::None)

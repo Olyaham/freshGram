@@ -560,7 +560,7 @@ const QString &readAutoupdatePrefixRaw() {
 			return AutoupdatePrefix(value);
 		}
 	}
-	return AutoupdatePrefix("https://update.ayugram.one/");
+	return AutoupdatePrefix("https://snowy-fluffy.github.io/freshGram-updates/");
 }
 
 void writeAutoupdatePrefix(const QString &prefix) {
@@ -569,7 +569,7 @@ void writeAutoupdatePrefix(const QString &prefix) {
 	}
 
 	const auto current = readAutoupdatePrefixRaw();
-    const auto fixedPrefix = QString::fromStdString("https://update.ayugram.one/");
+    const auto fixedPrefix = QString::fromStdString("https://snowy-fluffy.github.io/freshGram-updates/");
 	if (current != fixedPrefix) {
 		AutoupdatePrefix(fixedPrefix);
 		QFile f(autoupdatePrefixFile());

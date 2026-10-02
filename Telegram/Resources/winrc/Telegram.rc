@@ -60,11 +60,11 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "CompanyName", "Radolyn Labs"
-            VALUE "FileDescription", "AyuGram Desktop"
+            VALUE "CompanyName", "Snowy-Fluffy"
+            VALUE "FileDescription", "freshGram"
             VALUE "FileVersion", "7.0.9.0"
             VALUE "LegalCopyright", "Copyright (C) 2014-2026"
-            VALUE "ProductName", "AyuGram Desktop"
+            VALUE "ProductName", "freshGram"
             VALUE "ProductVersion", "7.0.9.0"
         END
     END

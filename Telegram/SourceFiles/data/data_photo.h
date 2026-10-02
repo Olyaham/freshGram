@@ -166,6 +166,8 @@ public:
 	void setLocation(const Core::FileLocation &loc);
 
 	PhotoId id = 0;
+	int32 _dc = 0;
+	std::weak_ptr<Data::PhotoMedia> _media;
 
 	PeerData *peer = nullptr; // for chat and channel photos connection
 	// geo, caption
@@ -193,14 +195,12 @@ private:
 	std::array<Data::CloudFile, Data::kPhotoSizeCount> _images;
 	std::unique_ptr<VideoSizes> _videoSizes;
 
-	int32 _dc = 0;
 	uint64 _access = 0;
 	bool _hasStickers = false;
 	bool _extendedMediaPreview = false;
 
 	QByteArray _fileReference;
 	std::unique_ptr<Data::ReplyPreview> _replyPreview;
-	std::weak_ptr<Data::PhotoMedia> _media;
 
 	not_null<Data::Session*> _owner;
 

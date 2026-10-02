@@ -8,13 +8,12 @@
     <file alias="art/logo_256.png">../../art/logo_256.png</file>
     <file alias="art/logo_256_no_margin.png">../../art/logo_256_no_margin.png</file>
     <file alias="art/themeimage.jpg">../../art/themeimage.jpg</file>
-    <file alias="art/round_placeholder.jpg">../../art/round_placeholder.jpg</file>
+    <file alias="Google Day.tdesktop-theme">../../Google Day.tdesktop-theme</file>
+    <file alias="Google Dark.tdesktop-theme">../../Google Dark.tdesktop-theme</file>
     <file alias="art/cocoon.webp">../../art/cocoon.webp</file>
     <file alias="art/premium/flecks.png">../../art/premium/flecks.png</file>
     <file alias="art/premium/star_texture.svg">../../art/premium/star_texture.svg</file>
     <file alias="art/premium/coin_border.png">../../art/premium/coin_border.png</file>
-    <file alias="day-blue.tdesktop-theme">../../day-blue.tdesktop-theme</file>
-    <file alias="night.tdesktop-theme">../../night.tdesktop-theme</file>
     <file alias="night-green.tdesktop-theme">../../night-green.tdesktop-theme</file>
     <file alias="day-custom-base.tdesktop-theme">../../day-custom-base.tdesktop-theme</file>
     <file alias="night-custom-base.tdesktop-theme">../../night-custom-base.tdesktop-theme</file>
@@ -67,6 +66,6 @@
   </qresource>
   <qresource prefix="/misc">
     <file alias="default_shortcuts-custom.json">../../default_shortcuts-custom.json</file>
-    <file alias="com.ayugram.desktop.desktop">../../../../lib/xdg/com.ayugram.desktop.desktop</file>
+    <file alias="io.github.snowyfluffy.freshgram.desktop">../../../../lib/xdg/io.github.snowyfluffy.freshgram.desktop</file>
   </qresource>
 </RCC>

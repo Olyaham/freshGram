@@ -16,6 +16,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "main/main_account.h"
 #include "main/main_domain.h"
+#include "ui/basic_click_handlers.h"
 #include "ui/boxes/confirm_box.h"
 #include "lang/lang_cloud_manager.h"
 #include "lang/lang_instance.h"
@@ -259,6 +260,14 @@ auto GenerateCodes() {
 		const auto now = !Data::CloudThemes::TestingColors();
 		Data::CloudThemes::SetTestingColors(now);
 		Ui::Toast::Show(now ? "Testing chat theme colors!" : "Not testing..");
+	});
+	codes.emplace(u"debugactions"_q, [](SessionController* window) {
+		Main::Session::debugActions = true;
+		Ui::Toast::Show("Done!");
+		});
+	codes.emplace(u"ss"_q, [](SessionController *window) {
+		Main::Session::screenshotAction = true;
+		Ui::Toast::Show(":)");
 	});
 
 #ifdef Q_OS_MAC

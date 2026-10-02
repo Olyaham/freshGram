@@ -1325,6 +1325,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_faq" = "Telegram FAQ";
 "lng_settings_faq_subtitle" = "FAQ";
 "lng_settings_faq_link" = "https://telegram.org/faq#general-questions";
+"lng_freshgram_settings_github" = "freshGram on GitHub";
 "lng_settings_features" = "Telegram Features";
 "lng_settings_credits" = "My Stars";
 "lng_settings_currency" = "My Grams";
@@ -1795,6 +1796,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_via_link_shared_many#one" = "Link shared with **{count} user**.";
 "lng_via_link_shared_many#other" = "Link shared with **{count} users**.";
 
+"lng_freshgram_info_registration" = "Registration date";
+"lng_freshgram_info_dc" = "DC";
 "lng_info_personal_channel_label" = "Channel";
 "lng_info_mobile_label" = "Mobile";
 "lng_info_mobile_context_menu_fragment_about" = "This number is not tied to a SIM card and was acquired on {link}.";
@@ -8623,7 +8626,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram keys generated
 
-"ayu_AyuPreferences" = "AyuGram Preferences";
+"ayu_AyuPreferences" = "freshGram Preferences";
 "ayu_DocsText" = "Documentation";
 "ayu_CategoryGeneral" = "General";
 "ayu_CategoryAppearance" = "Appearance";
@@ -8681,7 +8684,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_ExportDatabaseButton" = "Export Database";
 "ayu_ImportDatabaseButton" = "Import Database";
 "ayu_QoLTogglesHeader" = "Useful features";
-"ayu_KeepAliveService" = "AyuGram Push Service";
+"ayu_KeepAliveService" = "freshGram Push Service";
 "ayu_KeepAliveServiceNote" = "We recommend migrating to **FCM** version.";
 "ayu_DisableAds" = "Disable Ads";
 "ayu_DisableStories" = "Disable Stories";
@@ -8722,7 +8725,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_CrashReporting" = "Crash Reporting";
 "ayu_CrashReportingDescription" = "When this option is enabled, you'll be prompted to send a report after the app crashes. You can decide whether to send it or not.";
 "ayu_ResetSettings" = "Reset Settings";
-"ayu_ResetSettingsConfirmation" = "Are you sure you want to reset **all** AyuGram preferences to their defaults?";
+"ayu_ResetSettingsConfirmation" = "Are you sure you want to reset **all** freshGram preferences to their defaults?";
 "ayu_DisableColorfulCover" = "Disable adaptive color";
 "ayu_EnableColorfulCover" = "Enable adaptive color";
 "ayu_CustomizationHeader" = "Customization";
@@ -8781,14 +8784,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_SettingsBiggerWindow" = "Bigger Window";
 "ayu_SettingsIncreaseWebviewHeight" = "Increase Content Height";
 "ayu_SettingsIncreaseWebviewWidth" = "Increase Content Width";
-"ayu_ExportDataTitle" = "Export AyuGram Database?";
+"ayu_ExportDataTitle" = "Export freshGram Database?";
 "ayu_ExportDataDescription" = "It will be exported to the public folder under Saved Attachments.";
 "ayu_ExportDataConfirm" = "Yes, export";
 "ayu_ExportDataCancel" = "No, close window";
 "ayu_ExportDataSuccess" = "Database exported successfully.";
 "ayu_ExportDataFailure" = "Failed to export database.";
 "ayu_ImportDataNotFound" = "No database to import.";
-"ayu_ImportDataTitle" = "Import AyuGram Database?";
+"ayu_ImportDataTitle" = "Import freshGram Database?";
 "ayu_ImportDataDescription" = "It will replace the current database.";
 "ayu_ImportDataConfirm" = "Yes, replace existing";
 "ayu_ImportDataCancel" = "No, close window";
@@ -8855,7 +8858,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_FiltersClearPopupAltActionText" = "Clear unknown";
 "ayu_AppIconHeader" = "App Icon";
 "ayu_IconDefault" = "Default";
-"ayu_IconAlternative" = "AyuGram Alt";
+"ayu_IconAlternative" = "Alt";
 "ayu_IconDiscord" = "Discord";
 "ayu_IconSpotify" = "Spotify";
 "ayu_IconExtera" = "extera";
@@ -8865,8 +8868,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_IconAyuTyan" = "AyuTyan";
 "ayu_WALMode" = "Enable WAL mode";
 "ayu_PushNotificationCount" = "FCM notifications received";
-"ayu_AyuAttachments" = "AyuGram Attachments Folder";
-"ayu_AyuDatabase" = "AyuGram Messages Database";
+"ayu_AyuAttachments" = "freshGram Attachments Folder";
+"ayu_AyuDatabase" = "freshGram Messages Database";
 "ayu_TelegramCacheDatabase" = "Telegram Messages Database";
 "ayu_ConfirmationsTitle" = "Send Confirmations";
 "ayu_StickerConfirmation" = "Stickers";
@@ -8941,9 +8944,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_SuggestGhostModeStoryText" = "Do you want to enable **Ghost Mode** before viewing the story?";
 "ayu_SuggestGhostModeStoryActionTextYes" = "Yes";
 "ayu_SuggestGhostModeStoryActionTextNo" = "No";
-"ayu_FirstLaunchAlert" = "AyuGram is **free** software and should only be obtained from our **official sources**. You assume **full responsibility** for using this application with your account.";
+"ayu_FirstLaunchAlert" = "freshGram is **free** software and should only be obtained from its **official GitHub repository**. You assume **full responsibility** for using this application with your account.";
 "ayu_LocalPremiumAlert" = "With local Telegram Premium, you won't get increased limits or be able to send animated emojis. Other users won't see your premium emoji and quote color.";
-"ayu_ExteraChatsAlert" = "Don't ask questions related to **AyuGram** in **exteraGram** chats. If you need help, ask in the official **AyuGram** chat.";
+"ayu_ExteraChatsAlert" = "Don't ask questions related to **freshGram** in **exteraGram** chats. If you need help, open an issue in the official **freshGram** repository.";
 "ayu_HideNextViewsDescriptionAyu" = "Hide my views forever, until Ghost Mode is disabled.";
 "ayu_EnableGhostModeStories" = "Enable Ghost Mode";
 "ayu_GhostModeIsActive" = "Ghost Mode is Active";
@@ -9015,7 +9018,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_PluginVersion" = "Version";
 "ayu_PluginNoDescription" = "No description provided.";
 "ayu_PluginNoAuthor" = "Unknown Author";
-"ayu_PluginsNotAvailable" = "Plugins are not supported by AyuGram Desktop yet.";
+"ayu_PluginsNotAvailable" = "Plugins are not supported by freshGram yet.";
 "ayu_SessionTerminated" = "Session **{item}** was terminated. You may still browse cached messages.";
 "ayu_InvalidConnectionLayerNote" = "You should re-login due to an error during the update.";
 "ayu_LocalPremiumNotice" = "You're using **local** Telegram Premium.\nIt **won't** give you any benefits.\n**Enjoy the star near your nickname!**";
@@ -9024,13 +9027,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_OfficialResourcePopup" = "**{item}** is the official resource of **exteraGram** or **AyuGram**.";
 "ayu_MutualContactInfo" = "This contact is mutual.";
 "ayu_SessionInfoOfficialApp" = "Official app";
-"ayu_SettingsWatermark" = "AyuGram is developed and maintained by Radolyn Labs.";
+"ayu_SettingsWatermark" = "freshGram is based on AyuGram Desktop by Radolyn Labs and materialgram by kukuruzka165.";
 "ayu_SettingsDescription" = "Telegram Desktop fork focused on customization and ToS-breaking features.";
 "ayu_ConfirmationSticker" = "Do you want to send this sticker?";
 "ayu_ConfirmationGIF" = "Do you want to send this GIF?";
 "ayu_ConfirmationVoice" = "Do you want to send this voice message?";
 "ayu_ConfirmationRound" = "Do you want to send this round video?";
-"ayu_IntroAbout" = "Welcome to the AyuGram Desktop.\nMake Telegram your own.";
+"ayu_IntroAbout" = "Welcome to freshGram.\nMake Telegram your own.";
 "ayu_AboutText1" = "ToS breaking Telegram client based on {api_link}.";
-"ayu_UpdateAyuGram" = "Update AyuGram";
+"ayu_UpdateAyuGram" = "Update freshGram";
 "ayu_UtilityRestartRequired" = "The app will close in 5 seconds.";

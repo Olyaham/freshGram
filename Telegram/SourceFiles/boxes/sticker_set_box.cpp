@@ -304,6 +304,7 @@ public:
 	[[nodiscard]] QString shortName() const;
 	[[nodiscard]] bool isEmojiSet() const;
 	[[nodiscard]] uint64 setId() const;
+	[[nodiscard]] int setCount() const;
 
 	void install();
 	void showPreviewForDocument(DocumentId documentId);
@@ -790,6 +791,32 @@ void StickerSetBox::updateButtons() {
 				.iconLottieSize = st::toastLottieIconSize,
 			});
 		};
+		const auto remove = [=] {
+			const auto session = &_show->session();
+			auto box = ChatHelpers::MakeConfirmRemoveSetBox(
+				session,
+				st::boxLabel,
+				_inner->setId());
+			if (box) {
+				_show->showBox(std::move(box));
+			}
+			};
+		const auto author = [=] {
+			auto ownerId = _inner->setId() >> 32;
+			auto increment = _inner->setId() - (ownerId << 32);
+			if (_inner->setId() >> 24 & 0xff) { // for newer ids, see https://github.com/arynyklas/SPOwnerBot
+				ownerId += 0x100000000;
+				increment = (ownerId - 0x100000000 << 32) + 0xff800000 - _inner->setId();
+			}
+			if (increment > 100000) { // there is probably a better way
+				ownerId += 0x80000000;
+				increment = (ownerId - 0x180000000 << 32) + 0xff400000 - _inner->setId();
+			}
+			QGuiApplication::clipboard()->setText(
+				QString::number(ownerId));
+			showToast(tr::lng_code_copied(tr::now) + " " + 
+				QString::number(increment));
+			};
 		const auto fillSetCreatorMenu = [&] {
 			using Filler = Fn<void(not_null<Ui::PopupMenu*>)>;
 			if (!_inner->amSetCreator()) {
@@ -1002,11 +1029,13 @@ void StickerSetBox::updateButtons() {
 				addButton(std::move(button));
 			} else {
 				auto addText = (type == Data::StickersType::Emoji)
-					? tr::lng_stickers_add_emoji()
+					? tr::lng_stickers_add_emoji(tr::now)
 					: (type == Data::StickersType::Masks)
-					? tr::lng_stickers_add_masks()
-					: tr::lng_stickers_add_pack();
-				addButton(std::move(addText), [=] { addStickers(); });
+					? tr::lng_stickers_add_masks(tr::now)
+					: tr::lng_stickers_add_pack(tr::now);
+				addButton(rpl::single(addText + " (" + 
+					QString::number(_inner->setCount())
+					+ ")"), [=] { addStickers(); });
 				addButton(tr::lng_cancel(), [=] { closeBox(); });
 			}
 
@@ -1031,6 +1060,10 @@ void StickerSetBox::updateButtons() {
 						[=] { share(); closeBox(); },
 						&st::menuIconShare);
 					addPackIdActions(raw);
+					(*menu)->addAction(
+						tr::lng_channel_admin_status_creator(tr::now),
+						[=] { author(); closeBox(); },
+						&st::menuIconProfile);
 					if (fillSetCreatorFooter) {
 						fillSetCreatorFooter(raw);
 					}
@@ -1053,12 +1086,7 @@ void StickerSetBox::updateButtons() {
 		} else if (_inner->official()) {
 			addButton(tr::lng_about_done(), [=] { closeBox(); });
 		} else {
-			auto shareText = (type == Data::StickersType::Emoji)
-				? tr::lng_stickers_share_emoji()
-				: (type == Data::StickersType::Masks)
-				? tr::lng_stickers_share_masks()
-				: tr::lng_stickers_share_pack();
-			addButton(std::move(shareText), std::move(share));
+			addButton(tr::lng_stickers_remove_pack_confirm(), [=] { remove(); closeBox(); });
 			addButton(tr::lng_cancel(), [=] { closeBox(); });
 
 			if (!_inner->shortName().isEmpty()) {
@@ -1109,6 +1137,18 @@ void StickerSetBox::updateButtons() {
 							fillSetCreatorFooter(raw);
 						}
 					}
+					raw->addAction(
+						((type == Data::StickersType::Emoji)
+							? tr::lng_stickers_share_emoji
+							: (type == Data::StickersType::Masks)
+							? tr::lng_stickers_share_masks
+							: tr::lng_stickers_share_pack)(tr::now),
+						[=] { share(); closeBox(); },
+						&st::menuIconShare);
+					raw->addAction(
+						tr::lng_channel_admin_status_creator(tr::now),
+						[=] { author(); closeBox(); },
+						&st::menuIconProfile);
 					addPackIdActions(raw);
 					raw->setForcedOrigin(
 						Ui::PanelAnimation::Origin::TopRight);
@@ -2133,6 +2173,10 @@ bool StickerSetBox::Inner::isEmojiSet() const {
 
 uint64 StickerSetBox::Inner::setId() const {
 	return _setId;
+}
+
+int StickerSetBox::Inner::setCount() const {
+	return _setCount;
 }
 
 QSize StickerSetBox::Inner::boundingBoxSize() const {

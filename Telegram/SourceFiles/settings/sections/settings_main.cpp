@@ -620,6 +620,16 @@ void BuildHelpSection(SectionBuilder &builder) {
 	});
 
 	builder.addButton({
+		.id = u"freshgram-github"_q,
+		.title = tr::lng_freshgram_settings_github(),
+		.icon = { &st::menuIconGitHub },
+		.onClick = [=] {
+			UrlClickHandler::Open("https://github.com/Snowy-Fluffy/freshGram");
+		},
+		.keywords = { u"freshgram"_q, u"github"_q, u"source"_q },
+	});
+
+	builder.addButton({
 		.id = u"main/features"_q,
 		.title = tr::lng_settings_features(),
 		.icon = { &st::menuIconEmojiObjects },

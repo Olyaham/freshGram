@@ -16,9 +16,9 @@ enum {
 	LocalEncryptNoPwdIterCount = 4, // key derivation iteration count without pwd (not secure anyway)
 	LocalEncryptSaltSize = 32, // 256 bit
 
-	AutoSearchTimeout = 900, // 0.9 secs
+	AutoSearchTimeout = 500, // 0.5 secs
 
-	PreloadHeightsCount = 3, // when 3 screens to scroll left make a preload request
+	PreloadHeightsCount = 1, // when 1 screen to scroll left make a preload request
 
 	SearchPeopleLimit = 20,
 
@@ -29,7 +29,7 @@ enum {
 
 	WrongPasscodeTimeout = 1500,
 
-	ChoosePeerByDragTimeout = 1000, // 1 second mouse not moved to choose dialog when dragging a file
+	ChoosePeerByDragTimeout = 500, // 0.5 secs mouse not moved to choose dialog when dragging a file
 };
 
 inline const char *cGUIDStr() {

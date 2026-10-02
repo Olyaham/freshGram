@@ -150,7 +150,7 @@ void FillOverview(
 		tr::lng_boosts_next_level);
 
 	container->showChildren();
-	container->resize(container->width(), topLeftLabel->height() * 5);
+	container->resize(container->width(), topLeftLabel->height() * 6);
 	container->sizeValue(
 	) | rpl::on_next([=](const QSize &s) {
 		const auto halfWidth = s.width() / 2;

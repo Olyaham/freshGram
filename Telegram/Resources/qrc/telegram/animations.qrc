@@ -68,15 +68,13 @@
     <file alias="show_or_premium_lastseen.tgs">../../animations/show_or_premium_lastseen.tgs</file>
     <file alias="show_or_premium_readtime.tgs">../../animations/show_or_premium_readtime.tgs</file>
     <file alias="passkeys.tgs">../../animations/passkeys.tgs</file>
-    <file alias="ban.tgs">../../animations/ban.tgs</file>
     <file alias="cocoon.tgs">../../animations/cocoon.tgs</file>
     <file alias="craft_failed.tgs">../../animations/craft_failed.tgs</file>
     <file alias="stop.tgs">../../animations/stop.tgs</file>
     <file alias="toast_hide_results.tgs">../../icons/poll/toast_hide_results.tgs</file>
     <file alias="uploading.tgs">../../icons/poll/uploading.tgs</file>
 
-    <file alias="profile_muting.tgs">../../animations/profile/profile_muting.tgs</file>
-    <file alias="profile_unmuting.tgs">../../animations/profile/profile_unmuting.tgs</file>
+    <file alias="ban.tgs">../../animations/ban.tgs</file>
 
     <file alias="dice_idle.tgs">../../animations/dice/dice_idle.tgs</file>
     <file alias="dart_idle.tgs">../../animations/dice/dart_idle.tgs</file>

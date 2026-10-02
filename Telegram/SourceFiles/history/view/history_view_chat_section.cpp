@@ -74,6 +74,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_histories.h"
 #include "data/data_saved_messages.h"
 #include "data/data_saved_sublist.h"
+#include "data/data_ai_compose_tones.h"
 #include "data/data_session.h"
 #include "data/data_user.h"
 #include "data/data_chat.h"
@@ -86,6 +87,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_shared_media.h"
 #include "data/data_send_action.h"
 #include "data/data_premium_limits.h"
+#include "main/main_app_config.h"
 #include "storage/storage_media_prepare.h"
 #include "storage/storage_account.h"
 #include "storage/localimageloader.h"
@@ -1940,7 +1942,7 @@ void ChatWidget::refreshJoinGroupButton() {
 			? tr::lng_profile_join_channel(tr::now)
 			: (channel->requestToJoin() && !channel->amCreator())
 			? tr::lng_profile_apply_to_join_group(tr::now)
-			: tr::lng_profile_join_group(tr::now)).toUpper());
+			: tr::lng_profile_join_group(tr::now)));
 	}
 }
 
@@ -2094,12 +2096,16 @@ SendMenu::Details ChatWidget::sendMenuDetails() const {
 		: (_topic && !_peer->starsPerMessageChecked())
 		? Type::Scheduled
 		: Type::SilentOnly;
+	const auto aiComposeAllowed =
+		!_composeControls->getTextWithAppliedMarkdown().text.isEmpty()
+		&& !session().data().aiComposeTones().list().empty();
 	return SendMenu::Details{
 		.type = type,
 		.barePeerId = (_sublist
 			? _sublist->owningHistory()
 			: _history)->peer->id.value,
 		.bareTopicRootId = _topic ? _topic->rootId().bare : 0,
+		.aiComposeAllowed = aiComposeAllowed,
 	};
 }
 

@@ -1,10 +1,17 @@
-# AyuGram
+# freshGram
 
-![AyuGram Logo](.github/AyuGram.png) ![AyuChan](.github/AyuChan.png)
+[ English | [Русский](README-RU.md) ]
 
-[ English  |   [Русский](README-RU.md) ]
+freshGram is a [Telegram Desktop](https://github.com/telegramdesktop/tdesktop) fork that combines
+the Material Design look and customization of [materialgram](https://github.com/kukuruzka165/materialgram)
+with all the features of [AyuGram Desktop](https://github.com/AyuGram/AyuGramDesktop).
+It is based on the [Telegram API][telegram_api] and the [MTProto][telegram_proto] secure protocol.
+
+The source code is published under GPLv3 with OpenSSL exception, the license is available [here][license].
 
 ## Features
+
+### From AyuGram Desktop
 
 - Full ghost mode (flexible)
 - Messages history
@@ -13,129 +20,67 @@
 - Streamer mode
 - Local Telegram Premium
 - Translator
-- Media preview & quick reaction on force click (macOS)
+- Media preview and quick reaction on force click (macOS)
 - Enhanced appearance
+- App icon picker
 
-And many more. Check out our [Documentation](https://docs.ayugram.one/desktop/).
+See the [AyuGram documentation](https://docs.ayugram.one/desktop/) for the full description of these features.
 
-<h3>
-  <details>
-    <summary>Preview</summary>
-    <table>
-      <tr>
-        <td><img src='.github/demos/demo1.png' width='268' alt='Preferences'></td>
-        <td><img src='.github/demos/demo2.png' width='268' alt='AyuGram Options'></td>
-        <td><img src='.github/demos/demo3.png' width='268' alt='Message Filters'></td>
-      </tr>
-      <tr>
-        <td><img src='.github/demos/demo4.png' width='268' alt='Appearance'></td>
-        <td><img src='.github/demos/demo5.png' width='268' alt='Chats'></td>
-      </tr>
-    </table>
-  </details>
-</h3>
+### From materialgram
 
-## Downloads
+- Own Material You themes (Google Day and Google Dark, applied on the first launch)
+- **Google Sans** font everywhere (except for Arabic characters, they use the **Vazirmatn** font)
+- Material icons instead of default ones
+- Removed message bubble tails and reverted old paddings (enabled by default, can be turned off in the AyuGram chat settings)
+- Removed "large emoji" outline
+- Reduced use of uppercase in the interface
+- Ability to seek round videos
+- Ability to delete more than 100 messages at once
+- Ability to copy the sticker set author's id and increment
+- Ability to mention multiple users at once with right click
+- Added admin menu and chat log buttons above the members list
+- Copy usernames as @example if possible
+- Use photos from @gamee in profile photo list (optional)
+- Removed delay when recording voice messages
+- Webview platform is reported as "android" (enabled by default, can be turned off in the AyuGram settings)
+- Replaced all sounds
+- Reduced jpeg compression (94-95% on photos, 100% on wallpapers)
+- Reduced minimum window size and minimum brush thickness in the photo editor
+- Reduced some timeouts (like when opening a chat preview)
+- Increased upload speed
+- Improved spoiler animation
+- Improved sticker pack menu
+- Improved chat export (10000 messages in one html document and faster file downloads)
+- Improved voice messages bitrate
+- Hide your phone number in profile and settings
+- Show more recent stickers (unlimited by default)
+- Show the approximate date of account creation and the datacenter in profile (optional)
+- Show photo/file datacenter and original date
+- Show photo platform in media viewer
+- Show more info for unique gifts
 
-### Windows
+## Default values
 
-#### Official
+Where AyuGram and materialgram solve the same task, freshGram keeps the AyuGram implementation
+and uses the materialgram look as the default value of the corresponding AyuGram setting
+(for example, message tails are removed and unlimited recent stickers are enabled by default).
 
-You can download prebuilt Windows binary from [Releases tab](https://github.com/AyuGram/AyuGramDesktop/releases) or from
-the [Telegram channel](https://t.me/AyuGramReleases).
+## Build instructions
 
-#### Winget
+* [Windows 64-bit](docs/building-win-x64.md)
+* [macOS](docs/building-mac.md)
+* [GNU/Linux using Docker](docs/building-linux.md)
 
-```bash
-winget install RadolynLabs.AyuGramDesktop
-```
-
-#### Scoop
-
-```bash
-scoop bucket add extras
-scoop install ayugram
-```
-
-#### Self-built
-
-Follow [official guide](https://github.com/AyuGram/AyuGramDesktop/blob/dev/docs/building-win-x64.md) if you want to
-build by yourself.
-
-### macOS
-
-#### Official
-
-You can download prebuilt macOS package from [Releases tab](https://github.com/AyuGram/AyuGramDesktop/releases).
-
-#### Homebrew
-
-```bash
-brew install --cask ayugram
-```
-
-### Arch Linux
-
-#### From source (recommended)
-
-Install `ayugram-desktop` from [AUR](https://aur.archlinux.org/packages/ayugram-desktop).
-
-#### Prebuilt binaries
-
-Install `ayugram-desktop-bin` from [AUR](https://aur.archlinux.org/packages/ayugram-desktop-bin).
-
-Note: these binaries aren't officially maintained by us.
-
-### NixOS
-
-#### Flake (recommended)
-
-Install `ayugram-desktop` from [ndfined-crp/ayugram-desktop](https://github.com/ndfined-crp/ayugram-desktop)
-
-#### Nixpkgs
-
-Install `ayugram-desktop` from [nixpkgs](https://search.nixos.org/packages?channel=unstable&show=ayugram-desktop)
-
-### ALT Linux
-
-[Sisyphus](https://packages.altlinux.org/en/sisyphus/srpms/ayugram-desktop/)
-
-### Gentoo Linux
-
-See [this repository](https://codeberg.org/OverLessArtem/ayugram-ebuild-gentoo) for installation manual.
-
-### Void Linux
-See [this repository](https://codeberg.org/OverLessArtem/ayugram-template-void) for installation manual.
-
-### EPM
-
-`epm play ayugram`
-
-### Fedora
-
-From [RPM Fusion](https://admin.rpmfusion.org/pkgdb/package/free/ayugram-desktop/) repository.
-
-```bash
-dnf install ayugram-desktop
-```
-
-### Any other Linux distro
-
-Flatpak: https://github.com/0FL01/AyuGramDesktop-flatpak
-
-Or follow the [official guide](https://github.com/AyuGram/AyuGramDesktop/blob/dev/docs/building-linux.md).
-
-## Donation
-
-Enjoy using **AyuGram**? Consider sending us a tip!
-
-[Here's available methods.](https://docs.ayugram.one/donate/)
+freshGram needs your own Telegram `api_id` and `api_hash`, see [API credentials](docs/api_credentials.md).
+Autoupdate is disabled by default because freshGram has no update server.
 
 ## Credits
 
 ### Telegram clients
 
 - [Telegram Desktop](https://github.com/telegramdesktop/tdesktop)
+- [AyuGram Desktop](https://github.com/AyuGram/AyuGramDesktop)
+- [materialgram](https://github.com/kukuruzka165/materialgram)
 - [Kotatogram](https://github.com/kotatogram/kotatogram-desktop)
 - [64Gram](https://github.com/TDesktop-x64/tdesktop)
 - [Forkgram](https://github.com/forkgram/tdesktop)
@@ -146,11 +91,14 @@ Enjoy using **AyuGram**? Consider sending us a tip!
 - [SQLite](https://github.com/sqlite/sqlite)
 - [sqlite_orm](https://github.com/fnc12/sqlite_orm)
 - [androidx sources](https://github.com/androidx/androidx)
+- **Qt 6**, **OpenSSL**, **WebRTC**, **FFmpeg**, **Opus**, **OpenAL Soft** and the other libraries listed in the Telegram Desktop repository
+- **Vazirmatn font** ([SIL Open Font License 1.1](https://github.com/rastikerdar/vazirmatn/blob/master/OFL.txt))
 
 ### Icons
 
 - [Solar Icon Set](https://www.figma.com/community/file/1166831539721848736)
 
-### Bots
-
-- [TelegramDB](https://t.me/tgdatabase) for username lookup by ID (until closing free inline mode at 2 April 2026)
+[//]: # (LINKS)
+[telegram_api]: https://core.telegram.org
+[telegram_proto]: https://core.telegram.org/mtproto
+[license]: LICENSE

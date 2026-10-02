@@ -85,7 +85,6 @@ ComposeIcons {
 	menuPrice: icon;
 	menuEditStars: icon;
 
-	stripBubble: icon;
 	stripExpandPanel: icon;
 	stripExpandDropdown: icon;
 }
@@ -379,7 +378,8 @@ stickersTrendingAddTop: 14px;
 stickersTrendingAdd: RoundButton(defaultActiveButton) {
 	width: -16px;
 	height: 26px;
-	textTop: 4px;
+	textTop: 5px;
+	radius: 10px;
 }
 stickersTrendingInstalled: RoundButton(stickersTrendingAdd) {
 	textFg: activeButtonBg;
@@ -716,18 +716,8 @@ defaultComposeIcons: ComposeIcons {
 	menuQualityHigh: menuIconQualityHigh;
 	menuPrice: menuIconEarn;
 
-	stripBubble: icon{
-		{ "chat/reactions_bubble_shadow", windowShadowFg },
-		{ "chat/reactions_bubble", emojiPanBg },
-	};
-	stripExpandPanel: icon{
-		{ "chat/reactions_round_big", windowBgRipple },
-		{ "chat/reactions_expand_panel", windowSubTextFg },
-	};
-	stripExpandDropdown: icon{
-		{ "chat/reactions_round_small", windowBgRipple },
-		{ "chat/reactions_expand_panel", windowSubTextFg },
-	};
+	stripExpandPanel: icon{{ "chat/reactions_expand_panel", windowSubTextFg }};
+	stripExpandDropdown: icon{{ "chat/reactions_expand_panel", windowSubTextFg }};
 }
 defaultEmojiPanAbout: FlatLabel(defaultFlatLabel) {
 	minWidth: 10px;
@@ -893,7 +883,6 @@ reactStripSize: 32px;
 reactStripMinWidth: 60px;
 reactStripImage: 26px;
 reactStripSkip: 7px;
-reactStripBubbleRight: 20px;
 userpicBuilderEmojiPan: EmojiPan(statusEmojiPan) {
 	margin: margins(reactStripSkip, 0px, reactStripSkip, 0px);
 	padding: margins(reactStripSkip, 0px, reactStripSkip, reactStripSkip);
@@ -910,7 +899,6 @@ reactPanelEmojiPan: EmojiPan(userpicBuilderEmojiPan) {
 emojiScroll: ScrollArea(defaultSolidScroll) {
 	deltat: 3px;
 	deltab: 3px;
-	round: -1px;
 	width: 7px;
 	deltax: 2px;
 	hiding: 0;
@@ -1100,7 +1088,7 @@ historyReplyCancel: IconButton {
 	iconOver: historyReplyCancelIconOver;
 	iconPosition: point(-1px, -1px);
 
-	rippleAreaPosition: point(4px, 4px);
+	rippleAreaPosition: point(4px, 5px);
 	rippleAreaSize: 40px;
 	ripple: defaultRippleAnimationBgOver;
 }
@@ -1135,16 +1123,16 @@ historyPinnedBotLabel: FlatLabel(defaultFlatLabel) {
 historyPinnedBotButtonMaxWidth: 120px;
 
 historyToDownPosition: point(12px, 10px);
-historyToDownAbove: icon {{ "history_down_arrow", historyToDownFg }};
-historyToDownAboveOver: icon {{ "history_down_arrow", historyToDownFgOver }};
+historyToDownAbove: icon {{ "history_down_arrow", windowBgActive }};
+historyToDownAboveOver: icon {{ "history_down_arrow", windowBgActive }};
 historyToDownPaddingTop: 10px;
 historyToDownBelow: icon {
 	{ "history_down_shadow", historyToDownShadow },
-	{ "history_down_circle", historyToDownBg },
+	{ "history_down_circle", sideBarBg },
 };
 historyToDownBelowOver: icon {
 	{ "history_down_shadow", historyToDownShadow },
-	{ "history_down_circle", historyToDownBgOver },
+	{ "history_down_circle", sideBarBg },
 };
 historyToDown: TwoIconButton {
 	width: 52px;
@@ -1156,10 +1144,10 @@ historyToDown: TwoIconButton {
 	iconAboveOver: historyToDownAboveOver;
 	iconPosition: point(0px, historyToDownPaddingTop);
 
-	rippleAreaPosition: point(5px, 15px);
-	rippleAreaSize: 42px;
+	rippleAreaPosition: point(9px, 19px);
+	rippleAreaSize: 34px;
 	ripple: RippleAnimation(defaultRippleAnimation) {
-		color: historyToDownBgRipple;
+		color: sideBarBgRipple;
 	}
 }
 historyToDownBadgeFont: semiboldFont;
@@ -1189,8 +1177,8 @@ historyPullNextBadgeFont: font(12px semibold);
 historyPullNextNameFont: font(13px semibold);
 historyPullNextHintFont: font(14px);
 
-dialogsToUpAbove: icon {{ "history_down_arrow-flip_vertical", historyToDownFg, point(0px, 1px) }};
-dialogsToUpAboveOver: icon {{ "history_down_arrow-flip_vertical", historyToDownFgOver, point(0px, 1px) }};
+dialogsToUpAbove: icon {{ "history_down_arrow-flip_vertical", windowBgActive, point(0px, 1px) }};
+dialogsToUpAboveOver: icon {{ "history_down_arrow-flip_vertical", windowBgActive, point(0px, 1px) }};
 
 dialogsToUp: TwoIconButton(historyToDown) {
 	iconAbove: dialogsToUpAbove;
@@ -1198,12 +1186,12 @@ dialogsToUp: TwoIconButton(historyToDown) {
 }
 
 historyUnreadMentions: TwoIconButton(historyToDown) {
-	iconAbove: icon {{ "history_unread_mention", historyToDownFg }};
-	iconAboveOver: icon {{ "history_unread_mention", historyToDownFgOver }};
+	iconAbove: icon {{ "history_unread_mention", windowBgActive }};
+	iconAboveOver: icon {{ "history_unread_mention", windowBgActive }};
 }
 historyUnreadReactions: TwoIconButton(historyToDown) {
-	iconAbove: icon {{ "history_unread_reaction", historyToDownFg }};
-	iconAboveOver: icon {{ "history_unread_reaction", historyToDownFgOver }};
+	iconAbove: icon {{ "history_unread_reaction", windowBgActive }};
+	iconAboveOver: icon {{ "history_unread_reaction", windowBgActive }};
 }
 historyUnreadPollVotes: TwoIconButton(historyToDown) {
 	iconAbove: icon {{ "history_unread_poll_vote-40x40", historyToDownFg, point(6px, 6px) }};
@@ -1402,12 +1390,12 @@ historyRecordMajorBlobMinRadius: 43px;
 historyRecordMajorBlobMaxRadius: 50px;
 
 historyRecordLockTopShadow: icon {{ "voice_lock/record_lock_top_shadow", historyToDownShadow }};
-historyRecordLockTop: icon {{ "voice_lock/record_lock_top", historyToDownBg }};
+historyRecordLockTop: icon {{ "voice_lock/record_lock_top", sideBarBg }};
 historyRecordLockBottomShadow: icon {{ "voice_lock/record_lock_bottom_shadow", historyToDownShadow }};
-historyRecordLockBottom: icon {{ "voice_lock/record_lock_bottom", historyToDownBg }};
+historyRecordLockBottom: icon {{ "voice_lock/record_lock_bottom", sideBarBg }};
 historyRecordLockBodyShadow: icon {{ "voice_lock/record_lock_body_shadow", historyToDownShadow }};
-historyRecordLockBody: icon {{ "voice_lock/record_lock_body", historyToDownBg }};
-historyRecordLockArrow: icon {{ "voice_lock/voice_arrow", historyToDownFg }};
+historyRecordLockBody: icon {{ "voice_lock/record_lock_body", sideBarBg }};
+historyRecordLockArrow: icon {{ "voice_lock/voice_arrow", windowBgActive }};
 
 historyRecordDelete: IconButton(historyAttach) {
 	icon: icon {{ "voice_lock/recorded_delete", historyComposeIconFg }};
@@ -1438,7 +1426,7 @@ defaultRecordBarLock: RecordBarLock {
 	shadowBottom: historyRecordLockBottomShadow;
 	shadowBody: historyRecordLockBodyShadow;
 	arrow: historyRecordLockArrow;
-	fg: historyToDownFg;
+	fg: windowBgActive;
 }
 defaultRecordBar: RecordBar {
 	bg: historyComposeAreaBg;
@@ -1658,6 +1646,8 @@ ttlMediaImportantTooltipLabel: FlatLabel(defaultImportantTooltipLabel) {
 	}
 }
 ttlMediaButton: RoundButton(defaultActiveButton) {
+	textFg: windowFg;
+	textFgOver: windowFgOver;
 	textBg: shadowFg;
 	textBgOver: shadowFg;
 	ripple: universalRippleAnimation;

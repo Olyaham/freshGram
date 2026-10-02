@@ -343,12 +343,13 @@ QSize Location::countCurrentSize(int newWidth) {
 	} else {
 		newWidth = tw;
 	}
+	const auto maxWidth = std::min(newWidth, st::maxMediaSize);
 	auto minWidth = hostedInstantView
 		? std::max(_parent->minWidthForMedia(), 1)
 		: std::clamp(
 			_parent->minWidthForMedia(),
-			st::minPhotoSize,
-			std::min(newWidth, st::maxMediaSize));
+			std::min(st::minPhotoSize, maxWidth),
+			maxWidth);
 	accumulate_max(newWidth, minWidth);
 	accumulate_max(newHeight, st::minPhotoSize);
 	_thumbnailHeight = newHeight;

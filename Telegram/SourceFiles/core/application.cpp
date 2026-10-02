@@ -1224,7 +1224,7 @@ bool Application::openInternalUrl(const QString &url, QVariant context) {
 }
 
 QString Application::changelogLink() const {
-	return u"https://github.com/AyuGram/AyuGramDesktop/releases"_q;
+	return u"https://github.com/Snowy-Fluffy/freshGram/releases"_q;
 }
 
 bool Application::openCustomUrl(
@@ -1403,6 +1403,8 @@ bool Application::savingPositionFor(
 
 bool Application::hasActiveWindow(not_null<Main::Session*> session) const {
 	if (Quitting() || !_lastActiveWindow) {
+		return false;
+	} else if (Main::Session::debugFocus) {
 		return false;
 	} else if (_calls->hasActivePanel(session)) {
 		return true;
@@ -1949,7 +1951,7 @@ void Application::RegisterUrlScheme() {
 		.arguments = arguments,
 		.protocol = u"tg"_q,
 		.protocolName = u"Telegram Link"_q,
-		.shortAppName = u"AyuGram"_q,
+		.shortAppName = u"freshGram"_q,
 		.longAppName = QCoreApplication::applicationName(),
 		.displayAppName = AppName.utf16(),
 		.displayAppDescription = AppName.utf16(),

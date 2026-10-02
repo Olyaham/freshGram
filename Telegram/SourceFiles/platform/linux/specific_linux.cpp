@@ -232,7 +232,7 @@ bool GenerateDesktopFile(
 	DEBUG_LOG(("App Info: placing .desktop file to %1").arg(targetPath));
 	if (!QDir(targetPath).exists()) QDir().mkpath(targetPath);
 
-	const auto sourceFile = u":/misc/com.ayugram.desktop.desktop"_q;
+	const auto sourceFile = u":/misc/io.github.snowyfluffy.freshgram.desktop"_q;
 	const auto targetFile = targetPath
 		+ QGuiApplication::desktopFileName()
 		+ u".desktop"_q;
@@ -349,8 +349,7 @@ bool GenerateDesktopFile(
 
 	if (!Core::UpdaterDisabled()) {
 		DEBUG_LOG(("App Info: removing old .desktop files"));
-		QFile::remove(u"%1telegram.desktop"_q.arg(targetPath));
-		QFile::remove(u"%1telegramdesktop.desktop"_q.arg(targetPath));
+		QFile::remove(u"%1freshgram.desktop"_q.arg(targetPath));
 
 		const auto appimagePath = u"file://%1%2"_q.arg(
 			cExeDir(),
@@ -371,7 +370,7 @@ bool GenerateDesktopFile(
 		hashMd5Hex(d.constData(), d.size(), md5Hash);
 
 		if (!Core::Launcher::Instance().customWorkingDir()) {
-			QFile::remove(u"%1ayugram.desktop._%2.desktop"_q.arg(
+			QFile::remove(u"%1freshgram.desktop._%2.desktop"_q.arg(
 				targetPath,
 				md5Hash));
 
@@ -380,7 +379,7 @@ bool GenerateDesktopFile(
 			hashMd5Hex(exePath.constData(), exePath.size(), md5Hash);
 		}
 
-		QFile::remove(u"%1ayugram.desktop.%2.desktop"_q.arg(
+		QFile::remove(u"%1freshgram.desktop.%2.desktop"_q.arg(
 			targetPath,
 			md5Hash));
 	}
@@ -439,7 +438,7 @@ bool GenerateServiceFile(bool silent = false) {
 		const auto d = QFile::encodeName(QDir(cWorkingDir()).absolutePath());
 		hashMd5Hex(d.constData(), d.size(), md5Hash);
 
-		QFile::remove(u"%1org.telegram.desktop._%2.service"_q.arg(
+		QFile::remove(u"%1io.github.snowyfluffy.freshgram._%2.service"_q.arg(
 			targetPath,
 			md5Hash));
 	}
@@ -489,7 +488,7 @@ void InstallLauncher() {
 
 	const auto icon = appIcons + ApplicationIconName() + u".png"_q;
 	QFile::remove(icon);
-	QFile::remove(icons + u"telegram.png"_q);
+	QFile::remove(icons + u"freshgram.png"_q);
 	if (QFile::copy(u":/gui/art/logo_256.png"_q, icon)) {
 		DEBUG_LOG(("App Info: Icon copied to '%1'").arg(icon));
 	}
@@ -737,11 +736,11 @@ void start() {
 		}
 
 		if (!Core::UpdaterDisabled()) {
-			return u"com.ayugram.desktop._%1"_q.arg(
+			return u"io.github.snowyfluffy.freshgram._%1"_q.arg(
 				Core::Launcher::Instance().instanceHash().constData());
 		}
 
-		return u"com.ayugram.desktop"_q;
+		return u"io.github.snowyfluffy.freshgram"_q;
 	}());
 
 	LOG(("App ID: %1").arg(QGuiApplication::desktopFileName()));

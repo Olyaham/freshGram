@@ -1295,6 +1295,71 @@ void BuildScreenReaderSection(SectionBuilder &builder) {
 	builder.addSkip();
 }
 
+void BuildFreshgramSection(SectionBuilder &builder) {
+	const auto settings = &Core::App().settings();
+
+	builder.addDivider();
+	builder.addSkip();
+	builder.addSubsectionTitle({
+		.id = u"advanced/freshgram"_q,
+		.title = rpl::single(u"freshGram"_q),
+		.keywords = { u"freshgram"_q },
+	});
+
+	const auto registration = builder.addButton({
+		.id = u"advanced/freshgram_registration"_q,
+		.title = tr::lng_freshgram_info_registration(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(settings->birthDateEnabled()),
+		.keywords = { u"freshgram"_q, u"registration"_q, u"date"_q },
+	});
+	if (registration) {
+		registration->toggledValue(
+		) | rpl::filter([=](bool enabled) {
+			return (enabled != settings->birthDateEnabled());
+		}) | rpl::on_next([=](bool enabled) {
+			settings->setBirthDateEnabled(enabled);
+			Core::App().saveSettingsDelayed();
+		}, registration->lifetime());
+	}
+
+	const auto datacenter = builder.addButton({
+		.id = u"advanced/freshgram_datacenter"_q,
+		.title = tr::lng_freshgram_info_dc(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(settings->datacenterEnabled()),
+		.keywords = { u"freshgram"_q, u"datacenter"_q, u"dc"_q },
+	});
+	if (datacenter) {
+		datacenter->toggledValue(
+		) | rpl::filter([=](bool enabled) {
+			return (enabled != settings->datacenterEnabled());
+		}) | rpl::on_next([=](bool enabled) {
+			settings->setDatacenterEnabled(enabled);
+			Core::App().saveSettingsDelayed();
+		}, datacenter->lifetime());
+	}
+
+	const auto gamee = builder.addButton({
+		.id = u"advanced/freshgram_gamee"_q,
+		.title = tr::lng_settings_profile_photo_privacy(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(settings->gameeEnabled()),
+		.keywords = { u"freshgram"_q, u"gamee"_q, u"profile"_q, u"photo"_q },
+	});
+	if (gamee) {
+		gamee->toggledValue(
+		) | rpl::filter([=](bool enabled) {
+			return (enabled != settings->gameeEnabled());
+		}) | rpl::on_next([=](bool enabled) {
+			settings->setGameeEnabled(enabled);
+			Core::App().saveSettingsDelayed();
+		}, gamee->lifetime());
+	}
+
+	builder.addSkip();
+}
+
 class Advanced : public Section<Advanced> {
 public:
 	Advanced(
@@ -1328,6 +1393,7 @@ const auto kMeta = BuildHelper({
 	BuildSystemIntegrationSection(builder);
 	BuildPerformanceSection(builder);
 	BuildSpellcheckerSection(builder);
+	BuildFreshgramSection(builder);
 	BuildScreenReaderSection(builder);
 	if (autoUpdate) {
 		BuildUpdateSection(builder, false);

@@ -149,6 +149,7 @@ constexpr auto kScrollDateHideTimeout = 800;
 constexpr auto kScrollDateHideOnDayCrossingTimeout = crl::time(3000);
 constexpr auto kUnloadHeavyPartsPages = 2;
 constexpr auto kClearUserpicsAfter = 50;
+constexpr auto kMaxSelectedItemsBig = 10000;
 
 // Helper binary search for an item in a list that is not completely
 // above the given top of the visible area or below the given bottom of the visible area
@@ -2439,7 +2440,7 @@ std::unique_ptr<QMimeData> HistoryInner::prepareDrag() {
 		}
 		if (uponSelected && !_controller->adaptive().isOneColumn()) {
 			auto selectedState = getSelectionState();
-			if (selectedState.count > 0 && selectedState.count == selectedState.canForwardCount) {
+			if (selectedState.count > 0 && selectedState.count <= 100 && selectedState.count == selectedState.canForwardCount) {
 				session().data().setMimeForwardIds(getSelectedItems());
 				mimeData->setData(u"application/x-td-forward"_q, "1");
 			}
@@ -3472,7 +3473,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			}, &st::menuIconLink);
 		}
 		if (isUponSelected > 1) {
-			if (selectedState.count > 0 && selectedState.canForwardCount == selectedState.count) {
+			if (selectedState.count > 0 && selectedState.count <= 100 && selectedState.canForwardCount == selectedState.count) {
 				_menu->addAction(tr::lng_context_forward_selected(tr::now), [=] {
 					_widget->forwardSelected();
 				}, &st::menuIconForward);
@@ -3782,7 +3783,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			}
 		}
 		if (isUponSelected > 1) {
-			if (selectedState.count > 0 && selectedState.count == selectedState.canForwardCount) {
+			if (selectedState.count > 0 && selectedState.count <= 100 && selectedState.count == selectedState.canForwardCount) {
 				_menu->addAction(tr::lng_context_forward_selected(tr::now), [=] {
 					_widget->forwardSelected();
 				}, &st::menuIconForward);
@@ -5660,7 +5661,7 @@ void HistoryInner::mouseActionUpdate() {
 		|| dragState.cursor == CursorState::Forwarded
 		|| dragState.cursor == CursorState::FromPhoto
 		|| dragState.customTooltip) {
-		Ui::Tooltip::Show(350, this);
+		Ui::Tooltip::Show(150, this);
 	}
 
 	Qt::CursorShape cur = style::cur_default;
@@ -6050,7 +6051,7 @@ void HistoryInner::changeSelection(
 	const auto add = (action == SelectAction::Select);
 	if (add
 		&& goodForSelection(toItems, item, total)
-		&& total <= MaxSelectedItems) {
+		&& total <= kMaxSelectedItemsBig) {
 		addToSelection(toItems, item);
 	} else {
 		removeFromSelection(toItems, item);
@@ -6077,7 +6078,7 @@ void HistoryInner::changeSelectionAsGroup(
 				return false;
 			}
 		}
-		return (total <= MaxSelectedItems);
+		return (total <= kMaxSelectedItemsBig);
 	}();
 	if (action == SelectAction::Select && canSelect) {
 		for (const auto &other : group->items) {
@@ -6345,7 +6346,7 @@ void HistoryInner::addSelectionRange(
 				auto item = block->messages[fromitem]->data();
 				changeSelectionAsGroup(toItems, item, SelectAction::Select);
 			}
-			if (toItems->size() >= MaxSelectedItems) break;
+			if (toItems->size() >= kMaxSelectedItemsBig) break;
 			fromitem = 0;
 		}
 	}

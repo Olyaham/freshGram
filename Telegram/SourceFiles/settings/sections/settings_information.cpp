@@ -1089,7 +1089,7 @@ not_null<Ui::SlideWrap<Ui::SettingsButton>*> AccountsList::setupAdd() {
 				{
 					&st::settingsIconAdd,
 					IconType::Round,
-					&st::windowBgActive
+					&st::sideBarBg
 				})))->setDuration(0);
 	const auto button = result->entity();
 
@@ -1530,7 +1530,7 @@ AccountsEvents SetupAccounts(
 void UpdatePhotoLocally(not_null<UserData*> user, const QImage &image) {
 	auto bytes = QByteArray();
 	auto buffer = QBuffer(&bytes);
-	image.save(&buffer, "JPG", 87);
+	image.save(&buffer, "JPG", 94);
 	user->setUserpic(
 		base::RandomValue<PhotoId>(),
 		ImageLocation(

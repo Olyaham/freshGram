@@ -641,11 +641,11 @@ private:
 	rpl::variable<int> _messageBubbleRadius = 16;
 	rpl::variable<bool> _disableOpenLinkWarning = false;
 	rpl::variable<double> _wideMultiplier = 1.0;
-	rpl::variable<bool> _spoofWebviewAsAndroid = false;
+	rpl::variable<bool> _spoofWebviewAsAndroid = true;
 	rpl::variable<bool> _increaseWebviewHeight = false;
 	rpl::variable<bool> _increaseWebviewWidth = false;
 	rpl::variable<bool> _materialSwitches = true;
-	rpl::variable<bool> _removeMessageTail = false;
+	rpl::variable<bool> _removeMessageTail = true;
 	rpl::variable<bool> _disableNotificationsDelay = false;
 	rpl::variable<bool> _localPremium = false;
 	rpl::variable<bool> _showChannelReactions = true;
@@ -657,7 +657,7 @@ private:
 	rpl::variable<bool> _replaceBottomInfoWithIcons = true;
 	rpl::variable<QString> _deletedMark = QString::fromUtf8("🧹");
 	rpl::variable<QString> _editedMark;
-	rpl::variable<bool> _unlimitedRecentStickers = false;
+	rpl::variable<bool> _unlimitedRecentStickers = true;
 	rpl::variable<ContextMenuVisibility> _showReactionsPanelInContextMenu = ContextMenuVisibility::Visible;
 	rpl::variable<ContextMenuVisibility> _showViewsPanelInContextMenu = ContextMenuVisibility::Visible;
 	rpl::variable<ContextMenuVisibility> _showHideMessageInContextMenu = ContextMenuVisibility::Hidden;

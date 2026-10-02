@@ -66,6 +66,9 @@ enum class DeviceType {
 	Firefox,
 	Safari,
 	Other,
+	Materialgram,
+	Octogram,
+	Swiftgram,
 };
 
 class Row;
@@ -168,6 +171,7 @@ void RenameBox(not_null<Ui::GenericBox*> box) {
 	const auto platform = entry.platform.toLower();
 	const auto device = entry.name.toLower();
 	const auto system = entry.system.toLower();
+	const auto info = entry.info.toLower();
 	const auto apiId = entry.apiId;
 	const auto kDesktop = std::array{ 2040, 17349, 611335 };
 	const auto kMac = std::array{ 2834 };
@@ -206,7 +210,13 @@ void RenameBox(not_null<Ui::GenericBox*> box) {
 		return {};
 	};
 
-	if (ranges::contains(kAndroid, apiId)) {
+	if (info.contains("materialgram") || info.contains("freshgram")) {
+		return DeviceType::Materialgram;
+	} else if (info.contains("octogram")) {
+		return DeviceType::Octogram;
+	} else if (info.contains("swiftgram")) {
+		return DeviceType::Swiftgram;
+	} else if (ranges::contains(kAndroid, apiId)) {
 		return DeviceType::Android;
 	} else if (ranges::contains(kDesktop, apiId)) {
 		return detectDesktop().value_or(DeviceType::Linux);
@@ -240,10 +250,16 @@ void RenameBox(not_null<Ui::GenericBox*> box) {
 		case DeviceType::Windows:
 		case DeviceType::Mac:
 		case DeviceType::Other:
+		case DeviceType::Materialgram:
+			// Blue.
 			return { st::historyPeer4UserpicBg, st::historyPeer4UserpicBg2 };
 		case DeviceType::Ubuntu:
+		case DeviceType::Swiftgram:
+			// Orange.
 			return { st::historyPeer8UserpicBg, st::historyPeer8UserpicBg2 };
 		case DeviceType::Linux:
+		case DeviceType::Octogram:
+			// Purple.
 			return { st::historyPeer5UserpicBg, st::historyPeer5UserpicBg2 };
 		case DeviceType::iPhone:
 		case DeviceType::iPad:
@@ -282,6 +298,9 @@ void RenameBox(not_null<Ui::GenericBox*> box) {
 	case DeviceType::Firefox: return st::sessionIconFirefox;
 	case DeviceType::Safari: return st::sessionIconSafari;
 	case DeviceType::Other: return st::sessionIconOther;
+	case DeviceType::Materialgram: return st::sessionIconMaterialgram;
+	case DeviceType::Octogram: return st::sessionIconOctogram;
+	case DeviceType::Swiftgram: return st::sessionIconSwiftgram;
 	}
 	Unexpected("Type in IconForType.");
 }
@@ -290,6 +309,9 @@ void RenameBox(not_null<Ui::GenericBox*> box) {
 	switch (type) {
 	case DeviceType::Web: return &st::sessionBigIconWeb;
 	case DeviceType::Other: return &st::sessionBigIconOther;
+	case DeviceType::Materialgram: return &st::sessionBigIconMaterialgram;
+	case DeviceType::Octogram: return &st::sessionBigIconOctogram;
+	case DeviceType::Swiftgram: return &st::sessionBigIconSwiftgram;
 	}
 	return nullptr;
 }

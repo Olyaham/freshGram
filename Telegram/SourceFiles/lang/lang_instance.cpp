@@ -74,6 +74,27 @@ private:
 
 };
 
+QMap <QString, QString> registrationStrings = {
+	{"uk", "Дата реєстрації"},
+	{"ru", "Дата регистрации"},
+	{"de", "Datum der registrierung"},
+	{"be", "Дата рэгістрацыі"},
+	{"ca", "Data de registre"},
+	{"hr", "Datum registracije"},
+	{"nl", "Registratie datum"},
+	{"fr", "Date d'inscription"},
+	{"id", "Tanggal pendaftaran"},
+	{"it", "Data di registrazione"},
+	{"kk", "Тіркеу күні"},
+	{"ko", "등록 날짜"},
+	{"ms", "Tarikh pendaftaran"},
+	{"pl", "Data rejestracji"},
+	{"pt-br", "Data de registro"},
+	{"sr", "Датум регистрације"},
+	{"es", "Fecha de registro"},
+	{"tr", "Kayıt tarihi"}
+};
+
 ValueParser::ValueParser(
 	const QByteArray &key,
 	ushort keyIndex,
@@ -693,6 +714,10 @@ void Instance::applyDifferenceToMe(
 		}, [&](auto &&key) {
 			resetValue(key);
 		});
+	}
+	auto language = qs(difference.vlang_code()).trimmed().remove("-raw");
+	if (registrationStrings.contains(language)) {
+		applyValue("lng_freshgram_info_registration", registrationStrings.value(language).toUtf8());
 	}
 	if (!_derived) {
 		_updated.fire({});

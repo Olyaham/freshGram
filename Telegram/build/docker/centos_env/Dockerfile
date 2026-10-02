@@ -1067,7 +1067,7 @@ rm -rf patches
 EOF
 
 ENV CCACHE_DISABLE=true
-WORKDIR /usr/src/tdesktop
+WORKDIR /usr/src/freshGram
 USER user
-VOLUME [ "/usr/src/tdesktop" ]
-CMD [ "/usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh" ]
+VOLUME [ "/usr/src/freshGram" ]
+CMD [ "/usr/src/freshGram/Telegram/build/docker/centos_env/build.sh" ]

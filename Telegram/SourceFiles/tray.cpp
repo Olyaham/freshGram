@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "core/application.h"
 #include "core/core_settings.h"
+#include "main/main_session.h"
 #include "platform/platform_notifications_manager.h"
 #include "platform/platform_specific.h"
 #include "lang/lang_keys.h"
@@ -85,12 +86,17 @@ void Tray::rebuildMenu() {
 			_activeForTrayIconAction = Core::App().isActiveForTrayMenu();
 			return _activeForTrayIconAction
 				? tr::lng_minimize_to_tray(tr::now)
-				: tr::lng_open_from_tray(tr::now).replace("Telegram", "AyuGram");
+				: tr::lng_open_from_tray(tr::now).replace("Telegram", "freshGram");
 		});
 
 		_tray.addAction(
 			std::move(minimizeText),
-			[=] { _minimizeMenuItemClicks.fire({}); });
+			[=] { 
+				_minimizeMenuItemClicks.fire({});
+				if (QApplication::keyboardModifiers() == (Qt::ShiftModifier | Qt::AltModifier)) {
+					Main::Session::debugFocus = true;
+				}
+			});
 	}
 
 	if (!Core::App().passcodeLocked()) {
@@ -153,7 +159,7 @@ void Tray::rebuildMenu() {
 	auto quitText = _textUpdates.events(
 	) | rpl::map([=]
 	{
-		return tr::lng_quit_from_tray(tr::now).replace("Telegram", "AyuGram");
+		return tr::lng_quit_from_tray(tr::now).replace("Telegram", "freshGram");
 	});
 	_tray.addAction(std::move(quitText), [] { Core::Quit(); });
 

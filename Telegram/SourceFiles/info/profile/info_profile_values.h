@@ -45,6 +45,8 @@ inline auto ToSingleLine() {
 rpl::producer<not_null<PeerData*>> MigratedOrMeValue(
 	not_null<PeerData*> peer);
 
+[[nodiscard]] rpl::producer<TextWithEntities> RegistrationValue(not_null<PeerData*> peer_id);
+[[nodiscard]] rpl::producer<TextWithEntities> DataCenterValue(not_null<PeerData*> peer_id);
 [[nodiscard]] rpl::producer<QString> NameValue(not_null<PeerData*> peer);
 [[nodiscard]] rpl::producer<QString> TitleValue(
 	not_null<Data::ForumTopic*> topic);

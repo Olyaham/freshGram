@@ -27,8 +27,8 @@ namespace Theme {
 namespace {
 
 constexpr auto kMaxAccentColors = 3;
-constexpr auto kDayBaseFile = ":/gui/day-custom-base.tdesktop-theme"_cs;
-constexpr auto kNightBaseFile = ":/gui/night-custom-base.tdesktop-theme"_cs;
+constexpr auto kDayBaseFile = ":/gui/Google Day.tdesktop-theme"_cs;
+constexpr auto kNightBaseFile = ":/gui/Google Dark.tdesktop-theme"_cs;
 
 const auto kColorizeIgnoredKeys = base::flat_set<QLatin1String>{ {
 	qstr("boxTextFgGood"),
@@ -99,6 +99,11 @@ const auto kColorizeIgnoredKeys = base::flat_set<QLatin1String>{ {
 	qstr("premiumButtonBg3"),
 	qstr("premiumIconBg1"),
 	qstr("premiumIconBg2"),
+	qstr("creditsBg1"),
+	qstr("creditsBg2"),
+	qstr("creditsBg3"),
+	qstr("creditsFg"),
+	qstr("creditsStroke")
 } };
 
 style::colorizer::Color cColor(std::string_view hex) {
@@ -120,7 +125,7 @@ style::colorizer ColorizerFrom(
 
 	auto result = style::colorizer();
 	result.ignoreKeys = kColorizeIgnoredKeys;
-	result.hueThreshold = 15;
+	result.hueThreshold = 35;
 	scheme.accentColor.getHsv(
 		&result.was.hue,
 		&result.was.saturation,
@@ -137,21 +142,7 @@ style::colorizer ColorizerFrom(
 		result.lightnessMax = 160;
 		break;
 	case EmbeddedType::Night:
-		result.keepContrast = base::flat_map<QLatin1String, Pair>{ {
-			//{ qstr("windowFgActive"), Pair{ cColor("5288c1"), cColor("17212b") } }, // windowBgActive
-			{ qstr("activeButtonFg"), Pair{ cColor("2f6ea5"), cColor("17212b") } }, // activeButtonBg
-			{ qstr("profileVerifiedCheckFg"), Pair{ cColor("5288c1"), cColor("17212b") } }, // profileVerifiedCheckBg
-			{ qstr("overviewCheckFgActive"), Pair{ cColor("5288c1"), cColor("17212b") } }, // overviewCheckBgActive
-			{ qstr("historyFileInIconFg"), Pair{ cColor("3f96d0"), cColor("182533") } }, // msgFileInBg, msgInBg
-			{ qstr("historyFileInIconFgSelected"), Pair{ cColor("6ab4f4"), cColor("2e70a5") } }, // msgFileInBgSelected, msgInBgSelected
-			{ qstr("historyFileInRadialFg"), Pair{ cColor("3f96d0"), cColor("182533") } }, // msgFileInBg, msgInBg
-			{ qstr("historyFileInRadialFgSelected"), Pair{ cColor("6ab4f4"), cColor("2e70a5") } }, // msgFileInBgSelected, msgInBgSelected
-			{ qstr("historyFileOutIconFg"), Pair{ cColor("4c9ce2"), cColor("2b5278") } }, // msgFileOutBg, msgOutBg
-			{ qstr("historyFileOutIconFgSelected"), Pair{ cColor("58abf3"), cColor("2e70a5") } }, // msgFileOutBgSelected, msgOutBgSelected
-			{ qstr("historyFileOutRadialFg"), Pair{ cColor("4c9ce2"), cColor("2b5278") } }, // msgFileOutBg, msgOutBg
-			{ qstr("historyFileOutRadialFgSelected"), Pair{ cColor("58abf3"), cColor("2e70a5") } }, // msgFileOutBgSelected, msgOutBgSelected
-		} };
-		result.lightnessMin = 64;
+		result.lightnessMin = 115;
 		break;
 	case EmbeddedType::NightGreen:
 		result.keepContrast = base::flat_map<QLatin1String, Pair>{ {
@@ -239,8 +230,32 @@ std::vector<EmbeddedScheme> EmbeddedThemes() {
 	};
 	const auto name = [](auto key) {
 		return rpl::deferred([=] { return key(); });
-	};
+		};
 	return {
+		EmbeddedScheme{
+			EmbeddedType::DayBlue,
+			qColor("fffcf5"),
+			qColor("dfe6c4"),
+			qColor("f3f3e7"),
+			qColor("f3f3e7"),
+			qColor("b9cf7a"),
+			name(tr::lng_settings_theme_day),
+			":/gui/Google Day.tdesktop-theme",
+			qColor("b9cf7a")
+		},
+		
+		EmbeddedScheme{
+			EmbeddedType::Night,
+			qColor("1b1c17"),
+			qColor("45483d"),
+			qColor("30312b"),
+			qColor("30312b"),
+			qColor("b9cf7a"),
+			name(tr::lng_settings_theme_tinted),
+			":/gui/Google Dark.tdesktop-theme",
+			qColor("b9cf7a")
+		},
+		
 		EmbeddedScheme{
 			EmbeddedType::Default,
 			qColor("9bd494"),
@@ -251,28 +266,6 @@ std::vector<EmbeddedScheme> EmbeddedThemes() {
 			name(tr::lng_settings_theme_classic),
 			QString(),
 			qColor("40a7e3")
-		},
-		EmbeddedScheme{
-			EmbeddedType::DayBlue,
-			qColor("7ec4ea"),
-			qColor("d7f0ff"),
-			qColor("ffffff"),
-			qColor("d7f0ff"),
-			qColor("ffffff"),
-			name(tr::lng_settings_theme_day),
-			":/gui/day-blue.tdesktop-theme",
-			qColor("40a7e3")
-		},
-		EmbeddedScheme{
-			EmbeddedType::Night,
-			qColor("485761"),
-			qColor("5ca7d4"),
-			qColor("6b808d"),
-			qColor("6b808d"),
-			qColor("5ca7d4"),
-			name(tr::lng_settings_theme_tinted),
-			":/gui/night.tdesktop-theme",
-			qColor("5288c1")
 		},
 		EmbeddedScheme{
 			EmbeddedType::NightGreen,
@@ -295,14 +288,14 @@ std::vector<QColor> DefaultAccentColors(EmbeddedType type) {
 	switch (type) {
 	case EmbeddedType::DayBlue:
 		return {
-			qColor("45bce7"),
-			qColor("52b440"),
-			qColor("d46c99"),
-			qColor("df8a49"),
-			qColor("9978c8"),
-			qColor("c55245"),
-			qColor("687b98"),
-			qColor("dea922"),
+			qColor("8ab4f8"),
+			qColor("5ad9d2"),
+			qColor("bec2ff"),
+			qColor("ffaaf3"),
+			qColor("fab983"),
+			qColor("ffb1bf"),
+			qColor("8bd888"),
+			qColor("ffb3a5"),
 		};
 	case EmbeddedType::Default:
 		return {
@@ -317,14 +310,14 @@ std::vector<QColor> DefaultAccentColors(EmbeddedType type) {
 		};
 	case EmbeddedType::Night:
 		return {
-			qColor("58bfe8"),
-			qColor("466f42"),
-			qColor("aa6084"),
-			qColor("a46d3c"),
-			qColor("917bbd"),
-			qColor("ab5149"),
-			qColor("697b97"),
-			qColor("9b834b"),
+			qColor("8ab4f8"),
+			qColor("5ad9d2"),
+			qColor("bec2ff"),
+			qColor("ffaaf3"),
+			qColor("fab983"),
+			qColor("ffb1bf"),
+			qColor("8bd888"),
+			qColor("ffb3a5"),
 		};
 	case EmbeddedType::NightGreen:
 		return {
@@ -349,7 +342,7 @@ Fn<void(style::palette&)> PreparePaletteCallback(
 		const auto &embedded = EmbeddedThemes();
 		const auto i = ranges::find(
 			embedded,
-			dark ? EmbeddedType::Night : EmbeddedType::Default,
+			dark ? EmbeddedType::Night : EmbeddedType::DayBlue,
 			&EmbeddedScheme::type);
 		Assert(i != end(embedded));
 		const auto colorizer = accent
@@ -421,9 +414,9 @@ bool AccentColors::setFromSerialized(const QByteArray &serialized) {
 		const auto color = Serialize::readColor(stream);
 		const auto uncheckedType = static_cast<EmbeddedType>(type);
 		switch (uncheckedType) {
-		case EmbeddedType::Default:
 		case EmbeddedType::DayBlue:
 		case EmbeddedType::Night:
+		case EmbeddedType::Default:
 		case EmbeddedType::NightGreen:
 			data.emplace(uncheckedType, color);
 			break;

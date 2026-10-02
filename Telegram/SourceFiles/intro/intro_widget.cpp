@@ -37,6 +37,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/application.h"
 #include "mtproto/mtproto_dc_options.h"
 #include "window/window_slide_animation.h"
+#include "window/themes/window_theme.h"
 #include "window/window_connecting_widget.h"
 #include "window/window_controller.h"
 #include "window/window_session_controller.h"
@@ -104,6 +105,11 @@ Widget::Widget(
 	controller->setDefaultFloatPlayerDelegate(floatPlayerDelegate());
 
 	getData()->country = ComputeNewAccountCountry();
+
+	if (!Core::App().domain().accountsAuthedCount()) {
+		Window::Theme::Apply(u":/gui/Google Day.tdesktop-theme"_q);
+		Window::Theme::KeepApplied();
+	}
 
 	_account->mtpValue(
 	) | rpl::on_next([=](not_null<MTP::Instance*> instance) {
@@ -179,7 +185,7 @@ Widget::Widget(
 		}, lifetime());
 	}
 
-	_footer->setText(QString("AyuGram Desktop v%1").arg(currentVersionText()));
+	_footer->setText(QString("freshGram v%1").arg(currentVersionText()));
 }
 
 rpl::producer<> Widget::showSettingsRequested() const {

@@ -149,6 +149,11 @@ TopBarWidget::TopBarWidget(
 	_delete->setTextTransform(Ui::RoundButtonTextTransform::ToUpper);
 	_messageShot->setTextTransform(Ui::RoundButtonTextTransform::ToUpper);
 
+	_clear->setFullRadius(true);
+	_forward->setFullRadius(true);
+	_sendNow->setFullRadius(true);
+	_delete->setFullRadius(true);
+
 	Lang::Updated(
 	) | rpl::on_next([=] {
 		refreshLang();
@@ -1525,9 +1530,7 @@ void TopBarWidget::updateMembersShowArea() {
 			return chat->amIn();
 		} else if (const auto megagroup = peer->asMegagroup()) {
 			return !megagroup->isMonoforum()
-				&& megagroup->canViewMembers()
-				&& (megagroup->membersCount()
-					< megagroup->session().serverConfig().chatSizeMax);
+				&& megagroup->canViewMembers();
 		}
 		return false;
 	}();
@@ -1556,7 +1559,7 @@ void TopBarWidget::showSelected(SelectedState state) {
 	const auto &settings = AyuSettings::getInstance();
 
 	auto canDelete = (state.count > 0 && state.count == state.canDeleteCount);
-	auto canForward = (state.count > 0 && state.count == state.canForwardCount);
+	auto canForward = (state.count > 0 && state.count <= 100 && state.count == state.canForwardCount);
 	auto canSendNow = (state.count > 0 && state.count == state.canSendNowCount);
 	auto count = (!canDelete && !canForward && !canSendNow && !settings.showMessageShot()) ? 0 : state.count;
 	if (_selectedCount == count
@@ -2044,9 +2047,7 @@ void TopBarWidget::updateOnlineDisplay() {
 	} else if (const auto channel = peer->asChannel()) {
 		if (channel->isMegagroup()
 			&& channel->canViewMembers()
-			&& (channel->membersCount() > 0)
-			&& (channel->membersCount()
-				<= channel->session().serverConfig().chatSizeMax)) {
+			&& channel->membersCount() > 0) {
 			if (channel->lastParticipantsRequestNeeded()) {
 				session().api().chatParticipants().requestLast(channel);
 			}

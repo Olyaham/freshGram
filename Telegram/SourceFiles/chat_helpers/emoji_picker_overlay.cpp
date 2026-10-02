@@ -368,7 +368,7 @@ void EmojiPickerOverlay::Grid::leaveEventHook(QEvent *e) {
 
 EmojiPickerOverlay::Metrics EmojiPickerOverlay::EstimateMetrics(
 		const QString &aboutText) {
-	const auto tailHeight = st::stickersEmojiPickerStripBubble.height();
+	const auto tailHeight = 0;
 	const auto shadowExtent = Ui::BoxShadow::ExtendFor(
 		st::stickersEmojiPickerBoxShadow);
 	const auto &pad = st::stickersEmojiPickerPadding;
@@ -627,28 +627,6 @@ void EmojiPickerOverlay::paintEvent(QPaintEvent *e) {
 	p.setPen(Qt::NoPen);
 	p.setBrush(st::stickersEmojiPickerBg);
 	p.drawRoundedRect(shown, radius, radius);
-
-	if (progress < 1.) {
-		paintTailBubble(p, shown, 1. - progress);
-	}
-}
-
-void EmojiPickerOverlay::paintTailBubble(
-		QPainter &p,
-		const QRect &bubble,
-		float64 opacity) {
-	const auto &icon = st::stickersEmojiPickerStripBubble;
-	const auto offsetRight = st::stickersEmojiPickerStripBubbleRight;
-	const auto x = bubble.right() + 1 - offsetRight - icon.width();
-	const auto y = bubble.bottom() + 1;
-	if (opacity >= 1.) {
-		icon.paint(p, x, y, width());
-	} else {
-		p.save();
-		p.setOpacity(opacity);
-		icon.paint(p, x, y, width());
-		p.restore();
-	}
 }
 
 void EmojiPickerOverlay::resizeEvent(QResizeEvent *e) {
@@ -675,7 +653,7 @@ void EmojiPickerOverlay::keyPressEvent(QKeyEvent *e) {
 }
 
 int EmojiPickerOverlay::tailHeight() const {
-	return st::stickersEmojiPickerStripBubble.height();
+	return 0;
 }
 
 void EmojiPickerOverlay::relayout() {

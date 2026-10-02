@@ -342,7 +342,7 @@ void PanelEditContact::setupControls(
 		_content->add(
 			object_ptr<Ui::SettingsButton>(
 				_content,
-				std::move(*text) | rpl::map(tr::upper),
+				std::move(*text),
 				st::passportDeleteButton),
 			st::passportUploadButtonPadding
 		)->addClickHandler([=] {

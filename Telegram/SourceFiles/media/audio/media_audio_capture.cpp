@@ -23,7 +23,7 @@ namespace Capture {
 namespace {
 
 constexpr auto kCaptureFrequency = Player::kDefaultFrequency;
-constexpr auto kCaptureSkipDuration = crl::time(400);
+constexpr auto kCaptureSkipDuration = crl::time(200);
 constexpr auto kCaptureFadeInDuration = crl::time(300);
 constexpr auto kCaptureBufferSlice = 256 * 1024;
 constexpr auto kCaptureUpdateDelta = crl::time(100);
@@ -397,7 +397,7 @@ bool Instance::Inner::initializeFFmpeg() {
 	av_opt_set_int(d->codecContext, "refcounted_frames", 1, 0);
 
 	d->codecContext->sample_fmt = AV_SAMPLE_FMT_FLTP;
-	d->codecContext->bit_rate = 32000;
+	d->codecContext->bit_rate = 256000;
 	d->codecContext->ch_layout = AV_CHANNEL_LAYOUT_MONO;
 	d->channels = d->codecContext->ch_layout.nb_channels;
 	d->codecContext->sample_rate = kCaptureFrequency;

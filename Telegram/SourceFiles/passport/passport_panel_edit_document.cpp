@@ -498,7 +498,7 @@ not_null<Ui::RpWidget*> PanelEditDocument::setupContent(
 		inner->add(
 			object_ptr<Ui::SettingsButton>(
 				inner,
-				std::move(*text) | rpl::map(tr::upper),
+				std::move(*text),
 				st::passportDeleteButton),
 			st::passportUploadButtonPadding
 		)->addClickHandler([=] {

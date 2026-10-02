@@ -25,7 +25,7 @@ namespace Export {
 namespace Output {
 namespace {
 
-constexpr auto kMessagesInFile = 1000;
+constexpr auto kMessagesInFile = 10000;
 constexpr auto kPersonalUserpicSize = 90;
 constexpr auto kEntryUserpicSize = 48;
 constexpr auto kServiceMessagePhotoSize = 60;
@@ -3480,7 +3480,7 @@ auto HtmlWriter::Wrap::pushMessage(
 			dialog,
 			basePath,
 			"This message is not supported by this version "
-			"of AyuGram Desktop. Please update the application.") };
+			"of freshGram. Please update the application.") };
 	}
 
 	const auto wrapReplyToLink = [&](const QByteArray &text) {

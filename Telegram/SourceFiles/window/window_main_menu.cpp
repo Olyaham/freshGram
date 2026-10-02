@@ -152,7 +152,7 @@ public:
 protected:
 	void paintEvent(QPaintEvent *e) override;
 
-	static constexpr auto kText = "100%";
+	static constexpr auto kText = "110%";
 
 };
 
@@ -391,8 +391,8 @@ MainMenu::MainMenu(
 	parentResized();
 
 	_telegram->setMarkedText(tr::link(
-		u"AyuGram Desktop"_q,
-		u"https://ayugram.one"_q));
+		u"freshGram"_q,
+		u"https://github.com/Snowy-Fluffy/freshGram"_q));
 	_telegram->setLinksTrusted();
 	_version->setMarkedText(
 		tr::link(

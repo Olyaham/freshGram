@@ -55,6 +55,7 @@ struct Details {
 	std::optional<uint64> commentPriceMin;
 	const style::EmojiPan *effectsPan = nullptr;
 	bool effectAllowed = false;
+	bool aiComposeAllowed = false;
 };
 
 } // namespace SendMenu
