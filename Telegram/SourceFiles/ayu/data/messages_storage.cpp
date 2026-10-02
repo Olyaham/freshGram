@@ -11,7 +11,10 @@
 #include "ayu/utils/telegram_helpers.h"
 #include "base/unixtime.h"
 #include "crl/crl_on_main.h"
+#include "data/data_document.h"
 #include "data/data_forum_topic.h"
+#include "data/data_media_types.h"
+#include "data/data_photo.h"
 #include "data/data_session.h"
 #include "history/history.h"
 #include "history/history_item.h"
@@ -21,6 +24,8 @@
 namespace AyuMessages {
 
 namespace {
+
+constexpr auto kMaxCachedDocumentSize = int64(32) * 1024 * 1024;
 
 std::vector<DeletedMessage> PendingDeleted;
 bool FlushScheduled = false;
@@ -128,6 +133,23 @@ bool hasRevisions(not_null<HistoryItem*> item) {
 	const auto msgId = item->id.bare;
 
 	return AyuDatabase::hasRevisions(userId, dialogId, msgId);
+}
+
+void cacheDeletedMedia(not_null<HistoryItem*> item) {
+	const auto media = item->media();
+	if (!media) {
+		return;
+	}
+	const auto origin = item->fullId();
+	if (const auto photo = media->photo()) {
+		photo->load(origin, LoadFromCloudOrLocal, true);
+	}
+	if (const auto document = media->document()) {
+		document->loadThumbnail(origin);
+		if (document->size > 0 && document->size <= kMaxCachedDocumentSize) {
+			document->save(origin, QString(), LoadFromCloudOrLocal, true);
+		}
+	}
 }
 
 void addDeletedMessage(not_null<HistoryItem*> item) {

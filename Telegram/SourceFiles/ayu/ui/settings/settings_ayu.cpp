@@ -334,6 +334,7 @@ void BuildGhostEssentials(SectionBuilder &builder) {
 				dst.setSendOnlinePacketsLocked(src.sendOnlinePacketsLocked());
 				dst.setSendUploadProgressLocked(src.sendUploadProgressLocked());
 				dst.setSendOfflinePacketAfterOnlineLocked(src.sendOfflinePacketAfterOnlineLocked());
+				dst.setUseScheduledMessagesLocked(src.useScheduledMessagesLocked());
 				AyuSettings::getInstance().setUseGlobalGhostMode(true);
 			}
 
@@ -420,6 +421,19 @@ void BuildGhostEssentials(SectionBuilder &builder) {
 					[state] { return AyuSettings::ghost(state->selectedUserId.current()).sendOfflinePacketAfterOnlineLocked(); },
 					[state](bool v) { AyuSettings::ghost(state->selectedUserId.current()).setSendOfflinePacketAfterOnlineLocked(v); }
 				},
+				NestedEntry{
+					tr::ayu_UseScheduledMessages(tr::now),
+					[state] { return AyuSettings::ghost(state->selectedUserId.current()).useScheduledMessages(); },
+					[state](bool v) {
+						auto &ghost = AyuSettings::ghost(state->selectedUserId.current());
+						ghost.setUseScheduledMessages(v);
+						if (v) {
+							ghost.setMarkReadAfterAction(false);
+						}
+					},
+					[state] { return AyuSettings::ghost(state->selectedUserId.current()).useScheduledMessagesLocked(); },
+					[state](bool v) { AyuSettings::ghost(state->selectedUserId.current()).setUseScheduledMessagesLocked(v); }
+				},
 			};
 
 			auto collapsible = AddCollapsibleToggle(
@@ -432,6 +446,9 @@ void BuildGhostEssentials(SectionBuilder &builder) {
 			if (wctx.highlights && collapsible.widget) {
 				wctx.highlights->push_back(std::make_pair(
 					u"ayu/ghostModeToggle"_q,
+					HighlightEntry{ collapsible.widget, {} }));
+				wctx.highlights->push_back(std::make_pair(
+					u"ayu/useScheduledMessages"_q,
 					HighlightEntry{ collapsible.widget, {} }));
 			}
 
@@ -466,39 +483,6 @@ void BuildGhostEssentials(SectionBuilder &builder) {
 				container->lifetime());
 			AddSkip(container);
 			AddDividerText(container, tr::ayu_MarkReadAfterActionDescription());
-
-			AddSkip(container);
-			const auto scheduleButton = AddButtonWithIcon(
-				container,
-				tr::ayu_UseScheduledMessages(),
-				st::settingsButtonNoIcon
-			);
-			if (wctx.highlights) {
-				wctx.highlights->push_back(std::make_pair(
-					u"ayu/useScheduledMessages"_q,
-					HighlightEntry{ scheduleButton.get(), {} }));
-			}
-			scheduleButton->toggleOn(
-				state->selectedUserId.value()
-				| rpl::map([](uint64 id) {
-					return AyuSettings::ghost(id).useScheduledMessagesValue();
-				}) | rpl::flatten_latest()
-			)->toggledValue(
-			) | rpl::filter(
-				[=](bool enabled) {
-					return enabled != AyuSettings::ghost(state->selectedUserId.current()).useScheduledMessages();
-				}
-			) | on_next(
-				[=](bool enabled) {
-					auto &ghost = AyuSettings::ghost(state->selectedUserId.current());
-					ghost.setUseScheduledMessages(enabled);
-					if (enabled) {
-						ghost.setMarkReadAfterAction(false);
-					}
-				},
-				container->lifetime());
-			AddSkip(container);
-			AddDividerText(container, tr::ayu_UseScheduledMessagesDescription());
 
 			AddSkip(container);
 			const auto silentOptions = std::vector<QString>{

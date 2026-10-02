@@ -94,25 +94,43 @@ MTPVector<MTPMessageEntity> deserializeTextWithEntities(std::vector<char> serial
 }
 
 std::vector<char> serializeSavableMedia(const MTPMessageMedia &media) {
-	const auto savable = media.match([](const MTPDmessageMediaPhoto &data) {
-		return data.vphoto() && !data.vttl_seconds();
-	}, [](const MTPDmessageMediaDocument &data) {
-		return data.vdocument() && !data.vttl_seconds();
-	}, [](const MTPDmessageMediaGeo &) {
-		return true;
-	}, [](const MTPDmessageMediaVenue &) {
-		return true;
-	}, [](const MTPDmessageMediaContact &) {
-		return true;
-	}, [](const MTPDmessageMediaDice &) {
-		return true;
-	}, [](const auto &) {
-		return false;
-	});
-	if (!savable) {
+	return media.match([](const MTPDmessageMediaPhoto &data) -> std::vector<char> {
+		const auto photo = data.vphoto();
+		if (!photo) {
+			return {};
+		}
+		const auto video = data.vvideo();
+		return serializeObject(MTP_messageMediaPhoto(
+			MTP_flags(data.vflags().v & ~MTPDmessageMediaPhoto::Flag::f_ttl_seconds),
+			*photo,
+			MTP_int(0),
+			video ? MTPDocument(*video) : MTPDocument()));
+	}, [](const MTPDmessageMediaDocument &data) -> std::vector<char> {
+		const auto document = data.vdocument();
+		if (!document) {
+			return {};
+		}
+		const auto alt = data.valt_documents();
+		const auto cover = data.vvideo_cover();
+		const auto timestamp = data.vvideo_timestamp();
+		return serializeObject(MTP_messageMediaDocument(
+			MTP_flags(data.vflags().v & ~MTPDmessageMediaDocument::Flag::f_ttl_seconds),
+			*document,
+			alt ? MTPVector<MTPDocument>(*alt) : MTPVector<MTPDocument>(),
+			cover ? MTPPhoto(*cover) : MTPPhoto(),
+			timestamp ? MTP_int(timestamp->v) : MTP_int(0),
+			MTP_int(0)));
+	}, [&](const MTPDmessageMediaGeo &) {
+		return serializeObject(media);
+	}, [&](const MTPDmessageMediaVenue &) {
+		return serializeObject(media);
+	}, [&](const MTPDmessageMediaContact &) {
+		return serializeObject(media);
+	}, [&](const MTPDmessageMediaDice &) {
+		return serializeObject(media);
+	}, [](const auto &) -> std::vector<char> {
 		return {};
-	}
-	return serializeObject(media);
+	});
 }
 
 MTPMessageMedia deserializeMedia(const std::vector<char> &serialized) {

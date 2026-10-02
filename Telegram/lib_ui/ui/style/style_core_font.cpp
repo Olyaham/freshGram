@@ -362,16 +362,8 @@ struct Metrics {
 	}
 	if (!monospace) {
 		font.setWeight((flags & FontFlag::Bold)
-			? QFont::DemiBold
+			? QFont::Bold
 			: QFont::Normal);
-		if (font.bold()) {
-			const auto style = QFontInfo(font).styleName();
-			if (!style.isEmpty() && !style.startsWith(
-					"Medium",
-					Qt::CaseInsensitive)) {
-				font.setBold(true);
-			}
-		}
 
 		font.setItalic(flags & FontFlag::Italic);
 		font.setUnderline(flags & FontFlag::Underline);

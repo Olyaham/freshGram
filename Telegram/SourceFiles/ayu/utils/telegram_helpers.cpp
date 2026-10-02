@@ -552,6 +552,7 @@ void processMessageDelete(not_null<HistoryItem*> item) {
 		}
 		item->setDeleted();
 		AyuMessages::addDeletedMessage(item);
+		AyuMessages::cacheDeletedMedia(item);
 	}
 }
 

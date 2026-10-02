@@ -53,18 +53,22 @@ GhostModeAccountSettings::GhostModeAccountSettings() {
 		_sendUploadProgress.value(),
 		_sendUploadProgressLocked.value(),
 		_sendOfflinePacketAfterOnline.value(),
-		_sendOfflinePacketAfterOnlineLocked.value()
+		_sendOfflinePacketAfterOnlineLocked.value(),
+		_useScheduledMessages.value(),
+		_useScheduledMessagesLocked.value()
 	) | rpl::on_next([=](
 			bool readMsg, bool readMsgLocked,
 			bool readStories, bool readStoriesLocked,
 			bool online, bool onlineLocked,
 			bool upload, bool uploadLocked,
-			bool offline, bool offlineLocked) {
+			bool offline, bool offlineLocked,
+			bool scheduled, bool scheduledLocked) {
 		_ghostModeActive = (readMsgLocked || !readMsg)
 			&& (readStoriesLocked || !readStories)
 			&& (onlineLocked || !online)
 			&& (uploadLocked || !upload)
-			&& (offlineLocked || offline);
+			&& (offlineLocked || offline)
+			&& (scheduledLocked || scheduled);
 	}, lifetime);
 }
 
@@ -141,6 +145,10 @@ void GhostModeAccountSettings::setGhostModeEnabled(bool val) {
 	if (!_sendOnlinePacketsLocked.current()) _sendOnlinePackets = !val;
 	if (!_sendUploadProgressLocked.current()) _sendUploadProgress = !val;
 	if (!_sendOfflinePacketAfterOnlineLocked.current()) _sendOfflinePacketAfterOnline = val;
+	if (!_useScheduledMessagesLocked.current()) {
+		_useScheduledMessages = val;
+		if (val) _markReadAfterAction = false;
+	}
 	AyuSettings::save();
 
 	if (val) {
@@ -182,6 +190,12 @@ void GhostModeAccountSettings::setSendOfflinePacketAfterOnlineLocked(bool val) {
 	AyuSettings::save();
 }
 
+void GhostModeAccountSettings::setUseScheduledMessagesLocked(bool val) {
+	if (_useScheduledMessagesLocked.current() == val) return;
+	_useScheduledMessagesLocked = val;
+	AyuSettings::save();
+}
+
 void to_json(nlohmann::json &j, const GhostModeAccountSettings &s) {
 	j = nlohmann::json{
 		{"sendReadMessages", s._sendReadMessages.current()},
@@ -197,7 +211,8 @@ void to_json(nlohmann::json &j, const GhostModeAccountSettings &s) {
 		{"sendReadStoriesLocked", s._sendReadStoriesLocked.current()},
 		{"sendOnlinePacketsLocked", s._sendOnlinePacketsLocked.current()},
 		{"sendUploadProgressLocked", s._sendUploadProgressLocked.current()},
-		{"sendOfflinePacketAfterOnlineLocked", s._sendOfflinePacketAfterOnlineLocked.current()}
+		{"sendOfflinePacketAfterOnlineLocked", s._sendOfflinePacketAfterOnlineLocked.current()},
+		{"useScheduledMessagesLocked", s._useScheduledMessagesLocked.current()}
 	};
 }
 
@@ -223,6 +238,7 @@ void from_json(const nlohmann::json &j, GhostModeAccountSettings &s) {
 	s._sendOnlinePacketsLocked = j.value("sendOnlinePacketsLocked", false);
 	s._sendUploadProgressLocked = j.value("sendUploadProgressLocked", false);
 	s._sendOfflinePacketAfterOnlineLocked = j.value("sendOfflinePacketAfterOnlineLocked", false);
+	s._useScheduledMessagesLocked = j.value("useScheduledMessagesLocked", true);
 }
 
 void MessageShotSettings::setShowBackground(bool val) {

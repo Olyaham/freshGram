@@ -16,6 +16,7 @@ std::vector<AyuMessageBase> loadEditedMessages(ID userId, ID dialogId, ID messag
 bool hasRevisions(not_null<HistoryItem*> item);
 
 void addDeletedMessage(not_null<HistoryItem*> item);
+void cacheDeletedMedia(not_null<HistoryItem*> item);
 std::vector<AyuMessageBase> loadDeletedMessages(ID userId, ID dialogId, ID topicId, ID minId, ID maxId, int totalLimit, const std::string &searchQuery);
 bool hasDeletedMessages(not_null<PeerData*> peer, ID topicId);
 void removeDeletedMessage(not_null<HistoryItem*> item);

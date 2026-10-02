@@ -2,7 +2,7 @@
 
 ## In progress
 
-- Stability of viewing and saving deleted messages.
+- Stability of viewing and saving deleted messages: database access, media without text, self-destructing media and background caching of media are done, manual testing is pending.
 
 ## Planned
 
@@ -12,7 +12,7 @@
 4. Unit tests for the AyuGram logic that does not depend on UI (storage, mapping, formatting).
 5. Explicit schema versioning and safe migrations of the local AyuGram database.
 6. Split `ayu_settings.cpp` and `telegram_helpers.cpp` by topic.
-7. Check that saving of self-destructing media still works after the upstream merge, `unsupportedTTL()` is always zero now.
+7. Remove the dead `unsupportedTTL()` field and the code that reads it.
 
 ## Later
 
