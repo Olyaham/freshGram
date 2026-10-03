@@ -470,7 +470,7 @@ protected:
 
 [[nodiscard]] inline Ui::BubbleRounding HostedMediaRounding() {
 	using Corner = Ui::BubbleCornerRounding;
-	return {
+	return Ui::BubbleRounding{
 		.topLeft = Corner::Small,
 		.topRight = Corner::Small,
 		.bottomLeft = Corner::Small,
