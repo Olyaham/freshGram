@@ -1,3 +1,14 @@
+7.2.14 beta (03.10.26)
+
+- Fix the freeze when restoring deleted messages, which the watchdog reported as a crash.
+- Restore deleted stickers, gifs and emoji as normal media again.
+- Show self-destructing photos and videos under a spoiler after a restart instead of as expired.
+- Port the media and bubble rounding from materialgram, with the Message Rounding and Tail setting to return the classic look.
+- Add the Material Icons setting to switch to the classic icons (restart required).
+- Return the colored reply background and add sliders for the reply and reaction background opacity.
+- Tint reactions on incoming messages with the author's color.
+- Add the freshGram channel to the links and hide the Telegram ID in the settings header.
+
 7.2.13 beta (03.10.26)
 
 - Keep photos, self-destructing media and polls of deleted messages after a restart.
