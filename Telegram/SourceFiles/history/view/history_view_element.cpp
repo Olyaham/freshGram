@@ -1795,13 +1795,15 @@ void Element::refreshMedia(Element *replacing) {
 		_media = std::make_unique<SimilarChannels>(this);
 	} else if (isOnlyCustomEmoji()
 		&& Core::App().settings().largeEmoji()
-		&& !item->isSponsored()) {
+		&& !item->isSponsored()
+		&& !(item->isDeleted() && item->isLocal())) {
 		_media = std::make_unique<UnwrappedMedia>(
 			this,
 			std::make_unique<CustomEmoji>(this, onlyCustomEmoji()));
 	} else if (isIsolatedEmoji()
 		&& Core::App().settings().largeEmoji()
-		&& !item->isSponsored()) {
+		&& !item->isSponsored()
+		&& !(item->isDeleted() && item->isLocal())) {
 		const auto emoji = isolatedEmoji();
 		const auto emojiStickers = &history()->session().emojiStickersPack();
 		const auto skipPremiumEffect = false;

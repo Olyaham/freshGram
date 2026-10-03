@@ -236,6 +236,11 @@ void cacheDeletedMedia(not_null<HistoryItem*> item) {
 		SavePhotoBytes(photo, origin, SavedMediaPath(item));
 	}
 	if (const auto document = media->document()) {
+		if (document->sticker()
+			|| document->isAnimation()
+			|| document->isVideoMessage()) {
+			return;
+		}
 		document->loadThumbnail(origin);
 		if (document->size > 0 && document->size <= kMaxCachedDocumentSize) {
 			document->save(origin, QString(), LoadFromCloudOrLocal, true);

@@ -201,7 +201,11 @@ HistoryItem *State::create(Row &row) {
 		flags |= MessageFlag::HasPostAuthor;
 	}
 
-	auto text = Ui::Text::WithEntities(QString::fromStdString(message.text));
+	auto fallback = QString::fromStdString(message.text);
+	if (fallback.isEmpty()) {
+		fallback = AyuMapper::unwrappedMediaText(message.documentSerialized);
+	}
+	auto text = Ui::Text::WithEntities(fallback);
 	text.entities = Api::EntitiesFromMTP(
 		&_history->session(),
 		AyuMapper::deserializeTextWithEntities(message.textEntities).v);
