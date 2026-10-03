@@ -17,6 +17,7 @@ namespace AyuKept {
 void setup(not_null<Data::Session*> owner, rpl::lifetime &lifetime);
 
 void markLost(not_null<History*> history);
+[[nodiscard]] bool keepOnDelete(not_null<History*> history);
 void note(not_null<History*> history);
 void forget(not_null<PeerData*> peer);
 

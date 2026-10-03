@@ -115,10 +115,7 @@ std::vector<char> serializeSavableMedia(const MTPMessageMedia &media) {
 			return {};
 		}
 		const auto video = data.vvideo();
-		auto flags = data.vflags().v & ~MTPDmessageMediaPhoto::Flag::f_ttl_seconds;
-		if (data.vttl_seconds()) {
-			flags |= MTPDmessageMediaPhoto::Flag::f_spoiler;
-		}
+		const auto flags = data.vflags().v & ~MTPDmessageMediaPhoto::Flag::f_ttl_seconds;
 		return serializeObject(MTPMessageMedia(MTP_messageMediaPhoto(
 			MTP_flags(flags),
 			*photo,
@@ -132,10 +129,7 @@ std::vector<char> serializeSavableMedia(const MTPMessageMedia &media) {
 		const auto alt = data.valt_documents();
 		const auto cover = data.vvideo_cover();
 		const auto timestamp = data.vvideo_timestamp();
-		auto flags = data.vflags().v & ~MTPDmessageMediaDocument::Flag::f_ttl_seconds;
-		if (data.vttl_seconds()) {
-			flags |= MTPDmessageMediaDocument::Flag::f_spoiler;
-		}
+		const auto flags = data.vflags().v & ~MTPDmessageMediaDocument::Flag::f_ttl_seconds;
 		return serializeObject(MTPMessageMedia(MTP_messageMediaDocument(
 			MTP_flags(flags),
 			*document,

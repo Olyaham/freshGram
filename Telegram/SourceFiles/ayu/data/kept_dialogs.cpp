@@ -275,6 +275,14 @@ void markLost(not_null<History*> history) {
 	AyuDatabase::saveKeptDialog(MakeRow(history, true));
 }
 
+bool keepOnDelete(not_null<History*> history) {
+	if (history->ayuKept() || !history->inChatList()) {
+		return false;
+	}
+	markLost(history);
+	return history->ayuKept();
+}
+
 void note(not_null<History*> history) {
 	const auto peer = history->peer;
 	if (!Supported(peer) || history->ayuKept()) {

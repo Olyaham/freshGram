@@ -837,6 +837,7 @@ private:
 	bool _deleted = false;
 	bool _deletedAnimated = false;
 	int _unsupportedTTL = 0;
+	bool _ayuExpired = false;
 	std::vector<char> _ayuSavedMedia;
 
 	TimeId _date = 0;

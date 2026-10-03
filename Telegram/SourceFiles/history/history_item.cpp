@@ -536,13 +536,30 @@ HistoryItem::HistoryItem(
 			tr::lng_message_empty(tr::now, tr::marked)
 		});
 	} else if (checked == MediaCheckResult::HasExpiredMediaTimeToLive) {
-		createServiceFromMtp(data);
-		setReactions(data.vreactions());
-		applyTTL(data);
-		if (AyuSettings::getInstance().saveDeletedMessages()) {
+		if (const auto saved = AyuMessages::savedTtlMedia(history, id)) {
+			createComponents(data);
+			setMedia(*saved);
+			AyuMessages::restoreTtlBytes(this);
+			setText(TextWithEntities{
+				qs(data.vmessage()),
+				Api::EntitiesFromMTP(
+					&history->session(),
+					data.ventities().value_or_empty())
+			});
+			setReactions(data.vreactions());
+			applyTTL(data);
 			_deleted = true;
 			_deletedAnimated = true;
-			setAyuHint(AyuSettings::getInstance().deletedMark());
+			_ayuExpired = true;
+		} else {
+			createServiceFromMtp(data);
+			setReactions(data.vreactions());
+			applyTTL(data);
+			if (AyuSettings::getInstance().saveDeletedMessages()) {
+				_deleted = true;
+				_deletedAnimated = true;
+				setAyuHint(AyuSettings::getInstance().deletedMark());
+			}
 		}
 	} else if (checked == MediaCheckResult::HasStoryMention) {
 		setMedia(*data.vmedia());
@@ -4199,7 +4216,8 @@ bool HistoryItem::isDeleted() const {
 }
 
 bool HistoryItem::isBurnt() const {
-	return ((media() && media()->ttlSeconds()) || unsupportedTTL()) && !hasUnreadMediaFlag();
+	return _ayuExpired
+		|| (((media() && media()->ttlSeconds()) || unsupportedTTL()) && !hasUnreadMediaFlag());
 }
 
 bool HistoryItem::wasDeletedAnimated() const {

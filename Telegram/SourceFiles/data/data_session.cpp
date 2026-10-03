@@ -1712,6 +1712,11 @@ History *Session::historyLoaded(const PeerData *peer) {
 }
 
 void Session::deleteConversationLocally(not_null<PeerData*> peer) {
+	if (const auto kept = historyLoaded(peer)) {
+		if (AyuKept::keepOnDelete(kept)) {
+			return;
+		}
+	}
 	AyuKept::forget(peer);
 	const auto markLeft = [&] {
 		if (const auto channel = peer->asMegagroup()) {

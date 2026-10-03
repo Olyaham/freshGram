@@ -420,6 +420,38 @@ void saveTtlMedia(not_null<HistoryItem*> item) {
 	}
 }
 
+static MTPMessageMedia WithoutSpoiler(const MTPMessageMedia &media) {
+	return media.match([&](const MTPDmessageMediaPhoto &data) {
+		const auto photo = data.vphoto();
+		if (!photo || !(data.vflags().v & MTPDmessageMediaPhoto::Flag::f_spoiler)) {
+			return media;
+		}
+		const auto video = data.vvideo();
+		return MTPMessageMedia(MTP_messageMediaPhoto(
+			MTP_flags(data.vflags().v & ~MTPDmessageMediaPhoto::Flag::f_spoiler),
+			*photo,
+			MTP_int(0),
+			video ? MTPDocument(*video) : MTPDocument()));
+	}, [&](const MTPDmessageMediaDocument &data) {
+		const auto document = data.vdocument();
+		if (!document || !(data.vflags().v & MTPDmessageMediaDocument::Flag::f_spoiler)) {
+			return media;
+		}
+		const auto alt = data.valt_documents();
+		const auto cover = data.vvideo_cover();
+		const auto timestamp = data.vvideo_timestamp();
+		return MTPMessageMedia(MTP_messageMediaDocument(
+			MTP_flags(data.vflags().v & ~MTPDmessageMediaDocument::Flag::f_spoiler),
+			*document,
+			alt ? MTPVector<MTPDocument>(*alt) : MTPVector<MTPDocument>(),
+			cover ? MTPPhoto(*cover) : MTPPhoto(),
+			timestamp ? MTP_int(timestamp->v) : MTP_int(0),
+			MTP_int(0)));
+	}, [&](const auto &) {
+		return media;
+	});
+}
+
 std::optional<MTPMessageMedia> savedTtlMedia(
 		not_null<History*> history,
 		MsgId id) {
@@ -443,7 +475,7 @@ std::optional<MTPMessageMedia> savedTtlMedia(
 	if (media.type() == mtpc_messageMediaEmpty) {
 		return std::nullopt;
 	}
-	return media;
+	return WithoutSpoiler(media);
 }
 
 void restoreTtlBytes(not_null<HistoryItem*> item) {
