@@ -494,6 +494,14 @@ bool hasDeletedMessages(ID userId, ID dialogId, ID topicId) {
 	});
 }
 
+std::vector<ID> getDeletedDialogIds(ID userId) {
+	return run<std::vector<ID>>("load deleted dialogs", {}, [&] {
+		return storage.select(
+			distinct(column<DeletedMessage>(&DeletedMessage::dialogId)),
+			where(column<DeletedMessage>(&DeletedMessage::userId) == userId));
+	});
+}
+
 void removeDeletedMessage(ID userId, ID dialogId, ID messageId) {
 	runVoid("remove deleted message", [&] {
 		storage.remove_all<DeletedMessage>(

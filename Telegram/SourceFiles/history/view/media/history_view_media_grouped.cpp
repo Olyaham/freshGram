@@ -442,7 +442,7 @@ void GroupedMedia::draw(Painter &p, const PaintContext &context) const {
 	const auto inWebPage = (_parent->media() != this);
 	constexpr auto kSmall = Ui::BubbleCornerRounding::Small;
 	const auto rounding = IsHostedInstantViewMedia(_parent)
-		? Ui::BubbleRounding()
+		? HostedMediaRounding()
 		: inWebPage
 		? Ui::BubbleRounding{ kSmall, kSmall, kSmall, kSmall }
 		: adjustedBubbleRounding();

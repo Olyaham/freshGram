@@ -9,17 +9,25 @@
 #include "ayu/data/ayu_database.h"
 #include "ayu/utils/ayu_mapper.h"
 #include "ayu/utils/telegram_helpers.h"
+#include "base/timer.h"
 #include "base/unixtime.h"
 #include "crl/crl_on_main.h"
+#include "data/data_cloud_file.h"
 #include "data/data_document.h"
 #include "data/data_forum_topic.h"
 #include "data/data_media_types.h"
 #include "data/data_photo.h"
+#include "data/data_photo_media.h"
 #include "data/data_session.h"
 #include "history/history.h"
 #include "history/history_item.h"
 #include "history/history_item_components.h"
 #include "main/main_session.h"
+#include "storage/cache/storage_cache_database.h"
+
+#include <QtCore/QDir>
+#include <QtCore/QFile>
+#include <QtCore/QFileInfo>
 
 namespace AyuMessages {
 
@@ -27,8 +35,87 @@ namespace {
 
 constexpr auto kMaxCachedDocumentSize = int64(32) * 1024 * 1024;
 
+constexpr auto kPhotoSaveAttempts = 60;
+
+struct PhotoSaveTask {
+	std::shared_ptr<Data::PhotoMedia> media;
+	QString path;
+	base::Timer timer;
+	int attempts = 0;
+};
+
 std::vector<DeletedMessage> PendingDeleted;
 bool FlushScheduled = false;
+std::vector<std::unique_ptr<PhotoSaveTask>> PhotoSaveTasks;
+
+[[nodiscard]] QString SavedMediaPath(
+		ID userId,
+		ID dialogId,
+		int messageId) {
+	return QString("./tdata/ayu_media/%1_%2_%3.bin")
+		.arg(userId)
+		.arg(dialogId)
+		.arg(messageId);
+}
+
+[[nodiscard]] QString SavedMediaPath(not_null<HistoryItem*> item) {
+	return SavedMediaPath(
+		storageUserId(item->history()->peer),
+		getDialogIdFromPeer(item->history()->peer),
+		item->id.bare);
+}
+
+bool WritePhotoBytes(
+		const std::shared_ptr<Data::PhotoMedia> &media,
+		const QString &path) {
+	if (!media->loaded()) {
+		return false;
+	}
+	const auto bytes = media->imageBytes(Data::PhotoSize::Large);
+	if (!bytes.isEmpty()) {
+		QDir().mkpath(QFileInfo(path).absolutePath());
+		auto file = QFile(path);
+		if (file.open(QIODevice::WriteOnly)) {
+			file.write(bytes);
+		}
+	}
+	return true;
+}
+
+void SavePhotoBytes(
+		not_null<PhotoData*> photo,
+		FullMsgId origin,
+		const QString &path) {
+	if (QFile::exists(path)) {
+		return;
+	}
+	auto media = photo->createMediaView();
+	media->wanted(Data::PhotoSize::Large, origin);
+	if (WritePhotoBytes(media, path)) {
+		return;
+	}
+	auto task = std::make_unique<PhotoSaveTask>();
+	const auto raw = task.get();
+	raw->media = std::move(media);
+	raw->path = path;
+	raw->timer.setCallback([=] {
+		++raw->attempts;
+		if (WritePhotoBytes(raw->media, raw->path)
+			|| raw->attempts >= kPhotoSaveAttempts) {
+			raw->timer.cancel();
+			crl::on_main([=] {
+				PhotoSaveTasks.erase(
+					std::remove_if(
+						PhotoSaveTasks.begin(),
+						PhotoSaveTasks.end(),
+						[=](const auto &task) { return task.get() == raw; }),
+					PhotoSaveTasks.end());
+			});
+		}
+	});
+	raw->timer.callEach(1000);
+	PhotoSaveTasks.push_back(std::move(task));
+}
 
 void flushPendingDeleted() {
 	FlushScheduled = false;
@@ -99,7 +186,11 @@ void map(not_null<HistoryItem*> item, AyuMessageBase &message) {
 
 	// todo: implement mapping
 	message.documentSerialized = item->ayuSavedMedia();
-	message.mediaPath = "/";
+	const auto media = item->media();
+	const auto mediaFile = SavedMediaPath(item);
+	message.mediaPath = ((media && media->photo()) || QFile::exists(mediaFile))
+		? mediaFile.toStdString()
+		: "/";
 	// message.hqThumbPath
 	message.documentType = message.documentSerialized.empty() ? 0 : 1;
 	// message.documentSerialized
@@ -142,7 +233,7 @@ void cacheDeletedMedia(not_null<HistoryItem*> item) {
 	}
 	const auto origin = item->fullId();
 	if (const auto photo = media->photo()) {
-		photo->load(origin, LoadFromCloudOrLocal, true);
+		SavePhotoBytes(photo, origin, SavedMediaPath(item));
 	}
 	if (const auto document = media->document()) {
 		document->loadThumbnail(origin);
@@ -150,6 +241,35 @@ void cacheDeletedMedia(not_null<HistoryItem*> item) {
 			document->save(origin, QString(), LoadFromCloudOrLocal, true);
 		}
 	}
+}
+
+void restoreSavedMedia(
+		not_null<HistoryItem*> item,
+		const AyuMessageBase &message) {
+	const auto media = item->media();
+	const auto photo = media ? media->photo() : nullptr;
+	if (!photo || message.mediaPath.empty() || message.mediaPath == "/") {
+		return;
+	}
+	auto file = QFile(QString::fromStdString(message.mediaPath));
+	if (!file.open(QIODevice::ReadOnly)) {
+		return;
+	}
+	const auto bytes = file.readAll();
+	const auto cacheKey = photo->location(
+		Data::PhotoSize::Large).file().cacheKey();
+	if (bytes.isEmpty() || !cacheKey) {
+		return;
+	}
+	photo->owner().cache().putIfEmpty(
+		cacheKey,
+		Storage::Cache::Database::TaggedValue(
+			QByteArray(bytes),
+			Data::kImageCacheTag));
+}
+
+std::vector<ID> loadDeletedDialogIds(ID userId) {
+	return AyuDatabase::getDeletedDialogIds(userId);
 }
 
 void addDeletedMessage(not_null<HistoryItem*> item) {

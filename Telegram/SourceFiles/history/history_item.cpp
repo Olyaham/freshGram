@@ -83,6 +83,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_dialogs.h"
 
 #include "ayu/ayu_settings.h"
+#include "ayu/data/messages_storage.h"
 #include "ayu/utils/ayu_mapper.h"
 #include "ayu/features/filters/filters_controller.h"
 #include "ayu/features/message_shot/message_shot.h"
@@ -5608,9 +5609,12 @@ void HistoryItem::refreshMedia(const MTPMessageMedia *media) {
 		}
 	}
 	_media = nullptr;
-	_ayuSavedMedia.clear();
 	if (media) {
+		auto saved = std::move(_ayuSavedMedia);
 		setMedia(*media);
+		if (_ayuSavedMedia.empty()) {
+			_ayuSavedMedia = std::move(saved);
+		}
 	}
 	if (was || _media) {
 		if (const auto views = Get<HistoryMessageViews>()) {
@@ -6112,6 +6116,14 @@ void HistoryItem::setMedia(const MTPMessageMedia &media) {
 	_media = CreateMedia(this, media);
 	checkStoryForwardInfo();
 	checkBuyButton();
+	if (_media && _media->ttlSeconds() && isRegular() && !out()) {
+		const auto session = &_history->session();
+		crl::on_main(session, [session, id = fullId()] {
+			if (const auto item = session->data().message(id)) {
+				AyuMessages::cacheDeletedMedia(item);
+			}
+		});
+	}
 }
 
 void HistoryItem::checkStoryForwardInfo() {

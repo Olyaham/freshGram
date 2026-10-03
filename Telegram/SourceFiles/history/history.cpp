@@ -4171,7 +4171,8 @@ void History::insertMessageToBlocks(not_null<HistoryItem*> item) {
 				++itemIndex;
 				addNewInTheMiddle(item, blockIndex, itemIndex);
 				const auto lastDate = chatListTimeId();
-				if (!lastDate || itemDate >= lastDate) {
+				if (!item->isDeleted()
+					&& (!lastDate || itemDate >= lastDate)) {
 					setLastMessage(item);
 					owner().notifyHistoryChangeDelayed(this);
 				}
@@ -4202,11 +4203,33 @@ void History::checkLocalMessages() {
 	const auto goodDate = [&](TimeId date) {
 		return (date >= firstDate && date < lastDate);
 	};
-	_ayuRestore->materialize(firstDate, lastDate);
+	const auto restored = _ayuRestore->materialize(firstDate, lastDate);
+	auto insertedDeleted = false;
 	for (const auto &item : _clientSideMessages) {
 		if (!item->mainView() && goodDate(item->date())) {
 			insertMessageToBlocks(item);
+			if (item->isDeleted()) {
+				insertedDeleted = true;
+			}
 		}
+	}
+	if (restored || insertedDeleted) {
+		const auto session = &this->session();
+		const auto peerId = peer->id;
+		crl::on_main(session, [=] {
+			const auto history = session->data().historyLoaded(peerId);
+			if (!history) {
+				return;
+			}
+			for (const auto &item : history->clientSideMessages()) {
+				if (item->isDeleted()) {
+					if (const auto view = item->mainView()) {
+						session->data().requestViewResize(view);
+						return;
+					}
+				}
+			}
+		});
 	}
 	if (peer->isChannel()
 		&& !_joinedMessage
@@ -4409,6 +4432,9 @@ void History::clear(ClearType type, bool markEmpty) {
 		}
 		for (const auto &item : local) {
 			item->destroy();
+		}
+		if (_ayuRestore) {
+			_ayuRestore->disable();
 		}
 		clearNotifications();
 		owner().notifyHistoryCleared(this);

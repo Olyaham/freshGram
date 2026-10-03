@@ -380,7 +380,7 @@ void Photo::draw(Painter &p, const PaintContext &context) const {
 		paintUserpicFrame(p, context, rthumb.topLeft());
 	} else {
 		const auto rounding = hostedInstantView
-			? std::optional<Ui::BubbleRounding>(Ui::BubbleRounding())
+			? std::optional<Ui::BubbleRounding>(HostedMediaRounding())
 			: inWebPage
 			? std::optional<Ui::BubbleRounding>()
 			: adjustedBubbleRounding();

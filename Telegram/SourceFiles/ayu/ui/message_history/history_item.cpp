@@ -9,6 +9,7 @@
 #include "history/history_item.h"
 #include "api/api_text_entities.h"
 #include "ayu/data/entities.h"
+#include "ayu/data/messages_storage.h"
 #include "ayu/ui/message_history/history_inner.h"
 #include "ayu/utils/ayu_mapper.h"
 #include "base/unixtime.h"
@@ -95,7 +96,7 @@ void GenerateItems(
 			flags |= MessageFlag::HasPostAuthor;
 		}
 
-		return history->makeMessage({
+		const auto item = history->makeMessage({
 										.id = history->nextNonHistoryEntryId(),
 										.flags = flags,
 										.from = from ? from->id : 0,
@@ -108,6 +109,8 @@ void GenerateItems(
 									},
 									std::move(text),
 									media);
+		AyuMessages::restoreSavedMedia(item, message);
+		return item;
 	};
 
 	const auto addSimpleTextMessage = [&](TextWithEntities &&text, const MTPMessageMedia &media)

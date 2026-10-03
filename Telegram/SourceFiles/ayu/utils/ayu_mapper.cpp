@@ -135,16 +135,12 @@ std::vector<char> serializeSavableMedia(const MTPMessageMedia &media) {
 			cover ? MTPPhoto(*cover) : MTPPhoto(),
 			timestamp ? MTP_int(timestamp->v) : MTP_int(0),
 			MTP_int(0)));
-	}, [&](const MTPDmessageMediaGeo &) {
-		return serializeObject(media);
-	}, [&](const MTPDmessageMediaVenue &) {
-		return serializeObject(media);
-	}, [&](const MTPDmessageMediaContact &) {
-		return serializeObject(media);
-	}, [&](const MTPDmessageMediaDice &) {
-		return serializeObject(media);
-	}, [](const auto &) -> std::vector<char> {
+	}, [](const MTPDmessageMediaEmpty &) -> std::vector<char> {
 		return {};
+	}, [](const MTPDmessageMediaUnsupported &) -> std::vector<char> {
+		return {};
+	}, [&](const auto &) {
+		return serializeObject(media);
 	});
 }
 
@@ -167,6 +163,10 @@ MTPMessageMedia deserializeMedia(const std::vector<char> &serialized) {
 	}, [](const MTPDmessageMediaContact &) {
 		return true;
 	}, [](const MTPDmessageMediaDice &) {
+		return true;
+	}, [](const MTPDmessageMediaPoll &) {
+		return true;
+	}, [](const MTPDmessageMediaToDo &) {
 		return true;
 	}, [](const auto &) {
 		return false;

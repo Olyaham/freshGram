@@ -110,6 +110,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "ayu/ayu_infra.h"
 #include "ayu/ayu_settings.h"
+#include "ayu/utils/crash_trace.h"
 #include "ayu/features/streamer_mode/streamer_mode.h"
 
 
@@ -314,6 +315,8 @@ void Application::run() {
 	_notifications = std::make_unique<Window::Notifications::System>();
 
 	startLocalStorage();
+
+	AyuCrashTrace::Install(cWorkingDir() + u"tdata"_q);
 
 	style::SetCustomFont(settings().customFontFamily());
 	style::internal::StartFonts();

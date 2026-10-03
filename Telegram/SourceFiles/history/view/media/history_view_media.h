@@ -468,6 +468,16 @@ protected:
 
 };
 
+[[nodiscard]] inline Ui::BubbleRounding HostedMediaRounding() {
+	using Corner = Ui::BubbleCornerRounding;
+	return {
+		.topLeft = Corner::Small,
+		.topRight = Corner::Small,
+		.bottomLeft = Corner::Small,
+		.bottomRight = Corner::Small,
+	};
+}
+
 [[nodiscard]] Images::CornersMaskRef MediaRoundingMask(
 	std::optional<Ui::BubbleRounding> rounding);
 

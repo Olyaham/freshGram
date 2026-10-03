@@ -5,6 +5,8 @@
 #include "ayu/data/messages_storage.h"
 #include "ayu/utils/ayu_mapper.h"
 #include "ayu/utils/telegram_helpers.h"
+#include "base/flat_map.h"
+#include "base/flat_set.h"
 #include "data/data_channel.h"
 #include "data/data_chat.h"
 #include "data/data_peer.h"
@@ -18,11 +20,54 @@
 namespace AyuRestore {
 namespace {
 
-constexpr auto kLoadLimit = 3000;
+constexpr auto kLoadLimit = 800;
 constexpr auto kOutgoingFlag = 0x00000002;
+
+struct DialogsEntry {
+	bool loading = false;
+	bool loaded = false;
+	base::flat_set<ID> ids;
+	std::vector<Fn<void(const base::flat_set<ID> &)>> waiting;
+};
+
+base::flat_map<ID, DialogsEntry> DialogsWithDeleted;
 
 [[nodiscard]] bool Supported(not_null<PeerData*> peer) {
 	return !peer->isForum() && !peer->isMonoforum();
+}
+
+void WithDeletedDialogs(
+		ID userId,
+		Fn<void(const base::flat_set<ID> &)> callback) {
+	auto &entry = DialogsWithDeleted[userId];
+	if (entry.loaded) {
+		callback(entry.ids);
+		return;
+	}
+	entry.waiting.push_back(std::move(callback));
+	if (entry.loading) {
+		return;
+	}
+	entry.loading = true;
+	crl::async([=] {
+		auto ids = std::vector<ID>();
+		try {
+			ids = AyuMessages::loadDeletedDialogIds(userId);
+		} catch (...) {
+			ids.clear();
+		}
+		crl::on_main([=, ids = std::move(ids)]() mutable {
+			auto &entry = DialogsWithDeleted[userId];
+			entry.loaded = true;
+			entry.loading = false;
+			entry.ids = base::flat_set<ID>(ids.begin(), ids.end());
+			auto waiting = std::move(entry.waiting);
+			entry.waiting.clear();
+			for (const auto &callback : waiting) {
+				callback(entry.ids);
+			}
+		});
+	});
 }
 
 } // namespace
@@ -46,7 +91,22 @@ void State::checkLoaded() {
 	const auto userId = AyuMessages::storageUserId(peer);
 	const auto dialogId = getDialogIdFromPeer(peer);
 	const auto weak = base::make_weak(this);
+	WithDeletedDialogs(userId, [=](const base::flat_set<ID> &ids) {
+		if (const auto strong = weak.get(); strong && ids.contains(dialogId)) {
+			strong->load(userId, dialogId);
+		}
+	});
+}
 
+void State::disable() {
+	_disabled = true;
+	_requested = true;
+	_loaded = false;
+	_rows.clear();
+}
+
+void State::load(ID userId, ID dialogId) {
+	const auto weak = base::make_weak(this);
 	crl::async([=] {
 		auto messages = std::vector<AyuMessageBase>();
 		try {
@@ -64,7 +124,7 @@ void State::checkLoaded() {
 
 		crl::on_main([=, messages = std::move(messages)]() mutable {
 			const auto strong = weak.get();
-			if (!strong) {
+			if (!strong || strong->_disabled) {
 				return;
 			}
 			strong->_rows.reserve(messages.size());
@@ -77,36 +137,40 @@ void State::checkLoaded() {
 	});
 }
 
-void State::materialize(TimeId from, TimeId till) {
+HistoryItem *State::materialize(TimeId from, TimeId till) {
 	if (!_loaded || _materializing || _rows.empty()) {
-		return;
+		return nullptr;
 	}
 	_materializing = true;
+	auto last = (HistoryItem*)nullptr;
 	for (auto &row : _rows) {
 		const auto date = row.message.date;
 		if (date >= from && date < till) {
 			try {
-				create(row);
+				if (const auto item = create(row)) {
+					last = item;
+				}
 			} catch (...) {
 				LOG(("AyuRestore: failed to restore a saved message"));
 			}
 		}
 	}
 	_materializing = false;
+	return last;
 }
 
-void State::create(Row &row) {
+HistoryItem *State::create(Row &row) {
 	const auto peer = _history->peer;
 	auto &owner = _history->owner();
 	if (row.localId) {
 		if (owner.message(peer, row.localId)) {
-			return;
+			return nullptr;
 		}
 		row.localId = MsgId();
 	}
 	const auto &message = row.message;
 	if (owner.message(peer, MsgId(message.messageId))) {
-		return;
+		return nullptr;
 	}
 
 	PeerData *from = owner.userLoaded(message.fromId);
@@ -150,9 +214,11 @@ void State::create(Row &row) {
 		.postAuthor = QString::fromStdString(message.postAuthor),
 	}, std::move(text), AyuMapper::deserializeMedia(message.documentSerialized));
 
+	AyuMessages::restoreSavedMedia(item, message);
 	item->setDeleted();
 	item->markDeletedAnimated();
 	row.localId = item->id;
+	return item;
 }
 
 } // namespace AyuRestore
