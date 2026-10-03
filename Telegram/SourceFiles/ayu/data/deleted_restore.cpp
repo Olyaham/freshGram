@@ -21,6 +21,7 @@ namespace AyuRestore {
 namespace {
 
 constexpr auto kLoadLimit = 800;
+constexpr auto kCreateBatch = 60;
 constexpr auto kOutgoingFlag = 0x00000002;
 
 struct DialogsEntry {
@@ -143,19 +144,36 @@ HistoryItem *State::materialize(TimeId from, TimeId till) {
 	}
 	_materializing = true;
 	auto last = (HistoryItem*)nullptr;
+	auto created = 0;
+	auto more = false;
 	for (auto &row : _rows) {
 		const auto date = row.message.date;
-		if (date >= from && date < till) {
-			try {
-				if (const auto item = create(row)) {
-					last = item;
-				}
-			} catch (...) {
-				LOG(("AyuRestore: failed to restore a saved message"));
+		if (row.dead || date < from || date >= till) {
+			continue;
+		}
+		if (created >= kCreateBatch) {
+			more = true;
+			break;
+		}
+		try {
+			if (const auto item = create(row)) {
+				last = item;
+				++created;
 			}
+		} catch (...) {
+			row.dead = true;
+			LOG(("AyuRestore: failed to restore a saved message"));
 		}
 	}
 	_materializing = false;
+	if (more) {
+		const auto weak = base::make_weak(this);
+		crl::on_main([=] {
+			if (const auto strong = weak.get()) {
+				strong->_history->checkLocalMessages();
+			}
+		});
+	}
 	return last;
 }
 
@@ -201,11 +219,7 @@ HistoryItem *State::create(Row &row) {
 		flags |= MessageFlag::HasPostAuthor;
 	}
 
-	auto fallback = QString::fromStdString(message.text);
-	if (fallback.isEmpty()) {
-		fallback = AyuMapper::unwrappedMediaText(message.documentSerialized);
-	}
-	auto text = Ui::Text::WithEntities(fallback);
+	auto text = Ui::Text::WithEntities(QString::fromStdString(message.text));
 	text.entities = Api::EntitiesFromMTP(
 		&_history->session(),
 		AyuMapper::deserializeTextWithEntities(message.textEntities).v);
@@ -218,6 +232,11 @@ HistoryItem *State::create(Row &row) {
 		.postAuthor = QString::fromStdString(message.postAuthor),
 	}, std::move(text), AyuMapper::deserializeMedia(message.documentSerialized));
 
+	if (item->isEmpty()) {
+		row.dead = true;
+		item->destroy();
+		return nullptr;
+	}
 	AyuMessages::restoreSavedMedia(item, message);
 	item->setDeleted();
 	item->markDeletedAnimated();

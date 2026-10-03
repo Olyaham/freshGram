@@ -3675,24 +3675,7 @@ BottomRippleMask Message::bottomRippleMask(int buttonHeight) const {
 	const auto buttonWidth = g.width();
 	const auto &large = CachedCornersMasks(Radius::BubbleLarge);
 	const auto &small = CachedCornersMasks(Radius::BubbleSmall);
-	auto rounding = countBubbleRounding();
-	if (AyuSettings::getInstance().removeMessageTail()) {
-		if (rounding.bottomLeft == Corner::Tail) {
-			rounding.bottomLeft = Corner::Large;
-		}
-		if (rounding.bottomRight == Corner::Tail) {
-			rounding.bottomRight = Corner::Large;
-		}
-	}
-	const auto icon = (rounding.bottomLeft == Corner::Tail)
-		? &st::historyBubbleTailInLeft
-		: (rounding.bottomRight == Corner::Tail)
-		? &st::historyBubbleTailInRight
-		: nullptr;
-	const auto shift = (rounding.bottomLeft == Corner::Tail)
-		? icon->width()
-		: 0;
-	const auto added = shift ? shift : icon ? icon->width() : 0;
+	const auto rounding = countBubbleRounding();
 	auto corners = CornersMaskRef();
 	const auto set = [&](int index) {
 		corners.p[index] = (rounding[index] == Corner::Large)
@@ -3712,7 +3695,7 @@ BottomRippleMask Message::bottomRippleMask(int buttonHeight) const {
 				const auto height = image->height() / ratio;
 				p.drawImage(
 					QRect(
-						shift + (right ? (buttonWidth - width) : 0),
+						(right ? (buttonWidth - width) : 0),
 						buttonHeight - height,
 						width,
 						height),
@@ -3721,25 +3704,12 @@ BottomRippleMask Message::bottomRippleMask(int buttonHeight) const {
 		};
 		corner(kBottomLeft, false);
 		corner(kBottomRight, true);
-		if (icon) {
-			const auto left = shift ? 0 : buttonWidth;
-			p.fillRect(
-				QRect{ left, 0, added, buttonHeight },
-				Qt::transparent);
-			icon->paint(
-				p,
-				left,
-				buttonHeight - icon->height(),
-				buttonWidth + shift,
-				Qt::white);
-		}
 	};
 	return {
 		RippleAnimation::MaskByDrawer(
-			QSize(buttonWidth + added, buttonHeight),
+			QSize(buttonWidth, buttonHeight),
 			true,
 			drawer),
-		shift,
 	};
 }
 
@@ -6649,12 +6619,12 @@ Ui::BubbleRounding Message::countMessageRounding() const {
 		.bottomLeft = ((smallBottom && !right)
 			? Corner::Small
 			: (!skipTail && !right)
-			? Corner::Tail
+			? Corner::Large
 			: Corner::Large),
 		.bottomRight = ((smallBottom && right)
 			? Corner::Small
 			: (!skipTail && right)
-			? Corner::Tail
+			? Corner::Large
 			: Corner::Large),
 	};
 }

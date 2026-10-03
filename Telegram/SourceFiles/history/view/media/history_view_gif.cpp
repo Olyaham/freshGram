@@ -651,7 +651,7 @@ void Gif::draw(Painter &p, const PaintContext &context) const {
 	const auto inWebPageWithoutOwnRounding = inWebPage
 		&& bubbleRounding() == Ui::BubbleRounding();
 	const auto rounding = hostedInstantView
-		? std::optional<Ui::BubbleRounding>(HostedMediaRounding())
+		? std::optional<Ui::BubbleRounding>(Ui::BubbleRounding())
 		: inWebPageWithoutOwnRounding
 		? std::optional<Ui::BubbleRounding>()
 		: adjustedBubbleRounding();

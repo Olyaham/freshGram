@@ -44,7 +44,7 @@ inline constexpr auto kColorPatternsCount = Text::kMaxQuoteOutlines;
 inline constexpr auto kColorIndexCount = uint8(1 << 6);
 inline constexpr auto kSimpleColorIndexCount = uint8(7);
 
-inline constexpr auto kDefaultBgOpacity = 0;
+inline constexpr auto kDefaultBgOpacity = 0.12;
 inline constexpr auto kDefaultOutline1Opacity = 0.9;
 inline constexpr auto kDefaultOutline2Opacity = 0.3;
 inline constexpr auto kDefaultOutline3Opacity = 0.6;
@@ -72,8 +72,6 @@ struct MessageStyle {
 	style::TextPalette replyTextPalette;
 	style::icon channelBadgeIcon = { Qt::Uninitialized };
 	style::Markdown richPageStyle;
-	style::icon tailLeft = { Qt::Uninitialized };
-	style::icon tailRight = { Qt::Uninitialized };
 	style::icon historyRepliesIcon = { Qt::Uninitialized };
 	style::icon historyViewsIcon = { Qt::Uninitialized };
 	style::icon historyPinIcon = { Qt::Uninitialized };

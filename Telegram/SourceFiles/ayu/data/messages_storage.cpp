@@ -58,6 +58,11 @@ std::vector<std::unique_ptr<PhotoSaveTask>> PhotoSaveTasks;
 		.arg(messageId);
 }
 
+[[nodiscard]] QString TtlMediaPath(QString path) {
+	path.chop(4);
+	return path + QStringLiteral(".ttl");
+}
+
 [[nodiscard]] QString SavedMediaPath(not_null<HistoryItem*> item) {
 	return SavedMediaPath(
 		storageUserId(item->history()->peer),
@@ -236,11 +241,6 @@ void cacheDeletedMedia(not_null<HistoryItem*> item) {
 		SavePhotoBytes(photo, origin, SavedMediaPath(item));
 	}
 	if (const auto document = media->document()) {
-		if (document->sticker()
-			|| document->isAnimation()
-			|| document->isVideoMessage()) {
-			return;
-		}
 		document->loadThumbnail(origin);
 		if (document->size > 0 && document->size <= kMaxCachedDocumentSize) {
 			document->save(origin, QString(), LoadFromCloudOrLocal, true);
@@ -248,15 +248,10 @@ void cacheDeletedMedia(not_null<HistoryItem*> item) {
 	}
 }
 
-void restoreSavedMedia(
-		not_null<HistoryItem*> item,
-		const AyuMessageBase &message) {
-	const auto media = item->media();
-	const auto photo = media ? media->photo() : nullptr;
-	if (!photo || message.mediaPath.empty() || message.mediaPath == "/") {
-		return;
-	}
-	auto file = QFile(QString::fromStdString(message.mediaPath));
+void PutPhotoBytesIntoCache(
+		not_null<PhotoData*> photo,
+		const QString &path) {
+	auto file = QFile(path);
 	if (!file.open(QIODevice::ReadOnly)) {
 		return;
 	}
@@ -271,6 +266,66 @@ void restoreSavedMedia(
 		Storage::Cache::Database::TaggedValue(
 			QByteArray(bytes),
 			Data::kImageCacheTag));
+}
+
+void restoreSavedMedia(
+		not_null<HistoryItem*> item,
+		const AyuMessageBase &message) {
+	const auto media = item->media();
+	const auto photo = media ? media->photo() : nullptr;
+	if (!photo || message.mediaPath.empty() || message.mediaPath == "/") {
+		return;
+	}
+	PutPhotoBytesIntoCache(photo, QString::fromStdString(message.mediaPath));
+}
+
+void saveTtlMedia(not_null<HistoryItem*> item) {
+	const auto &saved = item->ayuSavedMedia();
+	if (saved.empty()) {
+		return;
+	}
+	const auto path = TtlMediaPath(SavedMediaPath(item));
+	if (QFile::exists(path)) {
+		return;
+	}
+	QDir().mkpath(QFileInfo(path).absolutePath());
+	auto file = QFile(path);
+	if (file.open(QIODevice::WriteOnly)) {
+		file.write(saved.data(), qint64(saved.size()));
+	}
+}
+
+std::optional<MTPMessageMedia> savedTtlMedia(
+		not_null<History*> history,
+		MsgId id) {
+	const auto path = TtlMediaPath(SavedMediaPath(
+		storageUserId(history->peer),
+		getDialogIdFromPeer(history->peer),
+		id.bare));
+	auto file = QFile(path);
+	if (!file.open(QIODevice::ReadOnly)) {
+		return std::nullopt;
+	}
+	const auto bytes = file.readAll();
+	if (bytes.isEmpty()) {
+		return std::nullopt;
+	}
+	const auto serialized = std::vector<char>(
+		bytes.constData(),
+		bytes.constData() + bytes.size());
+	auto media = AyuMapper::deserializeMedia(serialized);
+	if (media.type() == mtpc_messageMediaEmpty) {
+		return std::nullopt;
+	}
+	return media;
+}
+
+void restoreTtlBytes(not_null<HistoryItem*> item) {
+	const auto media = item->media();
+	const auto photo = media ? media->photo() : nullptr;
+	if (photo) {
+		PutPhotoBytesIntoCache(photo, SavedMediaPath(item));
+	}
 }
 
 std::vector<ID> loadDeletedDialogIds(ID userId) {

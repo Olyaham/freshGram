@@ -366,18 +366,6 @@ ChatStyle::ChatStyle(rpl::producer<ColorIndicesCompressed> colorIndices) {
 		st::messageMarkdownSelected,
 		st::messageMarkdownOut,
 		st::messageMarkdownOutSelected);
-	make(
-		&MessageStyle::tailLeft,
-		st::historyBubbleTailInLeft,
-		st::historyBubbleTailInLeftSelected,
-		st::historyBubbleTailOutLeft,
-		st::historyBubbleTailOutLeftSelected);
-	make(
-		&MessageStyle::tailRight,
-		st::historyBubbleTailInRight,
-		st::historyBubbleTailInRightSelected,
-		st::historyBubbleTailOutRight,
-		st::historyBubbleTailOutRightSelected);
 
 	make(
 		&MessageStyle::channelBadgeIcon,

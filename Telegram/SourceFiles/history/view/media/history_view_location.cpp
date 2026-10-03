@@ -412,7 +412,7 @@ void Location::draw(Painter &p, const PaintContext &context) const {
 	const auto hasText = !_title.isEmpty() || !_description.isEmpty();
 	const auto square = hasText ? RectPart::FullBottom : RectPart();
 	const auto rounding = hostedInstantView
-		? HostedMediaRounding()
+		? Ui::BubbleRounding()
 		: adjustedBubbleRounding(square);
 	const auto paintText = [&] {
 		if (!hasText && !_live) {

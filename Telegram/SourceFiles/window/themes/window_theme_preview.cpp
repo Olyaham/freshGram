@@ -849,7 +849,7 @@ void Generator::paintBubble(const Bubble &bubble) {
 		if (bubble.attachToBottom) {
 			rounding.bottomRight = Corner::Small;
 		} else if (bubble.tail) {
-			rounding.bottomRight = Corner::Tail;
+			rounding.bottomRight = Corner::Large;
 		}
 	} else {
 		if (bubble.attachToTop) {
@@ -858,7 +858,7 @@ void Generator::paintBubble(const Bubble &bubble) {
 		if (bubble.attachToBottom) {
 			rounding.bottomLeft = Corner::Small;
 		} else if (bubble.tail) {
-			rounding.bottomLeft = Corner::Tail;
+			rounding.bottomLeft = Corner::Large;
 		}
 	}
 	Ui::PaintBubble(*_p, Ui::SimpleBubble{

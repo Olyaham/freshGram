@@ -11,6 +11,7 @@ namespace AyuRestore {
 struct Row {
 	AyuMessageBase message;
 	MsgId localId;
+	bool dead = false;
 };
 
 class State final : public base::has_weak_ptr {

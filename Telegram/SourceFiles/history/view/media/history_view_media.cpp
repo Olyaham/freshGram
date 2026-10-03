@@ -7,7 +7,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/media/history_view_media.h"
 
-#include "ayu/ayu_settings.h"
 #include "ui/basic_click_handlers.h"
 
 #include "boxes/send_credits_box.h" // CreditsEmoji.
@@ -630,14 +629,10 @@ TextState Media::getStateGrouped(
 Ui::BubbleRounding Media::adjustedBubbleRounding(RectParts square) const {
 	auto result = bubbleRounding();
 	using Corner = Ui::BubbleCornerRounding;
-	const auto removeTail = AyuSettings::getInstance().removeMessageTail();
 	const auto adjust = [&](bool round, Corner already, RectPart corner) {
-		if (square & corner) {
-			return Corner::None;
-		} else if (already == Corner::Tail) {
-			return removeTail ? Corner::Large : Corner::None;
-		}
-		return round ? already : Corner::Small;
+		return (already == Corner::None || !round || (square & corner))
+			? Corner::None
+			: already;
 	};
 	const auto top = isBubbleTop();
 	const auto bottom = isRoundedInBubbleBottom();
@@ -676,7 +671,7 @@ Images::CornersMaskRef MediaRoundingMask(
 	const auto &large = Ui::CachedCornersMasks(Radius::BubbleLarge);
 	for (auto i = 0; i != 4; ++i) {
 		switch ((*rounding)[i]) {
-		case Corner::Small: result.p[i] = &small[i]; break;
+		case Corner::None: result.p[i] = &small[i]; break;
 		case Corner::Large: result.p[i] = &large[i]; break;
 		}
 	}

@@ -536,9 +536,23 @@ HistoryItem::HistoryItem(
 			tr::lng_message_empty(tr::now, tr::marked)
 		});
 	} else if (checked == MediaCheckResult::HasExpiredMediaTimeToLive) {
-		createServiceFromMtp(data);
-		setReactions(data.vreactions());
-		applyTTL(data);
+		if (const auto saved = AyuMessages::savedTtlMedia(history, id)) {
+			createComponents(data);
+			setMedia(*saved);
+			AyuMessages::restoreTtlBytes(this);
+			setText(TextWithEntities{
+				qs(data.vmessage()),
+				Api::EntitiesFromMTP(
+					&history->session(),
+					data.ventities().value_or_empty())
+			});
+			setReactions(data.vreactions());
+			applyTTL(data);
+		} else {
+			createServiceFromMtp(data);
+			setReactions(data.vreactions());
+			applyTTL(data);
+		}
 	} else if (checked == MediaCheckResult::HasStoryMention) {
 		setMedia(*data.vmedia());
 		createServiceFromMtp(data);
@@ -6120,6 +6134,7 @@ void HistoryItem::setMedia(const MTPMessageMedia &media) {
 		const auto session = &_history->session();
 		crl::on_main(session, [session, id = fullId()] {
 			if (const auto item = session->data().message(id)) {
+				AyuMessages::saveTtlMedia(item);
 				AyuMessages::cacheDeletedMedia(item);
 			}
 		});

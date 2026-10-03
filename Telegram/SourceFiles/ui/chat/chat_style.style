@@ -109,10 +109,6 @@ historySilentInSelectedIcon: icon {{ "dialogs/dialogs_mute", msgInDateFgSelected
 historySilentOutIcon: icon {{ "dialogs/dialogs_mute", historyOutIconFg }};
 historySilentOutSelectedIcon: icon {{ "dialogs/dialogs_mute", historyOutIconFgSelected }};
 historySilentInvertedIcon: icon {{ "dialogs/dialogs_mute", historySendingInvertedIconFg }};
-historyBubbleTailInLeftSelected: icon {{ "bubble_tail", msgInBgSelected }};
-historyBubbleTailOutLeftSelected: icon {{ "bubble_tail", msgOutBgSelected }};
-historyBubbleTailInRightSelected: icon {{ "bubble_tail-flip_horizontal", msgInBgSelected }};
-historyBubbleTailOutRightSelected: icon {{ "bubble_tail-flip_horizontal", msgOutBgSelected }};
 historyPsaIconInSelected: icon {{ "message_psa_tooltip", msgFileThumbLinkInFgSelected }};
 historyPsaIconOut: icon {{ "message_psa_tooltip", msgFileThumbLinkOutFg }};
 historyPsaIconOutSelected: icon {{ "message_psa_tooltip", msgFileThumbLinkOutFgSelected }};
@@ -213,10 +209,6 @@ historyFileThumbCancelSelected: icon {{ "history_file_cancel", historyFileThumbI
 historyFileThumbPlay: icon {{ "history_file_play", historyFileThumbIconFg }};
 historySentIcon: icon {{ "history_sent", historyOutIconFg, point(2px, 4px) }};
 historyReceivedIcon: icon {{ "history_received", historyOutIconFg, point(2px, 4px) }};
-historyBubbleTailInLeft: icon {{ "bubble_tail", msgInBg }};
-historyBubbleTailOutLeft: icon {{ "bubble_tail", msgOutBg }};
-historyBubbleTailInRight: icon {{ "bubble_tail-flip_horizontal", msgInBg }};
-historyBubbleTailOutRight: icon {{ "bubble_tail-flip_horizontal", msgOutBg }};
 historyPsaIconIn: icon {{ "message_psa_tooltip", msgFileThumbLinkInFg }};
 historyEphemeralIconIn: icon {{ "chat/ephemeral_badge", msgInServiceFg }};
 historyVideoMessageMute: icon {{ "volume_mute", historyFileThumbIconFg }};

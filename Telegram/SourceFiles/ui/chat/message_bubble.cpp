@@ -14,7 +14,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_chat.h"
 #include "styles/style_chat_style.h"
 
-#include "ayu/ayu_settings.h"
 
 
 namespace Ui {
@@ -73,51 +72,25 @@ void PaintBubblePiece(
 template <
 	typename FillBg, // fillBg(QRect rect)
 	typename FillSh, // fillSh(QRect rect)
-	typename FillCorner, // fillCorner(int x, int y, int index, Corner size)
-	typename PaintTail> // paintTail(QPoint bottomPosition) -> tailWidth
+	typename FillCorner> // fillCorner(int x, int y, int index, Corner size)
 void PaintBubbleGeneric(
 		const SimpleBubble &args,
 		FillBg &&fillBg,
 		FillSh &&fillSh,
-		FillCorner &&fillCorner,
-		PaintTail &&paintTail) {
+		FillCorner &&fillCorner) {
 	using namespace Images;
 
 	const auto topLeft = args.rounding.topLeft;
 	const auto topRight = args.rounding.topRight;
-	auto bottomWithTailLeft = args.rounding.bottomLeft;
-	auto bottomWithTailRight = args.rounding.bottomRight;
-	if (topLeft == Corner::None
-		&& topRight == Corner::None
-		&& bottomWithTailLeft == Corner::None
-		&& bottomWithTailRight == Corner::None) {
-		fillBg(args.geometry);
-		return;
-	}
-
-	const auto &settings = AyuSettings::getInstance();
-	if (settings.removeMessageTail()) {
-		if (bottomWithTailLeft == Corner::Tail) {
-			bottomWithTailLeft = Corner::Large;
-		}
-		if (bottomWithTailRight == Corner::Tail) {
-			bottomWithTailRight = Corner::Large;
-		}
-	}
-
-	const auto bottomLeft = (bottomWithTailLeft == Corner::Tail)
-		? Corner::None
-		: bottomWithTailLeft;
-	const auto bottomRight = (bottomWithTailRight == Corner::Tail)
-		? Corner::None
-		: bottomWithTailRight;
+	const auto bottomLeft = args.rounding.bottomLeft;
+	const auto bottomRight = args.rounding.bottomRight;
 	const auto rect = args.geometry;
 	const auto small = BubbleRadiusSmall();
 	const auto large = BubbleRadiusLarge();
 	const auto cornerSize = [&](Corner corner) {
 		return (corner == Corner::Large)
 			? large
-			: (corner == Corner::Small)
+			: (corner == Corner::None)
 			? small
 			: 0;
 	};
@@ -199,20 +172,13 @@ void PaintBubbleGeneric(
 			}
 		}
 	}
-	const auto leftTail = (bottomWithTailLeft == Corner::Tail)
-		? paintTail({ rect.x(), rect.y() + rect.height() })
-		: 0;
-	const auto rightTail = (bottomWithTailRight == Corner::Tail)
-		? paintTail({ rect.x() + rect.width(), rect.y() + rect.height() })
-		: 0;
 	if (!args.shadowed) {
 		return;
 	}
-	const auto shLeft = rect.x() + cornerSize(bottomLeft) - leftTail;
+	const auto shLeft = rect.x() + cornerSize(bottomLeft);
 	const auto shWidth = rect.x()
 		+ rect.width()
 		- cornerSize(bottomRight)
-		+ rightTail
 		- shLeft;
 	if (shWidth > 0) {
 		fillSh({ shLeft, rect.y() + rect.height(), shWidth, st::msgShadow });
@@ -224,12 +190,6 @@ void PaintPatternBubble(QPainter &p, const SimpleBubble &args) {
 	const auto opacity = PatternBubbleOpacity(args, wasOpacity);
 	const auto shadowOpacity = opacity * args.st->msgOutShadow()->c.alphaF();
 	const auto pattern = args.pattern;
-	const auto &tail = (args.rounding.bottomRight == Corner::Tail)
-		? pattern->tailRight
-		: pattern->tailLeft;
-	const auto tailShift = (args.rounding.bottomRight == Corner::Tail
-		? QPoint(0, tail.height())
-		: QPoint(tail.width(), tail.height())) / int(tail.devicePixelRatio());
 	const auto fillBg = [&](const QRect &rect) {
 		const auto fill = rect.intersected(args.patternViewport);
 		if (!fill.isEmpty()) {
@@ -271,14 +231,9 @@ void PaintPatternBubble(QPainter &p, const SimpleBubble &args) {
 				: pattern->cornerBottomSmallCache);
 		fillPattern(x, y, corner, cache);
 	};
-	const auto paintTail = [&](QPoint bottomPosition) {
-		const auto position = bottomPosition - tailShift;
-		fillPattern(position.x(), position.y(), tail, pattern->tailCache);
-		return tail.width() / int(tail.devicePixelRatio());
-	};
 
 	p.setOpacity(opacity);
-	PaintBubbleGeneric(args, fillBg, fillSh, fillCorner, paintTail);
+	PaintBubbleGeneric(args, fillBg, fillSh, fillCorner);
 	p.setOpacity(wasOpacity);
 }
 
@@ -288,12 +243,6 @@ void PaintSolidBubble(QPainter &p, const SimpleBubble &args) {
 	const auto sh = (args.rounding.bottomRight == Corner::None)
 		? nullptr
 		: &st.msgShadow;
-	const auto &tail = (args.rounding.bottomRight == Corner::Tail)
-		? st.tailRight
-		: st.tailLeft;
-	const auto tailShift = (args.rounding.bottomRight == Corner::Tail)
-		? QPoint(0, tail.height())
-		: QPoint(tail.width(), tail.height());
 
 	PaintBubbleGeneric(args, [&](const QRect &rect) {
 		p.fillRect(rect, bg);
@@ -304,9 +253,6 @@ void PaintSolidBubble(QPainter &p, const SimpleBubble &args) {
 			? st.msgBgCornersLarge
 			: st.msgBgCornersSmall;
 		p.drawPixmap(x, y, corners.p[index]);
-	}, [&](const QPoint &bottomPosition) {
-		tail.paint(p, bottomPosition - tailShift, args.outerWidth);
-		return tail.width();
 	});
 }
 
@@ -352,11 +298,6 @@ std::unique_ptr<BubblePattern> PrepareBubblePattern(
 }
 
 void FinishBubblePatternOnMain(not_null<BubblePattern*> pattern) {
-	pattern->tailLeft = st::historyBubbleTailOutLeft.instance(Qt::white);
-	pattern->tailRight = st::historyBubbleTailOutRight.instance(Qt::white);
-	pattern->tailCache = QImage(
-		pattern->tailLeft.size(),
-		QImage::Format_ARGB32_Premultiplied);
 }
 
 void PaintBubble(QPainter &p, const SimpleBubble &args) {

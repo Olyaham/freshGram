@@ -7,7 +7,6 @@
 #include "ayu/utils/ayu_mapper.h"
 
 #include "apiwrap.h"
-#include "lang/lang_keys.h"
 #include "api/api_text_entities.h"
 #include "history/history.h"
 #include "history/history_item.h"
@@ -116,8 +115,12 @@ std::vector<char> serializeSavableMedia(const MTPMessageMedia &media) {
 			return {};
 		}
 		const auto video = data.vvideo();
+		auto flags = data.vflags().v & ~MTPDmessageMediaPhoto::Flag::f_ttl_seconds;
+		if (data.vttl_seconds()) {
+			flags |= MTPDmessageMediaPhoto::Flag::f_spoiler;
+		}
 		return serializeObject(MTP_messageMediaPhoto(
-			MTP_flags(data.vflags().v & ~MTPDmessageMediaPhoto::Flag::f_ttl_seconds),
+			MTP_flags(flags),
 			*photo,
 			MTP_int(0),
 			video ? MTPDocument(*video) : MTPDocument()));
@@ -129,8 +132,12 @@ std::vector<char> serializeSavableMedia(const MTPMessageMedia &media) {
 		const auto alt = data.valt_documents();
 		const auto cover = data.vvideo_cover();
 		const auto timestamp = data.vvideo_timestamp();
+		auto flags = data.vflags().v & ~MTPDmessageMediaDocument::Flag::f_ttl_seconds;
+		if (data.vttl_seconds()) {
+			flags |= MTPDmessageMediaDocument::Flag::f_spoiler;
+		}
 		return serializeObject(MTP_messageMediaDocument(
-			MTP_flags(data.vflags().v & ~MTPDmessageMediaDocument::Flag::f_ttl_seconds),
+			MTP_flags(flags),
 			*document,
 			alt ? MTPVector<MTPDocument>(*alt) : MTPVector<MTPDocument>(),
 			cover ? MTPPhoto(*cover) : MTPPhoto(),
@@ -145,90 +152,34 @@ std::vector<char> serializeSavableMedia(const MTPMessageMedia &media) {
 	});
 }
 
-namespace {
-
-enum class UnwrappedKind {
-	None,
-	Sticker,
-	Gif,
-	Round,
-	CustomEmoji,
-};
-
-struct UnwrappedInfo {
-	UnwrappedKind kind = UnwrappedKind::None;
-	QString alt;
-};
-
-[[nodiscard]] UnwrappedInfo DetectUnwrapped(const MTPMessageMedia &media) {
-	return media.match([](const MTPDmessageMediaDocument &data) {
-		auto result = UnwrappedInfo();
-		const auto document = data.vdocument();
-		if (!document) {
-			return result;
-		}
-		document->match([&](const MTPDdocument &fields) {
-			for (const auto &attribute : fields.vattributes().v) {
-				attribute.match([&](const MTPDdocumentAttributeSticker &a) {
-					result = { UnwrappedKind::Sticker, qs(a.valt()) };
-				}, [&](const MTPDdocumentAttributeCustomEmoji &a) {
-					result = { UnwrappedKind::CustomEmoji, qs(a.valt()) };
-				}, [&](const MTPDdocumentAttributeAnimated &) {
-					if (result.kind == UnwrappedKind::None) {
-						result.kind = UnwrappedKind::Gif;
-					}
-				}, [&](const MTPDdocumentAttributeVideo &a) {
-					if (a.is_round_message()) {
-						result.kind = UnwrappedKind::Round;
-					}
-				}, [](const auto &) {
-				});
-			}
-		}, [](const auto &) {
-		});
-		return result;
-	}, [](const auto &) {
-		return UnwrappedInfo();
-	});
-}
-
-} // namespace
-
-QString unwrappedMediaText(const std::vector<char> &serialized) {
-	const auto media = tryDeserializeObject<MTPMessageMedia>(serialized);
-	if (!media) {
-		return QString();
-	}
-	const auto info = DetectUnwrapped(*media);
-	switch (info.kind) {
-	case UnwrappedKind::Sticker:
-		return info.alt.isEmpty()
-			? tr::lng_in_dlg_sticker(tr::now)
-			: (info.alt + ' ' + tr::lng_in_dlg_sticker(tr::now));
-	case UnwrappedKind::CustomEmoji:
-		return info.alt.isEmpty() ? tr::lng_in_dlg_sticker(tr::now) : info.alt;
-	case UnwrappedKind::Gif:
-		return QStringLiteral("GIF");
-	case UnwrappedKind::Round:
-		return tr::lng_in_dlg_video_message(tr::now);
-	}
-	return QString();
-}
-
 MTPMessageMedia deserializeMedia(const std::vector<char> &serialized) {
 	auto result = tryDeserializeObject<MTPMessageMedia>(serialized);
 	if (!result) {
+		if (const auto document = tryDeserializeObject<MTPDocument>(serialized)) {
+			return MTP_messageMediaDocument(
+				MTP_flags(MTPDmessageMediaDocument::Flag::f_document),
+				*document,
+				MTPVector<MTPDocument>(),
+				MTPPhoto(),
+				MTP_int(0),
+				MTP_int(0));
+		}
+		if (const auto photo = tryDeserializeObject<MTPPhoto>(serialized)) {
+			return MTP_messageMediaPhoto(
+				MTP_flags(MTPDmessageMediaPhoto::Flag::f_photo),
+				*photo,
+				MTP_int(0),
+				MTPDocument());
+		}
 		if (!serialized.empty()) {
 			LOG(("AyuMapper: Failed to deserialize saved media"));
 		}
 		return MTP_messageMediaEmpty();
 	}
-	const auto unwrapped = (DetectUnwrapped(*result).kind
-		!= UnwrappedKind::None);
 	const auto valid = result->match([](const MTPDmessageMediaPhoto &data) {
 		return data.vphoto() != nullptr;
-	}, [=](const MTPDmessageMediaDocument &data) {
-		return data.vdocument() != nullptr && !unwrapped;
+	}, [](const MTPDmessageMediaDocument &data) {
+		return data.vdocument() != nullptr;
 	}, [](const MTPDmessageMediaGeo &) {
 		return true;
 	}, [](const MTPDmessageMediaVenue &) {

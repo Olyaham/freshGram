@@ -192,13 +192,6 @@ void BuildMarks(
 		| rpl::map([](bool v) { return !v; }));
 
 	ayu.addSettingToggle({
-		.id = u"ayu/removeMessageTail"_q,
-		.title = tr::ayu_RemoveMessageTail(),
-		.getter = &AyuSettings::removeMessageTail,
-		.setter = &AyuSettings::setRemoveMessageTail,
-	});
-
-	ayu.addSettingToggle({
 		.id = u"ayu/hideFastShare"_q,
 		.altIds = { u"ayu/hideShareButton"_q },
 		.title = tr::ayu_HideShareButton(),

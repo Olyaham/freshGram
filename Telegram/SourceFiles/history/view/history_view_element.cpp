@@ -1795,15 +1795,13 @@ void Element::refreshMedia(Element *replacing) {
 		_media = std::make_unique<SimilarChannels>(this);
 	} else if (isOnlyCustomEmoji()
 		&& Core::App().settings().largeEmoji()
-		&& !item->isSponsored()
-		&& !(item->isDeleted() && item->isLocal())) {
+		&& !item->isSponsored()) {
 		_media = std::make_unique<UnwrappedMedia>(
 			this,
 			std::make_unique<CustomEmoji>(this, onlyCustomEmoji()));
 	} else if (isIsolatedEmoji()
 		&& Core::App().settings().largeEmoji()
-		&& !item->isSponsored()
-		&& !(item->isDeleted() && item->isLocal())) {
+		&& !item->isSponsored()) {
 		const auto emoji = isolatedEmoji();
 		const auto emojiStickers = &history()->session().emojiStickersPack();
 		const auto skipPremiumEffect = false;
@@ -3250,8 +3248,10 @@ Element *Element::nextInBlocks() const {
 
 Element *Element::nextDisplayedInBlocks() const {
 	auto result = nextInBlocks();
-	while (result && ((result->data()->isEmpty() || result->isHidden()) && !isMessageHidden(data()))) {
-		result = result->nextInBlocks();
+	if (result && !isMessageHidden(data())) {
+		while (result && (result->data()->isEmpty() || result->isHidden())) {
+			result = result->nextInBlocks();
+		}
 	}
 	return result == this ? nullptr : result;
 }
