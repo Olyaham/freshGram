@@ -528,6 +528,10 @@ void InlineList::paint(
 					? st->creditsBg3()->c
 					: chosen
 					? stm->msgFileBg->c
+					: (!context.outbg && _data.colorIndexPlusOne)
+					? st->coloredValues(
+						context.selected(),
+						_data.colorIndexPlusOne - 1).name
 					: stm->msgServiceFg->c;
 			} else {
 				if (!bubbleReady) {
@@ -1042,6 +1046,9 @@ InlineListData InlineListDataFromMessage(not_null<Element*> view) {
 		| (view->embedReactionsInBubble() ? Flag::InBubble : Flag())
 		| (item->reactionsAreTags() ? Flag::Tags : Flag())
 		| (item->isService() ? Flag::Centered : Flag());
+	if (!view->hasOutLayout() && !item->isService()) {
+		result.colorIndexPlusOne = item->from()->colorIndex() + 1;
+	}
 	return result;
 }
 

@@ -50,6 +50,7 @@ struct InlineListData {
 	std::vector<MessageReaction> reactions;
 	base::flat_map<ReactionId, std::vector<not_null<PeerData*>>> recent;
 	Flags flags = {};
+	uchar colorIndexPlusOne = 0;
 };
 
 class InlineList final : public Object {
