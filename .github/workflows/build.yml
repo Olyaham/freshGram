@@ -65,6 +65,15 @@ jobs:
         with:
           tool-cache: true
 
+      - name: Add swap
+        run: |
+          sudo swapoff -a || true
+          sudo fallocate -l 8G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          free -m
+
       - name: Log in to registry
         uses: docker/login-action@v3
         with:
@@ -97,13 +106,13 @@ jobs:
         run: |
           mkdir -p "$CCACHE_DIR"
           docker run --rm \
-            --cpus=3 \
+            --cpus=1.9 \
             -u "$(id -u)" \
             -v "$PWD:/usr/src/tdesktop" \
             -v "$CCACHE_DIR:/var/cache/ccache" \
             -e CONFIG=Release \
             -e KEEP_GOING=1 \
-            -e CMAKE_BUILD_PARALLEL_LEVEL=3 \
+            -e CMAKE_BUILD_PARALLEL_LEVEL=2 \
             -e CCACHE_MAXSIZE=3G \
             -e CCACHE_SLOPPINESS=pch_defines,time_macros \
             "$IMAGE" \
@@ -129,13 +138,13 @@ jobs:
         run: |
           mkdir -p "$CCACHE_DIR"
           docker run --rm \
-            --cpus=3 \
+            --cpus=1.9 \
             -u "$(id -u)" \
             -v "$PWD:/usr/src/tdesktop" \
             -v "$CCACHE_DIR:/var/cache/ccache" \
             -e CONFIG=Release \
             -e KEEP_GOING=1 \
-            -e CMAKE_BUILD_PARALLEL_LEVEL=3 \
+            -e CMAKE_BUILD_PARALLEL_LEVEL=2 \
             -e CCACHE_MAXSIZE=3G \
             -e CCACHE_SLOPPINESS=pch_defines,time_macros \
             "$IMAGE" \
@@ -161,13 +170,13 @@ jobs:
         run: |
           mkdir -p "$CCACHE_DIR"
           docker run --rm \
-            --cpus=3 \
+            --cpus=1.9 \
             -u "$(id -u)" \
             -v "$PWD:/usr/src/tdesktop" \
             -v "$CCACHE_DIR:/var/cache/ccache" \
             -e CONFIG=Release \
             -e KEEP_GOING=1 \
-            -e CMAKE_BUILD_PARALLEL_LEVEL=3 \
+            -e CMAKE_BUILD_PARALLEL_LEVEL=2 \
             -e CCACHE_MAXSIZE=3G \
             -e CCACHE_SLOPPINESS=pch_defines,time_macros \
             "$IMAGE" \
@@ -186,6 +195,70 @@ jobs:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-linux-${{ github.run_id }}-part3
 
+      - name: Build, part 4
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+        run: |
+          mkdir -p "$CCACHE_DIR"
+          docker run --rm \
+            --cpus=1.9 \
+            -u "$(id -u)" \
+            -v "$PWD:/usr/src/tdesktop" \
+            -v "$CCACHE_DIR:/var/cache/ccache" \
+            -e CONFIG=Release \
+            -e KEEP_GOING=1 \
+            -e CMAKE_BUILD_PARALLEL_LEVEL=2 \
+            -e CCACHE_MAXSIZE=3G \
+            -e CCACHE_SLOPPINESS=pch_defines,time_macros \
+            "$IMAGE" \
+            env -u CCACHE_DISABLE nice -n 10 timeout 55m /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+            -D CMAKE_CONFIGURATION_TYPES=Release \
+            -D CMAKE_INSTALL_PREFIX=/usr \
+            -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
+            -D DESKTOP_APP_DISABLE_CRASH_REPORTS=ON \
+            -D TDESKTOP_API_ID="$API_ID" \
+            -D TDESKTOP_API_HASH="$API_HASH" 2>&1 | tee -a build.log || true
+
+      - name: Save compiler cache, part 4
+        if: always() && steps.ccache.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-linux-${{ github.run_id }}-part4
+
+      - name: Build, part 5
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+        run: |
+          mkdir -p "$CCACHE_DIR"
+          docker run --rm \
+            --cpus=1.9 \
+            -u "$(id -u)" \
+            -v "$PWD:/usr/src/tdesktop" \
+            -v "$CCACHE_DIR:/var/cache/ccache" \
+            -e CONFIG=Release \
+            -e KEEP_GOING=1 \
+            -e CMAKE_BUILD_PARALLEL_LEVEL=2 \
+            -e CCACHE_MAXSIZE=3G \
+            -e CCACHE_SLOPPINESS=pch_defines,time_macros \
+            "$IMAGE" \
+            env -u CCACHE_DISABLE nice -n 10 timeout 55m /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+            -D CMAKE_CONFIGURATION_TYPES=Release \
+            -D CMAKE_INSTALL_PREFIX=/usr \
+            -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
+            -D DESKTOP_APP_DISABLE_CRASH_REPORTS=ON \
+            -D TDESKTOP_API_ID="$API_ID" \
+            -D TDESKTOP_API_HASH="$API_HASH" 2>&1 | tee -a build.log || true
+
+      - name: Save compiler cache, part 5
+        if: always() && steps.ccache.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-linux-${{ github.run_id }}-part5
+
       - name: Build
         env:
           API_ID: ${{ secrets.API_ID }}
@@ -193,13 +266,13 @@ jobs:
         run: |
           mkdir -p "$CCACHE_DIR"
           docker run --rm \
-            --cpus=3 \
+            --cpus=1.9 \
             -u "$(id -u)" \
             -v "$PWD:/usr/src/tdesktop" \
             -v "$CCACHE_DIR:/var/cache/ccache" \
             -e CONFIG=Release \
             -e KEEP_GOING=1 \
-            -e CMAKE_BUILD_PARALLEL_LEVEL=3 \
+            -e CMAKE_BUILD_PARALLEL_LEVEL=2 \
             -e CCACHE_MAXSIZE=3G \
             -e CCACHE_SLOPPINESS=pch_defines,time_macros \
             "$IMAGE" \
