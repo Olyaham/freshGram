@@ -90,7 +90,7 @@ jobs:
           key: ccache-linux-${{ github.run_id }}
           restore-keys: ccache-linux-
 
-      - name: Build
+      - name: Build, first part
         env:
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
@@ -102,6 +102,37 @@ jobs:
             -v "$CCACHE_DIR:/var/cache/ccache" \
             -e CONFIG=Release \
             -e KEEP_GOING=1 \
+            -e CMAKE_BUILD_PARALLEL_LEVEL=4 \
+            -e CCACHE_MAXSIZE=3G \
+            -e CCACHE_SLOPPINESS=pch_defines,time_macros \
+            "$IMAGE" \
+            env -u CCACHE_DISABLE timeout 75m /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+            -D CMAKE_CONFIGURATION_TYPES=Release \
+            -D CMAKE_INSTALL_PREFIX=/usr \
+            -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
+            -D DESKTOP_APP_DISABLE_CRASH_REPORTS=ON \
+            -D TDESKTOP_API_ID="$API_ID" \
+            -D TDESKTOP_API_HASH="$API_HASH" 2>&1 | tee build.log || true
+
+      - name: Save compiler cache, first part
+        if: always() && steps.ccache.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-linux-${{ github.run_id }}-part
+
+      - name: Build
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+        run: |
+          docker run --rm \
+            -u "$(id -u)" \
+            -v "$PWD:/usr/src/tdesktop" \
+            -v "$CCACHE_DIR:/var/cache/ccache" \
+            -e CONFIG=Release \
+            -e KEEP_GOING=1 \
+            -e CMAKE_BUILD_PARALLEL_LEVEL=4 \
             -e CCACHE_MAXSIZE=3G \
             -e CCACHE_SLOPPINESS=pch_defines,time_macros \
             "$IMAGE" \
@@ -111,7 +142,7 @@ jobs:
             -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
             -D DESKTOP_APP_DISABLE_CRASH_REPORTS=ON \
             -D TDESKTOP_API_ID="$API_ID" \
-            -D TDESKTOP_API_HASH="$API_HASH" 2>&1 | tee build.log
+            -D TDESKTOP_API_HASH="$API_HASH" 2>&1 | tee -a build.log
           exit "${PIPESTATUS[0]}"
 
       - name: Show build errors
