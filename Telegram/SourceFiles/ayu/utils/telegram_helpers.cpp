@@ -13,6 +13,7 @@
 #include "ayu/ayu_state.h"
 #include "ayu/ayu_worker.h"
 #include "ayu/data/entities.h"
+#include "ayu/data/kept_dialogs.h"
 #include "ayu/data/messages_storage.h"
 #include "ayu/features/filters/filters_controller.h"
 #include "ayu/ui/toasts.h"
@@ -553,6 +554,7 @@ void processMessageDelete(not_null<HistoryItem*> item) {
 		item->setDeleted();
 		AyuMessages::addDeletedMessage(item);
 		AyuMessages::cacheDeletedMedia(item);
+		AyuKept::note(item->history());
 	}
 }
 

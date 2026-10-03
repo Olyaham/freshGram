@@ -140,7 +140,10 @@ void ToggleView::paint(QPainter &p, int left, int top, int outerWidth) {
 		p.setBrush(fgBrush);
 		if (_locked) {
 			const auto color = anim::color(_st->untoggledFg, _st->toggledFg, toggled);
-			_st->lockIcon.paint(p, toggleLeft, top, outerWidth, color);
+			const auto diameter = SwitchDiameter(_st);
+			const auto iconLeft = toggleLeft + (diameter - _st->lockIcon.width()) / 2;
+			const auto iconTop = top + (diameter - _st->lockIcon.height()) / 2;
+			_st->lockIcon.paint(p, iconLeft, iconTop, outerWidth, color);
 		} else {
 			paintXV(p, toggleLeft, top, outerWidth, toggled, fgBrush);
 		}

@@ -548,6 +548,8 @@ HistoryItem::HistoryItem(
 			});
 			setReactions(data.vreactions());
 			applyTTL(data);
+			_deleted = true;
+			_deletedAnimated = true;
 		} else {
 			createServiceFromMtp(data);
 			setReactions(data.vreactions());

@@ -16,6 +16,7 @@ The source code is published under GPLv3 with OpenSSL exception, the license is 
 - Full ghost mode (flexible)
 - Messages history
 - Anti-recall
+- Chats and channels deleted by the other side or that you were removed from stay in the chats list together with the saved messages
 - Font customization
 - Streamer mode
 - Local Telegram Premium

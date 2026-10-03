@@ -72,6 +72,21 @@ public:
 	int entityCreateDate;
 };
 
+class KeptDialog
+{
+public:
+	ID fakeId;
+	ID userId;
+	ID dialogId;
+	int kind;
+	std::string title;
+	std::string username;
+	ID accessHash;
+	int folderId;
+	int lastMessageDate;
+	int lost;
+};
+
 class RegexFilter
 {
 public:

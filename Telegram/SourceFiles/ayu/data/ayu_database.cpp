@@ -120,6 +120,19 @@ auto storage = make_storage(
 		make_column("flags", &DeletedDialog::flags),
 		make_column("entityCreateDate", &DeletedDialog::entityCreateDate)
 	),
+	make_table<KeptDialog>(
+		"KeptDialog",
+		make_column("fakeId", &KeptDialog::fakeId, primary_key().autoincrement()),
+		make_column("userId", &KeptDialog::userId),
+		make_column("dialogId", &KeptDialog::dialogId),
+		make_column("kind", &KeptDialog::kind),
+		make_column("title", &KeptDialog::title),
+		make_column("username", &KeptDialog::username),
+		make_column("accessHash", &KeptDialog::accessHash),
+		make_column("folderId", &KeptDialog::folderId),
+		make_column("lastMessageDate", &KeptDialog::lastMessageDate),
+		make_column("lost", &KeptDialog::lost)
+	),
 	make_table<RegexFilter>(
 		"RegexFilter",
 		make_column("id", &RegexFilter::id, primary_key()),
@@ -521,6 +534,38 @@ void clearDeletedMessages(ID userId, ID dialogId, ID topicId) {
 				column<DeletedMessage>(&DeletedMessage::userId) == userId and
 				column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId and
 				(column<DeletedMessage>(&DeletedMessage::topicId) == topicId or topicId == 0)
+			)
+		);
+	});
+}
+
+void saveKeptDialog(const KeptDialog &dialog) {
+	runVoid("save kept dialog", [&] {
+		inTransaction([&] {
+			storage.remove_all<KeptDialog>(
+				where(
+					column<KeptDialog>(&KeptDialog::userId) == dialog.userId and
+					column<KeptDialog>(&KeptDialog::dialogId) == dialog.dialogId
+				)
+			);
+			storage.insert(dialog);
+		});
+	});
+}
+
+std::vector<KeptDialog> getKeptDialogs(ID userId) {
+	return run<std::vector<KeptDialog>>("load kept dialogs", {}, [&] {
+		return storage.get_all<KeptDialog>(
+			where(column<KeptDialog>(&KeptDialog::userId) == userId));
+	});
+}
+
+void removeKeptDialog(ID userId, ID dialogId) {
+	runVoid("remove kept dialog", [&] {
+		storage.remove_all<KeptDialog>(
+			where(
+				column<KeptDialog>(&KeptDialog::userId) == userId and
+				column<KeptDialog>(&KeptDialog::dialogId) == dialogId
 			)
 		);
 	});

@@ -238,8 +238,10 @@ HistoryItem *State::create(Row &row) {
 		return nullptr;
 	}
 	AyuMessages::restoreSavedMedia(item, message);
-	item->setDeleted();
-	item->markDeletedAnimated();
+	if (peer->isUser() || !_history->ayuKept()) {
+		item->setDeleted();
+		item->markDeletedAnimated();
+	}
 	row.localId = item->id;
 	return item;
 }

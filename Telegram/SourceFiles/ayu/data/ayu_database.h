@@ -33,6 +33,10 @@ std::vector<ID> getDeletedDialogIds(ID userId);
 void removeDeletedMessage(ID userId, ID dialogId, ID messageId);
 void clearDeletedMessages(ID userId, ID dialogId, ID topicId);
 
+void saveKeptDialog(const KeptDialog &dialog);
+std::vector<KeptDialog> getKeptDialogs(ID userId);
+void removeKeptDialog(ID userId, ID dialogId);
+
 std::vector<RegexFilter> getAllRegexFilters();
 RegexFilter getById(std::vector<char> id);
 std::vector<RegexFilter> getShared();

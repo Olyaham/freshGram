@@ -110,6 +110,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "ayu/ayu_settings.h"
 #include "ayu/ayu_worker.h"
+#include "ayu/data/kept_dialogs.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "ayu/features/forward/ayu_forward.h"
 
@@ -1992,6 +1993,7 @@ void ApiWrap::leaveChannel(not_null<ChannelData*> channel) {
 			channel,
 			Data::PeerUpdate::Flag::ChannelAmIn);
 	} else if (!_channelAmInRequests.contains(channel)) {
+		AyuKept::userLeaving(channel);
 		auto requestId = request(MTPchannels_LeaveChannel(
 			channel->inputChannel()
 		)).done([=](const MTPUpdates &result) {

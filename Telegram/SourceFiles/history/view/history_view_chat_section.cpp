@@ -973,7 +973,7 @@ ChatWidget::ChatWidget(
 
 	session().data().historyAccessLost(
 	) | rpl::filter([=](not_null<History*> history) {
-		return (history == _history);
+		return (history == _history) && !history->ayuKept();
 	}) | rpl::on_next([=] {
 		const auto was = _peer;
 		const auto account = not_null(&was->account());

@@ -94,6 +94,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "spellcheck/spellcheck_highlight_syntax.h"
 
 #include "ayu/ayu_settings.h"
+#include "ayu/data/kept_dialogs.h"
 #include "ayu/data/messages_storage.h"
 #include "ayu/features/filters/filters_controller.h"
 #include "ayu/utils/telegram_helpers.h"
@@ -370,6 +371,7 @@ Session::Session(not_null<Main::Session*> session)
 
 	setupMigrationViewer();
 	setupChannelLeavingViewer();
+	AyuKept::setup(this, _lifetime);
 	setupPeerNameViewer();
 	setupUserIsContactViewer();
 
@@ -1710,6 +1712,7 @@ History *Session::historyLoaded(const PeerData *peer) {
 }
 
 void Session::deleteConversationLocally(not_null<PeerData*> peer) {
+	AyuKept::forget(peer);
 	const auto markLeft = [&] {
 		if (const auto channel = peer->asMegagroup()) {
 			channel->addFlags(ChannelDataFlag::Left);
@@ -1882,8 +1885,18 @@ void Session::setupChannelLeavingViewer() {
 	}) | rpl::on_next([=](not_null<ChannelData*> channel) {
 		if (channel->amIn()) {
 			channel->clearInvitePeek();
+			AyuKept::takeUserLeaving(channel);
+			if (const auto history = historyLoaded(channel->id)) {
+				if (history->ayuKept()) {
+					AyuKept::forget(channel);
+				}
+			}
 		} else {
 			if (const auto history = historyLoaded(channel->id)) {
+				const auto leaving = AyuKept::takeUserLeaving(channel);
+				if (history->inChatList() && !leaving) {
+					AyuKept::markLost(history);
+				}
 				history->removeJoinedMessage();
 				history->updateChatListExistence();
 				history->updateChatListSortPosition();

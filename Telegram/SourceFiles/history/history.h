@@ -108,6 +108,9 @@ public:
 
 	[[nodiscard]] HistoryItem *joinedMessageInstance() const;
 	void checkLocalMessages();
+	[[nodiscard]] bool ayuKept() const;
+	void setAyuKept(bool kept);
+	void restoreAyuKept();
 	void removeJoinedMessage();
 	void removeNewPeerMessages();
 
@@ -678,6 +681,7 @@ private:
 	HistoryItem *_newPeerPhotoChange = nullptr;
 	bool _loadedAtTop = false;
 	bool _loadedAtBottom = true;
+	bool _ayuKept = false;
 
 	std::optional<Data::Folder*> _folder;
 	Data::CommunityInfo *_communityInfo = nullptr;

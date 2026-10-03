@@ -3025,6 +3025,9 @@ bool History::isReadyFor(MsgId msgId) {
 }
 
 void History::getReadyFor(MsgId msgId) {
+	if (_ayuKept && !isEmpty()) {
+		return;
+	}
 	if (msgId < 0 && -msgId < ServerMaxMsgId && peer->migrateFrom()) {
 		const auto migrated = owner().history(peer->migrateFrom()->id);
 		migrated->getReadyFor(-msgId);
@@ -3398,6 +3401,8 @@ bool History::trackUnreadMessages() const {
 bool History::shouldBeInChatList() const {
 	if (peer->migrateTo() || !folderKnown()) {
 		return false;
+	} else if (_ayuKept && !lastMessage()) {
+		return false;
 	} else if (const auto community = peer->asChannel()
 		; community && community->isCommunity()) {
 		return !(community->flags() & ChannelDataFlag::Forbidden)
@@ -3407,7 +3412,7 @@ bool History::shouldBeInChatList() const {
 		return true;
 	} else if (const auto channel = peer->asChannel()) {
 		if (!channel->amIn()) {
-			return isTopPromoted();
+			return isTopPromoted() || (_ayuKept && lastMessage());
 		}
 	} else if (const auto chat = peer->asChat()) {
 		return chat->amIn()
@@ -4213,6 +4218,11 @@ void History::checkLocalMessages() {
 			}
 		}
 	}
+	if (_ayuKept && !lastMessage()) {
+		if (const auto last = lastAvailableMessage()) {
+			setLastMessage(last);
+		}
+	}
 	if (restored || insertedDeleted) {
 		const auto session = &this->session();
 		const auto peerId = peer->id;
@@ -4239,6 +4249,23 @@ void History::checkLocalMessages() {
 	} else {
 		checkNewPeerMessages();
 	}
+}
+
+bool History::ayuKept() const {
+	return _ayuKept;
+}
+
+void History::setAyuKept(bool kept) {
+	if (_ayuKept == kept) {
+		return;
+	}
+	_ayuKept = kept;
+	updateChatListExistence();
+}
+
+void History::restoreAyuKept() {
+	_loadedAtTop = true;
+	checkLocalMessages();
 }
 
 HistoryStreamedDrafts &History::streamedDrafts() {
@@ -4407,6 +4434,9 @@ std::vector<MsgId> History::collectMessagesFromParticipantToDelete(
 }
 
 void History::clear(ClearType type, bool markEmpty) {
+	if (_ayuKept && type == ClearType::Unload && !isEmpty()) {
+		return;
+	}
 	_unreadBarView = nullptr;
 	_firstUnreadView = nullptr;
 	removeJoinedMessage();

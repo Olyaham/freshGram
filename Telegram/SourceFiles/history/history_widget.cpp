@@ -4768,6 +4768,18 @@ void HistoryWidget::messagesFailed(const MTP::Error &error, int requestId) {
 	} else if (error.type() == u"CHANNEL_PRIVATE"_q
 		|| error.type() == u"CHANNEL_PUBLIC_GROUP_NA"_q
 		|| error.type() == u"USER_BANNED_IN_CHANNEL"_q) {
+		if (_history && _history->ayuKept()) {
+			if (_preloadRequest == requestId) {
+				_preloadRequest = 0;
+			} else if (_preloadDownRequest == requestId) {
+				_preloadDownRequest = 0;
+			} else if (_firstLoadRequest == requestId) {
+				_firstLoadRequest = 0;
+			} else if (_delayedShowAtRequest == requestId) {
+				_delayedShowAtRequest = 0;
+			}
+			return;
+		}
 		auto was = _peer;
 		closeCurrent();
 		const auto wasAccount = not_null(&was->account());
