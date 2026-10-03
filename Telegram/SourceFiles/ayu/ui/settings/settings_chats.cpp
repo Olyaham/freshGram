@@ -231,6 +231,20 @@ void BuildMarks(
 			return QString::number(index * 2) + '%';
 		},
 	});
+	ayu.addSlider({
+		.id = u"ayu/reactionBackgroundOpacity"_q,
+		.altIds = { u"ayu/colorfulReactions"_q },
+		.title = tr::ayu_ReactionBackgroundOpacity(),
+		.steps = 26,
+		.current = settings->reactionBackgroundOpacity() / 2,
+		.indexToValue = [](int index) { return index; },
+		.onFinalChanged = [](int index) {
+			AyuSettings::getInstance().setReactionBackgroundOpacity(index * 2);
+		},
+		.formatLabel = [](int index) {
+			return QString::number(index * 2) + '%';
+		},
+	});
 
 	const auto semiTransparent = ayu.addSettingToggle({
 		.id = u"ayu/semiTransparentDeletedMessages"_q,

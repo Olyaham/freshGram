@@ -296,6 +296,7 @@ public:
 	[[nodiscard]] bool materialBubbles() const { return _materialBubbles.current(); }
 	[[nodiscard]] bool materialIcons() const { return _materialIcons.current(); }
 	[[nodiscard]] int replyBackgroundOpacity() const { return _replyBackgroundOpacity.current(); }
+	[[nodiscard]] int reactionBackgroundOpacity() const { return _reactionBackgroundOpacity.current(); }
 	[[nodiscard]] bool disableNotificationsDelay() const { return _disableNotificationsDelay.current(); }
 	[[nodiscard]] bool localPremium() const { return _localPremium.current(); }
 	[[nodiscard]] bool showChannelReactions() const { return _showChannelReactions.current(); }
@@ -385,6 +386,7 @@ public:
 	void setMaterialBubbles(bool val);
 	void setMaterialIcons(bool val);
 	void setReplyBackgroundOpacity(int val);
+	void setReactionBackgroundOpacity(int val);
 	void setDisableNotificationsDelay(bool val);
 	void setLocalPremium(bool val);
 	void setShowChannelReactions(bool val);
@@ -500,6 +502,8 @@ public:
 	[[nodiscard]] rpl::producer<bool> materialIconsChanges() const { return _materialIcons.changes(); }
 	[[nodiscard]] rpl::producer<int> replyBackgroundOpacityValue() const { return _replyBackgroundOpacity.value(); }
 	[[nodiscard]] rpl::producer<int> replyBackgroundOpacityChanges() const { return _replyBackgroundOpacity.changes(); }
+	[[nodiscard]] rpl::producer<int> reactionBackgroundOpacityValue() const { return _reactionBackgroundOpacity.value(); }
+	[[nodiscard]] rpl::producer<int> reactionBackgroundOpacityChanges() const { return _reactionBackgroundOpacity.changes(); }
 	[[nodiscard]] rpl::producer<bool> disableNotificationsDelayValue() const { return _disableNotificationsDelay.value(); }
 	[[nodiscard]] rpl::producer<bool> disableNotificationsDelayChanges() const { return _disableNotificationsDelay.changes(); }
 	[[nodiscard]] rpl::producer<bool> localPremiumValue() const { return _localPremium.value(); }
@@ -661,6 +665,7 @@ private:
 	rpl::variable<bool> _materialBubbles = true;
 	rpl::variable<bool> _materialIcons = true;
 	rpl::variable<int> _replyBackgroundOpacity = 12;
+	rpl::variable<int> _reactionBackgroundOpacity = 16;
 	rpl::variable<bool> _disableNotificationsDelay = false;
 	rpl::variable<bool> _localPremium = false;
 	rpl::variable<bool> _showChannelReactions = true;

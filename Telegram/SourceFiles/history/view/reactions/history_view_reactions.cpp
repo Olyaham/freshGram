@@ -515,15 +515,20 @@ void InlineList::paint(
 			auto color = QColor();
 			if (inbubble) {
 				if (!chosen) {
-					opacity = bubbleProgress * (context.outbg
-						? kOutNonChosenOpacity
-						: kInNonChosenOpacity);
+					opacity = bubbleProgress * (button.paid
+						? (context.outbg
+							? kOutNonChosenOpacity
+							: kInNonChosenOpacity)
+						: (AyuSettings::getInstance()
+							.reactionBackgroundOpacity() / 100.));
 				} else if (!bubbleReady) {
 					opacity = bubbleProgress;
 				}
 				color = button.paid
 					? st->creditsBg3()->c
-					: stm->msgFileBg->c;
+					: chosen
+					? stm->msgFileBg->c
+					: stm->msgServiceFg->c;
 			} else {
 				if (!bubbleReady) {
 					opacity = bubbleProgress;

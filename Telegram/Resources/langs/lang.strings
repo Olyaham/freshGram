@@ -8905,6 +8905,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_MaterialBubbles" = "Message Rounding and Tail";
 "ayu_MaterialIcons" = "Material Icons";
 "ayu_ReplyBackgroundOpacity" = "Colorful Reply Background";
+"ayu_ReactionBackgroundOpacity" = "Colorful Reaction Background";
 "ayu_HideShareButton" = "Hide Side \"Share\" Button";
 "ayu_ChatFoldersHeader" = "Chat Folders";
 "ayu_SettingsContextMenuTitle" = "Choose when to show the item";

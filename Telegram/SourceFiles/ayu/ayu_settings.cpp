@@ -534,6 +534,7 @@ void AyuSettings::validate() {
 
 	validateRange(_messageBubbleRadius, 0, 16, defaults._messageBubbleRadius);
 	validateRange(_replyBackgroundOpacity, 0, 50, defaults._replyBackgroundOpacity);
+	validateRange(_reactionBackgroundOpacity, 0, 50, defaults._reactionBackgroundOpacity);
 	validateRange(_wideMultiplier, 0.5, 4.0, defaults._wideMultiplier);
 	validateRange(_avatarCorners, 0, AyuUiSettings::kMaxAvatarCorners, defaults._avatarCorners);
 
@@ -698,6 +699,13 @@ void AyuSettings::setReplyBackgroundOpacity(int val) {
 	if (_replyBackgroundOpacity.current() == val) return;
 	_replyBackgroundOpacity = val;
 	style::NotifyPaletteChanged();
+	save();
+}
+
+void AyuSettings::setReactionBackgroundOpacity(int val) {
+	if (_reactionBackgroundOpacity.current() == val) return;
+	_reactionBackgroundOpacity = val;
+	repaintApp();
 	save();
 }
 
@@ -1135,6 +1143,7 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"materialBubbles", s._materialBubbles.current()},
 		{"materialIcons", s._materialIcons.current()},
 		{"replyBackgroundOpacity", s._replyBackgroundOpacity.current()},
+		{"reactionBackgroundOpacity", s._reactionBackgroundOpacity.current()},
 		{"disableNotificationsDelay", s._disableNotificationsDelay.current()},
 		{"localPremium", s._localPremium.current()},
 		{"showChannelReactions", s._showChannelReactions.current()},
@@ -1241,6 +1250,7 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._materialBubbles = j.value("materialBubbles", defaults._materialBubbles.current());
 	s._materialIcons = j.value("materialIcons", defaults._materialIcons.current());
 	s._replyBackgroundOpacity = j.value("replyBackgroundOpacity", defaults._replyBackgroundOpacity.current());
+	s._reactionBackgroundOpacity = j.value("reactionBackgroundOpacity", defaults._reactionBackgroundOpacity.current());
 	s._disableNotificationsDelay = j.value("disableNotificationsDelay", defaults._disableNotificationsDelay.current());
 	s._localPremium = j.value("localPremium", defaults._localPremium.current());
 	s._showChannelReactions = j.value("showChannelReactions", defaults._showChannelReactions.current());
