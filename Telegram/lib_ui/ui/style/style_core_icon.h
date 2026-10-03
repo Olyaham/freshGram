@@ -32,26 +32,38 @@ public:
 		static_assert(N > 0, "invalid image data");
 	}
 
-	template <int N, int M>
-	constexpr IconMask(const uchar (&data)[N], const uchar (&classic)[M])
+	struct ClassicData {
+		template <int M>
+		constexpr ClassicData(const uchar (&data)[M])
+		: data(data)
+		, size(M) {
+			static_assert(M > 0, "invalid image data");
+		}
+
+		const uchar *data = nullptr;
+		int size = 0;
+	};
+
+	template <int N>
+	constexpr IconMask(const uchar (&data)[N], ClassicData classic)
 	: _data(data)
 	, _size(N)
-	, _classicData(classic)
-	, _classicSize(M) {
-		static_assert(N > 0 && M > 0, "invalid image data");
+	, _classicData(classic.data)
+	, _classicSize(classic.size) {
+		static_assert(N > 0, "invalid image data");
 	}
 
-	template <int N, int M>
+	template <int N>
 	constexpr IconMask(
 		const uchar (&data)[N],
-		const uchar (&classic)[M],
+		ClassicData classic,
 		QSize rendered)
 	: _data(data)
 	, _size(N)
-	, _classicData(classic)
-	, _classicSize(M)
+	, _classicData(classic.data)
+	, _classicSize(classic.size)
 	, _rendered(rendered) {
-		static_assert(N > 0 && M > 0, "invalid image data");
+		static_assert(N > 0, "invalid image data");
 	}
 
 	const uchar *data() const {

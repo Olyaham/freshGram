@@ -419,11 +419,11 @@ settingsPhotoTop: 8px;
 settingsPhotoBottom: 16px;
 settingsPhotoHighlightMargin: margins(-4px, -4px, -4px, -4px);
 settingsNameLeft: 112px;
-settingsNameTop: 25px;
+settingsNameTop: 12px;
 settingsPhoneLeft: settingsNameLeft;
 settingsPhoneTop: 37px;
 settingsUsernameLeft: settingsNameLeft;
-settingsUsernameTop: 49px;
+settingsUsernameTop: 58px;
 settingsPeerToPeerSkip: 9px;
 
 settingsIconRadius: 6px;

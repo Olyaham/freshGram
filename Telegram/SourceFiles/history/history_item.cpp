@@ -6130,7 +6130,7 @@ void HistoryItem::setMedia(const MTPMessageMedia &media) {
 	_media = CreateMedia(this, media);
 	checkStoryForwardInfo();
 	checkBuyButton();
-	if (_media && _media->ttlSeconds() && isRegular() && !out()) {
+	if (_media && _media->ttlSeconds() && isRegular()) {
 		const auto session = &_history->session();
 		crl::on_main(session, [session, id = fullId()] {
 			if (const auto item = session->data().message(id)) {

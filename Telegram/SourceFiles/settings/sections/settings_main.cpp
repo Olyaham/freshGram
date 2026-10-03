@@ -93,6 +93,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QWindow>
 
 #include "ayu/ui/settings/settings_main.h"
+#include "ayu/ui/utils/ayu_profile_values.h"
 #include "ayu/utils/telegram_helpers.h"
 
 
@@ -118,7 +119,9 @@ public:
 private:
 	void setupChildGeometry();
 	void initViewers();
+	void updateIdText();
 	void refreshNameGeometry(int newWidth);
+	void refreshIdGeometry(int newWidth);
 	void refreshUsernameGeometry(int newWidth);
 	void refreshQrButtonGeometry(int newWidth);
 
@@ -129,6 +132,8 @@ private:
 
 	object_ptr<Ui::UserpicButton> _userpic;
 	object_ptr<Ui::FlatLabel> _name = { nullptr };
+	object_ptr<Ui::FlatLabel> _id = { nullptr };
+	QString _idText;
 	object_ptr<Ui::FlatLabel> _username = { nullptr };
 	object_ptr<Ui::IconButton> _qrButton = { nullptr };
 
@@ -165,11 +170,30 @@ Cover::Cover(
 	Ui::UserpicButton::Source::PeerPhoto,
 	st::infoProfileCover.photo)
 , _name(this, st::infoProfileCover.name)
+, _id(this, st::defaultFlatLabel, st::popupMenuWithIcons)
 , _username(this, st::infoProfileMegagroupCover.status) {
 	_user->updateFull();
 
 	_name->setSelectable(true);
 	_name->setContextCopyText(tr::lng_profile_copy_fullname(tr::now));
+
+	_id->setSelectable(true);
+	_id->setContextCopyText(tr::ayu_ContextCopyID(tr::now));
+	const auto hook = [=](Ui::FlatLabel::ContextMenuRequest request) {
+		if (request.selection.empty()) {
+			const auto callback = [=] {
+				auto id = IDString(_user);
+				TextUtilities::SetClipboardText({ id });
+			};
+			request.menu->addAction(
+				tr::ayu_ContextCopyID(tr::now),
+				callback,
+				&st::menuIconCopy);
+		} else {
+			_id->fillContextMenu(request);
+		}
+	};
+	_id->setContextMenuHook(hook);
 
 	initViewers();
 	setupChildGeometry();
@@ -229,6 +253,7 @@ void Cover::setupChildGeometry() {
 			st::settingsPhotoTop,
 			newWidth);
 		refreshNameGeometry(newWidth);
+		refreshIdGeometry(newWidth);
 		refreshUsernameGeometry(newWidth);
 		refreshQrButtonGeometry(newWidth);
 	}, lifetime());
@@ -240,6 +265,13 @@ void Cover::initViewers() {
 	) | rpl::on_next([=](const QString &name) {
 		_name->setText(name);
 		refreshNameGeometry(width());
+	}, lifetime());
+
+	rpl::single(
+		tr::marked(IDString(_user))
+	) | rpl::on_next([=](const TextWithEntities &value) {
+		_idText = value.text;
+		updateIdText();
 	}, lifetime());
 
 	Info::Profile::UsernameValue(
@@ -291,9 +323,24 @@ void Cover::refreshNameGeometry(int newWidth) {
 	_badge.move(badgeLeft, badgeTop, badgeBottom);
 }
 
+void Cover::updateIdText() {
+	_id->setText(_idText);
+	refreshIdGeometry(width());
+}
+
+void Cover::refreshIdGeometry(int newWidth) {
+	const auto idLeft = st::settingsPhoneLeft;
+	const auto idTop = st::settingsPhoneTop;
+	const auto idWidth = newWidth
+		- idLeft
+		- st::infoProfileCover.rightSkip;
+	_id->resizeToWidth(idWidth);
+	_id->moveToLeft(idLeft, idTop, newWidth);
+}
+
 void Cover::refreshUsernameGeometry(int newWidth) {
 	const auto usernameLeft = st::settingsUsernameLeft;
-	const auto usernameTop = st::settingsPhoneTop;
+	const auto usernameTop = st::settingsUsernameTop;
 	const auto usernameRight = st::infoProfileCover.rightSkip;
 	const auto usernameWidth = newWidth - usernameLeft - usernameRight;
 	_username->resizeToWidth(usernameWidth);

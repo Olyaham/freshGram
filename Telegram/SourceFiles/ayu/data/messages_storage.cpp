@@ -11,9 +11,12 @@
 #include "ayu/utils/telegram_helpers.h"
 #include "base/timer.h"
 #include "base/unixtime.h"
+#include "core/file_location.h"
+#include "logs.h"
 #include "crl/crl_on_main.h"
 #include "data/data_cloud_file.h"
 #include "data/data_document.h"
+#include "data/data_document_media.h"
 #include "data/data_forum_topic.h"
 #include "data/data_media_types.h"
 #include "data/data_photo.h"
@@ -36,17 +39,28 @@ namespace {
 constexpr auto kMaxCachedDocumentSize = int64(32) * 1024 * 1024;
 
 constexpr auto kPhotoSaveAttempts = 60;
+constexpr auto kLongSaveAttempts = 900;
 
 struct PhotoSaveTask {
 	std::shared_ptr<Data::PhotoMedia> media;
 	QString path;
 	base::Timer timer;
 	int attempts = 0;
+	int maxAttempts = 0;
+};
+
+struct DocumentSaveTask {
+	std::shared_ptr<Data::DocumentMedia> media;
+	QString path;
+	base::Timer timer;
+	int attempts = 0;
+	int maxAttempts = 0;
 };
 
 std::vector<DeletedMessage> PendingDeleted;
 bool FlushScheduled = false;
 std::vector<std::unique_ptr<PhotoSaveTask>> PhotoSaveTasks;
+std::vector<std::unique_ptr<DocumentSaveTask>> DocumentSaveTasks;
 
 [[nodiscard]] QString SavedMediaPath(
 		ID userId,
@@ -90,7 +104,8 @@ bool WritePhotoBytes(
 void SavePhotoBytes(
 		not_null<PhotoData*> photo,
 		FullMsgId origin,
-		const QString &path) {
+		const QString &path,
+		int maxAttempts) {
 	if (QFile::exists(path)) {
 		return;
 	}
@@ -103,10 +118,11 @@ void SavePhotoBytes(
 	const auto raw = task.get();
 	raw->media = std::move(media);
 	raw->path = path;
+	raw->maxAttempts = maxAttempts;
 	raw->timer.setCallback([=] {
 		++raw->attempts;
 		if (WritePhotoBytes(raw->media, raw->path)
-			|| raw->attempts >= kPhotoSaveAttempts) {
+			|| raw->attempts >= raw->maxAttempts) {
 			raw->timer.cancel();
 			crl::on_main([=] {
 				PhotoSaveTasks.erase(
@@ -120,6 +136,80 @@ void SavePhotoBytes(
 	});
 	raw->timer.callEach(1000);
 	PhotoSaveTasks.push_back(std::move(task));
+}
+
+[[nodiscard]] QByteArray DocumentBytes(
+		const std::shared_ptr<Data::DocumentMedia> &media) {
+	auto bytes = media->bytes();
+	if (!bytes.isEmpty()) {
+		return bytes;
+	}
+	const auto &location = media->owner()->location(true);
+	if (location.accessEnable()) {
+		auto file = QFile(location.name());
+		if (file.size() <= kMaxCachedDocumentSize
+			&& file.open(QIODevice::ReadOnly)) {
+			bytes = file.readAll();
+		}
+		location.accessDisable();
+	}
+	return bytes;
+}
+
+bool WriteDocumentBytes(
+		const std::shared_ptr<Data::DocumentMedia> &media,
+		const QString &path) {
+	if (!media->loaded()) {
+		return false;
+	}
+	const auto bytes = DocumentBytes(media);
+	if (!bytes.isEmpty()) {
+		QDir().mkpath(QFileInfo(path).absolutePath());
+		auto file = QFile(path);
+		if (file.open(QIODevice::WriteOnly)) {
+			file.write(bytes);
+		}
+	}
+	return true;
+}
+
+void SaveDocumentBytes(
+		not_null<DocumentData*> document,
+		not_null<HistoryItem*> item,
+		const QString &path,
+		int maxAttempts) {
+	if (QFile::exists(path)
+		|| document->size <= 0
+		|| document->size > kMaxCachedDocumentSize) {
+		return;
+	}
+	auto media = document->createMediaView();
+	media->automaticLoad(item->fullId(), item);
+	if (WriteDocumentBytes(media, path)) {
+		return;
+	}
+	auto task = std::make_unique<DocumentSaveTask>();
+	const auto raw = task.get();
+	raw->media = std::move(media);
+	raw->path = path;
+	raw->maxAttempts = maxAttempts;
+	raw->timer.setCallback([=] {
+		++raw->attempts;
+		if (WriteDocumentBytes(raw->media, raw->path)
+			|| raw->attempts >= raw->maxAttempts) {
+			raw->timer.cancel();
+			crl::on_main([=] {
+				DocumentSaveTasks.erase(
+					std::remove_if(
+						DocumentSaveTasks.begin(),
+						DocumentSaveTasks.end(),
+						[=](const auto &task) { return task.get() == raw; }),
+					DocumentSaveTasks.end());
+			});
+		}
+	});
+	raw->timer.callEach(1000);
+	DocumentSaveTasks.push_back(std::move(task));
 }
 
 void flushPendingDeleted() {
@@ -193,7 +283,8 @@ void map(not_null<HistoryItem*> item, AyuMessageBase &message) {
 	message.documentSerialized = item->ayuSavedMedia();
 	const auto media = item->media();
 	const auto mediaFile = SavedMediaPath(item);
-	message.mediaPath = ((media && media->photo()) || QFile::exists(mediaFile))
+	message.mediaPath = ((media && (media->photo() || media->document()))
+		|| QFile::exists(mediaFile))
 		? mediaFile.toStdString()
 		: "/";
 	// message.hqThumbPath
@@ -237,14 +328,15 @@ void cacheDeletedMedia(not_null<HistoryItem*> item) {
 		return;
 	}
 	const auto origin = item->fullId();
+	const auto attempts = media->ttlSeconds()
+		? kLongSaveAttempts
+		: kPhotoSaveAttempts;
 	if (const auto photo = media->photo()) {
-		SavePhotoBytes(photo, origin, SavedMediaPath(item));
+		SavePhotoBytes(photo, origin, SavedMediaPath(item), attempts);
 	}
 	if (const auto document = media->document()) {
 		document->loadThumbnail(origin);
-		if (document->size > 0 && document->size <= kMaxCachedDocumentSize) {
-			document->save(origin, QString(), LoadFromCloudOrLocal, true);
-		}
+		SaveDocumentBytes(document, item, SavedMediaPath(item), attempts);
 	}
 }
 
@@ -268,15 +360,45 @@ void PutPhotoBytesIntoCache(
 			Data::kImageCacheTag));
 }
 
+void PutDocumentBytesIntoCache(
+		not_null<DocumentData*> document,
+		const QString &path) {
+	auto file = QFile(path);
+	if (!file.open(QIODevice::ReadOnly)) {
+		return;
+	}
+	const auto bytes = file.readAll();
+	if (bytes.isEmpty()) {
+		return;
+	}
+	document->owner().cache().putIfEmpty(
+		document->cacheKey(),
+		Storage::Cache::Database::TaggedValue(
+			QByteArray(bytes),
+			document->cacheTag()));
+}
+
+void PutMediaBytesIntoCache(
+		not_null<HistoryItem*> item,
+		const QString &path) {
+	const auto media = item->media();
+	if (!media) {
+		return;
+	}
+	if (const auto photo = media->photo()) {
+		PutPhotoBytesIntoCache(photo, path);
+	} else if (const auto document = media->document()) {
+		PutDocumentBytesIntoCache(document, path);
+	}
+}
+
 void restoreSavedMedia(
 		not_null<HistoryItem*> item,
 		const AyuMessageBase &message) {
-	const auto media = item->media();
-	const auto photo = media ? media->photo() : nullptr;
-	if (!photo || message.mediaPath.empty() || message.mediaPath == "/") {
+	if (message.mediaPath.empty() || message.mediaPath == "/") {
 		return;
 	}
-	PutPhotoBytesIntoCache(photo, QString::fromStdString(message.mediaPath));
+	PutMediaBytesIntoCache(item, QString::fromStdString(message.mediaPath));
 }
 
 void saveTtlMedia(not_null<HistoryItem*> item) {
@@ -292,6 +414,9 @@ void saveTtlMedia(not_null<HistoryItem*> item) {
 	auto file = QFile(path);
 	if (file.open(QIODevice::WriteOnly)) {
 		file.write(saved.data(), qint64(saved.size()));
+		LOG(("Ayu: saved self-destructing media of %1").arg(item->id.bare));
+	} else {
+		LOG(("Ayu: could not save self-destructing media of %1").arg(item->id.bare));
 	}
 }
 
@@ -304,6 +429,7 @@ std::optional<MTPMessageMedia> savedTtlMedia(
 		id.bare));
 	auto file = QFile(path);
 	if (!file.open(QIODevice::ReadOnly)) {
+		LOG(("Ayu: no saved self-destructing media for %1").arg(id.bare));
 		return std::nullopt;
 	}
 	const auto bytes = file.readAll();
@@ -321,11 +447,7 @@ std::optional<MTPMessageMedia> savedTtlMedia(
 }
 
 void restoreTtlBytes(not_null<HistoryItem*> item) {
-	const auto media = item->media();
-	const auto photo = media ? media->photo() : nullptr;
-	if (photo) {
-		PutPhotoBytesIntoCache(photo, SavedMediaPath(item));
-	}
+	PutMediaBytesIntoCache(item, SavedMediaPath(item));
 }
 
 std::vector<ID> loadDeletedDialogIds(ID userId) {
