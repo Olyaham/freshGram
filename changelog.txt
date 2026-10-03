@@ -1,3 +1,9 @@
+7.2.16 beta (04.10.26)
+
+- Keep chats and channels deleted by the other side, lost by a removal or a ban, and deleted or left by yourself in the chats list until they are deleted once more, including legacy groups and after a restart.
+- Open saved self-destructing photos and videos after a restart without the spoiler, marked as deleted and expired.
+- Center the lock icon in the locked toggles.
+
 7.2.15 beta (04.10.26)
 
 - Fix saved photos, documents, stickers, gifs and self-destructing media of deleted messages not being read after a restart.
