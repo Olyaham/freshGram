@@ -4293,7 +4293,7 @@ void ApiWrap::sendVoiceMessage(
 		bool video,
 		const SendAction &action) {
 	auto scheduledAction = action;
-	applyGhostScheduling(_session, scheduledAction.options, 17);
+	applyGhostScheduling(_session, scheduledAction.options, 20);
 	const auto caption = TextWithTags();
 	const auto to = FileLoadTaskOptions(scheduledAction);
 	_fileLoader->addTask(
