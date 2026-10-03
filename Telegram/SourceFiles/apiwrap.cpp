@@ -2228,6 +2228,7 @@ void ApiWrap::clearHistory(not_null<PeerData*> peer, bool revoke) {
 
 void ApiWrap::deleteConversation(not_null<PeerData*> peer, bool revoke) {
 	if (const auto chat = peer->asChat()) {
+		AyuKept::userLeaving(chat);
 		request(MTPmessages_DeleteChatUser(
 			MTP_flags(0),
 			chat->inputChat(),

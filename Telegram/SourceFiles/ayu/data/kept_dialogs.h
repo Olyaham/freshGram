@@ -6,6 +6,7 @@
 class History;
 class PeerData;
 class ChannelData;
+class ChatData;
 
 namespace Data {
 class Session;
@@ -19,7 +20,8 @@ void markLost(not_null<History*> history);
 void note(not_null<History*> history);
 void forget(not_null<PeerData*> peer);
 
-void userLeaving(not_null<ChannelData*> channel);
-[[nodiscard]] bool takeUserLeaving(not_null<ChannelData*> channel);
+void userLeaving(not_null<PeerData*> peer);
+[[nodiscard]] bool takeUserLeaving(not_null<PeerData*> peer);
+void chatAmInChanged(not_null<ChatData*> chat);
 
 } // namespace AyuKept

@@ -40,10 +40,10 @@ struct SessionState {
 };
 
 std::set<std::pair<ID, ID>> Noted;
-std::set<ChannelData*> Leaving;
+std::set<PeerData*> Leaving;
 
 [[nodiscard]] bool Supported(not_null<PeerData*> peer) {
-	if (peer->isForum() || peer->isMonoforum()) {
+	if (peer->isForum() || peer->isMonoforum() || peer->migrateTo()) {
 		return false;
 	}
 	if (const auto channel = peer->asChannel()) {
@@ -186,6 +186,8 @@ void Restore(not_null<Main::Session*> session, const KeptDialog &row) {
 	}
 	if (const auto channel = peer->asChannel(); channel && channel->amIn()) {
 		return;
+	} else if (const auto chat = peer->asChat(); chat && chat->amIn()) {
+		return;
 	}
 	const auto history = owner.history(peer);
 	history->setAyuKept(true);
@@ -297,12 +299,27 @@ void forget(not_null<PeerData*> peer) {
 	AyuDatabase::removeKeptDialog(userId, dialogId);
 }
 
-void userLeaving(not_null<ChannelData*> channel) {
-	Leaving.emplace(channel.get());
+void userLeaving(not_null<PeerData*> peer) {
+	Leaving.emplace(peer.get());
 }
 
-bool takeUserLeaving(not_null<ChannelData*> channel) {
-	return Leaving.erase(channel.get()) > 0;
+bool takeUserLeaving(not_null<PeerData*> peer) {
+	return Leaving.erase(peer.get()) > 0;
+}
+
+void chatAmInChanged(not_null<ChatData*> chat) {
+	const auto history = chat->owner().historyLoaded(chat);
+	if (chat->amIn()) {
+		takeUserLeaving(chat);
+		if (history && history->ayuKept()) {
+			forget(chat);
+		}
+		return;
+	}
+	const auto leaving = takeUserLeaving(chat);
+	if (history && history->inChatList() && !leaving) {
+		markLost(history);
+	}
 }
 
 } // namespace AyuKept

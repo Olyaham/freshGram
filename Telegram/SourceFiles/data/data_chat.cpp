@@ -21,6 +21,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "api/api_invite_links.h"
 
 #include "ayu/ayu_settings.h"
+#include "ayu/data/kept_dialogs.h"
 #include "ayu/utils/telegram_helpers.h"
 
 
@@ -149,6 +150,11 @@ void ChatData::invalidateParticipants() {
 void ChatData::setFlags(ChatDataFlags which) {
 	const auto wasIn = amIn();
 	_flags.set(which);
+	if (wasIn != amIn()) {
+		crl::on_main(&session(), [=] {
+			AyuKept::chatAmInChanged(this);
+		});
+	}
 	if (wasIn && !amIn()) {
 		crl::on_main(&session(), [=] {
 			if (!amIn()) {

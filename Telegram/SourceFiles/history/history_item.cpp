@@ -536,24 +536,13 @@ HistoryItem::HistoryItem(
 			tr::lng_message_empty(tr::now, tr::marked)
 		});
 	} else if (checked == MediaCheckResult::HasExpiredMediaTimeToLive) {
-		if (const auto saved = AyuMessages::savedTtlMedia(history, id)) {
-			createComponents(data);
-			setMedia(*saved);
-			AyuMessages::restoreTtlBytes(this);
-			setText(TextWithEntities{
-				qs(data.vmessage()),
-				Api::EntitiesFromMTP(
-					&history->session(),
-					data.ventities().value_or_empty())
-			});
-			setReactions(data.vreactions());
-			applyTTL(data);
+		createServiceFromMtp(data);
+		setReactions(data.vreactions());
+		applyTTL(data);
+		if (AyuSettings::getInstance().saveDeletedMessages()) {
 			_deleted = true;
 			_deletedAnimated = true;
-		} else {
-			createServiceFromMtp(data);
-			setReactions(data.vreactions());
-			applyTTL(data);
+			setAyuHint(AyuSettings::getInstance().deletedMark());
 		}
 	} else if (checked == MediaCheckResult::HasStoryMention) {
 		setMedia(*data.vmedia());
