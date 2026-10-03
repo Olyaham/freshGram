@@ -1,3 +1,11 @@
+7.2.13 beta (03.10.26)
+
+- Keep photos, self-destructing media and polls of deleted messages after a restart.
+- Restore deleted stickers, gifs and emoji as text to avoid crashes.
+- Round media corners in rich messages.
+- Reduce freezes when restoring deleted messages in chats.
+- Write a crash and freeze trace to tdata/crash_trace.txt.
+
 7.2.12 beta (03.10.26)
 
 - Keep deleted messages, photos and media in chats after a restart.
