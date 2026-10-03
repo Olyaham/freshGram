@@ -957,7 +957,7 @@ HistoryWidget::HistoryWidget(
 		AyuSettings::getInstance().showAttachPopupChanges() | rpl::to_empty,
 		AyuSettings::getInstance().showEmojiPopupChanges() | rpl::to_empty,
 		AyuSettings::getInstance().channelBottomButtonChanges() | rpl::to_empty,
-		AyuSettings::getInstance().removeMessageTailChanges() | rpl::to_empty
+		AyuSettings::getInstance().materialBubblesChanges() | rpl::to_empty
 	) | rpl::on_next([=] {
 		refreshSendGiftToggle();
 		refreshAttachBotsMenu();

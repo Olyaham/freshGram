@@ -1100,6 +1100,35 @@ QByteArray iconMaskValueSize(int width, int height) {
 	return result;
 }
 
+[[nodiscard]] QString iconClassicPath(const QString &filepath) {
+	if (filepath.startsWith("size://")) {
+		return QString();
+	}
+	const auto marker = QString("/icons/");
+	const auto index = filepath.lastIndexOf(marker);
+	if (index < 0) {
+		return QString();
+	}
+	return filepath.left(index)
+		+ "/icons_classic/"
+		+ filepath.mid(index + marker.size());
+}
+
+[[nodiscard]] bool iconClassicExists(const QString &classicPath) {
+	if (classicPath.isEmpty()) {
+		return false;
+	}
+	if (!iconMaskSvgPath(classicPath).isEmpty()) {
+		return true;
+	}
+	const auto fileInfo = QFileInfo(classicPath);
+	const auto base = fileInfo.dir().absoluteFilePath(
+		fileInfo.fileName().split('-')[0]);
+	return QFileInfo(base + ".png").exists()
+		&& QFileInfo(base + "@2x.png").exists()
+		&& QFileInfo(base + "@3x.png").exists();
+}
+
 QByteArray iconMaskValueSvg(QString filepath) {
 	QFileInfo fileInfo(filepath);
 	auto directory = fileInfo.dir();
@@ -1221,6 +1250,7 @@ bool Generator::writeIconValues() {
 
 	// Size variants of one svg share a single embedded copy.
 	auto svgDataOwners = QMap<QString, int>();
+	auto classicOwners = QSet<int>();
 	for (auto i = iconMasks_.cbegin(), e = iconMasks_.cend(); i != e; ++i) {
 		const auto filePath = i.key();
 		auto maskData = QByteArray();
@@ -1244,6 +1274,18 @@ bool Generator::writeIconValues() {
 			return false;
 		}
 		source_->stream() << "const uchar iconMask" << i.value() << "Data[] = " << stringToBinaryArray(std::string(maskData.constData(), maskData.size())) << ";\n\n";
+
+		const auto classicPath = iconClassicPath(filePath);
+		if (iconClassicExists(classicPath)) {
+			auto classicData = iconMaskSvgPath(classicPath).isEmpty()
+				? iconMaskValuePng(classicPath)
+				: iconMaskValueSvg(classicPath);
+			if (classicData.isEmpty()) {
+				return false;
+			}
+			classicOwners.insert(i.value());
+			source_->stream() << "const uchar iconMask" << i.value() << "ClassicData[] = " << stringToBinaryArray(std::string(classicData.constData(), classicData.size())) << ";\n\n";
+		}
 	}
 	for (auto i = iconMasks_.cbegin(), e = iconMasks_.cend(); i != e; ++i) {
 		const auto filePath = i.key();
@@ -1255,7 +1297,10 @@ bool Generator::writeIconValues() {
 				sizeArgument = QString(", { %1, %2 }").arg(size.width()).arg(size.height());
 			}
 		}
-		source_->stream() << "IconMask iconMask" << i.value() << "(iconMask" << dataIndex << "Data" << sizeArgument << ");\n";
+		const auto classicArgument = classicOwners.contains(dataIndex)
+			? QString(", iconMask%1ClassicData").arg(dataIndex)
+			: QString();
+		source_->stream() << "IconMask iconMask" << i.value() << "(iconMask" << dataIndex << "Data" << classicArgument << sizeArgument << ");\n";
 	}
 	source_->stream() << "\n";
 	return true;

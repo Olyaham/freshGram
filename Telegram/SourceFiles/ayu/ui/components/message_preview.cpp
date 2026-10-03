@@ -126,11 +126,13 @@ MessagePreview::MessagePreview(
 			| rpl::to_empty,
 		AyuSettings::getInstance().editedMarkChanges()
 			| rpl::to_empty,
-		AyuSettings::getInstance().removeMessageTailChanges()
+		AyuSettings::getInstance().materialBubblesChanges()
 			| rpl::to_empty,
 		AyuSettings::getInstance().hideFastShareChanges()
 			| rpl::to_empty,
 		AyuSettings::getInstance().simpleQuotesAndRepliesChanges()
+			| rpl::to_empty,
+		AyuSettings::getInstance().replyBackgroundOpacityChanges()
 			| rpl::to_empty,
 		AyuSettings::getInstance().semiTransparentDeletedMessagesChanges()
 			| rpl::to_empty

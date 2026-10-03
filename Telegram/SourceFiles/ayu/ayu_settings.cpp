@@ -19,6 +19,7 @@
 #include "main/main_session.h"
 #include "platform/platform_translate_provider.h"
 #include "rpl/combine.h"
+#include "ui/style/style_core.h"
 #include "window/window_controller.h"
 
 #include <fstream>
@@ -532,6 +533,7 @@ void AyuSettings::validate() {
 	}
 
 	validateRange(_messageBubbleRadius, 0, 16, defaults._messageBubbleRadius);
+	validateRange(_replyBackgroundOpacity, 0, 50, defaults._replyBackgroundOpacity);
 	validateRange(_wideMultiplier, 0.5, 4.0, defaults._wideMultiplier);
 	validateRange(_avatarCorners, 0, AyuUiSettings::kMaxAvatarCorners, defaults._avatarCorners);
 
@@ -679,9 +681,23 @@ void AyuSettings::setMaterialSwitches(bool val) {
 	save();
 }
 
-void AyuSettings::setRemoveMessageTail(bool val) {
-	if (_removeMessageTail.current() == val) return;
-	_removeMessageTail = val;
+void AyuSettings::setMaterialBubbles(bool val) {
+	if (_materialBubbles.current() == val) return;
+	_materialBubbles = val;
+	repaintApp();
+	save();
+}
+
+void AyuSettings::setMaterialIcons(bool val) {
+	if (_materialIcons.current() == val) return;
+	_materialIcons = val;
+	save();
+}
+
+void AyuSettings::setReplyBackgroundOpacity(int val) {
+	if (_replyBackgroundOpacity.current() == val) return;
+	_replyBackgroundOpacity = val;
+	style::NotifyPaletteChanged();
 	save();
 }
 
@@ -1116,7 +1132,9 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"increaseWebviewHeight", s._increaseWebviewHeight.current()},
 		{"increaseWebviewWidth", s._increaseWebviewWidth.current()},
 		{"materialSwitches", s._materialSwitches.current()},
-		{"removeMessageTail", s._removeMessageTail.current()},
+		{"materialBubbles", s._materialBubbles.current()},
+		{"materialIcons", s._materialIcons.current()},
+		{"replyBackgroundOpacity", s._replyBackgroundOpacity.current()},
 		{"disableNotificationsDelay", s._disableNotificationsDelay.current()},
 		{"localPremium", s._localPremium.current()},
 		{"showChannelReactions", s._showChannelReactions.current()},
@@ -1220,7 +1238,9 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._increaseWebviewHeight = j.value("increaseWebviewHeight", defaults._increaseWebviewHeight.current());
 	s._increaseWebviewWidth = j.value("increaseWebviewWidth", defaults._increaseWebviewWidth.current());
 	s._materialSwitches = j.value("materialSwitches", defaults._materialSwitches.current());
-	s._removeMessageTail = j.value("removeMessageTail", defaults._removeMessageTail.current());
+	s._materialBubbles = j.value("materialBubbles", defaults._materialBubbles.current());
+	s._materialIcons = j.value("materialIcons", defaults._materialIcons.current());
+	s._replyBackgroundOpacity = j.value("replyBackgroundOpacity", defaults._replyBackgroundOpacity.current());
 	s._disableNotificationsDelay = j.value("disableNotificationsDelay", defaults._disableNotificationsDelay.current());
 	s._localPremium = j.value("localPremium", defaults._localPremium.current());
 	s._showChannelReactions = j.value("showChannelReactions", defaults._showChannelReactions.current());

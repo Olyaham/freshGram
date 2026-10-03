@@ -373,7 +373,7 @@ void RefreshCaptionQuoteCaches(
 	};
 
 	const auto accent = st::mediaviewTextLinkFg->c;
-	blockquote.bg = withAlpha(accent, Ui::kDefaultBgOpacity);
+	blockquote.bg = withAlpha(accent, Ui::DefaultBgOpacity());
 	blockquote.outlines[0] = withAlpha(accent, Ui::kDefaultOutline1Opacity);
 	blockquote.outlines[1] = blockquote.outlines[2] = QColor(0, 0, 0, 0);
 	blockquote.icon = accent;

@@ -13,6 +13,7 @@ namespace AyuUiSettings {
 QString monoFont;
 double wideMultiplier = 1.0;
 bool materialSwitches;
+bool classicIcons;
 int avatarCorners = kMaxAvatarCorners;
 
 void setMonoFont(QString newFont) {
@@ -45,6 +46,14 @@ void setMaterialSwitches(bool val) {
 
 bool isMaterialSwitches() {
 	return materialSwitches;
+}
+
+void setClassicIcons(bool val) {
+	classicIcons = val;
+}
+
+bool isClassicIcons() {
+	return classicIcons;
 }
 
 void setAvatarCorners(int val) {

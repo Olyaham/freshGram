@@ -27,6 +27,7 @@ void initUiSettings() {
 	AyuUiSettings::setMonoFont(settings.monoFont());
 	AyuUiSettings::setWideMultiplier(settings.wideMultiplier());
 	AyuUiSettings::setMaterialSwitches(settings.materialSwitches());
+	AyuUiSettings::setClassicIcons(!settings.materialIcons());
 	AyuUiSettings::setAvatarCorners(settings.avatarCorners());
 	Ui::SetAppliedBubbleRadius(settings.messageBubbleRadius());
 }

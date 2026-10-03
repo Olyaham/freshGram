@@ -8,6 +8,7 @@
 
 #include "ui/style/style_core_color.h"
 #include "ui/style/style_core_scale.h"
+#include "ayu/ayu_ui_settings.h"
 #include "base/algorithm.h"
 #include "base/assertion.h"
 
@@ -31,19 +32,47 @@ public:
 		static_assert(N > 0, "invalid image data");
 	}
 
+	template <int N, int M>
+	constexpr IconMask(const uchar (&data)[N], const uchar (&classic)[M])
+	: _data(data)
+	, _size(N)
+	, _classicData(classic)
+	, _classicSize(M) {
+		static_assert(N > 0 && M > 0, "invalid image data");
+	}
+
+	template <int N, int M>
+	constexpr IconMask(
+		const uchar (&data)[N],
+		const uchar (&classic)[M],
+		QSize rendered)
+	: _data(data)
+	, _size(N)
+	, _classicData(classic)
+	, _classicSize(M)
+	, _rendered(rendered) {
+		static_assert(N > 0 && M > 0, "invalid image data");
+	}
+
 	const uchar *data() const {
-		return _data;
+		return useClassic() ? _classicData : _data;
 	}
 	int size() const {
-		return _size;
+		return useClassic() ? _classicSize : _size;
 	}
 	QSize rendered() const {
 		return _rendered;
 	}
 
 private:
+	bool useClassic() const {
+		return _classicData && AyuUiSettings::isClassicIcons();
+	}
+
 	const uchar *_data;
 	const int _size;
+	const uchar *_classicData = nullptr;
+	const int _classicSize = 0;
 	const QSize _rendered;
 
 };

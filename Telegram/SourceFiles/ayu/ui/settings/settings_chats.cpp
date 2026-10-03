@@ -192,6 +192,18 @@ void BuildMarks(
 		| rpl::map([](bool v) { return !v; }));
 
 	ayu.addSettingToggle({
+		.id = u"ayu/materialBubbles"_q,
+		.altIds = {
+			u"ayu/removeMessageTail"_q,
+			u"ayu/messageRounding"_q,
+			u"ayu/messageTail"_q,
+		},
+		.title = tr::ayu_MaterialBubbles(),
+		.getter = &AyuSettings::materialBubbles,
+		.setter = &AyuSettings::setMaterialBubbles,
+	});
+
+	ayu.addSettingToggle({
 		.id = u"ayu/hideFastShare"_q,
 		.altIds = { u"ayu/hideShareButton"_q },
 		.title = tr::ayu_HideShareButton(),
@@ -204,6 +216,20 @@ void BuildMarks(
 		.title = tr::ayu_SimpleQuotesAndReplies(),
 		.getter = &AyuSettings::simpleQuotesAndReplies,
 		.setter = &AyuSettings::setSimpleQuotesAndReplies,
+	});
+	ayu.addSlider({
+		.id = u"ayu/replyBackgroundOpacity"_q,
+		.altIds = { u"ayu/colorfulReplies"_q },
+		.title = tr::ayu_ReplyBackgroundOpacity(),
+		.steps = 26,
+		.current = settings->replyBackgroundOpacity() / 2,
+		.indexToValue = [](int index) { return index; },
+		.onFinalChanged = [](int index) {
+			AyuSettings::getInstance().setReplyBackgroundOpacity(index * 2);
+		},
+		.formatLabel = [](int index) {
+			return QString::number(index * 2) + '%';
+		},
 	});
 
 	const auto semiTransparent = ayu.addSettingToggle({

@@ -30,8 +30,9 @@ See the [AyuGram documentation](https://docs.ayugram.one/desktop/) for the full 
 
 - Own Material You themes (Google Day and Google Dark, applied on the first launch)
 - **Google Sans** font everywhere (except for Arabic characters, they use the **Vazirmatn** font)
-- Material icons instead of default ones
-- Removed message bubble tails and reverted old paddings (enabled by default, can be turned off in the AyuGram chat settings)
+- Material icons instead of default ones (can be turned off in the AyuGram appearance settings, restart required)
+- Rounded photos and videos and no message bubble tails, plus reverted old paddings (the "Message Rounding and Tail" setting in the AyuGram chat settings turns the rounding and tails back to the classic look)
+- Colored reply background with an adjustable opacity
 - Removed "large emoji" outline
 - Reduced use of uppercase in the interface
 - Ability to seek round videos
@@ -64,6 +65,11 @@ See the [AyuGram documentation](https://docs.ayugram.one/desktop/) for the full 
 Where AyuGram and materialgram solve the same task, freshGram keeps the AyuGram implementation
 and uses the materialgram look as the default value of the corresponding AyuGram setting
 (for example, message tails are removed and unlimited recent stickers are enabled by default).
+
+## Links
+
+- Telegram channel: [freshGramDesktop](https://t.me/freshGramDesktop)
+- Source code: [Snowy-Fluffy/freshGram](https://github.com/Snowy-Fluffy/freshGram)
 
 ## Build instructions
 

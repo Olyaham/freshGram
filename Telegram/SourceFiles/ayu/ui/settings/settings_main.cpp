@@ -150,6 +150,17 @@ void BuildLinks(SectionBuilder &builder) {
 		},
 	});
 
+	builder.addButton({
+		.id = u"freshgram/channel"_q,
+		.title = tr::lng_freshgram_settings_channel(),
+		.icon = { &st::menuIconChannel },
+		.label = rpl::single(QString("@freshGramDesktop")),
+		.onClick = [=] {
+			QDesktopServices::openUrl(
+				QString("https://t.me/freshGramDesktop"));
+		},
+	});
+
 	builder.addSkip();
 }
 

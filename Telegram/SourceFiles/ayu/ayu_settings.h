@@ -293,7 +293,9 @@ public:
 	[[nodiscard]] bool increaseWebviewHeight() const { return _increaseWebviewHeight.current(); }
 	[[nodiscard]] bool increaseWebviewWidth() const { return _increaseWebviewWidth.current(); }
 	[[nodiscard]] bool materialSwitches() const { return _materialSwitches.current(); }
-	[[nodiscard]] bool removeMessageTail() const { return _removeMessageTail.current(); }
+	[[nodiscard]] bool materialBubbles() const { return _materialBubbles.current(); }
+	[[nodiscard]] bool materialIcons() const { return _materialIcons.current(); }
+	[[nodiscard]] int replyBackgroundOpacity() const { return _replyBackgroundOpacity.current(); }
 	[[nodiscard]] bool disableNotificationsDelay() const { return _disableNotificationsDelay.current(); }
 	[[nodiscard]] bool localPremium() const { return _localPremium.current(); }
 	[[nodiscard]] bool showChannelReactions() const { return _showChannelReactions.current(); }
@@ -380,7 +382,9 @@ public:
 	void setIncreaseWebviewHeight(bool val);
 	void setIncreaseWebviewWidth(bool val);
 	void setMaterialSwitches(bool val);
-	void setRemoveMessageTail(bool val);
+	void setMaterialBubbles(bool val);
+	void setMaterialIcons(bool val);
+	void setReplyBackgroundOpacity(int val);
 	void setDisableNotificationsDelay(bool val);
 	void setLocalPremium(bool val);
 	void setShowChannelReactions(bool val);
@@ -490,8 +494,12 @@ public:
 	[[nodiscard]] rpl::producer<bool> increaseWebviewWidthChanges() const { return _increaseWebviewWidth.changes(); }
 	[[nodiscard]] rpl::producer<bool> materialSwitchesValue() const { return _materialSwitches.value(); }
 	[[nodiscard]] rpl::producer<bool> materialSwitchesChanges() const { return _materialSwitches.changes(); }
-	[[nodiscard]] rpl::producer<bool> removeMessageTailValue() const { return _removeMessageTail.value(); }
-	[[nodiscard]] rpl::producer<bool> removeMessageTailChanges() const { return _removeMessageTail.changes(); }
+	[[nodiscard]] rpl::producer<bool> materialBubblesValue() const { return _materialBubbles.value(); }
+	[[nodiscard]] rpl::producer<bool> materialBubblesChanges() const { return _materialBubbles.changes(); }
+	[[nodiscard]] rpl::producer<bool> materialIconsValue() const { return _materialIcons.value(); }
+	[[nodiscard]] rpl::producer<bool> materialIconsChanges() const { return _materialIcons.changes(); }
+	[[nodiscard]] rpl::producer<int> replyBackgroundOpacityValue() const { return _replyBackgroundOpacity.value(); }
+	[[nodiscard]] rpl::producer<int> replyBackgroundOpacityChanges() const { return _replyBackgroundOpacity.changes(); }
 	[[nodiscard]] rpl::producer<bool> disableNotificationsDelayValue() const { return _disableNotificationsDelay.value(); }
 	[[nodiscard]] rpl::producer<bool> disableNotificationsDelayChanges() const { return _disableNotificationsDelay.changes(); }
 	[[nodiscard]] rpl::producer<bool> localPremiumValue() const { return _localPremium.value(); }
@@ -650,7 +658,9 @@ private:
 	rpl::variable<bool> _increaseWebviewHeight = false;
 	rpl::variable<bool> _increaseWebviewWidth = false;
 	rpl::variable<bool> _materialSwitches = true;
-	rpl::variable<bool> _removeMessageTail = true;
+	rpl::variable<bool> _materialBubbles = true;
+	rpl::variable<bool> _materialIcons = true;
+	rpl::variable<int> _replyBackgroundOpacity = 12;
 	rpl::variable<bool> _disableNotificationsDelay = false;
 	rpl::variable<bool> _localPremium = false;
 	rpl::variable<bool> _showChannelReactions = true;

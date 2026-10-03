@@ -629,10 +629,19 @@ TextState Media::getStateGrouped(
 Ui::BubbleRounding Media::adjustedBubbleRounding(RectParts square) const {
 	auto result = bubbleRounding();
 	using Corner = Ui::BubbleCornerRounding;
+	const auto material = Ui::MaterialBubbles();
 	const auto adjust = [&](bool round, Corner already, RectPart corner) {
-		return (already == Corner::None || !round || (square & corner))
-			? Corner::None
-			: already;
+		if (material) {
+			return (already == Corner::None || !round || (square & corner))
+				? Corner::None
+				: already;
+		}
+		if (square & corner) {
+			return Corner::None;
+		} else if (already == Corner::Tail) {
+			return Corner::None;
+		}
+		return round ? already : Corner::Small;
 	};
 	const auto top = isBubbleTop();
 	const auto bottom = isRoundedInBubbleBottom();
@@ -669,10 +678,15 @@ Images::CornersMaskRef MediaRoundingMask(
 	auto result = Images::CornersMaskRef();
 	const auto &small = Ui::CachedCornersMasks(Radius::BubbleSmall);
 	const auto &large = Ui::CachedCornersMasks(Radius::BubbleLarge);
+	const auto smallCorner = Ui::MaterialBubbles()
+		? Corner::None
+		: Corner::Small;
 	for (auto i = 0; i != 4; ++i) {
-		switch ((*rounding)[i]) {
-		case Corner::None: result.p[i] = &small[i]; break;
-		case Corner::Large: result.p[i] = &large[i]; break;
+		const auto corner = (*rounding)[i];
+		if (corner == smallCorner) {
+			result.p[i] = &small[i];
+		} else if (corner == Corner::Large) {
+			result.p[i] = &large[i];
 		}
 	}
 	return result;

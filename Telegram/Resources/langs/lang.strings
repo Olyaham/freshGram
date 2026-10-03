@@ -1347,6 +1347,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_faq_subtitle" = "FAQ";
 "lng_settings_faq_link" = "https://telegram.org/faq#general-questions";
 "lng_freshgram_settings_github" = "freshGram on GitHub";
+"lng_freshgram_settings_channel" = "freshGram channel";
 "lng_settings_features" = "Telegram Features";
 "lng_settings_credits" = "My Stars";
 "lng_settings_currency" = "My Grams";
@@ -8901,7 +8902,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_SettingsUnlimitedRecentStickers" = "Unlimited Recent Stickers";
 "ayu_SettingsCustomizationHint" = "You must restart the application after making changes in the \"Customization\" section.";
 "ayu_MaterialSwitches" = "MD3 Switch Style";
-"ayu_RemoveMessageTail" = "Remove Message Tail";
+"ayu_MaterialBubbles" = "Message Rounding and Tail";
+"ayu_MaterialIcons" = "Material Icons";
+"ayu_ReplyBackgroundOpacity" = "Colorful Reply Background";
 "ayu_HideShareButton" = "Hide Side \"Share\" Button";
 "ayu_ChatFoldersHeader" = "Chat Folders";
 "ayu_SettingsContextMenuTitle" = "Choose when to show the item";

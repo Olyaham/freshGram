@@ -24,6 +24,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 
 namespace Ui {
+
+double DefaultBgOpacity() {
+	return AyuSettings::getInstance().replyBackgroundOpacity() / 100.;
+}
+
 namespace {
 
 void EnsureCorners(
@@ -66,7 +71,7 @@ void EnsurePreCache(
 	const auto bg = bgOverride();
 	cache->bg = bg.value_or(color->c);
 	if (!bg) {
-		cache->bg.setAlpha(kDefaultBgOpacity * 255);
+		cache->bg.setAlpha(DefaultBgOpacity() * 255);
 	}
 	cache->outlines[0] = color->c;
 	cache->outlines[0].setAlpha(kDefaultOutline1Opacity * 255);
@@ -126,7 +131,7 @@ int HistoryServiceMsgInvertedShrink() {
 
 ColorIndexValues SimpleColorIndexValues(QColor color, int patternIndex) {
 	auto bg = color;
-	bg.setAlpha(kDefaultBgOpacity * 255);
+	bg.setAlpha(DefaultBgOpacity() * 255);
 	auto result = ColorIndexValues{
 		.name = color,
 		.bg = bg,
@@ -366,6 +371,18 @@ ChatStyle::ChatStyle(rpl::producer<ColorIndicesCompressed> colorIndices) {
 		st::messageMarkdownSelected,
 		st::messageMarkdownOut,
 		st::messageMarkdownOutSelected);
+	make(
+		&MessageStyle::tailLeft,
+		st::historyBubbleTailInLeft,
+		st::historyBubbleTailInLeftSelected,
+		st::historyBubbleTailOutLeft,
+		st::historyBubbleTailOutLeftSelected);
+	make(
+		&MessageStyle::tailRight,
+		st::historyBubbleTailInRight,
+		st::historyBubbleTailInRightSelected,
+		st::historyBubbleTailOutRight,
+		st::historyBubbleTailOutRightSelected);
 
 	make(
 		&MessageStyle::channelBadgeIcon,
@@ -881,7 +898,7 @@ ColorIndexValues ChatStyle::computeColorIndexValues(
 			.name = (*(selected ? listSelected : list)[paletteIndex])->c,
 		};
 		result.bg = result.name;
-		result.bg.setAlpha(kDefaultBgOpacity * 255);
+		result.bg.setAlpha(DefaultBgOpacity() * 255);
 		result.outlines[0] = result.name;
 		result.outlines[0].setAlpha(kDefaultOutline1Opacity * 255);
 		result.outlines[1] = result.outlines[2] = QColor(0, 0, 0, 0);
@@ -902,7 +919,7 @@ ColorIndexValues ChatStyle::computeColorIndexValues(
 		.outlines = { color(0), color(1), color(2) }
 	};
 	result.bg = result.outlines[0];
-	result.bg.setAlpha(kDefaultBgOpacity * 255);
+	result.bg.setAlpha(DefaultBgOpacity() * 255);
 	result.name = result.outlines[0];
 	return result;
 }
@@ -1042,7 +1059,7 @@ not_null<Text::QuotePaintCache*> ChatStyle::collectibleCache(
 	EnsureBlockquoteCache(cache, [&] {
 		const auto name = collectibleNameColor(collectible);
 		auto bg = name;
-		bg.setAlpha(kDefaultBgOpacity * 255);
+		bg.setAlpha(DefaultBgOpacity() * 255);
 
 		const auto &strip = (_dark && !collectible->darkStrip.empty())
 			? collectible->darkStrip

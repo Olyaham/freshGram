@@ -14,6 +14,7 @@ class ChatStyle;
 
 enum class BubbleCornerRounding : uchar {
 	None,
+	Tail,
 	Small,
 	Large,
 };
@@ -90,10 +91,13 @@ struct BubblePattern {
 	QPixmap pixmap;
 	std::array<QImage, 4> cornersSmall;
 	std::array<QImage, 4> cornersLarge;
+	QImage tailLeft;
+	QImage tailRight;
 	mutable QImage cornerTopSmallCache;
 	mutable QImage cornerTopLargeCache;
 	mutable QImage cornerBottomSmallCache;
 	mutable QImage cornerBottomLargeCache;
+	mutable QImage tailCache;
 };
 
 [[nodiscard]] std::unique_ptr<BubblePattern> PrepareBubblePattern(
@@ -124,6 +128,8 @@ struct BubbleWithGaps {
 	const std::vector<BubbleSelectionInterval> &gaps;
 	not_null<TornEdgeCache*> torn;
 };
+
+[[nodiscard]] bool MaterialBubbles();
 
 void PaintBubble(QPainter &p, const SimpleBubble &args);
 void PaintBubble(QPainter &p, const ComplexBubble &args);

@@ -75,7 +75,7 @@ void EnsureBlockquotePaintCache(
 	}
 	cache = std::make_unique<Ui::Text::QuotePaintCache>();
 	cache->bg = color->c;
-	cache->bg.setAlpha(Ui::kDefaultBgOpacity * 255);
+	cache->bg.setAlpha(Ui::DefaultBgOpacity() * 255);
 	cache->outlines[0] = color->c;
 	cache->outlines[0].setAlpha(Ui::kDefaultOutline1Opacity * 255);
 	cache->outlines[1] = cache->outlines[2] = QColor(0, 0, 0, 0);
@@ -103,7 +103,7 @@ void EnsurePrePaintCache(
 		cache->bg = QColor(0, 0, 0, 192);
 	} else {
 		cache->bg = color->c;
-		cache->bg.setAlpha(Ui::kDefaultBgOpacity * 255);
+		cache->bg.setAlpha(Ui::DefaultBgOpacity() * 255);
 	}
 	cache->outlines[0] = color->c;
 	cache->outlines[0].setAlpha(Ui::kDefaultOutline1Opacity * 255);

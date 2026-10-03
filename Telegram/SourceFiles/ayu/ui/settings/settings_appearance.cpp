@@ -187,8 +187,22 @@ void BuildAvatarCorners(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 
 void BuildAppearance(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	auto *settings = &AyuSettings::getInstance();
+	const auto iconsController = builder.controller();
 
 	builder.addSubsectionTitle(tr::ayu_CategoryAppearance());
+
+	ayu.addToggle({
+		.id = u"ayu/materialIcons"_q,
+		.altIds = { u"ayu/materialDesign"_q, u"ayu/icons"_q },
+		.title = tr::ayu_MaterialIcons(),
+		.getter = [] {
+			return AyuSettings::getInstance().materialIcons();
+		},
+		.setter = [=](bool enabled) {
+			AyuSettings::getInstance().setMaterialIcons(enabled);
+			ShowRestartPrompt(iconsController);
+		},
+	});
 
 	ayu.addSettingToggle({
 		.id = u"ayu/materialSwitches"_q,

@@ -341,7 +341,16 @@ void Content::createBubble() {
 	}
 	const auto innerGeometry = currentView->innerGeometry();
 
-	_bubble.offsetFromContent = QPoint(0, innerGeometry.y());
+	const auto tailWidth = Ui::MaterialBubbles()
+		? 0
+		: st::historyBubbleTailOutLeft.width();
+	_bubble.offsetFromContent = QPoint(
+		(currentView->hasOutLayout()
+			&& (currentView->delegate()->elementChatMode()
+				!= HistoryView::ElementChatMode::Wide))
+			? 0
+			: tailWidth,
+		innerGeometry.y());
 
 	const auto scaleOffset = QPoint(0, innerGeometry.y());
 	const auto paintOffsetLeft = innerGeometry.x()
@@ -351,10 +360,11 @@ void Content::createBubble() {
 		|| currentView->data()->externalReply();
 	_bubble.widget->resize(innerGeometry.size()
 		+ QSize(
-			(_isText && currentView->data()->isPost()
-				? rect::m::sum::h(st::msgPadding)
-					+ st::historyFastShareSize
-				: 0),
+			(currentView->hasOutLayout() ? tailWidth : 0)
+				+ (_isText && currentView->data()->isPost()
+					? rect::m::sum::h(st::msgPadding)
+						+ st::historyFastShareSize
+					: 0),
 			(hasCommentsButton || _isText) ? innerGeometry.y() : 0));
 	_bubble.widget->show();
 
