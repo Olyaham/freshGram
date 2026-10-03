@@ -971,6 +971,7 @@ void Histories::deleteMessagesByDates(
 
 void Histories::deleteMessages(const MessageIdsList &ids, bool revoke) {
 	auto remove = std::vector<not_null<HistoryItem*>>();
+	auto keep = std::vector<not_null<HistoryItem*>>();
 	remove.reserve(ids.size());
 	base::flat_map<not_null<History*>, QVector<MTPint>> idsByPeer;
 	base::flat_map<not_null<PeerData*>, QVector<MTPint>> scheduledIdsByPeer;
@@ -1015,11 +1016,18 @@ void Histories::deleteMessages(const MessageIdsList &ids, bool revoke) {
 				_owner->session().ephemeralMessages().deleteMessage(item);
 				continue;
 			}
-			remove.push_back(item);
 			if (item->isDeleted()) {
+				remove.push_back(item);
 				AyuMessages::removeDeletedMessage(item);
 			} else if (item->isRegular()) {
 				idsByPeer[history].push_back(MTP_int(itemId.msg));
+				if (isMessageSavable(item)) {
+					keep.push_back(item);
+				} else {
+					remove.push_back(item);
+				}
+			} else {
+				remove.push_back(item);
 			}
 		}
 	}
@@ -1046,6 +1054,9 @@ void Histories::deleteMessages(const MessageIdsList &ids, bool revoke) {
 	}
 	for (const auto &document : savedMusic) {
 		document->owner().savedMusic().remove(document);
+	}
+	for (const auto &item : keep) {
+		processMessageDelete(item);
 	}
 
 	if (!remove.empty()) {

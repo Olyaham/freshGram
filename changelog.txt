@@ -1,3 +1,11 @@
+7.2.15 beta (04.10.26)
+
+- Fix saved photos, documents, stickers, gifs and self-destructing media of deleted messages not being read after a restart.
+- Keep messages that you delete yourself as deleted messages, the same way as messages deleted by others.
+- Fix the crash and the stretched icons when Material Icons are turned off or on.
+- Show the Telegram ID in the settings header again and fix its spacing.
+- Use a longer delay for messages sent through scheduled messages in ghost mode.
+
 7.2.14 beta (03.10.26)
 
 - Fix the freeze when restoring deleted messages, which the watchdog reported as a crash.
