@@ -119,11 +119,11 @@ std::vector<char> serializeSavableMedia(const MTPMessageMedia &media) {
 		if (data.vttl_seconds()) {
 			flags |= MTPDmessageMediaPhoto::Flag::f_spoiler;
 		}
-		return serializeObject(MTP_messageMediaPhoto(
+		return serializeObject(MTPMessageMedia(MTP_messageMediaPhoto(
 			MTP_flags(flags),
 			*photo,
 			MTP_int(0),
-			video ? MTPDocument(*video) : MTPDocument()));
+			video ? MTPDocument(*video) : MTPDocument())));
 	}, [](const MTPDmessageMediaDocument &data) -> std::vector<char> {
 		const auto document = data.vdocument();
 		if (!document) {
@@ -136,13 +136,13 @@ std::vector<char> serializeSavableMedia(const MTPMessageMedia &media) {
 		if (data.vttl_seconds()) {
 			flags |= MTPDmessageMediaDocument::Flag::f_spoiler;
 		}
-		return serializeObject(MTP_messageMediaDocument(
+		return serializeObject(MTPMessageMedia(MTP_messageMediaDocument(
 			MTP_flags(flags),
 			*document,
 			alt ? MTPVector<MTPDocument>(*alt) : MTPVector<MTPDocument>(),
 			cover ? MTPPhoto(*cover) : MTPPhoto(),
 			timestamp ? MTP_int(timestamp->v) : MTP_int(0),
-			MTP_int(0)));
+			MTP_int(0))));
 	}, [](const MTPDmessageMediaEmpty &) -> std::vector<char> {
 		return {};
 	}, [](const MTPDmessageMediaUnsupported &) -> std::vector<char> {
@@ -152,8 +152,33 @@ std::vector<char> serializeSavableMedia(const MTPMessageMedia &media) {
 	});
 }
 
+std::optional<MTPMessageMedia> tryDeserializeBareMedia(
+		const std::vector<char> &serialized) {
+	if (serialized.empty() || serialized.size() % sizeof(mtpPrime) != 0) {
+		return std::nullopt;
+	}
+	auto buffer = mtpBuffer(serialized.size() / sizeof(mtpPrime));
+	memcpy(buffer.data(), serialized.data(), serialized.size());
+
+	for (const auto type : {
+		mtpc_messageMediaPhoto,
+		mtpc_messageMediaDocument,
+	}) {
+		auto from = static_cast<const mtpPrime*>(buffer.data());
+		const auto end = from + buffer.size();
+		auto data = MTPmessageMedia();
+		if (data.read(from, end, type) && from == end) {
+			return MTPMessageMedia(data);
+		}
+	}
+	return std::nullopt;
+}
+
 MTPMessageMedia deserializeMedia(const std::vector<char> &serialized) {
 	auto result = tryDeserializeObject<MTPMessageMedia>(serialized);
+	if (!result) {
+		result = tryDeserializeBareMedia(serialized);
+	}
 	if (!result) {
 		if (const auto document = tryDeserializeObject<MTPDocument>(serialized)) {
 			return MTP_messageMediaDocument(
