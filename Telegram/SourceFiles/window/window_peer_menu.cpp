@@ -140,6 +140,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtWidgets/QApplication>
 
 #include "ayu/utils/telegram_helpers.h"
+#include "ayu/features/peek/peek_online.h"
 #include "ayu/secret/secret_manager.h"
 #include "ayu/secret/secret_peer.h"
 #include "ayu/secret/secret_policy.h"
@@ -344,6 +345,7 @@ private:
 	void addNewContact();
 	void addShareContact();
 	void addSecretChat();
+	void addPeekLastSeen();
 	void fillSecretActions();
 	void addEditContact();
 	void addBotToGroup();
@@ -1203,6 +1205,17 @@ void Filler::addSecretChat() {
 		&st::menuIconLock);
 }
 
+void Filler::addPeekLastSeen() {
+	const auto user = _peer->asUser();
+	if (!user || !AyuPeek::available(user)) {
+		return;
+	}
+	_addAction(
+		tr::ayu_PeekButton(tr::now),
+		[=] { AyuPeek::start(user); },
+		&st::menuIconInfo);
+}
+
 void Filler::addEditContact() {
 	const auto user = _peer->asUser();
 	if (!user || !user->isContact() || user->isSelf()) {
@@ -2019,6 +2032,7 @@ void Filler::fillHistoryActions() {
 	AyuUi::AddAyuGramActions(_peer, _thread, _controller, _addAction);
 	addCreateTopic();
 	addInfo();
+	addPeekLastSeen();
 	AyuUi::AddJumpToBeginningAction(_peer, _thread, _controller, _addAction);
 	AyuUi::AddOpenChannelAction(_peer, _controller, _addAction);
 	addViewAsTopics();
@@ -2048,6 +2062,7 @@ void Filler::fillProfileActions() {
 	addNewContact();
 	addShareContact();
 	addSecretChat();
+	addPeekLastSeen();
 	addEditContact();
 	addBotToGroup();
 	addNewMembers();

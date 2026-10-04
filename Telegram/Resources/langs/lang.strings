@@ -9116,12 +9116,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_PeekPremium" = "With Telegram Premium you can see the last seen without this.";
 "ayu_PeekBusy" = "Another check is in progress.";
 "ayu_PeekRestoreFailed" = "Could not restore your last seen privacy settings. Check them in Settings - Privacy.";
-"ayu_PeekOnline" = "online";
-"ayu_PeekRecently" = "recently (hidden by the user)";
-"ayu_PeekLastWeek" = "within a week (hidden by the user)";
-"ayu_PeekLastMonth" = "within a month (hidden by the user)";
-"ayu_PeekHidden" = "hidden by the user";
-"ayu_PeekChecked" = "checked";
+"ayu_PeekStatusFormat" = "{status} (peeked: {peeked})";
 "ayu_SecretChats" = "Secret chats";
 "ayu_StartSecretChat" = "Start secret chat";
 "ayu_SecretChatsEmpty" = "No secret chats yet. Start one from the menu of a user profile.";

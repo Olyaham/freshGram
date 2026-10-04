@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "info/profile/info_profile_status_label.h"
 
+#include "ayu/features/peek/peek_online.h"
 #include "data/data_changes.h"
 #include "data/data_channel.h"
 #include "data/data_chat.h"
@@ -138,7 +139,11 @@ void StatusLabel::refresh() {
 		using namespace Ui::Text;
 		auto currentTime = base::unixtime::now();
 		if (auto user = _peer->asUser()) {
-			const auto result = Data::OnlineTextFull(user, currentTime);
+			const auto result = AyuPeek::augment(
+				user,
+				Data::OnlineTextFull(user, currentTime),
+				currentTime,
+				true);
 			const auto showOnline = Data::OnlineTextActive(
 				user,
 				currentTime);

@@ -16,14 +16,10 @@ namespace AyuPeek {
 enum class Kind : int {
 	Online = 0,
 	Offline = 1,
-	Recently = 2,
-	LastWeek = 3,
-	LastMonth = 4,
-	Hidden = 5,
 };
 
 struct Result {
-	Kind kind = Kind::Hidden;
+	Kind kind = Kind::Offline;
 	int time = 0;
 	int checkedAt = 0;
 };
@@ -35,6 +31,11 @@ void restoreIfNeeded(not_null<Main::Session*> session);
 
 [[nodiscard]] rpl::producer<std::optional<Result>> value(
 	not_null<UserData*> user);
-[[nodiscard]] QString format(const Result &result);
+[[nodiscard]] QString format(const Result &result, bool full = true);
+[[nodiscard]] QString augment(
+	not_null<UserData*> user,
+	const QString &telegramText,
+	TimeId now,
+	bool full = false);
 
 } // namespace AyuPeek

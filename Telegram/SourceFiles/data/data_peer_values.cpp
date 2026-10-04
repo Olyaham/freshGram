@@ -510,11 +510,16 @@ QString OnlineText(not_null<UserData*> user, TimeId now) {
 QString OnlineTextFull(not_null<UserData*> user, TimeId now) {
 	if (const auto special = OnlineTextSpecial(user)) {
 		return *special;
-	} else if (const auto common = OnlineTextCommon(user->lastseen(), now)) {
+	}
+	return OnlineTextFull(user->lastseen(), now);
+}
+
+QString OnlineTextFull(Data::LastseenStatus status, TimeId now) {
+	if (const auto common = OnlineTextCommon(status, now)) {
 		return *common;
 	}
 	const auto &settings = AyuSettings::getInstance();
-	const auto till = user->lastseen().onlineTill();
+	const auto till = status.onlineTill();
 	const auto onlineFull = base::unixtime::parse(till);
 	const auto nowFull = base::unixtime::parse(now);
 	const auto locale = QLocale();

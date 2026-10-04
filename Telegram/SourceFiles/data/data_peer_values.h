@@ -164,6 +164,7 @@ inline auto PeerFullFlagValue(
 [[nodiscard]] QString OnlineText(LastseenStatus status, TimeId now);
 [[nodiscard]] QString OnlineText(not_null<UserData*> user, TimeId now);
 [[nodiscard]] QString OnlineTextFull(not_null<UserData*> user, TimeId now);
+[[nodiscard]] QString OnlineTextFull(LastseenStatus status, TimeId now);
 [[nodiscard]] bool OnlineTextActive(not_null<UserData*> user, TimeId now);
 [[nodiscard]] bool IsUserOnline(not_null<UserData*> user, TimeId now = 0);
 [[nodiscard]] bool ChannelHasActiveCall(not_null<ChannelData*> channel);

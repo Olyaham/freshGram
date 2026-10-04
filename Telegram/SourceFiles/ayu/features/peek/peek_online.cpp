@@ -6,7 +6,10 @@
 #include "base/call_delayed.h"
 #include "base/timer.h"
 #include "base/unixtime.h"
+#include "data/data_changes.h"
+#include "data/data_lastseen_status.h"
 #include "data/data_peer.h"
+#include "data/data_peer_values.h"
 #include "data/data_session.h"
 #include "data/data_user.h"
 #include "lang/lang_keys.h"
@@ -15,6 +18,8 @@
 #include "ui/toast/toast.h"
 
 #include <QtCore/QStringList>
+
+#include <map>
 
 namespace AyuPeek {
 namespace {
@@ -34,12 +39,20 @@ constexpr auto kIgnoreAlways = 16;
 constexpr auto kIgnoreNever = 32;
 
 struct Update {
+	not_null<Main::Session*> session;
 	uint64 target = 0;
 	std::optional<Result> result;
 };
 
+using CacheKey = std::pair<uint64, uint64>;
+
 rpl::event_stream<Update> Updates;
 bool Running = false;
+
+[[nodiscard]] std::map<CacheKey, std::optional<Result>> &Cache() {
+	static auto result = std::map<CacheKey, std::optional<Result>>();
+	return result;
+}
 
 void Toast(const QString &text) {
 	Ui::Toast::Show(text);
@@ -116,11 +129,27 @@ void Toast(const QString &text) {
 	if (rows.empty()) {
 		return std::nullopt;
 	}
+	const auto kind = rows.front().kind;
+	if (kind != int(Kind::Online) && kind != int(Kind::Offline)) {
+		return std::nullopt;
+	}
 	auto result = Result();
-	result.kind = Kind(rows.front().kind);
+	result.kind = Kind(kind);
 	result.time = rows.front().time;
 	result.checkedAt = rows.front().checkedAt;
 	return result;
+}
+
+[[nodiscard]] std::optional<Result> Cached(not_null<UserData*> user) {
+	const auto key = CacheKey(
+		uint64(UserKey(&user->session())),
+		uint64(user->id.value & PeerId::kChatTypeMask));
+	auto &cache = Cache();
+	const auto i = cache.find(key);
+	if (i != cache.end()) {
+		return i->second;
+	}
+	return cache.emplace(key, Load(user)).first->second;
 }
 
 void Store(not_null<UserData*> user, const Result &result) {
@@ -132,10 +161,15 @@ void Store(not_null<UserData*> user, const Result &result) {
 	row.time = result.time;
 	row.checkedAt = result.checkedAt;
 	AyuDatabase::savePeekedStatus(row);
+	Cache()[CacheKey(uint64(row.userId), uint64(row.targetId))] = result;
 	Updates.fire({
+		.session = &user->session(),
 		.target = user->id.value & PeerId::kChatTypeMask,
 		.result = result,
 	});
+	user->session().changes().peerUpdated(
+		user,
+		Data::PeerUpdate::Flag::OnlineStatus);
 }
 
 void Restore(
@@ -170,18 +204,8 @@ void Restore(
 		result.kind = Kind::Offline;
 		result.time = data.vwas_online().v;
 		return result;
-	}, [&](const MTPDuserStatusRecently &) -> std::optional<Result> {
-		result.kind = Kind::Recently;
-		return result;
-	}, [&](const MTPDuserStatusLastWeek &) -> std::optional<Result> {
-		result.kind = Kind::LastWeek;
-		return result;
-	}, [&](const MTPDuserStatusLastMonth &) -> std::optional<Result> {
-		result.kind = Kind::LastMonth;
-		return result;
-	}, [&](const MTPDuserStatusEmpty &) -> std::optional<Result> {
-		result.kind = Kind::Hidden;
-		return result;
+	}, [](const auto &) -> std::optional<Result> {
+		return std::nullopt;
 	});
 }
 
@@ -210,14 +234,7 @@ void Fetch(
 			}, [](const auto &) {
 			});
 		}
-		const auto exact = found
-			&& (found->kind == Kind::Online || found->kind == Kind::Offline);
-		if (exact || attempt + 1 >= kAttempts) {
-			if (found && !exact) {
-				found->kind = (found->kind == Kind::Hidden)
-					? Kind::Hidden
-					: found->kind;
-			}
+		if (found || attempt + 1 >= kAttempts) {
 			done(found);
 			return;
 		}
@@ -296,12 +313,12 @@ bool available(not_null<UserData*> user) {
 		&& !user->isBot()
 		&& !user->isInaccessible()
 		&& !user->isServiceUser()
-		&& !user->session().premium();
+		&& !user->session().user()->isPremium();
 }
 
 void start(not_null<UserData*> user) {
 	const auto session = &user->session();
-	if (session->premium()) {
+	if (session->user()->isPremium()) {
 		Toast(tr::ayu_PeekPremium(tr::now));
 		return;
 	} else if (Running) {
@@ -347,42 +364,55 @@ void restoreIfNeeded(not_null<Main::Session*> session) {
 
 rpl::producer<std::optional<Result>> value(not_null<UserData*> user) {
 	const auto target = user->id.value & PeerId::kChatTypeMask;
+	const auto session = &user->session();
 	return rpl::single(
-		Load(user)
+		Cached(user)
 	) | rpl::then(
 		Updates.events(
 		) | rpl::filter([=](const Update &update) {
-			return update.target == target;
+			return (update.session == session) && (update.target == target);
 		}) | rpl::map([](const Update &update) {
 			return update.result;
 		})
 	);
 }
 
-QString format(const Result &result) {
-	const auto checked = langDateTime(base::unixtime::parse(result.checkedAt));
-	auto text = QString();
-	switch (result.kind) {
-	case Kind::Online:
-		text = tr::ayu_PeekOnline(tr::now);
-		break;
-	case Kind::Offline:
-		text = langDateTime(base::unixtime::parse(result.time));
-		break;
-	case Kind::Recently:
-		text = tr::ayu_PeekRecently(tr::now);
-		break;
-	case Kind::LastWeek:
-		text = tr::ayu_PeekLastWeek(tr::now);
-		break;
-	case Kind::LastMonth:
-		text = tr::ayu_PeekLastMonth(tr::now);
-		break;
-	case Kind::Hidden:
-		text = tr::ayu_PeekHidden(tr::now);
-		break;
+QString format(const Result &result, bool full) {
+	const auto status = Data::LastseenStatus::OnlineTill(result.time);
+	const auto now = base::unixtime::now();
+	return full
+		? Data::OnlineTextFull(status, now)
+		: Data::OnlineText(status, now);
+}
+
+QString augment(
+		not_null<UserData*> user,
+		const QString &telegramText,
+		TimeId now,
+		bool full) {
+	if (user->isSelf()
+		|| user->isBot()
+		|| user->isServiceUser()
+		|| user->session().user()->isPremium()) {
+		return telegramText;
 	}
-	return QString("%1 (%2 %3)").arg(text).arg(tr::ayu_PeekChecked(tr::now)).arg(checked);
+	const auto &lastseen = user->lastseen();
+	if (!lastseen.isHidden() || lastseen.isLocalOnlineValue()) {
+		return telegramText;
+	}
+	const auto result = Cached(user);
+	if (!result) {
+		return telegramText;
+	}
+	const auto status = Data::LastseenStatus::OnlineTill(result->time);
+	return tr::ayu_PeekStatusFormat(
+		tr::now,
+		lt_status,
+		telegramText,
+		lt_peeked,
+		full
+			? Data::OnlineTextFull(status, now)
+			: Data::OnlineText(status, now));
 }
 
 } // namespace AyuPeek
