@@ -4196,6 +4196,7 @@ void History::checkLocalMessages() {
 		_ayuRestore = std::make_unique<AyuRestore::State>(this);
 	}
 	_ayuRestore->checkLoaded();
+	_ayuRestore->dropDuplicates();
 	if (isEmpty() && (!loadedAtTop() || !loadedAtBottom())) {
 		return;
 	}

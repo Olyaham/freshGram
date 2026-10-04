@@ -21,10 +21,12 @@ public:
 	void checkLoaded();
 	void disable();
 	HistoryItem *materialize(TimeId from, TimeId till);
+	void dropDuplicates();
 
 private:
 	void load(ID userId, ID dialogId);
 	HistoryItem *create(Row &row);
+	[[nodiscard]] HistoryItem *duplicateOf(const Row &row) const;
 
 	const not_null<History*> _history;
 	std::vector<Row> _rows;

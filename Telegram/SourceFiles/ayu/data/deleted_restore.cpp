@@ -138,6 +138,52 @@ void State::load(ID userId, ID dialogId) {
 	});
 }
 
+HistoryItem *State::duplicateOf(const Row &row) const {
+	const auto real = _history->owner().message(
+		_history->peer,
+		MsgId(row.message.messageId));
+	if (!real
+		|| !real->isRegular()
+		|| real->isDeleted()
+		|| real->date() != row.message.date) {
+		return nullptr;
+	}
+	const auto text = real->emptyText()
+		? std::string()
+		: real->originalText().text.toStdString();
+	if (text == row.message.text
+		|| (text.empty()
+			&& real->notificationText().text.toStdString() == row.message.text)) {
+		return real;
+	}
+	return nullptr;
+}
+
+void State::dropDuplicates() {
+	if (!_loaded) {
+		return;
+	}
+	auto &owner = _history->owner();
+	const auto peer = _history->peer;
+	for (auto &row : _rows) {
+		if (row.dead) {
+			continue;
+		}
+		const auto real = duplicateOf(row);
+		if (!real) {
+			continue;
+		}
+		if (row.localId) {
+			if (const auto local = owner.message(peer, row.localId)) {
+				local->destroy();
+			}
+			row.localId = MsgId();
+		}
+		row.dead = true;
+		AyuMessages::removeDeletedMessage(real);
+	}
+}
+
 HistoryItem *State::materialize(TimeId from, TimeId till) {
 	if (!_loaded || _materializing || _rows.empty()) {
 		return nullptr;
