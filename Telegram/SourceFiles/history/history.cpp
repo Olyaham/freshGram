@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_peer.h"
 #include "history/history.h"
 
 #include "history/view/history_view_element.h"
@@ -3025,6 +3026,9 @@ bool History::isReadyFor(MsgId msgId) {
 }
 
 void History::getReadyFor(MsgId msgId) {
+	if (AyuSecret::IsSecretPeer(peer)) {
+		return;
+	}
 	if (_ayuKept && !isEmpty()) {
 		return;
 	}
@@ -4435,6 +4439,9 @@ std::vector<MsgId> History::collectMessagesFromParticipantToDelete(
 }
 
 void History::clear(ClearType type, bool markEmpty) {
+	if (type == ClearType::Unload && AyuSecret::IsSecretPeer(peer)) {
+		return;
+	}
 	if (_ayuKept && type == ClearType::Unload && !isEmpty()) {
 		return;
 	}

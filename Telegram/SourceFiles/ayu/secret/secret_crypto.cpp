@@ -90,6 +90,23 @@ int64_t KeyFingerprint(const Bytes &key) {
 	return result;
 }
 
+Bytes KeyVisualHash(const Bytes &key) {
+	uint8_t sha1[20];
+	SHA1(key.data(), key.size(), sha1);
+	uint8_t sha256[32];
+	SHA256(key.data(), key.size(), sha256);
+	auto result = Bytes(36);
+	std::memcpy(result.data(), sha1, 16);
+	std::memcpy(result.data() + 16, sha256, 20);
+	return result;
+}
+
+Bytes KeySha256(const Bytes &key) {
+	auto result = Bytes(32);
+	SHA256(key.data(), key.size(), result.data());
+	return result;
+}
+
 Bytes PadKey(const Bytes &key) {
 	if (key.size() >= kKeySize) {
 		return key;

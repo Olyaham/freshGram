@@ -271,6 +271,8 @@ public:
 	[[nodiscard]] bool unread(not_null<Data::Thread*> thread) const;
 	[[nodiscard]] bool showNotification() const;
 	void markClientSideAsRead();
+	[[nodiscard]] bool isAyuSecret() const;
+	void setAyuSecretRead();
 	[[nodiscard]] bool mentionsMe() const;
 	[[nodiscard]] bool isUnreadMention() const;
 	[[nodiscard]] bool hasUnreadReaction() const;
@@ -839,6 +841,7 @@ private:
 	int _unsupportedTTL = 0;
 	bool _ayuExpired = false;
 	std::vector<char> _ayuSavedMedia;
+	bool _ayuSecretRead = false;
 
 	TimeId _date = 0;
 	TimeId _ttlDestroyAt = 0;

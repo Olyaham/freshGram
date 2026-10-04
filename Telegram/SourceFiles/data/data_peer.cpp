@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_peer.h"
 #include "data/data_peer.h"
 
 #include "api/api_sensitive_content.h"
@@ -1118,6 +1119,9 @@ void PeerData::fillNames() {
 PeerData::~PeerData() = default;
 
 void PeerData::updateFull() {
+	if (AyuSecret::IsSecretPeer(this)) {
+		return;
+	}
 	if (!_lastFullUpdate
 		|| crl::now() > _lastFullUpdate + kUpdateFullPeerTimeout) {
 		updateFullForced();
@@ -1125,6 +1129,9 @@ void PeerData::updateFull() {
 }
 
 void PeerData::updateFullForced() {
+	if (AyuSecret::IsSecretPeer(this)) {
+		return;
+	}
 	session().api().requestFullPeer(this);
 	if (const auto channel = asChannel()) {
 		if (!channel->amCreator() && !channel->inviter) {

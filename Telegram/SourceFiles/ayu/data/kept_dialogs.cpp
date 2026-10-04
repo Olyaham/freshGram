@@ -1,3 +1,4 @@
+#include "ayu/secret/secret_peer.h"
 #include "ayu/data/kept_dialogs.h"
 
 #include "ayu/ayu_settings.h"
@@ -43,6 +44,9 @@ std::set<std::pair<ID, ID>> Noted;
 std::set<PeerData*> Leaving;
 
 [[nodiscard]] bool Supported(not_null<PeerData*> peer) {
+	if (AyuSecret::IsSecretPeer(peer)) {
+		return false;
+	}
 	if (peer->isForum() || peer->isMonoforum() || peer->migrateTo()) {
 		return false;
 	}

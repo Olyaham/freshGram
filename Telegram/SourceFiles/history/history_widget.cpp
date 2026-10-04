@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_peer.h"
 #include "history/history_widget.h"
 
 #include "api/api_compose_with_ai.h"
@@ -4802,7 +4803,8 @@ void HistoryWidget::messagesFailed(const MTP::Error &error, int requestId) {
 		_preloadDownRequest = 0;
 	} else if (_firstLoadRequest == requestId) {
 		_firstLoadRequest = 0;
-		if (!_history->ayuKept()) {
+		if (!_history->ayuKept()
+			&& !AyuSecret::IsSecretPeer(_history->peer)) {
 			closeCurrent();
 		}
 	} else if (_delayedShowAtRequest == requestId) {
@@ -4993,6 +4995,9 @@ void HistoryWidget::checkActivation() {
 }
 
 void HistoryWidget::firstLoadMessages() {
+	if (_history && AyuSecret::IsSecretPeer(_history->peer)) {
+		return;
+	}
 	if (!_history || _firstLoadRequest) {
 		return;
 	}
@@ -5064,6 +5069,9 @@ void HistoryWidget::firstLoadMessages() {
 }
 
 void HistoryWidget::loadMessages() {
+	if (_history && AyuSecret::IsSecretPeer(_history->peer)) {
+		return;
+	}
 	if (!_history || _preloadRequest) {
 		return;
 	}
@@ -5156,6 +5164,9 @@ bool HistoryWidget::historyLoadedAtBottom() const {
 }
 
 void HistoryWidget::loadMessagesDown() {
+	if (_history && AyuSecret::IsSecretPeer(_history->peer)) {
+		return;
+	}
 	if (!_history || _preloadDownRequest) {
 		return;
 	}
@@ -5224,7 +5235,7 @@ void HistoryWidget::loadMessagesDown() {
 void HistoryWidget::delayedShowAt(
 		MsgId showAtMsgId,
 		const Window::SectionShow &params) {
-	if (!_history) {
+	if (!_history || AyuSecret::IsSecretPeer(_history->peer)) {
 		return;
 	}
 	_delayedShowAtMsgParams = params;

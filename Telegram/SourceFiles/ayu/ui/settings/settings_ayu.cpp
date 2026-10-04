@@ -8,6 +8,7 @@
 
 #include "lang_auto.h"
 #include "ayu/ayu_settings.h"
+#include "ayu/secret/secret_policy.h"
 #include "ayu/ui/ayu_userpic.h"
 #include "ayu/ui/settings/ayu_builder.h"
 #include "ayu/ui/settings/settings_ayu_utils.h"
@@ -662,6 +663,46 @@ void BuildOther(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	});
 }
 
+void BuildSecretChats(SectionBuilder &builder) {
+	builder.addSubsectionTitle(tr::ayu_SecretChatsHeader());
+	builder.add([](const BuildContext &ctx) {
+		v::match(ctx, [&](const WidgetContext &wctx) {
+			const auto container = wctx.container;
+			AyuSecret::SyncPolicy();
+			const auto button = AddButtonWithIcon(
+				container,
+				tr::ayu_SecretChatsSwitch(),
+				st::settingsButtonNoIcon);
+			if (wctx.highlights) {
+				wctx.highlights->push_back(std::make_pair(
+					u"ayu/secretChats"_q,
+					HighlightEntry{ button.get(), {} }));
+			}
+			button->toggleOn(
+				AyuSettings::getInstance().secretChatsEnabledValue(),
+				true);
+			button->addClickHandler([=] {
+				auto &settings = AyuSettings::getInstance();
+				if (settings.secretChatsEnabled()) {
+					settings.setSecretChatsEnabled(false);
+				} else if (!AyuSecret::PasscodeSet()) {
+					Ui::Toast::Show(tr::ayu_SecretChatsNeedPasscode(tr::now));
+				} else {
+					settings.setSecretChatsEnabled(true);
+				}
+			});
+			AddSkip(container);
+			AddDividerText(container, tr::ayu_SecretChatsSwitchDescription());
+		}, [&](const SearchContext &sctx) {
+			sctx.entries->push_back({
+				.id = u"ayu/secretChats"_q,
+				.title = tr::ayu_SecretChatsSwitch(tr::now),
+				.section = sctx.sectionId,
+			});
+		});
+	});
+}
+
 const auto kMeta = BuildHelper({
 	.id = AyuGhost::Id(),
 	.parentId = AyuMain::Id(),
@@ -678,6 +719,8 @@ const auto kMeta = BuildHelper({
 
 	ayu.addSectionDivider();
 	BuildOther(builder, ayu);
+	ayu.addSectionDivider();
+	BuildSecretChats(builder);
 	builder.addSkip();
 });
 

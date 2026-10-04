@@ -9,6 +9,10 @@
 
 class UserData;
 
+namespace AyuSecret {
+class Bridge;
+} // namespace AyuSecret
+
 namespace Main {
 class Session;
 } // namespace Main
@@ -34,8 +38,25 @@ struct ChatInfo {
 	int layer = 0;
 	bool typing = false;
 	int64 fingerprint = 0;
+	std::vector<uint8_t> keyHash;
+	std::vector<uint8_t> keySha256;
 	QString title;
 	QString lastText;
+};
+
+struct OutgoingFile {
+	QString path;
+	QByteArray bytes;
+	QString name;
+	QString mime;
+	QString caption;
+	int64 replyTo = 0;
+	MediaType kind = MediaType::None;
+	int duration = 0;
+	QByteArray waveform;
+	bool round = false;
+	int width = 0;
+	int height = 0;
 };
 
 class Manager final {
@@ -51,6 +72,7 @@ public:
 	[[nodiscard]] std::vector<ChatInfo> chats() const;
 	[[nodiscard]] std::optional<ChatInfo> chat(int chatId) const;
 	[[nodiscard]] std::vector<MessageData> messages(int chatId);
+	[[nodiscard]] int revision(int chatId) const;
 	[[nodiscard]] int pendingRequests() const;
 	[[nodiscard]] int unreadTotal() const;
 	[[nodiscard]] double progress(int chatId, int64 randomId) const;
@@ -62,9 +84,14 @@ public:
 	void start(not_null<UserData*> user);
 
 	void sendText(int chatId, TextWithEntities text, int64 replyTo = 0);
-	void sendFile(int chatId, const QString &path, const QString &caption);
+	void sendFile(int chatId, OutgoingFile outgoing);
 	void downloadMedia(int chatId, int64 randomId);
 	void openMessage(int chatId, int64 randomId);
+	[[nodiscard]] QString exportFile(int chatId, int64 randomId);
+	[[nodiscard]] std::optional<MessageData> message(
+		int chatId,
+		int64 randomId);
+	[[nodiscard]] QByteArray readFile(int chatId, int64 randomId);
 	void setTtl(int chatId, int seconds);
 	void deleteMessages(int chatId, const std::vector<int64_t> &randomIds);
 	void clearHistory(int chatId);
@@ -73,12 +100,17 @@ public:
 	void markRead(int chatId);
 	void setOpenChat(int chatId);
 
+	[[nodiscard]] Bridge &bridge() const {
+		return *_bridge;
+	}
+
 	[[nodiscard]] rpl::producer<> changes() const;
 	[[nodiscard]] rpl::producer<int> messageChanges() const;
 
 private:
 	struct Impl;
 	const std::unique_ptr<Impl> _impl;
+	std::unique_ptr<Bridge> _bridge;
 
 };
 

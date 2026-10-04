@@ -46,6 +46,9 @@ public:
 
 	[[nodiscard]] rpl::producer<> localPasscodeChanged() const;
 	[[nodiscard]] bool hasLocalPasscode() const;
+	[[nodiscard]] MTP::AuthKeyPtr localKey() const {
+		return _localKey;
+	}
 
 private:
 	enum class StartModernResult {

@@ -4,6 +4,7 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
+#include "ayu/secret/secret_peer.h"
 #include "ayu/utils/telegram_helpers.h"
 
 #include "apiwrap.h"
@@ -532,6 +533,9 @@ int getScheduleTime(int64 sumSize) {
 }
 
 bool isMessageSavable(const not_null<HistoryItem*> item) {
+	if (AyuSecret::IsSecretPeer(item->history()->peer)) {
+		return false;
+	}
 	const auto &settings = AyuSettings::getInstance();
 
 	if (!settings.saveDeletedMessages()) {
@@ -545,6 +549,10 @@ bool isMessageSavable(const not_null<HistoryItem*> item) {
 }
 
 void processMessageDelete(not_null<HistoryItem*> item) {
+	if (AyuSecret::IsSecretPeer(item->history()->peer)) {
+		item->destroy();
+		return;
+	}
 	if (!isMessageSavable(item)) {
 		item->destroy();
 	} else if (!item->isDeleted()) {

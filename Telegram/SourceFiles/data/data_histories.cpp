@@ -5,6 +5,8 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_bridge.h"
+#include "ayu/secret/secret_peer.h"
 #include "data/data_histories.h"
 
 #include "api/api_text_entities.h"
@@ -181,6 +183,15 @@ void Histories::clearAll() {
 }
 
 void Histories::readInbox(not_null<History*> history) {
+	if (AyuSecret::IsSecretPeer(history->peer)) {
+		for (const auto &block : history->blocks) {
+			for (const auto &view : block->messages) {
+				readClientSideMessage(view->data());
+			}
+		}
+		AyuSecret::BridgeFor(&session()).messagesRead(history);
+		return;
+	}
 	DEBUG_LOG(("Reading: readInbox called."));
 	if (history->lastServerMessageKnown()) {
 		const auto last = history->lastServerMessage();
@@ -213,6 +224,24 @@ void Histories::readInbox(not_null<History*> history) {
 
 void Histories::readInboxTill(not_null<HistoryItem*> item) {
 	const auto history = item->history();
+	if (item->isAyuSecret()) {
+		auto reached = false;
+		for (const auto &block : history->blocks) {
+			for (const auto &view : block->messages) {
+				const auto other = view->data();
+				readClientSideMessage(other);
+				if (other == item) {
+					reached = true;
+					break;
+				}
+			}
+			if (reached) {
+				break;
+			}
+		}
+		AyuSecret::BridgeFor(&session()).messagesRead(history);
+		return;
+	}
 	if (!item->isRegular()) {
 		readClientSideMessage(item);
 		auto view = item->mainView();
@@ -388,6 +417,12 @@ void Histories::requestDialogEntry(not_null<Data::Folder*> folder) {
 void Histories::requestDialogEntry(
 		not_null<History*> history,
 		Fn<void()> callback) {
+	if (AyuSecret::IsSecretPeer(history->peer)) {
+		if (callback) {
+			callback();
+		}
+		return;
+	}
 	if (const auto channel = history->peer->asChannel()) {
 		if (channel->isCommunity()) {
 			return;
@@ -977,9 +1012,15 @@ void Histories::deleteMessages(const MessageIdsList &ids, bool revoke) {
 	base::flat_map<not_null<PeerData*>, QVector<MTPint>> scheduledIdsByPeer;
 	base::flat_map<BusinessShortcutId, QVector<MTPint>> quickIdsByShortcut;
 	base::flat_set<not_null<DocumentData*>> savedMusic;
+	auto secretItems = std::vector<not_null<HistoryItem*>>();
 	for (const auto &itemId : ids) {
 		if (const auto item = _owner->message(itemId)) {
 			const auto history = item->history();
+			if (item->isAyuSecret()) {
+				secretItems.push_back(item);
+				remove.push_back(item);
+				continue;
+			}
 			if (item->isSavedMusicItem()) {
 				savedMusic.emplace(item->media()->document());
 				continue;
@@ -1032,6 +1073,9 @@ void Histories::deleteMessages(const MessageIdsList &ids, bool revoke) {
 		}
 	}
 
+	if (!secretItems.empty()) {
+		AyuSecret::BridgeFor(&session()).itemsDeletedByUser(secretItems);
+	}
 	for (const auto &[history, ids] : idsByPeer) {
 		history->owner().histories().deleteMessages(history, ids, revoke);
 	}

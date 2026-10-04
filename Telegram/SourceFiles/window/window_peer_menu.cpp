@@ -141,6 +141,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "ayu/utils/telegram_helpers.h"
 #include "ayu/secret/secret_manager.h"
+#include "ayu/secret/secret_peer.h"
+#include "ayu/secret/secret_policy.h"
+#include "ayu/ui/boxes/secret_chat_actions.h"
 #include "styles/style_ayu_icons.h"
 #include "ayu/ui/context_menu/context_menu.h"
 #include "ayu/features/forward/ayu_forward.h"
@@ -341,6 +344,7 @@ private:
 	void addNewContact();
 	void addShareContact();
 	void addSecretChat();
+	void fillSecretActions();
 	void addEditContact();
 	void addBotToGroup();
 	void addNewMembers();
@@ -1184,6 +1188,8 @@ void Filler::addShareContact() {
 void Filler::addSecretChat() {
 	const auto user = _peer->asUser();
 	if (!user
+		|| !AyuSecret::Enabled()
+		|| AyuSecret::IsSecretPeer(user)
 		|| user->isSelf()
 		|| user->isBot()
 		|| user->isInaccessible()
@@ -1749,7 +1755,35 @@ void Filler::addSendGift() {
 	}, &st::menuIconGiftPremium);
 }
 
+void Filler::fillSecretActions() {
+	const auto peer = _peer;
+	const auto controller = _controller;
+	_addAction(
+		tr::ayu_SecretTimer(tr::now),
+		[=] { Ui::ShowSecretTimer(controller, peer); },
+		&st::menuIconTTL);
+	_addAction(
+		tr::ayu_SecretKey(tr::now),
+		[=] { Ui::ShowSecretKey(controller, peer); },
+		&st::menuIconLock);
+	_addAction(
+		tr::ayu_SecretClear(tr::now),
+		[=] { Ui::ConfirmSecretClear(controller, peer); },
+		&st::menuIconClear);
+	_addAction(PeerMenuCallback::Args{ .isSeparator = true });
+	_addAction(PeerMenuCallback::Args{
+		.text = tr::ayu_SecretChatDelete(tr::now),
+		.handler = [=] { Ui::ConfirmSecretEnd(controller, peer); },
+		.icon = &st::menuIconDeleteAttention,
+		.isAttention = true,
+	});
+}
+
 void Filler::fill() {
+	if (_peer && AyuSecret::IsSecretPeer(_peer)) {
+		fillSecretActions();
+		return;
+	}
 	if (_folder) {
 		fillArchiveActions();
 	} else if (_sublist && _peer->isSelf()) {

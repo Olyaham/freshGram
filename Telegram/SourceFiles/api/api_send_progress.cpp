@@ -5,6 +5,8 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_manager.h"
+#include "ayu/secret/secret_peer.h"
 #include "api/api_send_progress.h"
 
 #include "main/main_session.h"
@@ -68,6 +70,13 @@ void SendProgressManager::update(
 		SendProgressType type,
 		int progress) {
 	const auto peer = history->peer;
+	if (AyuSecret::IsSecretPeer(peer)) {
+		if (type == SendProgressType::Typing) {
+			AyuSecret::Get(&peer->session()).setTyping(
+				AyuSecret::ChatIdOfPeer(peer));
+		}
+		return;
+	}
 	if (peer->isSelf()
 		|| (peer->isChannel()
 			&& !peer->isMegagroup()

@@ -5378,7 +5378,8 @@ MessageIdsList HistoryInner::getSelectedItems() const {
 		_selected.begin(),
 		_selected.end()
 	) | views::filter([](const auto &item) {
-		return !item->isService() && item->isRegular();
+		return !item->isService()
+			&& (item->isRegular() || item->isAyuSecret());
 	}) | views::transform([](const auto &item) {
 		return item->fullId();
 	}) | to_vector;
@@ -5399,7 +5400,9 @@ MessageIdsList HistoryInner::getSelectedForwardItems() const {
 	items.reserve(_selected.size());
 	for (const auto &item : _selected) {
 		if (!item->isService()
-			&& (item->isRegular() || item->isEphemeral())) {
+			&& (item->isRegular()
+				|| item->isEphemeral()
+				|| item->isAyuSecret())) {
 			items.push_back(item);
 		}
 	}

@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_send.h"
 #include "boxes/share_box.h"
 
 #include "api/api_premium.h"
@@ -1834,6 +1835,18 @@ ShareBox::SubmitCallback ShareBox::DefaultForwardCallback(
 			return;
 		} else if (!checkPaid()) {
 			return;
+		}
+
+		{
+			auto secretItems = std::vector<not_null<HistoryItem*>>(
+				items.begin(),
+				items.end());
+			if (AyuSecret::Forward(secretItems, result, options)) {
+				if (show->valid()) {
+					show->hideLayer();
+				}
+				return;
+			}
 		}
 
 		using Flag = MTPmessages_ForwardMessages::Flag;

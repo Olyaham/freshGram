@@ -75,6 +75,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "ayu/features/peek/peek_online.h"
 #include "ayu/secret/secret_manager.h"
+#include "ayu/secret/secret_policy.h"
 #include "ayu/ayu_settings.h"
 #include "ayu/ayu_worker.h"
 
@@ -508,9 +509,11 @@ void Updates::differenceDone(const MTPupdates_Difference &result) {
 		feedDifference(d.vusers(), d.vchats(), d.vnew_messages(), d.vother_updates());
 
 		const auto &s = d.vintermediate_state().c_updates_state();
-		AyuSecret::Get(&session()).handleDifference(
-			d.vnew_encrypted_messages().v,
-			s.vqts().v);
+		if (AyuSecret::Enabled()) {
+			AyuSecret::Get(&session()).handleDifference(
+				d.vnew_encrypted_messages().v,
+				s.vqts().v);
+		}
 		setState(s.vpts().v, s.vdate().v, s.vqts().v, s.vseq().v);
 
 		_ptsWaiter.setRequesting(false);
@@ -524,9 +527,11 @@ void Updates::differenceDone(const MTPupdates_Difference &result) {
 		const auto &d = result.c_updates_difference();
 		feedDifference(d.vusers(), d.vchats(), d.vnew_messages(), d.vother_updates());
 
-		AyuSecret::Get(&session()).handleDifference(
-			d.vnew_encrypted_messages().v,
-			d.vstate().c_updates_state().vqts().v);
+		if (AyuSecret::Enabled()) {
+			AyuSecret::Get(&session()).handleDifference(
+				d.vnew_encrypted_messages().v,
+				d.vstate().c_updates_state().vqts().v);
+		}
 		stateDone(d.vstate());
 	} break;
 	case mtpc_updates_differenceTooLong: {
@@ -2210,18 +2215,13 @@ void Updates::feedUpdate(const MTPUpdate &update) {
 		}
 	} break;
 
-	case mtpc_updateNewEncryptedMessage: {
-		AyuSecret::Get(&session()).handleUpdate(update);
-	} break;
-
-	case mtpc_updateEncryptedChatTyping: {
-	} break;
-
-	case mtpc_updateEncryption: {
-		AyuSecret::Get(&session()).handleUpdate(update);
-	} break;
-
+	case mtpc_updateNewEncryptedMessage:
+	case mtpc_updateEncryptedChatTyping:
+	case mtpc_updateEncryption:
 	case mtpc_updateEncryptedMessagesRead: {
+		if (AyuSecret::Enabled()) {
+			AyuSecret::Get(&session()).handleUpdate(update);
+		}
 	} break;
 
 	case mtpc_updatePhoneCall:

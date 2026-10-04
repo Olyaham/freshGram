@@ -110,6 +110,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "ayu/ayu_infra.h"
 #include "ayu/ayu_settings.h"
+#include "ayu/secret/secret_policy.h"
 #include "ayu/utils/crash_trace.h"
 #include "ayu/features/streamer_mode/streamer_mode.h"
 
@@ -1453,6 +1454,7 @@ void Application::checkAutoLockIn(crl::time time) {
 }
 
 void Application::localPasscodeChanged() {
+	AyuSecret::SyncPolicy();
 	_shouldLockAt = 0;
 	_autoLockTimer.cancel();
 	checkAutoLock(crl::now());

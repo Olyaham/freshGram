@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_peer.h"
 #include "history/history_item.h"
 
 #include "api/api_premium.h"
@@ -3280,7 +3281,7 @@ bool HistoryItem::allowsReschedule() const {
 
 bool HistoryItem::allowsForward() const {
 	return !isService()
-		&& (isRegular() || isEphemeral())
+		&& (isRegular() || isEphemeral() || isAyuSecret())
 		&& !forbidsForward()
 		&& history()->peer->allowsForwarding()
 		&& (!_media || _media->allowsForward());
@@ -4605,7 +4606,22 @@ bool HistoryItem::unread(not_null<Data::Thread*> thread) const {
 		return true;
 	}
 
+	if (out() && isAyuSecret()) {
+		return !_ayuSecretRead;
+	}
 	return out() || (_flags & MessageFlag::ClientSideUnread);
+}
+
+bool HistoryItem::isAyuSecret() const {
+	return AyuSecret::IsSecretPeer(_history->peer);
+}
+
+void HistoryItem::setAyuSecretRead() {
+	if (_ayuSecretRead) {
+		return;
+	}
+	_ayuSecretRead = true;
+	_history->owner().requestItemRepaint(this);
 }
 
 MsgId HistoryItem::replyToId() const {

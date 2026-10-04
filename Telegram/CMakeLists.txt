@@ -188,8 +188,10 @@ set(ayugram_files
         ayu/ui/boxes/theme_selector_box.h
         ayu/ui/boxes/message_shot_box.cpp
         ayu/ui/boxes/message_shot_box.h
-        ayu/ui/boxes/secret_chats_box.cpp
-        ayu/ui/boxes/secret_chats_box.h
+        ayu/ui/boxes/secret_chat_actions.cpp
+        ayu/ui/boxes/secret_chat_actions.h
+        ayu/ui/boxes/secret_key_box.cpp
+        ayu/ui/boxes/secret_key_box.h
         ayu/ui/boxes/plugin_info_box.cpp
         ayu/ui/boxes/plugin_info_box.h
         ayu/ui/components/image_view.cpp
@@ -250,6 +252,8 @@ set(ayugram_files
         ayu/data/deleted_restore.h
         ayu/data/kept_dialogs.cpp
         ayu/data/kept_dialogs.h
+        ayu/secret/secret_bridge.cpp
+        ayu/secret/secret_bridge.h
         ayu/secret/secret_crypto.cpp
         ayu/secret/secret_crypto.h
         ayu/secret/secret_files.cpp
@@ -258,9 +262,16 @@ set(ayugram_files
         ayu/secret/secret_model.cpp
         ayu/secret/secret_model.h
         ayu/secret/secret_manager.h
+        ayu/secret/secret_peer.h
+        ayu/secret/secret_policy.cpp
+        ayu/secret/secret_policy.h
         ayu/secret/secret_protocol.cpp
         ayu/secret/secret_protocol.h
+        ayu/secret/secret_send.cpp
+        ayu/secret/secret_send.h
         ayu/secret/secret_tl.h
+        ayu/secret/secret_vault.cpp
+        ayu/secret/secret_vault.h
         ayu/data/messages_storage.cpp
         ayu/data/messages_storage.h
         ayu/data/entities.h

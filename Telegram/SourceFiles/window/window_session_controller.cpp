@@ -5,6 +5,9 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_bridge.h"
+#include "ayu/secret/secret_peer.h"
+#include "ayu/ui/boxes/secret_chat_actions.h"
 #include "window/window_session_controller.h"
 
 #include "apiwrap.h"
@@ -1394,6 +1397,12 @@ void SessionNavigation::showThread(
 void SessionNavigation::showPeerInfo(
 		not_null<PeerData*> peer,
 		const SectionShow &params) {
+	if (AyuSecret::IsSecretPeer(peer)) {
+		if (const auto controller = parentController()) {
+			Ui::ShowSecretKey(controller, peer);
+		}
+		return;
+	}
 	//if (Adaptive::ThreeColumn()
 	//	&& !Core::App().settings().thirdSectionInfoEnabled()) {
 	//	Core::App().settings().setThirdSectionInfoEnabled(true);
@@ -3425,6 +3434,9 @@ void SessionController::openPhoto(
 	if (openSharedStory(item) || openFakeItemStory(message.id, stories)) {
 		return;
 	}
+	if (item && item->isAyuSecret()) {
+		AyuSecret::BridgeFor(&session()).mediaOpened(item);
+	}
 	const auto origin = item
 		? Data::FileOrigin(item->fullId())
 		: Data::FileOrigin();
@@ -3463,7 +3475,11 @@ void SessionController::openDocument(
 	const auto item = session().data().message(message.id);
 	if (openSharedStory(item) || openFakeItemStory(message.id, stories)) {
 		return;
-	} else if (showInMediaView) {
+	}
+	if (item && item->isAyuSecret()) {
+		AyuSecret::BridgeFor(&session()).mediaOpened(item);
+	}
+	if (showInMediaView) {
 		if (OptionExternalMediaViewer.value()
 			&& !document->isTheme()
 			&& !HasSavingRestriction(item)) {

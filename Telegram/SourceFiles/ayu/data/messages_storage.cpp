@@ -4,6 +4,7 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
+#include "ayu/secret/secret_peer.h"
 #include "ayu/data/messages_storage.h"
 
 #include "ayu/ayu_settings.h"
@@ -297,6 +298,9 @@ void map(not_null<HistoryItem*> item, AyuMessageBase &message) {
 }
 
 void addEditedMessage(not_null<HistoryItem *> item) {
+	if (AyuSecret::IsSecretPeer(item->history()->peer)) {
+		return;
+	}
 	EditedMessage message;
 	map(item, message);
 
@@ -324,6 +328,9 @@ bool hasRevisions(not_null<HistoryItem*> item) {
 }
 
 void cacheDeletedMedia(not_null<HistoryItem*> item) {
+	if (AyuSecret::IsSecretPeer(item->history()->peer)) {
+		return;
+	}
 	const auto media = item->media();
 	if (!media) {
 		return;
@@ -403,6 +410,9 @@ void restoreSavedMedia(
 }
 
 void saveTtlMedia(not_null<HistoryItem*> item) {
+	if (AyuSecret::IsSecretPeer(item->history()->peer)) {
+		return;
+	}
 	const auto &saved = item->ayuSavedMedia();
 	if (saved.empty()) {
 		return;
@@ -488,6 +498,9 @@ std::vector<ID> loadDeletedDialogIds(ID userId) {
 }
 
 void addDeletedMessage(not_null<HistoryItem*> item) {
+	if (AyuSecret::IsSecretPeer(item->history()->peer)) {
+		return;
+	}
 	DeletedMessage message;
 	map(item, message);
 

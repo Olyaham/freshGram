@@ -95,6 +95,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "ayu/ayu_settings.h"
 #include "ayu/data/kept_dialogs.h"
+#include "ayu/secret/secret_bridge.h"
 #include "ayu/data/messages_storage.h"
 #include "ayu/features/filters/filters_controller.h"
 #include "ayu/utils/telegram_helpers.h"
@@ -372,6 +373,9 @@ Session::Session(not_null<Main::Session*> session)
 	setupMigrationViewer();
 	setupChannelLeavingViewer();
 	AyuKept::setup(this, _lifetime);
+	crl::on_main(_session, [=] {
+		AyuSecret::Start(_session);
+	});
 	setupPeerNameViewer();
 	setupUserIsContactViewer();
 

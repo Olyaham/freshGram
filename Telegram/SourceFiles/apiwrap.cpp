@@ -5,6 +5,8 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_send.h"
+#include "ayu/secret/secret_peer.h"
 #include "apiwrap.h"
 
 #include "api/api_authorizations.h"
@@ -140,6 +142,9 @@ using UpdatedFileReferences = Data::UpdatedFileReferences;
 	const auto history = thread->owningHistory();
 	const auto topicRootId = thread->topicRootId();
 	const auto monoforumPeerId = thread->monoforumPeerId();
+	if (AyuSecret::IsSecretPeer(history->peer)) {
+		return true;
+	}
 	const auto cloudDraft = history->cloudDraft(topicRootId, monoforumPeerId);
 	return (Iv::Editor::IsComposeBoxOpen(
 			session,
@@ -1222,6 +1227,9 @@ void ApiWrap::requestWallPaper(
 }
 
 void ApiWrap::requestFullPeer(not_null<PeerData*> peer) {
+	if (AyuSecret::IsSecretPeer(peer)) {
+		return;
+	}
 	if (_fullPeerRequests.contains(peer)) {
 		return;
 	} else if (!peer->isUser() && !peer->barSettings().has_value()) {
@@ -1343,6 +1351,10 @@ void ApiWrap::gotUserFull(
 }
 
 void ApiWrap::requestPeerSettings(not_null<PeerData*> peer) {
+	if (AyuSecret::IsSecretPeer(peer)) {
+		peer->setBarSettings(PeerBarSettings());
+		return;
+	}
 	if (!_requestedPeerSettings.emplace(peer).second) {
 		return;
 	} else if (peer->isMonoforum()) {
@@ -2122,6 +2134,9 @@ void ApiWrap::updateNotifySettingsDelayed(
 }
 
 void ApiWrap::updateNotifySettingsDelayed(not_null<const PeerData*> peer) {
+	if (AyuSecret::IsSecretPeer(peer)) {
+		return;
+	}
 	if (_updateNotifyPeers.emplace(peer).second) {
 		_updateNotifyTimer.callOnce(kNotifySettingSaveTimeout);
 	}
@@ -2391,6 +2406,9 @@ mtpRequestId ApiWrap::saveDraftToCloud(
 		const Data::Draft &draft,
 		Fn<void()> done,
 		Fn<void(const MTP::Error &)> fail) {
+	if (AyuSecret::IsSecretPeer(thread->peer())) {
+		return 0;
+	}
 	const auto weak = base::make_weak(thread);
 	const auto requestId = savePreparedDraftToCloud(
 		thread,
@@ -2411,6 +2429,9 @@ mtpRequestId ApiWrap::savePreparedDraftToCloud(
 		bool clearOnFail,
 		Fn<void()> done,
 		Fn<void(const MTP::Error &)> fail) {
+	if (AyuSecret::IsSecretPeer(thread->peer())) {
+		return 0;
+	}
 	const auto weak = base::make_weak(thread);
 	const auto history = thread->owningHistory();
 	const auto topicRootId = thread->topicRootId();
@@ -3917,6 +3938,19 @@ void ApiWrap::forwardMessages(
 		FnMut<void()> &&successCallback) {
 	Expects(!draft.items.empty());
 
+	{
+		auto threads = std::vector<not_null<Data::Thread*>>{ action.history };
+		auto items = std::vector<not_null<HistoryItem*>>(
+			draft.items.begin(),
+			draft.items.end());
+		if (AyuSecret::Forward(items, threads, action.options)) {
+			if (successCallback) {
+				successCallback();
+			}
+			return;
+		}
+	}
+
 	const auto fullAyuForward = AyuForward::isFullAyuForwardNeeded(draft.items.front());
 	if (fullAyuForward) {
 		crl::async([=] {
@@ -4199,6 +4233,12 @@ void ApiWrap::shareContact(
 		const QString &lastName,
 		const SendAction &action,
 		Fn<void(bool)> done) {
+	if (AyuSecret::Reject(action.history->peer)) {
+		if (done) {
+			done(false);
+		}
+		return;
+	}
 	const auto userId = UserId(0);
 	sendSharedContact(
 		phone,
@@ -4295,6 +4335,9 @@ void ApiWrap::sendVoiceMessage(
 		crl::time duration,
 		bool video,
 		const SendAction &action) {
+	if (AyuSecret::SendVoice(result, waveform, duration, video, action)) {
+		return;
+	}
 	auto scheduledAction = action;
 	applyGhostScheduling(_session, scheduledAction.options, 20);
 	const auto caption = TextWithTags();
@@ -4374,6 +4417,9 @@ void ApiWrap::sendFiles(
 		SendMediaType type,
 		std::shared_ptr<SendingAlbum> album,
 		SendAction action) {
+	if (AyuSecret::SendFiles(list, action)) {
+		return;
+	}
 	const auto &ephemeral = _session->ephemeralMessages();
 	if (album && !ephemeral.isEphemeralBotReply(action.replyTo.messageId)) {
 		const auto peer = action.history->peer;
@@ -4461,6 +4507,9 @@ void ApiWrap::sendFile(
 		const QByteArray &fileContent,
 		SendMediaType type,
 		const SendAction &action) {
+	if (AyuSecret::SendBytes(fileContent, action)) {
+		return;
+	}
 	const auto to = FileLoadTaskOptions(action);
 	auto caption = TextWithTags();
 	const auto spoiler = false;
@@ -4799,6 +4848,9 @@ void ApiWrap::sendRichMessage(
 void ApiWrap::sendMessage(
 		MessageToSend &&message,
 		std::optional<MsgId> localMessageId) {
+	if (AyuSecret::SendText(message)) {
+		return;
+	}
 	applyGhostScheduling(_session, message.action.options);
 	const auto clearReplyTo = prependPseudoReply(message);
 
@@ -5178,6 +5230,12 @@ void ApiWrap::sendInlineResult(
 		SendAction action,
 		std::optional<MsgId> localMessageId,
 		Fn<void(bool)> done) {
+	if (AyuSecret::Reject(action.history->peer)) {
+		if (done) {
+			done(false);
+		}
+		return;
+	}
 	StripEphemeralReply(_session, action.replyTo);
 	sendAction(action);
 

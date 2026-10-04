@@ -5,6 +5,8 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/ui/boxes/secret_chat_actions.h"
+#include "ayu/secret/secret_peer.h"
 #include "history/view/history_view_top_bar_widget.h"
 
 #include "history/history.h"
@@ -505,6 +507,9 @@ void TopBarWidget::showCallMenu() {
 }
 
 void TopBarWidget::toggleInfoSection() {
+	if (AyuSecret::IsSecretPeer(_activeChat.key.peer())) {
+		return;
+	}
 	const auto isThreeColumn = _controller->adaptive().isThreeColumn();
 	if (isThreeColumn
 		&& (Core::App().settings().thirdSectionInfoEnabled()
@@ -892,6 +897,9 @@ void TopBarWidget::infoClicked() {
 	const auto key = _activeChat.key;
 	if (!key) {
 		return;
+	} else if (AyuSecret::IsSecretPeer(key.peer())) {
+		Ui::ShowSecretKey(_controller, key.peer());
+		return;
 	} else if (const auto topic = key.topic()) {
 		_controller->showSection(std::make_shared<Info::Memento>(topic));
 	} else if (const auto sublist = key.sublist()) {
@@ -1164,7 +1172,9 @@ void TopBarWidget::updateSearchVisibility() {
 			&& !pinnedInSavedMessages)
 		|| (_activeChat.section == Section::SavedSublist
 			&& _activeChat.key.sublist());
-	_search->setVisible(searchAllowedMode && !_chooseForReportReason);
+	_search->setVisible(searchAllowedMode
+		&& !_chooseForReportReason
+		&& !AyuSecret::IsSecretPeer(_activeChat.key.peer()));
 }
 
 void TopBarWidget::updateInfoButtonVisibility() {
@@ -1460,6 +1470,7 @@ void TopBarWidget::updateControlsVisibility() {
 				_activeChat.key.peer()->asChannel()))
 		: false;
 	const auto hasInfo = !_activeChat.key.folder()
+		&& !AyuSecret::IsSecretPeer(_activeChat.key.peer())
 		&& (section == Section::History
 			? true
 			: (section == Section::Replies)
@@ -1528,7 +1539,8 @@ void TopBarWidget::updateControlsVisibility() {
 				return !user->isSelf()
 					&& !user->isBot()
 					&& !user->isInaccessible()
-					&& !peer->isServiceUser();
+					&& !peer->isServiceUser()
+					&& !AyuSecret::IsSecretPeer(peer);
 			}
 		}
 		return false;

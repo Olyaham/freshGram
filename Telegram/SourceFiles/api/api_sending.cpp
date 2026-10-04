@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_send.h"
 #include "api/api_sending.h"
 
 #include "api/api_text_entities.h"
@@ -708,6 +709,9 @@ void SendExistingDocument(
 		MessageToSend &&message,
 		not_null<DocumentData*> document,
 		std::optional<MsgId> localMessageId) {
+	if (AyuSecret::Reject(message.action.history->peer)) {
+		return;
+	}
 	if (!document->sticker()
 		&& !document->isVideoMessage()
 		&& !document->isVoiceMessage()) {
@@ -809,6 +813,9 @@ void SendExistingPhoto(
 		MessageToSend &&message,
 		not_null<PhotoData*> photo,
 		std::optional<MsgId> localMessageId) {
+	if (AyuSecret::Reject(message.action.history->peer)) {
+		return;
+	}
 	const auto clearReplyTo = prependPseudoReply(message);
 	if (clearReplyTo) {
 		message.action.replyTo.messageId = FullMsgId(
@@ -980,6 +987,9 @@ bool SendDice(MessageToSend &message) {
 }
 
 void SendLocation(SendAction action, float64 lat, float64 lon) {
+	if (AyuSecret::Reject(action.history->peer)) {
+		return;
+	}
 	SendSimpleMedia(
 		action,
 		MTP_inputMediaGeoPoint(
@@ -991,6 +1001,9 @@ void SendLocation(SendAction action, float64 lat, float64 lon) {
 }
 
 void SendVenue(SendAction action, Data::InputVenue venue) {
+	if (AyuSecret::Reject(action.history->peer)) {
+		return;
+	}
 	SendSimpleMedia(
 		action,
 		MTP_inputMediaVenue(
