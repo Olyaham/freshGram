@@ -33,6 +33,14 @@ std::vector<ID> getDeletedDialogIds(ID userId);
 void removeDeletedMessage(ID userId, ID dialogId, ID messageId);
 void clearDeletedMessages(ID userId, ID dialogId, ID topicId);
 
+void saveSecretChat(const SecretChatRow &chat);
+std::vector<SecretChatRow> getSecretChats(ID userId);
+void removeSecretChat(ID userId, int chatId);
+bool addSecretMessage(const SecretMessageRow &message);
+std::vector<SecretMessageRow> getSecretMessages(ID userId, int chatId);
+void removeSecretMessage(ID userId, int chatId, ID randomId);
+void clearSecretMessages(ID userId, int chatId);
+
 void saveKeptDialog(const KeptDialog &dialog);
 std::vector<KeptDialog> getKeptDialogs(ID userId);
 void removeKeptDialog(ID userId, ID dialogId);

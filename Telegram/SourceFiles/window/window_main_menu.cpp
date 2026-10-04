@@ -81,6 +81,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QClipboard>
 
 #include "ayu/ayu_settings.h"
+#include "ayu/secret/secret_manager.h"
+#include "ayu/ui/boxes/secret_chats_box.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "boxes/abstract_box.h"
 #include "styles/style_ayu_icons.h"
@@ -723,6 +725,24 @@ void MainMenu::setupMenu() {
 			{ &st::menuIconSavedMessages }
 		)->setClickedCallback([=] {
 			controller->showPeerHistory(controller->session().user());
+		});
+
+		const auto secretCount = [=] {
+			auto &manager = AyuSecret::Get(&controller->session());
+			return manager.pendingRequests() + manager.unreadTotal();
+		};
+		addAction(
+			rpl::combine(
+				tr::ayu_SecretChats(),
+				rpl::single(secretCount()) | rpl::then(
+					AyuSecret::Get(&controller->session()).changes()
+					| rpl::map(secretCount))
+			) | rpl::map([](QString text, int count) {
+				return count ? QString("%1 (%2)").arg(text).arg(count) : text;
+			}),
+			{ &st::menuIconLock }
+		)->setClickedCallback([=] {
+			controller->show(Box(Ui::FillSecretChatsBox, controller));
 		});
 
 		if (settings.showLReadToggleInDrawer()) {

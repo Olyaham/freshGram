@@ -140,6 +140,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtWidgets/QApplication>
 
 #include "ayu/utils/telegram_helpers.h"
+#include "ayu/secret/secret_manager.h"
 #include "styles/style_ayu_icons.h"
 #include "ayu/ui/context_menu/context_menu.h"
 #include "ayu/features/forward/ayu_forward.h"
@@ -339,6 +340,7 @@ private:
 	void addReport();
 	void addNewContact();
 	void addShareContact();
+	void addSecretChat();
 	void addEditContact();
 	void addBotToGroup();
 	void addNewMembers();
@@ -1179,6 +1181,22 @@ void Filler::addShareContact() {
 		&st::menuIconShare);
 }
 
+void Filler::addSecretChat() {
+	const auto user = _peer->asUser();
+	if (!user
+		|| user->isSelf()
+		|| user->isBot()
+		|| user->isInaccessible()
+		|| user->isServiceUser()) {
+		return;
+	}
+	const auto controller = _controller;
+	_addAction(
+		tr::ayu_StartSecretChat(tr::now),
+		[=] { AyuSecret::Get(&controller->session()).start(user); },
+		&st::menuIconLock);
+}
+
 void Filler::addEditContact() {
 	const auto user = _peer->asUser();
 	if (!user || !user->isContact() || user->isSelf()) {
@@ -1995,6 +2013,7 @@ void Filler::fillProfileActions() {
 	addSupportInfo();
 	addNewContact();
 	addShareContact();
+	addSecretChat();
 	addEditContact();
 	addBotToGroup();
 	addNewMembers();

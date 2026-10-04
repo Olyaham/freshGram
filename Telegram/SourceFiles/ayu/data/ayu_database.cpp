@@ -133,6 +133,46 @@ auto storage = make_storage(
 		make_column("lastMessageDate", &KeptDialog::lastMessageDate),
 		make_column("lost", &KeptDialog::lost)
 	),
+	make_index("idx_secret_chat_userId_chatId",
+			   column<SecretChatRow>(&SecretChatRow::userId),
+			   column<SecretChatRow>(&SecretChatRow::chatId)),
+	make_index("idx_secret_message_userId_chatId_randomId",
+			   column<SecretMessageRow>(&SecretMessageRow::userId),
+			   column<SecretMessageRow>(&SecretMessageRow::chatId),
+			   column<SecretMessageRow>(&SecretMessageRow::randomId)),
+	make_table<SecretChatRow>(
+		"SecretChat",
+		make_column("fakeId", &SecretChatRow::fakeId, primary_key().autoincrement()),
+		make_column("userId", &SecretChatRow::userId),
+		make_column("chatId", &SecretChatRow::chatId),
+		make_column("accessHash", &SecretChatRow::accessHash),
+		make_column("peerUserId", &SecretChatRow::peerUserId),
+		make_column("creator", &SecretChatRow::creator),
+		make_column("state", &SecretChatRow::state),
+		make_column("keyData", &SecretChatRow::keyData),
+		make_column("fingerprint", &SecretChatRow::fingerprint),
+		make_column("myIn", &SecretChatRow::myIn),
+		make_column("myOut", &SecretChatRow::myOut),
+		make_column("hisIn", &SecretChatRow::hisIn),
+		make_column("hisLayer", &SecretChatRow::hisLayer),
+		make_column("date", &SecretChatRow::date),
+		make_column("lastDate", &SecretChatRow::lastDate),
+		make_column("unread", &SecretChatRow::unread)
+	),
+	make_table<SecretMessageRow>(
+		"SecretMessage",
+		make_column("fakeId", &SecretMessageRow::fakeId, primary_key().autoincrement()),
+		make_column("userId", &SecretMessageRow::userId),
+		make_column("chatId", &SecretMessageRow::chatId),
+		make_column("randomId", &SecretMessageRow::randomId),
+		make_column("outgoing", &SecretMessageRow::outgoing),
+		make_column("date", &SecretMessageRow::date),
+		make_column("kind", &SecretMessageRow::kind),
+		make_column("seqIn", &SecretMessageRow::seqIn),
+		make_column("seqOut", &SecretMessageRow::seqOut),
+		make_column("text", &SecretMessageRow::text),
+		make_column("payload", &SecretMessageRow::payload)
+	),
 	make_table<RegexFilter>(
 		"RegexFilter",
 		make_column("id", &RegexFilter::id, primary_key()),
@@ -566,6 +606,98 @@ void removeKeptDialog(ID userId, ID dialogId) {
 			where(
 				column<KeptDialog>(&KeptDialog::userId) == userId and
 				column<KeptDialog>(&KeptDialog::dialogId) == dialogId
+			)
+		);
+	});
+}
+
+void saveSecretChat(const SecretChatRow &chat) {
+	runVoid("save secret chat", [&] {
+		inTransaction([&] {
+			storage.remove_all<SecretChatRow>(
+				where(
+					column<SecretChatRow>(&SecretChatRow::userId) == chat.userId and
+					column<SecretChatRow>(&SecretChatRow::chatId) == chat.chatId
+				)
+			);
+			storage.insert(chat);
+		});
+	});
+}
+
+std::vector<SecretChatRow> getSecretChats(ID userId) {
+	return run<std::vector<SecretChatRow>>("load secret chats", {}, [&] {
+		return storage.get_all<SecretChatRow>(
+			where(column<SecretChatRow>(&SecretChatRow::userId) == userId));
+	});
+}
+
+void removeSecretChat(ID userId, int chatId) {
+	runVoid("remove secret chat", [&] {
+		inTransaction([&] {
+			storage.remove_all<SecretChatRow>(
+				where(
+					column<SecretChatRow>(&SecretChatRow::userId) == userId and
+					column<SecretChatRow>(&SecretChatRow::chatId) == chatId
+				)
+			);
+			storage.remove_all<SecretMessageRow>(
+				where(
+					column<SecretMessageRow>(&SecretMessageRow::userId) == userId and
+					column<SecretMessageRow>(&SecretMessageRow::chatId) == chatId
+				)
+			);
+		});
+	});
+}
+
+bool addSecretMessage(const SecretMessageRow &message) {
+	return run<bool>("save secret message", false, [&] {
+		const auto exists = storage.count<SecretMessageRow>(
+			where(
+				column<SecretMessageRow>(&SecretMessageRow::userId) == message.userId and
+				column<SecretMessageRow>(&SecretMessageRow::chatId) == message.chatId and
+				column<SecretMessageRow>(&SecretMessageRow::randomId) == message.randomId
+			)
+		) > 0;
+		if (exists) {
+			return false;
+		}
+		storage.insert(message);
+		return true;
+	});
+}
+
+std::vector<SecretMessageRow> getSecretMessages(ID userId, int chatId) {
+	return run<std::vector<SecretMessageRow>>("load secret messages", {}, [&] {
+		return storage.get_all<SecretMessageRow>(
+			where(
+				column<SecretMessageRow>(&SecretMessageRow::userId) == userId and
+				column<SecretMessageRow>(&SecretMessageRow::chatId) == chatId
+			),
+			order_by(column<SecretMessageRow>(&SecretMessageRow::fakeId)).asc()
+		);
+	});
+}
+
+void removeSecretMessage(ID userId, int chatId, ID randomId) {
+	runVoid("remove secret message", [&] {
+		storage.remove_all<SecretMessageRow>(
+			where(
+				column<SecretMessageRow>(&SecretMessageRow::userId) == userId and
+				column<SecretMessageRow>(&SecretMessageRow::chatId) == chatId and
+				column<SecretMessageRow>(&SecretMessageRow::randomId) == randomId
+			)
+		);
+	});
+}
+
+void clearSecretMessages(ID userId, int chatId) {
+	runVoid("clear secret messages", [&] {
+		storage.remove_all<SecretMessageRow>(
+			where(
+				column<SecretMessageRow>(&SecretMessageRow::userId) == userId and
+				column<SecretMessageRow>(&SecretMessageRow::chatId) == chatId
 			)
 		);
 	});

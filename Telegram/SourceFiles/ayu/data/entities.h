@@ -87,6 +87,43 @@ public:
 	int lost;
 };
 
+class SecretChatRow
+{
+public:
+	ID fakeId;
+	ID userId;
+	int chatId;
+	ID accessHash;
+	ID peerUserId;
+	int creator;
+	int state;
+	std::vector<char> keyData;
+	ID fingerprint;
+	int myIn;
+	int myOut;
+	int hisIn;
+	int hisLayer;
+	int date;
+	int lastDate;
+	int unread;
+};
+
+class SecretMessageRow
+{
+public:
+	ID fakeId;
+	ID userId;
+	int chatId;
+	ID randomId;
+	int outgoing;
+	int date;
+	int kind;
+	int seqIn;
+	int seqOut;
+	std::string text;
+	std::vector<char> payload;
+};
+
 class RegexFilter
 {
 public:

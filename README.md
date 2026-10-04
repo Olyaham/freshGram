@@ -16,6 +16,7 @@ The source code is published under GPLv3 with OpenSSL exception, the license is 
 - Full ghost mode (flexible)
 - Messages history
 - Anti-recall
+- Secret chats inside freshGram: accept a request and exchange text messages from the "Secret chats" item of the main menu, start a chat from the user profile menu
 - Service messages (for example, "user joined") are kept when deleted, the same way as normal ones
 - Chats and channels deleted by the other side, that you were removed from or that you deleted yourself stay in the chats list together with the saved messages (deleting the chat once more removes it for real)
 - Font customization
