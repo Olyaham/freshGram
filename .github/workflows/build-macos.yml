@@ -71,7 +71,7 @@ jobs:
         id: prepare
         continue-on-error: true
         timeout-minutes: 300
-        run: ./freshGram/Telegram/build/prepare/mac.sh
+        run: ./freshGram/Telegram/build/prepare/mac.sh silent
 
       - name: Save libraries
         if: always() && steps.libraries.outcome == 'success'
