@@ -51,12 +51,13 @@ enum class FileType {
 };
 
 [[nodiscard]] bool MayHaveGoodThumbnail(not_null<DocumentData*> owner) {
-	return owner->isVideoFile()
-		|| owner->isAnimation()
-		|| owner->isWallPaper()
-		|| owner->isTheme()
-		|| owner->isSvgImage()
-		|| (owner->sticker() && owner->sticker()->isAnimated());
+	return !AyuSecret::IsSecretDocument(owner)
+		&& (owner->isVideoFile()
+			|| owner->isAnimation()
+			|| owner->isWallPaper()
+			|| owner->isTheme()
+			|| owner->isSvgImage()
+			|| (owner->sticker() && owner->sticker()->isAnimated()));
 }
 
 [[nodiscard]] QImage PrepareGoodThumbnail(

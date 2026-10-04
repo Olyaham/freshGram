@@ -2,8 +2,19 @@ name: Build Windows
 
 on:
   push:
+    branches-ignore:
+      - 'dependabot/**'
     tags:
       - 'v*'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - 'changelog.txt'
+      - 'LEGAL'
+      - 'LICENSE'
+      - 'Telegram/build/docker/centos_env/**'
+      - '.github/workflows/build-env.yml'
+      - '.github/workflows/build.yml'
   workflow_dispatch:
     inputs:
       release_tag:
@@ -13,7 +24,7 @@ on:
 
 concurrency:
   group: build-windows-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/') }}
 
 permissions:
   contents: write
