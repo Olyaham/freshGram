@@ -69,6 +69,31 @@ jobs:
           key: windows-libraries-${{ hashFiles('freshGram/Telegram/build/prepare/**', 'freshGram/Telegram/build/qt_version.py') }}-${{ github.run_id }}
           restore-keys: windows-libraries-${{ hashFiles('freshGram/Telegram/build/prepare/**', 'freshGram/Telegram/build/qt_version.py') }}-
 
+      - name: Install ATL and MFC for the toolset
+        shell: pwsh
+        run: |
+          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+          $vs = & "$installer\vswhere.exe" -latest -products * -property installationPath
+          $tools = Join-Path $vs "VC\Tools\MSVC"
+          function Show-Atl {
+            Get-ChildItem $tools | ForEach-Object {
+              "$($_.Name): atlbase.h=$(Test-Path (Join-Path $_.FullName 'atlmfc\include\atlbase.h'))"
+            }
+          }
+          Show-Atl
+          $process = Start-Process -Wait -PassThru -FilePath "$installer\vs_installer.exe" -ArgumentList @(
+            "modify", "--installPath", "`"$vs`"",
+            "--add", "Microsoft.VisualStudio.Component.VC.14.44.17.14.ATL",
+            "--add", "Microsoft.VisualStudio.Component.VC.14.44.17.14.MFC",
+            "--quiet", "--norestart", "--noUpdateInstaller")
+          "Installer exit code: $($process.ExitCode)"
+          Show-Atl
+          $found = Get-ChildItem $tools | Where-Object { $_.Name -like '14.44*' -and (Test-Path (Join-Path $_.FullName 'atlmfc\include\atlbase.h')) }
+          if (-not $found) {
+            Write-Host "::error::ATL for the 14.44 toolset is still missing."
+            exit 1
+          }
+
       - name: Set up the Visual Studio environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
