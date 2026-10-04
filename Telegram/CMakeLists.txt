@@ -188,8 +188,6 @@ set(ayugram_files
         ayu/ui/boxes/theme_selector_box.h
         ayu/ui/boxes/message_shot_box.cpp
         ayu/ui/boxes/message_shot_box.h
-        ayu/ui/boxes/sent_history_box.cpp
-        ayu/ui/boxes/sent_history_box.h
         ayu/ui/boxes/plugin_info_box.cpp
         ayu/ui/boxes/plugin_info_box.h
         ayu/ui/components/image_view.cpp
@@ -248,8 +246,6 @@ set(ayugram_files
         ayu/data/deleted_restore.h
         ayu/data/kept_dialogs.cpp
         ayu/data/kept_dialogs.h
-        ayu/data/sent_messages.cpp
-        ayu/data/sent_messages.h
         ayu/data/messages_storage.cpp
         ayu/data/messages_storage.h
         ayu/data/entities.h

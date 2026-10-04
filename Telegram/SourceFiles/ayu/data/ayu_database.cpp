@@ -133,20 +133,6 @@ auto storage = make_storage(
 		make_column("lastMessageDate", &KeptDialog::lastMessageDate),
 		make_column("lost", &KeptDialog::lost)
 	),
-	make_index("idx_sent_message_userId_dialogId_messageId",
-			   column<SentMessage>(&SentMessage::userId),
-			   column<SentMessage>(&SentMessage::dialogId),
-			   column<SentMessage>(&SentMessage::messageId)),
-	make_table<SentMessage>(
-		"SentMessage",
-		make_column("fakeId", &SentMessage::fakeId, primary_key().autoincrement()),
-		make_column("userId", &SentMessage::userId),
-		make_column("dialogId", &SentMessage::dialogId),
-		make_column("messageId", &SentMessage::messageId),
-		make_column("date", &SentMessage::date),
-		make_column("title", &SentMessage::title),
-		make_column("text", &SentMessage::text)
-	),
 	make_table<RegexFilter>(
 		"RegexFilter",
 		make_column("id", &RegexFilter::id, primary_key()),
@@ -581,64 +567,6 @@ void removeKeptDialog(ID userId, ID dialogId) {
 				column<KeptDialog>(&KeptDialog::userId) == userId and
 				column<KeptDialog>(&KeptDialog::dialogId) == dialogId
 			)
-		);
-	});
-}
-
-void addSentMessages(const std::vector<SentMessage> &messages) {
-	if (messages.empty()) {
-		return;
-	}
-	runVoid("save sent messages", [&] {
-		inTransaction([&] {
-			for (const auto &message : messages) {
-				const auto exists = storage.count<SentMessage>(
-					where(
-						column<SentMessage>(&SentMessage::userId) == message.userId and
-						column<SentMessage>(&SentMessage::dialogId) == message.dialogId and
-						column<SentMessage>(&SentMessage::messageId) == message.messageId
-					)
-				) > 0;
-				if (!exists) {
-					storage.insert(message);
-				}
-			}
-		});
-	});
-}
-
-void updateSentMessageText(ID userId, ID dialogId, int messageId, const std::string &text) {
-	runVoid("update sent message", [&] {
-		storage.update_all(
-			set(assign(&SentMessage::text, text)),
-			where(
-				column<SentMessage>(&SentMessage::userId) == userId and
-				column<SentMessage>(&SentMessage::dialogId) == dialogId and
-				column<SentMessage>(&SentMessage::messageId) == messageId
-			)
-		);
-	});
-}
-
-std::vector<SentMessage> getSentMessages(ID userId, ID dialogId, const std::string &searchQuery, int offsetCount, int totalLimit) {
-	return run<std::vector<SentMessage>>("load sent messages", {}, [&] {
-		std::string escaped;
-		escaped.reserve(searchQuery.size());
-		for (const auto c : searchQuery) {
-			if (c == '%' || c == '_' || c == '\\') {
-				escaped += '\\';
-			}
-			escaped += c;
-		}
-		const auto pattern = "%" + escaped + "%";
-		return storage.get_all<SentMessage>(
-			where(
-				column<SentMessage>(&SentMessage::userId) == userId and
-				(column<SentMessage>(&SentMessage::dialogId) == dialogId or dialogId == 0) and
-				like(column<SentMessage>(&SentMessage::text), pattern, "\\")
-			),
-			order_by(column<SentMessage>(&SentMessage::date)).desc(),
-			limit(totalLimit, offset(offsetCount))
 		);
 	});
 }

@@ -33,10 +33,6 @@ std::vector<ID> getDeletedDialogIds(ID userId);
 void removeDeletedMessage(ID userId, ID dialogId, ID messageId);
 void clearDeletedMessages(ID userId, ID dialogId, ID topicId);
 
-void addSentMessages(const std::vector<SentMessage> &messages);
-void updateSentMessageText(ID userId, ID dialogId, int messageId, const std::string &text);
-std::vector<SentMessage> getSentMessages(ID userId, ID dialogId, const std::string &searchQuery, int offsetCount, int totalLimit);
-
 void saveKeptDialog(const KeptDialog &dialog);
 std::vector<KeptDialog> getKeptDialogs(ID userId);
 void removeKeptDialog(ID userId, ID dialogId);

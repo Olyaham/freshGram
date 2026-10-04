@@ -83,7 +83,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_dialogs.h"
 
 #include "ayu/ayu_settings.h"
-#include "ayu/data/sent_messages.h"
 #include "ayu/data/messages_storage.h"
 #include "ayu/utils/ayu_mapper.h"
 #include "ayu/features/filters/filters_controller.h"
@@ -624,8 +623,6 @@ HistoryItem::HistoryItem(
 			history->owner().histories().reportDelivery(this);
 		}
 	}
-
-	AyuSent::note(this);
 }
 
 HistoryItem::HistoryItem(
@@ -2548,7 +2545,6 @@ void HistoryItem::applyEdition(HistoryMessageEdition &&edition) {
 	}
 
 	finishEdition(keyboardTop);
-	AyuSent::edited(this);
 }
 
 void HistoryItem::applyChanges(not_null<Data::Story*> story) {
@@ -3254,8 +3250,6 @@ void HistoryItem::setRealId(MsgId newId) {
 	if (out() && starsPaid()) {
 		_history->session().credits().load(true);
 	}
-
-	AyuSent::note(this);
 }
 
 bool HistoryItem::canPin() const {

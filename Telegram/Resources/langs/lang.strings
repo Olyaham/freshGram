@@ -9109,12 +9109,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_CustomizeFontTitle" = "Customize Font";
 "ayu_MessageShotTopBarText" = "Shot";
 "ayu_MessageShotPreview" = "Preview";
-"ayu_SentHistoryTitle" = "My messages";
-"ayu_SentHistorySearch" = "Search in my messages";
-"ayu_SentHistoryThisChat" = "Only this chat";
-"ayu_SentHistoryEmpty" = "No messages yet. Messages you send are recorded here.";
-"ayu_SentHistoryNothingFound" = "Nothing found.";
-"ayu_SentHistoryMore" = "Show more";
 "ayu_MessageShotPreferences" = "Preferences";
 "ayu_MessageShotCopy" = "Copy";
 "ayu_MessageShotSave" = "Save";

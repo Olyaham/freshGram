@@ -28,6 +28,31 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 namespace Ui {
 namespace {
 
+[[nodiscard]] QColor UserpicBgColor() {
+	auto bg = QColor(st::sideBarBg->c);
+	const style::color *references[] = {
+		&st::windowBg,
+		&st::dialogsBgOver,
+		&st::dialogsBgActive,
+	};
+	auto highest = 0.f;
+	auto closest = 1.f;
+	for (const auto reference : references) {
+		const auto lightness = float(QColor((*reference)->c).lightnessF());
+		highest = std::max(highest, lightness);
+		closest = std::min(closest, std::abs(lightness - float(bg.lightnessF())));
+	}
+	if (highest >= 0.5f || closest >= 0.05f) {
+		return bg;
+	}
+	bg.setHslF(
+		std::max(float(bg.hslHueF()), 0.f),
+		bg.hslSaturationF(),
+		std::min(highest + 0.13f, 1.f));
+	return bg;
+}
+
+
 [[nodiscard]] bool IsExternal(const QString &name) {
 	return !name.isEmpty()
 		&& (name.front() == QChar(0))
@@ -307,7 +332,7 @@ void EmptyUserpic::paint(
 
 	PainterHighQualityEnabler hq(p);
 	{
-		auto bg = QColor(st::sideBarBg->c);
+		auto bg = UserpicBgColor();
 		p.setBrush(bg);
 	}
 	p.setPen(Qt::NoPen);
@@ -392,7 +417,7 @@ void EmptyUserpic::PaintSavedMessages(
 		int y,
 		int outerWidth,
 		int size) {
-	auto bg = QColor(st::sideBarBg->c);
+	auto bg = UserpicBgColor();
 	const auto &fg = st::windowBgActive;
 	PaintSavedMessages(p, x, y, outerWidth, size, QBrush(bg), fg);
 }
@@ -427,7 +452,7 @@ void EmptyUserpic::PaintRepliesMessages(
 		int y,
 		int outerWidth,
 		int size) {
-	auto bg = QColor(st::sideBarBg->c);
+	auto bg = UserpicBgColor();
 	const auto &fg = st::windowBgActive;
 	PaintRepliesMessages(p, x, y, outerWidth, size, QBrush(bg), fg);
 }
@@ -462,7 +487,7 @@ void EmptyUserpic::PaintHiddenAuthor(
 		int y,
 		int outerWidth,
 		int size) {
-	auto bg = QColor(st::sideBarBg->c);
+	auto bg = UserpicBgColor();
 	const auto &fg = st::windowBgActive;
 	PaintHiddenAuthor(p, x, y, outerWidth, size, QBrush(bg), fg);
 }
@@ -497,7 +522,7 @@ void EmptyUserpic::PaintMyNotes(
 		int y,
 		int outerWidth,
 		int size) {
-	auto bg = QColor(st::sideBarBg->c);
+	auto bg = UserpicBgColor();
 	const auto &fg = st::windowBgActive;
 	PaintMyNotes(p, x, y, outerWidth, size, QBrush(bg), fg);
 }

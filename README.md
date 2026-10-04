@@ -17,7 +17,6 @@ The source code is published under GPLv3 with OpenSSL exception, the license is 
 - Messages history
 - Anti-recall
 - Service messages (for example, "user joined") are kept when deleted, the same way as normal ones
-- A button in the chat top bar opens the history of the messages you sent in all chats, with search and a jump to the message
 - Chats and channels deleted by the other side, that you were removed from or that you deleted yourself stay in the chats list together with the saved messages (deleting the chat once more removes it for real)
 - Font customization
 - Streamer mode

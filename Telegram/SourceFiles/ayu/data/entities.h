@@ -87,18 +87,6 @@ public:
 	int lost;
 };
 
-class SentMessage
-{
-public:
-	ID fakeId;
-	ID userId;
-	ID dialogId;
-	int messageId;
-	int date;
-	std::string title;
-	std::string text;
-};
-
 class RegexFilter
 {
 public:
