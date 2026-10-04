@@ -188,6 +188,8 @@ set(ayugram_files
         ayu/ui/boxes/theme_selector_box.h
         ayu/ui/boxes/message_shot_box.cpp
         ayu/ui/boxes/message_shot_box.h
+        ayu/ui/boxes/sent_history_box.cpp
+        ayu/ui/boxes/sent_history_box.h
         ayu/ui/boxes/plugin_info_box.cpp
         ayu/ui/boxes/plugin_info_box.h
         ayu/ui/components/image_view.cpp
