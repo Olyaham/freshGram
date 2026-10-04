@@ -124,6 +124,28 @@ public:
 	std::vector<char> payload;
 };
 
+class PeekedStatusRow
+{
+public:
+	ID fakeId;
+	ID userId;
+	ID targetId;
+	int kind;
+	int time;
+	int checkedAt;
+};
+
+class PeekRestoreRow
+{
+public:
+	ID fakeId;
+	ID userId;
+	int option;
+	int flags;
+	std::string always;
+	std::string never;
+};
+
 class RegexFilter
 {
 public:

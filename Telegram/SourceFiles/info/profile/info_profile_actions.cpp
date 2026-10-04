@@ -117,6 +117,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QGuiApplication>
 #include <QtGui/QClipboard>
 
+#include "ayu/features/peek/peek_online.h"
 #include "ayu/ui/utils/ayu_profile_values.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "styles/style_ayu_styles.h"
@@ -1301,6 +1302,7 @@ private:
 	void addFastButtonsMode(not_null<UserData*> user);
 	void addReportAction();
 	void addBlockAction(not_null<UserData*> user);
+	void addPeekAction(not_null<UserData*> user);
 	void addLeaveChannelAction(not_null<ChannelData*> channel);
 	void addJoinChannelAction(not_null<ChannelData*> channel);
 	void fillUserActions(not_null<UserData*> user);
@@ -1871,6 +1873,20 @@ Section DetailsFiller::makeInfo() {
 				std::move(locationText),
 				QString()
 			).text->setLinksTrusted();
+		}
+
+		if (!user->isSelf() && !user->isBot()) {
+			auto peekText = AyuPeek::value(
+				user
+			) | rpl::map([](const std::optional<AyuPeek::Result> &result) {
+				return result
+					? TextWithEntities{ AyuPeek::format(*result) }
+					: TextWithEntities();
+			});
+			addInfoOneLine(
+				tr::ayu_PeekLabel(),
+				std::move(peekText),
+				QString());
 		}
 
 		{
@@ -3248,6 +3264,18 @@ void ActionsFiller::addReportAction() {
 		st::infoBlockButton);
 }
 
+void ActionsFiller::addPeekAction(not_null<UserData*> user) {
+	if (!AyuPeek::available(user)) {
+		return;
+	}
+	AddActionButton(
+		_wrap,
+		tr::ayu_PeekButton(),
+		rpl::single(true),
+		[=] { AyuPeek::start(user); },
+		&st::infoIconInformation);
+}
+
 void ActionsFiller::addBlockAction(not_null<UserData*> user) {
 	const auto controller = _controller->parentController();
 	const auto window = &controller->window();
@@ -3355,6 +3383,7 @@ void ActionsFiller::fillUserActions(not_null<UserData*> user) {
 		_wrap->add(CreateSkipWidget(_wrap, st::infoBlockButtonSkip));
 		addReportAction();
 	}
+	addPeekAction(user);
 	if (!user->isSelf() && !user->isSupport() && !user->isVerifyCodes()) {
 		addBlockAction(user);
 	}

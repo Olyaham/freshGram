@@ -260,7 +260,9 @@ UserPrivacy::UserPrivacy(not_null<ApiWrap*> api)
 
 void UserPrivacy::save(
 		Key key,
-		const UserPrivacy::Rule &rule) {
+		const UserPrivacy::Rule &rule,
+		Fn<void()> done,
+		Fn<void()> fail) {
 	const auto tlKey = KeyToTL(key);
 	const auto keyTypeId = tlKey.type();
 	const auto it = _privacySaveRequests.find(keyTypeId);
@@ -279,12 +281,18 @@ void UserPrivacy::save(
 			_privacySaveRequests.remove(keyTypeId);
 			apply(keyTypeId, data.vrules(), true);
 		});
+		if (done) {
+			done();
+		}
 	}).fail([=](const MTP::Error &error) {
 		const auto message = error.type();
 		if (message == u"PREMIUM_ACCOUNT_REQUIRED"_q) {
 			Settings::ShowPremium(_session, QString());
 		}
 		_privacySaveRequests.remove(keyTypeId);
+		if (fail) {
+			fail();
+		}
 	}).send();
 
 	_privacySaveRequests.emplace(keyTypeId, requestId);

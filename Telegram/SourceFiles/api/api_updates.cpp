@@ -73,6 +73,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "apiwrap.h"
 #include "ui/text/format_values.h" // Ui::FormatPhone
 
+#include "ayu/features/peek/peek_online.h"
 #include "ayu/secret/secret_manager.h"
 #include "ayu/ayu_settings.h"
 #include "ayu/ayu_worker.h"
@@ -486,6 +487,7 @@ void Updates::stateDone(const MTPupdates_State &state) {
 
 	session().api().requestDialogs();
 	updateOnline();
+	AyuPeek::restoreIfNeeded(&session());
 }
 
 void Updates::differenceDone(const MTPupdates_Difference &result) {

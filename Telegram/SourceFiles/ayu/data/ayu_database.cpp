@@ -173,6 +173,24 @@ auto storage = make_storage(
 		make_column("text", &SecretMessageRow::text),
 		make_column("payload", &SecretMessageRow::payload)
 	),
+	make_table<PeekedStatusRow>(
+		"PeekedStatus",
+		make_column("fakeId", &PeekedStatusRow::fakeId, primary_key().autoincrement()),
+		make_column("userId", &PeekedStatusRow::userId),
+		make_column("targetId", &PeekedStatusRow::targetId),
+		make_column("kind", &PeekedStatusRow::kind),
+		make_column("time", &PeekedStatusRow::time),
+		make_column("checkedAt", &PeekedStatusRow::checkedAt)
+	),
+	make_table<PeekRestoreRow>(
+		"PeekRestore",
+		make_column("fakeId", &PeekRestoreRow::fakeId, primary_key().autoincrement()),
+		make_column("userId", &PeekRestoreRow::userId),
+		make_column("option", &PeekRestoreRow::option),
+		make_column("flags", &PeekRestoreRow::flags),
+		make_column("always", &PeekRestoreRow::always),
+		make_column("never", &PeekRestoreRow::never)
+	),
 	make_table<RegexFilter>(
 		"RegexFilter",
 		make_column("id", &RegexFilter::id, primary_key()),
@@ -700,6 +718,55 @@ void clearSecretMessages(ID userId, int chatId) {
 				column<SecretMessageRow>(&SecretMessageRow::chatId) == chatId
 			)
 		);
+	});
+}
+
+void savePeekedStatus(const PeekedStatusRow &row) {
+	runVoid("save peeked status", [&] {
+		inTransaction([&] {
+			storage.remove_all<PeekedStatusRow>(
+				where(
+					column<PeekedStatusRow>(&PeekedStatusRow::userId) == row.userId and
+					column<PeekedStatusRow>(&PeekedStatusRow::targetId) == row.targetId
+				)
+			);
+			storage.insert(row);
+		});
+	});
+}
+
+std::vector<PeekedStatusRow> getPeekedStatus(ID userId, ID targetId) {
+	return run<std::vector<PeekedStatusRow>>("load peeked status", {}, [&] {
+		return storage.get_all<PeekedStatusRow>(
+			where(
+				column<PeekedStatusRow>(&PeekedStatusRow::userId) == userId and
+				column<PeekedStatusRow>(&PeekedStatusRow::targetId) == targetId
+			)
+		);
+	});
+}
+
+void savePeekRestore(const PeekRestoreRow &row) {
+	runVoid("save peek restore", [&] {
+		inTransaction([&] {
+			storage.remove_all<PeekRestoreRow>(
+				where(column<PeekRestoreRow>(&PeekRestoreRow::userId) == row.userId));
+			storage.insert(row);
+		});
+	});
+}
+
+std::vector<PeekRestoreRow> getPeekRestore(ID userId) {
+	return run<std::vector<PeekRestoreRow>>("load peek restore", {}, [&] {
+		return storage.get_all<PeekRestoreRow>(
+			where(column<PeekRestoreRow>(&PeekRestoreRow::userId) == userId));
+	});
+}
+
+void clearPeekRestore(ID userId) {
+	runVoid("clear peek restore", [&] {
+		storage.remove_all<PeekRestoreRow>(
+			where(column<PeekRestoreRow>(&PeekRestoreRow::userId) == userId));
 	});
 }
 

@@ -41,6 +41,12 @@ std::vector<SecretMessageRow> getSecretMessages(ID userId, int chatId);
 void removeSecretMessage(ID userId, int chatId, ID randomId);
 void clearSecretMessages(ID userId, int chatId);
 
+void savePeekedStatus(const PeekedStatusRow &row);
+std::vector<PeekedStatusRow> getPeekedStatus(ID userId, ID targetId);
+void savePeekRestore(const PeekRestoreRow &row);
+std::vector<PeekRestoreRow> getPeekRestore(ID userId);
+void clearPeekRestore(ID userId);
+
 void saveKeptDialog(const KeptDialog &dialog);
 std::vector<KeptDialog> getKeptDialogs(ID userId);
 void removeKeptDialog(ID userId, ID dialogId);
