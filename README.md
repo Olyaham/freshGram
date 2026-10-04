@@ -16,8 +16,8 @@ The source code is published under GPLv3 with OpenSSL exception, the license is 
 - Full ghost mode (flexible)
 - Messages history
 - Anti-recall
-- "Peek last seen" in a user profile (without Telegram Premium): briefly adds the user to the "Last seen & online" exceptions, reads their exact status and restores your privacy settings; the result is shown as a separate profile line
-- Secret chats live in the main chat list (opt-in: Settings - AyuGram - Enable secret chats, requires a local passcode): text with formatting, replies, photos, files, voice messages and video notes recorded with the native composer, self-destruct timers, typing and read marks, forwarding, message shots, native media viewer, encryption key picture and hex for comparison. Keys, messages and attachments are encrypted with a key derived from the local passcode key
+- "Peek last seen" in a user profile (without Telegram Premium): briefly adds the user to the "Last seen & online" exceptions, reads their exact status and restores your privacy settings; the result is shown as a separate profile line and next to the status in the chat top bar and the profile header, for example "last seen recently (peeked: last seen yesterday at 11:27 PM)"
+- Secret chats live in the main chat list (opt-in: Settings - AyuGram - Enable secret chats, requires a local passcode): text with formatting, replies, photos, files, static stickers and GIFs, voice messages and video notes recorded with the native composer, self-destruct timers, typing and read marks, forwarding, message shots, native media viewer, encryption key picture and hex for comparison. Keys, messages and attachments are encrypted with a key derived from the local passcode key
 - Service messages (for example, "user joined") are kept when deleted, the same way as normal ones
 - Chats and channels deleted by the other side, that you were removed from or that you deleted yourself stay in the chats list together with the saved messages (deleting the chat once more removes it for real)
 - Font customization
@@ -88,8 +88,10 @@ Autoupdate is disabled by default because freshGram has no update server.
 
 1. Add the repository secrets `API_ID` and `API_HASH`.
 2. Run the `Build environment` workflow once, it builds the library image and pushes it to GitHub Packages.
-3. The `Build` workflow builds Linux x86_64 on every push and pull request.
-   Run it manually with `release_tag` (for example `v7.2.10`) or push a `v*` tag to publish a release.
+3. The `Build` workflow builds Linux x86_64 on every push and pull request and produces `freshGram-linux-x86_64.tar.gz`, `freshGram.pacman` (an Arch Linux package, install it with `pacman -U`) and the plain `freshGram` binary.
+4. The `Build Windows` and `Build macOS` workflows run on `v*` tags and manually, and produce `freshGram.exe` (with `freshGram-windows-portable.zip`, which also holds the `TelegramForcePortable` folder that keeps all data next to the exe) and `freshGram.dmg` (ad-hoc signed, open it with right click - Open).
+   The first run builds all libraries, which can take more than one run: the finished part is cached, so run the workflow again until it passes.
+   Run any of the three manually with `release_tag` (for example `v7.2.10`) or push a `v*` tag to publish a release with all the files attached.
 
 See [docs/upstream-merge.md](docs/upstream-merge.md) for the upstream merge procedure.
 
