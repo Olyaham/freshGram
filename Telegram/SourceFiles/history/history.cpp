@@ -4268,6 +4268,12 @@ void History::setAyuKept(bool kept) {
 	updateChatListExistence();
 }
 
+void History::ayuRestoreMarkStale() {
+	if (_ayuRestore) {
+		_ayuRestore->markStale();
+	}
+}
+
 void History::restoreAyuKept() {
 	_loadedAtTop = true;
 	checkLocalMessages();

@@ -2128,7 +2128,6 @@ std::vector<ChatInfo> Manager::chats() const {
 		info.fingerprint = chat.row.fingerprint;
 		if (!chat.key.empty()) {
 			info.keyHash = KeyVisualHash(chat.key);
-			info.keySha256 = KeySha256(chat.key);
 		}
 		info.title = _impl->title(chat);
 		for (auto i = chat.messages.rbegin(); i != chat.messages.rend(); ++i) {

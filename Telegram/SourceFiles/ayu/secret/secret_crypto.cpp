@@ -101,12 +101,6 @@ Bytes KeyVisualHash(const Bytes &key) {
 	return result;
 }
 
-Bytes KeySha256(const Bytes &key) {
-	auto result = Bytes(32);
-	SHA256(key.data(), key.size(), result.data());
-	return result;
-}
-
 Bytes PadKey(const Bytes &key) {
 	if (key.size() >= kKeySize) {
 		return key;

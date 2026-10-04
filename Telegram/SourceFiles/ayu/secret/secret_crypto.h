@@ -15,7 +15,6 @@ void RandomBytes(uint8_t *data, size_t size);
 [[nodiscard]] int64_t KeyFingerprint(const Bytes &key);
 [[nodiscard]] Bytes PadKey(const Bytes &key);
 [[nodiscard]] Bytes KeyVisualHash(const Bytes &key);
-[[nodiscard]] Bytes KeySha256(const Bytes &key);
 
 [[nodiscard]] Bytes EncryptPacket(
 	const Bytes &key,

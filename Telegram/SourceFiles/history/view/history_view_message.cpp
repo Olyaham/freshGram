@@ -2642,11 +2642,18 @@ void Message::paintFromName(
 				.now = context.now,
 				.position = QPoint(
 					x - 2 * _fromNameStatus->skip,
-					y + _fromNameStatus->skip),
+					y + (st::msgNameFont->height
+						- Ui::Text::AdjustCustomEmojiSize(st::emojiSize)) / 2),
 				.paused = context.paused || On(PowerSaving::kEmojiStatus),
 			});
 		} else {
-			st::dialogsPremiumIcon.icon.paint(p, x, y, width(), color);
+			st::dialogsPremiumIcon.icon.paint(
+				p,
+				x,
+				y + (st::msgNameFont->height
+					- st::dialogsPremiumIcon.icon.height()) / 2,
+				width(),
+				color);
 		}
 	}
 	p.setFont(st::msgNameFont);

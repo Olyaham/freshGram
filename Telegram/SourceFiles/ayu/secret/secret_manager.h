@@ -39,7 +39,6 @@ struct ChatInfo {
 	bool typing = false;
 	int64 fingerprint = 0;
 	std::vector<uint8_t> keyHash;
-	std::vector<uint8_t> keySha256;
 	QString title;
 	QString lastText;
 };

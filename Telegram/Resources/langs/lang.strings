@@ -9160,7 +9160,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_SecretChatNotReady" = "This secret chat is not active.";
 "ayu_SecretNotSupported" = "This is not supported in secret chats.";
 "ayu_SecretKeyIntro" = "Compare this picture and the hexadecimal text with the ones on your contact's device. If they match, the chat is end-to-end encrypted between you two.";
-"ayu_SecretKeyEmojiNote" = "The emoji are derived from the same key by freshGram for easier comparison. Official apps show only the picture and the text.";
 "ayu_SecretChatsHeader" = "Secret chats";
 "ayu_SecretChatsSwitch" = "Enable secret chats";
 "ayu_SecretChatsSwitchDescription" = "Works only with a local passcode. Keys, messages and attachments of secret chats are encrypted with it. Turning the passcode off turns this option off.";

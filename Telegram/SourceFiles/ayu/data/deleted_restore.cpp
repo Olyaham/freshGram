@@ -33,6 +33,7 @@ struct DialogsEntry {
 };
 
 base::flat_map<ID, DialogsEntry> DialogsWithDeleted;
+base::flat_map<ID, base::flat_set<ID>> NotedDialogs;
 
 [[nodiscard]] bool Supported(not_null<PeerData*> peer) {
 	return !peer->isForum() && !peer->isMonoforum();
@@ -46,6 +47,7 @@ void WithDeletedDialogs(
 		callback(entry.ids);
 		return;
 	}
+	AyuMessages::flushPending();
 	entry.waiting.push_back(std::move(callback));
 	if (entry.loading) {
 		return;
@@ -63,6 +65,9 @@ void WithDeletedDialogs(
 			entry.loaded = true;
 			entry.loading = false;
 			entry.ids = base::flat_set<ID>(ids.begin(), ids.end());
+			for (const auto id : NotedDialogs[userId]) {
+				entry.ids.emplace(id);
+			}
 			auto waiting = std::move(entry.waiting);
 			entry.waiting.clear();
 			for (const auto &callback : waiting) {
@@ -74,15 +79,32 @@ void WithDeletedDialogs(
 
 } // namespace
 
+void noteDeleted(not_null<History*> history) {
+	const auto peer = history->peer;
+	if (!Supported(peer)) {
+		return;
+	}
+	const auto userId = AyuMessages::storageUserId(peer);
+	const auto dialogId = getDialogIdFromPeer(peer);
+	NotedDialogs[userId].emplace(dialogId);
+	DialogsWithDeleted[userId].ids.emplace(dialogId);
+	history->ayuRestoreMarkStale();
+}
+
 State::State(not_null<History*> history)
 : _history(history) {
 }
 
+void State::markStale() {
+	_stale = true;
+}
+
 void State::checkLoaded() {
-	if (_requested) {
+	if (_requested && !_stale) {
 		return;
 	}
 	_requested = true;
+	_stale = false;
 
 	const auto peer = _history->peer;
 	if (!AyuSettings::getInstance().saveDeletedMessages()
@@ -109,6 +131,7 @@ void State::disable() {
 
 void State::load(ID userId, ID dialogId) {
 	const auto weak = base::make_weak(this);
+	AyuMessages::flushPending();
 	crl::async([=] {
 		auto messages = std::vector<AyuMessageBase>();
 		try {
@@ -129,8 +152,15 @@ void State::load(ID userId, ID dialogId) {
 			if (!strong || strong->_disabled) {
 				return;
 			}
-			strong->_rows.reserve(messages.size());
+			auto known = base::flat_set<std::pair<ID, TimeId>>();
+			for (const auto &row : strong->_rows) {
+				known.emplace(row.message.messageId, row.message.date);
+			}
+			strong->_rows.reserve(strong->_rows.size() + messages.size());
 			for (auto &message : messages) {
+				if (!known.emplace(message.messageId, message.date).second) {
+					continue;
+				}
 				strong->_rows.push_back({ std::move(message), MsgId() });
 			}
 			strong->_loaded = true;

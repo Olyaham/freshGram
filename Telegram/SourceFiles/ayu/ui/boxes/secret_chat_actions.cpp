@@ -89,8 +89,7 @@ void ShowSecretKey(
 	}
 	controller->show(Box(
 		FillSecretKeyBox,
-		info->keyHash,
-		info->keySha256));
+		info->keyHash));
 }
 
 void ConfirmSecretClear(

@@ -4,6 +4,7 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
+#include "ayu/data/deleted_restore.h"
 #include "ayu/secret/secret_peer.h"
 #include "ayu/data/messages_storage.h"
 
@@ -527,6 +528,7 @@ void addDeletedMessage(not_null<HistoryItem*> item) {
 	}
 
 	PendingDeleted.push_back(std::move(message));
+	AyuRestore::noteDeleted(item->history());
 	if (!FlushScheduled) {
 		FlushScheduled = true;
 		crl::on_main(flushPendingDeleted);
@@ -542,6 +544,10 @@ std::vector<AyuMessageBase> loadDeletedMessages(
 		int totalLimit,
 		const std::string &searchQuery) {
 	return convertToBase(AyuDatabase::getDeletedMessages(userId, dialogId, topicId, minId, maxId, totalLimit, searchQuery));
+}
+
+void flushPending() {
+	flushPendingDeleted();
 }
 
 bool hasDeletedMessages(not_null<PeerData*> peer, ID topicId) {

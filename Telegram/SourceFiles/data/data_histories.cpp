@@ -417,7 +417,13 @@ void Histories::requestDialogEntry(not_null<Data::Folder*> folder) {
 void Histories::requestDialogEntry(
 		not_null<History*> history,
 		Fn<void()> callback) {
-	if (AyuSecret::IsSecretPeer(history->peer)) {
+	if (AyuSecret::IsSecretPeer(history->peer)
+		|| (history->ayuKept()
+			&& (history->peer->isChat() || history->peer->isChannel())
+			&& (history->peer->asChat()
+				? history->peer->asChat()->isForbidden()
+				: (history->peer->asChannel()->flags()
+					& ChannelDataFlag::Forbidden)))) {
 		if (callback) {
 			callback();
 		}

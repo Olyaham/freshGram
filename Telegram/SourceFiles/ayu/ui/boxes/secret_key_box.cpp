@@ -1,10 +1,8 @@
 #include "ayu/ui/boxes/secret_key_box.h"
 
-#include "calls/calls_emoji_fingerprint.h"
 #include "lang/lang_keys.h"
 #include "styles/style_boxes.h"
 #include "styles/style_layers.h"
-#include "ui/emoji_config.h"
 #include "ui/layers/generic_box.h"
 #include "ui/painter.h"
 #include "ui/rp_widget.h"
@@ -79,8 +77,7 @@ private:
 
 void FillSecretKeyBox(
 		not_null<Ui::GenericBox*> box,
-		std::vector<uint8_t> keyHash,
-		std::vector<uint8_t> keySha256) {
+		std::vector<uint8_t> keyHash) {
 	box->setTitle(tr::ayu_SecretKey());
 	box->addButton(tr::lng_close(), [=] { box->closeBox(); });
 
@@ -110,32 +107,6 @@ void FillSecretKeyBox(
 			st::boxLabel),
 		st::boxPadding);
 	hex->setSelectable(true);
-
-	if (keySha256.size() >= 32) {
-		auto bytes = std::vector<gsl::byte>(32);
-		for (auto i = 0; i != 32; ++i) {
-			bytes[i] = gsl::byte(keySha256[i]);
-		}
-		const auto emoji = Calls::ComputeEmojiFingerprint(
-			bytes::const_span(bytes.data(), bytes.size()));
-		auto text = QString();
-		for (const auto &entry : emoji) {
-			text += entry->text();
-			text += ' ';
-		}
-		box->addRow(
-			object_ptr<Ui::FlatLabel>(
-				box,
-				text.trimmed(),
-				st::boxTitle),
-			st::boxPadding);
-		box->addRow(
-			object_ptr<Ui::FlatLabel>(
-				box,
-				tr::ayu_SecretKeyEmojiNote(tr::now),
-				st::boxDividerLabel),
-			st::boxPadding);
-	}
 }
 
 } // namespace Ui

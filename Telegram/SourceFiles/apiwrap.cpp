@@ -1230,6 +1230,12 @@ void ApiWrap::requestFullPeer(not_null<PeerData*> peer) {
 	if (AyuSecret::IsSecretPeer(peer)) {
 		return;
 	}
+	if (const auto chat = peer->asChat(); chat && chat->isForbidden()) {
+		return;
+	} else if (const auto channel = peer->asChannel();
+		channel && (channel->flags() & ChannelDataFlag::Forbidden)) {
+		return;
+	}
 	if (_fullPeerRequests.contains(peer)) {
 		return;
 	} else if (!peer->isUser() && !peer->barSettings().has_value()) {

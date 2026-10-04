@@ -28,6 +28,7 @@ std::optional<MTPMessageMedia> savedTtlMedia(not_null<History*> history, MsgId i
 void restoreTtlBytes(not_null<HistoryItem*> item);
 std::vector<AyuMessageBase> loadDeletedMessages(ID userId, ID dialogId, ID topicId, ID minId, ID maxId, int totalLimit, const std::string &searchQuery);
 bool hasDeletedMessages(not_null<PeerData*> peer, ID topicId);
+void flushPending();
 void removeDeletedMessage(not_null<HistoryItem*> item);
 void clearDeletedMessages(not_null<PeerData*> peer, ID topicId);
 

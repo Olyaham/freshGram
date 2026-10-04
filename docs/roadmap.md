@@ -17,7 +17,7 @@
 9. Restore deleted messages in forums (chats with topics) after a restart.
 10. Show deleted messages in the regular chat search and in the shared media tabs.
 11. Kept chats: restore the senders' names and userpics in restored supergroups and show an explicit "removed" status on a kept chat.
-12. Secret chats: not yet checked against the live server (the protocol is covered by unit tests only); non-image attachments are decrypted into a temporary folder while the app runs; stickers, polls, inline bots, search and shared media are not available in secret chats; the key emoji are freshGram-specific, official apps show only the picture and the hex text.
+12. Secret chats: not yet checked against the live server (the protocol is covered by unit tests only); non-image attachments are decrypted into a temporary folder while the app runs; stickers, polls, inline bots, search and shared media are not available in secret chats.
 13. Make the rest of the materialgram look (paddings, sizes, Google Sans font) switchable together with the icons; for now only the icons, message rounding and tails, and the reply background are switchable.
 
 ## Later

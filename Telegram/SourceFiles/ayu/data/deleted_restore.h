@@ -14,12 +14,15 @@ struct Row {
 	bool dead = false;
 };
 
+void noteDeleted(not_null<History*> history);
+
 class State final : public base::has_weak_ptr {
 public:
 	explicit State(not_null<History*> history);
 
 	void checkLoaded();
 	void disable();
+	void markStale();
 	HistoryItem *materialize(TimeId from, TimeId till);
 	void dropDuplicates();
 
@@ -34,6 +37,7 @@ private:
 	bool _loaded = false;
 	bool _materializing = false;
 	bool _disabled = false;
+	bool _stale = false;
 
 };
 

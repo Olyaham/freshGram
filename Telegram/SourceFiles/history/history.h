@@ -111,6 +111,7 @@ public:
 	[[nodiscard]] bool ayuKept() const;
 	void setAyuKept(bool kept);
 	void restoreAyuKept();
+	void ayuRestoreMarkStale();
 	void removeJoinedMessage();
 	void removeNewPeerMessages();
 
