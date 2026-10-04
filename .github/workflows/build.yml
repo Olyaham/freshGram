@@ -309,6 +309,23 @@ jobs:
           tar -C out/install -czf dist/freshGram-linux-x86_64.tar.gz usr
           (cd dist && sha256sum freshGram freshGram-linux-x86_64.tar.gz > SHA256SUMS)
 
+      - name: Arch Linux package
+        run: |
+          set -e
+          version=$(awk '/^AppVersionStr /{print $2}' Telegram/build/version)
+          rm -rf arch
+          mkdir -p arch
+          cp Telegram/build/arch/PKGBUILD arch/PKGBUILD
+          tar -C out/install -cf arch/freshgram-root.tar usr
+          docker run --rm -e FRESHGRAM_VERSION="$version" -v "$PWD/arch:/pkg" archlinux:base-devel bash -c '
+            set -e
+            useradd -m builder
+            chown -R builder /pkg
+            su builder -c "cd /pkg && FRESHGRAM_VERSION=$FRESHGRAM_VERSION makepkg -f --nodeps"
+          '
+          cp arch/freshgram-*.pkg.tar.zst dist/freshGram.pacman
+          (cd dist && sha256sum freshGram freshGram-linux-x86_64.tar.gz freshGram.pacman > SHA256SUMS)
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -338,5 +355,6 @@ jobs:
           generate_release_notes: true
           files: |
             dist/freshGram-linux-x86_64.tar.gz
+            dist/freshGram.pacman
             dist/freshGram
             dist/SHA256SUMS
