@@ -29,6 +29,21 @@ stickerRoundingSize: 5px;
 
 messageShotPadding: 4px;
 
+topBarMyMessages: IconButton {
+	width: 40px;
+	height: topBarHeight;
+
+	icon: icon {{ "ayu/edits_history", menuIconFg }};
+	iconOver: icon {{ "ayu/edits_history", menuIconFgOver }};
+	iconPosition: point(8px, 15px);
+
+	rippleAreaPosition: point(0px, 7px);
+	rippleAreaSize: 40px;
+	ripple: RippleAnimation(defaultRippleAnimation) {
+		color: windowBgOver;
+	}
+}
+
 topBarAdmins: IconButton {
 	width: 40px;
 	height: topBarHeight;

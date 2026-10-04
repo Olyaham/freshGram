@@ -94,7 +94,7 @@ void SaveSnapshot(not_null<History*> history) {
 				return;
 			}
 			const auto item = view->data();
-			if (item->isDeleted() || item->isService()) {
+			if (item->isDeleted() || item->isLocal()) {
 				continue;
 			}
 			AyuMessages::addDeletedMessage(item);

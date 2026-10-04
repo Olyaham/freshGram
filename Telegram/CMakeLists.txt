@@ -246,6 +246,8 @@ set(ayugram_files
         ayu/data/deleted_restore.h
         ayu/data/kept_dialogs.cpp
         ayu/data/kept_dialogs.h
+        ayu/data/sent_messages.cpp
+        ayu/data/sent_messages.h
         ayu/data/messages_storage.cpp
         ayu/data/messages_storage.h
         ayu/data/entities.h

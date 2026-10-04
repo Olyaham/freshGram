@@ -12,6 +12,8 @@ class History;
 
 namespace AyuMessages {
 
+constexpr auto kServiceDocumentType = 2;
+
 void addEditedMessage(not_null<HistoryItem *> item);
 ID storageUserId(not_null<PeerData*> peer);
 std::vector<AyuMessageBase> loadEditedMessages(ID userId, ID dialogId, ID messageId, ID minId, ID maxId, int totalLimit);

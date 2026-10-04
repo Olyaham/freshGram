@@ -73,6 +73,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QWindow>
 
 #include "ayu/ayu_settings.h"
+#include "ayu/ui/boxes/sent_history_box.h"
+#include "ui/layers/generic_box.h"
 #include "boxes/peers/edit_participants_box.h"
 #include "data/data_chat_filters.h"
 #include "history/admin_log/history_admin_log_section.h"
@@ -139,6 +141,7 @@ TopBarWidget::TopBarWidget(
 , _menuToggle(this, st::topBarMenuToggle)
 , _recentActions(this, st::topBarRecentActions)
 , _admins(this, st::topBarAdmins)
+, _myMessages(this, st::topBarMyMessages)
 , _titlePeerText(st::windowMinWidth / 3)
 , _onlineUpdater([=] { updateOnlineDisplay(); }) {
 	setAttribute(Qt::WA_OpaquePaintEvent);
@@ -192,6 +195,15 @@ TopBarWidget::TopBarWidget(
 			_activeChat.key.peer(),
 			ParticipantsBoxController::Role::Admins
 		);
+	});
+
+	_myMessages->setAccessibleName(tr::ayu_SentHistoryTitle(tr::now));
+	_myMessages->setClickedCallback([=]
+	{
+		controller->show(Box(
+			Ui::FillSentHistoryBox,
+			controller,
+			_activeChat.key.peer()));
 	});
 
 	AyuSettings::getInstance().quickAdminShortcutsChanges(
@@ -1361,6 +1373,10 @@ void TopBarWidget::updateControlsGeometry() {
 	if (!_admins->isHidden()) {
 		_rightTaken += _admins->width();
 	}
+	_myMessages->moveToRight(_rightTaken, otherButtonsTop);
+	if (!_myMessages->isHidden()) {
+		_rightTaken += _myMessages->width();
+	}
 
 	_search->moveToRight(_rightTaken, otherButtonsTop);
 	if (!_search->isHidden()) {
@@ -1520,6 +1536,10 @@ void TopBarWidget::updateControlsVisibility() {
 		return false;
 	}();
 	_admins->setVisible(showAdmins);
+	_myMessages->setVisible(section == Section::History
+		&& _activeChat.key.peer()
+		&& !_chooseForReportReason
+		&& !showSelectedState());
 
 	const auto callsEnabled = [&] {
 		if (const auto peer = _activeChat.key.peer()) {

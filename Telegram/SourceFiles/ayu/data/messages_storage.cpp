@@ -6,6 +6,7 @@
 // Copyright @Radolyn, 2026
 #include "ayu/data/messages_storage.h"
 
+#include "ayu/ayu_settings.h"
 #include "ayu/data/ayu_database.h"
 #include "ayu/utils/ayu_mapper.h"
 #include "ayu/utils/telegram_helpers.h"
@@ -490,7 +491,22 @@ void addDeletedMessage(not_null<HistoryItem*> item) {
 	DeletedMessage message;
 	map(item, message);
 
-	if (message.text.empty() && message.documentSerialized.empty() && item->media()) {
+	if (item->isService()) {
+		auto text = item->notificationText().text;
+		const auto postfix = QString(" (%1)").arg(
+			AyuSettings::getInstance().deletedMark());
+		if (text.endsWith(postfix)) {
+			text.chop(postfix.size());
+		}
+		if (text.isEmpty()) {
+			return;
+		}
+		message.text = text.toStdString();
+		message.textEntities.clear();
+		message.documentSerialized.clear();
+		message.mediaPath = "/";
+		message.documentType = kServiceDocumentType;
+	} else if (message.text.empty() && message.documentSerialized.empty() && item->media()) {
 		message.text = item->notificationText().text.toStdString();
 	}
 	if (message.text.empty() && message.documentSerialized.empty()) {

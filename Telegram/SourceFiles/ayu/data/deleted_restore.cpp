@@ -14,6 +14,7 @@
 #include "data/data_user.h"
 #include "history/history.h"
 #include "history/history_item.h"
+#include "history/history_item_helpers.h"
 #include "main/main_session.h"
 #include "ui/text/text_utilities.h"
 
@@ -235,6 +236,22 @@ HistoryItem *State::create(Row &row) {
 	const auto &message = row.message;
 	if (owner.message(peer, MsgId(message.messageId))) {
 		return nullptr;
+	}
+
+	if (message.documentType == AyuMessages::kServiceDocumentType) {
+		const auto service = _history->makeMessage({
+			.id = owner.nextLocalMessageId(),
+			.flags = MessageFlags(MessageFlag::Local),
+			.date = message.date,
+		}, PreparedServiceText{
+			.text = TextWithEntities{ QString::fromStdString(message.text) },
+		});
+		if (peer->isUser() || !_history->ayuKept()) {
+			service->setDeleted();
+			service->markDeletedAnimated();
+		}
+		row.localId = service->id;
+		return service;
 	}
 
 	PeerData *from = owner.userLoaded(message.fromId);
