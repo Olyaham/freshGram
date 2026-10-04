@@ -1,3 +1,16 @@
+7.2.19 (04.10.26)
+
+- Add secret chats to the main chats list, with replies, photos, files, stickers and GIFs.
+- Show a secret chat request as a chat and ask for the answer when it is opened.
+- Open a new secret chat right after it is created and show read marks in it.
+- Keep deleted and self-destructed secret messages, marked as deleted.
+- Keep all secret chat attachments encrypted with the local passcode.
+- Open the profile and show the avatar of the person in a secret chat.
+- Add peeking at the last seen without Telegram Premium, shown in the top bar.
+- Fix media corners staying rounded when message rounding is off.
+- Fix emoji with enclosing marks being stretched.
+- Overwrite the crash trace on every start.
+
 7.2.17 beta (04.10.26)
 
 - Add the history of the messages you sent in all chats, with search and a jump to the message, behind a button in the chat top bar.
