@@ -103,7 +103,13 @@ jobs:
       - name: Build
         run: |
           cd freshGram
-          cmake --build out --config Release --target Telegram
+          for attempt in 1 2 3; do
+            if cmake --build out --config Release --target Telegram; then
+              exit 0
+            fi
+            echo "::warning::Build attempt $attempt failed, trying again"
+          done
+          exit 1
 
       - name: Package
         run: |
