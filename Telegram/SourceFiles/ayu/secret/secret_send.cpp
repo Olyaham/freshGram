@@ -6,6 +6,8 @@
 #include "ayu/secret/secret_peer.h"
 #include "ayu/secret/secret_policy.h"
 #include "data/data_document.h"
+#include "data/data_document_media.h"
+#include "data/data_file_origin.h"
 #include "data/data_media_types.h"
 #include "data/data_session.h"
 #include "data/data_thread.h"
@@ -16,6 +18,10 @@
 #include "ui/chat/attach/attach_prepare.h"
 #include "ui/text/text_entity.h"
 #include "ui/toast/toast.h"
+
+#include <QtCore/QBuffer>
+#include <QtCore/QFile>
+#include <QtGui/QImage>
 
 namespace AyuSecret {
 namespace {
@@ -55,6 +61,66 @@ struct Target {
 	return true;
 }
 
+void ObtainBytes(
+		not_null<DocumentData*> document,
+		Fn<void(QByteArray)> done) {
+	const auto media = document->createMediaView();
+	const auto origin = document->stickerOrGifOrigin();
+	const auto read = [=] {
+		auto bytes = media->bytes();
+		if (bytes.isEmpty()) {
+			const auto path = document->filepath(true);
+			if (!path.isEmpty()) {
+				auto file = QFile(path);
+				if (file.open(QIODevice::ReadOnly)) {
+					bytes = file.readAll();
+				}
+			}
+		}
+		return bytes;
+	};
+	if (auto bytes = read(); !bytes.isEmpty()) {
+		done(std::move(bytes));
+		return;
+	}
+	if (!document->saveToCache()) {
+		Ui::Toast::Show(tr::ayu_SecretNotSupported(tr::now));
+		return;
+	}
+	document->save(origin, QString(), LoadFromCloudOrLocal, true);
+	const auto session = &document->session();
+	session->downloaderTaskFinished(
+	) | rpl::filter([=] {
+		return !read().isEmpty();
+	}) | rpl::take(1) | rpl::on_next([=] {
+		done(read());
+	}, session->lifetime());
+}
+
+[[nodiscard]] QByteArray PreparedImageBytes(
+		const Ui::PreparedFile &file,
+		QString &name) {
+	if (!file.information) {
+		return QByteArray();
+	}
+	const auto image = std::get_if<Ui::PreparedFileInformation::Image>(
+		&file.information->media);
+	if (!image) {
+		return QByteArray();
+	} else if (!image->bytes.isEmpty()) {
+		return image->bytes;
+	} else if (image->data.isNull()) {
+		return QByteArray();
+	}
+	const auto png = image->data.hasAlphaChannel();
+	auto result = QByteArray();
+	auto buffer = QBuffer(&result);
+	buffer.open(QIODevice::WriteOnly);
+	image->data.save(&buffer, png ? "PNG" : "JPEG", 94);
+	name = png ? u"photo.png"_q : u"photo.jpg"_q;
+	return result;
+}
+
 [[nodiscard]] TextWithEntities ToEntities(const TextWithTags &tags) {
 	return TextWithEntities{
 		tags.text,
@@ -69,6 +135,49 @@ bool Reject(not_null<PeerData*> peer) {
 		return false;
 	}
 	Ui::Toast::Show(tr::ayu_SecretNotSupported(tr::now));
+	return true;
+}
+
+bool SendDocument(
+		const Api::MessageToSend &message,
+		not_null<DocumentData*> document) {
+	const auto target = Resolve(message.action);
+	if (!target) {
+		return false;
+	}
+	if (!Ready(*target)) {
+		return true;
+	}
+	auto outgoing = OutgoingFile();
+	outgoing.replyTo = target->replyTo;
+	outgoing.width = document->dimensions.width();
+	outgoing.height = document->dimensions.height();
+	if (const auto sticker = document->sticker()) {
+		if (!sticker->isStatic()) {
+			Ui::Toast::Show(tr::ayu_SecretNotSupported(tr::now));
+			return true;
+		}
+		outgoing.kind = MediaType::Sticker;
+		outgoing.mime = u"image/webp"_q;
+		outgoing.name = u"sticker.webp"_q;
+		outgoing.emoji = sticker->alt;
+	} else if (document->isAnimation() && !document->isVideoMessage()) {
+		outgoing.kind = MediaType::Animation;
+		outgoing.mime = document->mimeString();
+		outgoing.name = document->filename();
+		outgoing.duration = int(std::max<crl::time>(
+			1,
+			document->duration() / 1000));
+	} else {
+		Ui::Toast::Show(tr::ayu_SecretNotSupported(tr::now));
+		return true;
+	}
+	const auto chatId = target->chatId;
+	const auto session = target->session;
+	ObtainBytes(document, [=](QByteArray bytes) mutable {
+		outgoing.bytes = std::move(bytes);
+		Get(session).sendFile(chatId, std::move(outgoing));
+	});
 	return true;
 }
 
@@ -103,10 +212,13 @@ bool SendFiles(Ui::PreparedList &list, const Api::SendAction &action) {
 	for (auto &file : list.files) {
 		auto outgoing = OutgoingFile();
 		outgoing.path = file.path;
+		outgoing.name = file.displayName;
 		if (file.path.isEmpty()) {
 			outgoing.bytes = file.content;
+			if (outgoing.bytes.isEmpty()) {
+				outgoing.bytes = PreparedImageBytes(file, outgoing.name);
+			}
 		}
-		outgoing.name = file.displayName;
 		outgoing.caption = file.caption.text;
 		outgoing.replyTo = replyTo;
 		replyTo = 0;

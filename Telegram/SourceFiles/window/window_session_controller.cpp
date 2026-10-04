@@ -7,7 +7,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "ayu/secret/secret_bridge.h"
 #include "ayu/secret/secret_peer.h"
-#include "ayu/ui/boxes/secret_chat_actions.h"
 #include "window/window_session_controller.h"
 
 #include "apiwrap.h"
@@ -1398,8 +1397,8 @@ void SessionNavigation::showPeerInfo(
 		not_null<PeerData*> peer,
 		const SectionShow &params) {
 	if (AyuSecret::IsSecretPeer(peer)) {
-		if (const auto controller = parentController()) {
-			Ui::ShowSecretKey(controller, peer);
+		if (const auto real = AyuSecret::RealUser(peer)) {
+			showPeerInfo(real, params);
 		}
 		return;
 	}
@@ -1595,6 +1594,7 @@ SessionController::SessionController(
 , _defaultChatTheme(std::make_shared<Ui::ChatTheme>())
 , _chatStyle(std::make_unique<Ui::ChatStyle>(session->colorIndicesValue())) {
 	init();
+	AyuSecret::WatchActiveChat(this);
 
 	_chatStyleTheme = _defaultChatTheme;
 	_chatStyle->apply(_defaultChatTheme.get());

@@ -5236,6 +5236,13 @@ void ApiWrap::sendInlineResult(
 		SendAction action,
 		std::optional<MsgId> localMessageId,
 		Fn<void(bool)> done) {
+	if (const auto document = data->document()
+		; document && AyuSecret::SendDocument(MessageToSend(action), document)) {
+		if (done) {
+			done(true);
+		}
+		return;
+	}
 	if (AyuSecret::Reject(action.history->peer)) {
 		if (done) {
 			done(false);

@@ -91,7 +91,9 @@ Bytes SerializeMeta(const MessageData &data) {
 	w.writeInt(data.ttl);
 	w.writeInt(data.expiresAt);
 	w.writeInt(int(data.state));
-	w.writeInt((data.opened ? 1 : 0) | (data.special << 1));
+	w.writeInt((data.opened ? 1 : 0)
+		| ((data.special & 0x7FFF) << 1)
+		| (data.deleted ? (1 << 16) : 0));
 	w.writeLong(data.replyTo);
 	w.writeInt(int(data.entities.size()));
 	for (const auto &entity : data.entities) {
@@ -120,7 +122,8 @@ bool ParseMeta(const Bytes &meta, MessageData &data) {
 	data.state = DeliveryState(r.readInt());
 	const auto flags = r.readInt();
 	data.opened = (flags & 1) != 0;
-	data.special = flags >> 1;
+	data.special = (flags >> 1) & 0x7FFF;
+	data.deleted = (flags & (1 << 16)) != 0;
 	data.replyTo = r.readLong();
 	const auto count = r.readInt();
 	if (count < 0 || count > 10000) {

@@ -740,6 +740,7 @@ void HistoryInner::setupSwipeReplyAndBack() {
 			if ((position.y() < itemtop)
 				|| (position.y() > itembottom)
 				|| (!view->data()->isRegular()
+					&& !view->data()->isAyuSecret()
 					&& (!view->data()->isEphemeral()
 						|| view->data()->out()))
 				|| view->data()->isService()) {
@@ -794,6 +795,7 @@ void HistoryInner::setupSwipeReplyAndBack() {
 			if ((data.cursorPosition.y() < itemtop)
 				|| (data.cursorPosition.y() > itembottom)
 				|| (!view->data()->isRegular()
+					&& !view->data()->isAyuSecret()
 					&& (!view->data()->isEphemeral()
 						|| view->data()->out()))
 				|| view->data()->showSimilarChannels()

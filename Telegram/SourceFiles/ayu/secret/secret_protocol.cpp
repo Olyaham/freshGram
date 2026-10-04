@@ -260,10 +260,10 @@ bool ParseAttributes(Reader &r, Media &media) {
 		media.type = MediaType::Voice;
 	} else if (audio) {
 		media.type = MediaType::Audio;
-	} else if (video) {
-		media.type = MediaType::Video;
 	} else if (media.animated) {
 		media.type = MediaType::Animation;
+	} else if (video) {
+		media.type = MediaType::Video;
 	} else {
 		media.type = MediaType::Document;
 	}
@@ -586,19 +586,28 @@ void WriteAttributes(Writer &w, const Media &media) {
 		attributes.writeString(media.fileName);
 		++count;
 	}
+	const auto videoAnimation = (media.type == MediaType::Animation)
+		&& (media.mime.rfind("video/", 0) == 0);
 	if (media.width > 0 && media.height > 0
 		&& (media.type == MediaType::Document
-			|| media.type == MediaType::Animation)) {
+			|| media.type == MediaType::Sticker
+			|| (media.type == MediaType::Animation && !videoAnimation))) {
 		attributes.writeUInt(kAttrImageSize);
 		attributes.writeInt(media.width);
 		attributes.writeInt(media.height);
+		++count;
+	}
+	if (media.type == MediaType::Sticker) {
+		attributes.writeUInt(kAttrSticker);
+		attributes.writeString(media.emoji);
+		attributes.writeUInt(kStickerSetEmpty);
 		++count;
 	}
 	if (media.animated || media.type == MediaType::Animation) {
 		attributes.writeUInt(kAttrAnimated);
 		++count;
 	}
-	if (media.type == MediaType::Video) {
+	if (media.type == MediaType::Video || videoAnimation) {
 		attributes.writeUInt(kAttrVideo);
 		attributes.writeInt(media.round ? 1 : 0);
 		attributes.writeInt(media.duration);

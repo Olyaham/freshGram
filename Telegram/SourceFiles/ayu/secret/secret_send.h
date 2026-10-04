@@ -26,6 +26,9 @@ namespace AyuSecret {
 	crl::time duration,
 	bool video,
 	const Api::SendAction &action);
+[[nodiscard]] bool SendDocument(
+	const Api::MessageToSend &message,
+	not_null<DocumentData*> document);
 [[nodiscard]] bool Reject(not_null<PeerData*> peer);
 
 [[nodiscard]] bool Forward(

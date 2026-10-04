@@ -49,6 +49,7 @@ struct OutgoingFile {
 	QString name;
 	QString mime;
 	QString caption;
+	QString emoji;
 	int64 replyTo = 0;
 	MediaType kind = MediaType::None;
 	int duration = 0;
@@ -86,7 +87,6 @@ public:
 	void sendFile(int chatId, OutgoingFile outgoing);
 	void downloadMedia(int chatId, int64 randomId);
 	void openMessage(int chatId, int64 randomId);
-	[[nodiscard]] QString exportFile(int chatId, int64 randomId);
 	[[nodiscard]] std::optional<MessageData> message(
 		int chatId,
 		int64 randomId);

@@ -709,7 +709,7 @@ void SendExistingDocument(
 		MessageToSend &&message,
 		not_null<DocumentData*> document,
 		std::optional<MsgId> localMessageId) {
-	if (AyuSecret::Reject(message.action.history->peer)) {
+	if (AyuSecret::SendDocument(message, document)) {
 		return;
 	}
 	if (!document->sticker()

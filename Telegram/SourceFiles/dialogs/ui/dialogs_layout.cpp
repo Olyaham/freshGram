@@ -52,6 +52,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_window.h"
 
 #include "ayu/features/filters/filters_controller.h"
+#include "ayu/secret/secret_peer.h"
 #include "styles/style_ayu_icons.h"
 
 
@@ -1104,7 +1105,12 @@ const style::icon *ChatTypeIcon(
 		not_null<PeerData*> peer,
 		const PaintContext &context) {
 	if (const auto user = peer->asUser()) {
-		if (ShowUserBotIcon(user)) {
+		if (AyuSecret::IsSecretPeer(user)) {
+			return &ThreeStateIcon(
+				st::ayuSecretChatIcon,
+				context.active,
+				context.selected);
+		} else if (ShowUserBotIcon(user)) {
 			return &ThreeStateIcon(
 				st::dialogsBotIcon,
 				context.active,

@@ -7,12 +7,14 @@
 #include "base/unixtime.h"
 #include "core/application.h"
 #include "core/file_location.h"
+#include "data/data_changes.h"
 #include "data/data_document.h"
 #include "data/data_peer.h"
 #include "data/data_photo.h"
 #include "data/data_send_action.h"
 #include "data/data_session.h"
 #include "data/data_user.h"
+#include "dialogs/dialogs_key.h"
 #include "history/history.h"
 #include "history/history_item.h"
 #include "history/history_item_helpers.h"
@@ -23,6 +25,7 @@
 #include "ui/text/text_entity.h"
 #include "ui/toast/toast.h"
 #include "window/window_controller.h"
+#include "window/window_session_controller.h"
 
 #include <QtCore/QBuffer>
 #include <QtCore/QFile>
@@ -33,6 +36,17 @@ namespace AyuSecret {
 namespace {
 
 constexpr auto kHistoryLimit = 150;
+
+struct DocumentRef {
+	not_null<Main::Session*> session;
+	int chatId = 0;
+	int64_t randomId = 0;
+};
+
+[[nodiscard]] std::map<DocumentId, DocumentRef> &Documents() {
+	static auto result = std::map<DocumentId, DocumentRef>();
+	return result;
+}
 
 [[nodiscard]] QString Qs(const std::string &value) {
 	return QString::fromStdString(value);
@@ -230,6 +244,14 @@ constexpr auto kHistoryLimit = 150;
 		break;
 	case MediaType::Video:
 	case MediaType::Animation:
+		if (media.type == MediaType::Animation
+			&& Qs(media.mime).startsWith("image/")) {
+			result.push_back(MTP_documentAttributeImageSize(
+				MTP_int(media.width),
+				MTP_int(media.height)));
+			result.push_back(MTP_documentAttributeAnimated());
+			break;
+		}
 		result.push_back(MTP_documentAttributeVideo(
 			MTP_flags(MTPDdocumentAttributeVideo::Flag::f_supports_streaming
 				| (media.round
@@ -241,7 +263,7 @@ constexpr auto kHistoryLimit = 150;
 			MTPint(),
 			MTPdouble(),
 			MTPstring()));
-		if (media.type == MediaType::Animation) {
+		if (media.type == MediaType::Animation || media.animated) {
 			result.push_back(MTP_documentAttributeAnimated());
 		}
 		break;
@@ -249,6 +271,11 @@ constexpr auto kHistoryLimit = 150;
 		result.push_back(MTP_documentAttributeImageSize(
 			MTP_int(media.width),
 			MTP_int(media.height)));
+		result.push_back(MTP_documentAttributeSticker(
+			MTP_flags(0),
+			MTP_string(Qs(media.emoji)),
+			MTP_inputStickerSetEmpty(),
+			MTPMaskCoords()));
 		break;
 	default:
 		break;
@@ -277,7 +304,38 @@ Bridge::Bridge(
 	}, _lifetime);
 }
 
-Bridge::~Bridge() = default;
+Bridge::~Bridge() {
+	auto &documents = Documents();
+	for (auto i = documents.begin(); i != documents.end();) {
+		if (i->second.session == _session) {
+			i = documents.erase(i);
+		} else {
+			++i;
+		}
+	}
+}
+
+void Bridge::registerDocument(
+		DocumentId id,
+		int chatId,
+		int64_t randomId) {
+	Documents().insert_or_assign(id, DocumentRef{
+		.session = _session,
+		.chatId = chatId,
+		.randomId = randomId,
+	});
+}
+
+void Bridge::forgetDocuments(int chatId) {
+	auto &documents = Documents();
+	for (auto i = documents.begin(); i != documents.end();) {
+		if (i->second.session == _session && i->second.chatId == chatId) {
+			i = documents.erase(i);
+		} else {
+			++i;
+		}
+	}
+}
 
 void Bridge::refreshAll() {
 	if (!Enabled()) {
@@ -312,9 +370,6 @@ void Bridge::refreshChat(int chatId) {
 	_refreshing = true;
 	const auto guard = gsl::finally([&] { _refreshing = false; });
 	auto &binding = ensureBinding(*info);
-	if (info->state == ChatState::Requested) {
-		askRequest(binding, *info);
-	}
 	if (_manager->revision(chatId) != binding.revision) {
 		syncMessages(binding, *info);
 	}
@@ -335,7 +390,7 @@ Bridge::Binding &Bridge::ensureBinding(const ChatInfo &info) {
 	binding.chatId = info.id;
 	auto &owner = _session->data();
 	const auto bare = PeerBareForChat(info.id);
-	const auto name = QString::fromUtf8("\xF0\x9F\x94\x92 ") + info.title;
+	const auto name = info.title;
 	if (!binding.user) {
 		auto user = owner.userLoaded(UserId(bare));
 		if (!user) {
@@ -370,6 +425,23 @@ Bridge::Binding &Bridge::ensureBinding(const ChatInfo &info) {
 		user->addFlags(UserDataFlag::MessageMoneyRestrictionsKnown);
 		user->setBarSettings(PeerBarSettings());
 	}
+	if (!binding.real) {
+		binding.real = owner.user(UserId(info.peerUserId));
+		const auto chatId = info.id;
+		_session->changes().peerUpdates(
+			not_null<PeerData*>(binding.real),
+			Data::PeerUpdate::Flag::Name | Data::PeerUpdate::Flag::Photo
+		) | rpl::on_next([=] {
+			if (!_refreshing) {
+				refreshChat(chatId);
+			}
+			if (const auto i = _bindings.find(chatId); i != _bindings.end()) {
+				_session->changes().peerUpdated(
+					i->second.user,
+					Data::PeerUpdate::Flag::Photo);
+			}
+		}, binding.lifetime);
+	}
 	if (binding.user->name() != name) {
 		binding.user->setName(name, QString(), QString(), QString());
 	}
@@ -379,40 +451,75 @@ Bridge::Binding &Bridge::ensureBinding(const ChatInfo &info) {
 			binding.history->clearFolder();
 		}
 		if (!binding.history->unreadCountKnown()) {
-			binding.history->setUnreadCount(0);
+			binding.history->setUnreadCount(
+				(info.state == ChatState::Requested) ? 1 : 0);
 		}
 		binding.history->markLoadedAtTop();
+	}
+	if (!binding.history->chatListTimeId()) {
+		binding.history->setChatListTimeId(
+			info.lastDate ? info.lastDate : info.date);
 	}
 	return binding;
 }
 
-void Bridge::askRequest(Binding &binding, const ChatInfo &info) {
-	if (binding.asked) {
+void Bridge::promptRequest(int chatId) {
+	const auto info = _manager->chat(chatId);
+	const auto i = _bindings.find(chatId);
+	if (!info
+		|| i == _bindings.end()
+		|| info->state != ChatState::Requested
+		|| i->second.asked) {
 		return;
 	}
-	binding.asked = true;
-	const auto session = _session;
-	const auto id = info.id;
 	const auto window = Core::App().activePrimaryWindow();
 	if (!window) {
 		return;
 	}
-	window->show(Ui::MakeConfirmBox({
+	i->second.asked = true;
+	const auto session = _session;
+	auto box = Ui::MakeConfirmBox({
 		.text = tr::ayu_SecretChatRequestAsk(
 			tr::now,
 			lt_name,
-			info.title),
+			info->title),
 		.confirmed = [=](Fn<void()> close) {
-			Get(session).accept(id);
+			Get(session).accept(chatId);
 			close();
 		},
 		.cancelled = [=](Fn<void()> close) {
-			Get(session).decline(id);
+			Get(session).remove(chatId);
 			close();
 		},
 		.confirmText = tr::ayu_SecretChatAccept(),
 		.cancelText = tr::ayu_SecretChatDecline(),
-	}));
+	});
+	box->boxClosing(
+	) | rpl::on_next([=] {
+		Get(session).bridge().promptClosed(chatId);
+	}, box->lifetime());
+	window->show(std::move(box));
+}
+
+void Bridge::openChat(int chatId) {
+	const auto i = _bindings.find(chatId);
+	if (i == _bindings.end() || !i->second.history) {
+		return;
+	}
+	const auto history = i->second.history;
+	if (const auto window = Core::App().windowForShowingHistory(
+			history->peer)) {
+		if (const auto controller = window->sessionController()) {
+			controller->showPeerHistory(history);
+		}
+	}
+}
+
+void Bridge::promptClosed(int chatId) {
+	const auto i = _bindings.find(chatId);
+	if (i != _bindings.end()) {
+		i->second.asked = false;
+	}
 }
 
 void Bridge::syncMessages(Binding &binding, const ChatInfo &info) {
@@ -452,6 +559,9 @@ void Bridge::syncMessages(Binding &binding, const ChatInfo &info) {
 		}
 		if (message.outgoing && message.state == DeliveryState::Read) {
 			item->setAyuSecretRead();
+		}
+		if (message.deleted && !item->isDeleted()) {
+			item->setDeleted();
 		}
 	}
 	auto gone = std::vector<int64_t>();
@@ -595,44 +705,36 @@ HistoryItem *Bridge::createItem(
 		&& NeedsFile(message)
 		&& message.media.type != MediaType::Photo
 		&& HasStoredFile(message)) {
-		const auto path = _manager->exportFile(info.id, message.randomId);
-		if (path.isEmpty()) {
-			result = history->addNewLocalMessage(
-				std::move(fields),
-				TextWithEntities{ QString("[Attachment could not be opened]") },
-				MTP_messageMediaEmpty());
-		} else {
-			const auto &media = message.media;
-			const auto docId = DocumentId(uint64(message.randomId) >> 1);
-			auto mime = Qs(media.mime);
-			if (mime.isEmpty()) {
-				mime = QString("application/octet-stream");
-			}
-			const auto document = owner.document(
-				docId,
-				uint64(0),
-				QByteArray(),
-				message.date,
-				AttributesOf(media),
-				mime,
-				InlineImageLocation(),
-				ThumbOf(media),
-				ImageWithLocation(),
-				false,
-				0,
-				media.size);
-			document->setLocation(Core::FileLocation(path));
-			if (media.type == MediaType::Voice
-				|| (media.type == MediaType::Video && media.round)) {
-				if (!message.outgoing && unread) {
-					fields.flags |= MessageFlag::MediaIsUnread;
-				}
-			}
-			result = history->addNewLocalMessage(
-				std::move(fields),
-				document,
-				BuildText(message));
+		const auto &media = message.media;
+		const auto docId = DocumentId(uint64(message.randomId) >> 1);
+		auto mime = Qs(media.mime);
+		if (mime.isEmpty()) {
+			mime = QString("application/octet-stream");
 		}
+		registerDocument(docId, info.id, message.randomId);
+		const auto document = owner.document(
+			docId,
+			uint64(0),
+			QByteArray(),
+			message.date,
+			AttributesOf(media),
+			mime,
+			InlineImageLocation(),
+			ThumbOf(media),
+			ImageWithLocation(),
+			false,
+			0,
+			media.size);
+		if (media.type == MediaType::Voice
+			|| (media.type == MediaType::Video && media.round)) {
+			if (!message.outgoing && unread) {
+				fields.flags |= MessageFlag::MediaIsUnread;
+			}
+		}
+		result = history->addNewLocalMessage(
+			std::move(fields),
+			document,
+			BuildText(message));
 	} else if (message.media.type == MediaType::Location
 		|| message.media.type == MediaType::Venue) {
 		result = history->addNewLocalMessage(
@@ -656,6 +758,9 @@ HistoryItem *Bridge::createItem(
 		if (message.outgoing && message.state == DeliveryState::Read) {
 			result->setAyuSecretRead();
 		}
+		if (message.deleted) {
+			result->setDeleted();
+		}
 	}
 	return result;
 }
@@ -663,6 +768,7 @@ HistoryItem *Bridge::createItem(
 void Bridge::removeAll() {
 	auto &owner = _session->data();
 	for (auto &[chatId, binding] : _bindings) {
+		forgetDocuments(chatId);
 		if (binding.history) {
 			for (const auto &[randomId, msgId] : binding.items) {
 				if (const auto item = owner.message(binding.user, msgId)) {
@@ -687,6 +793,7 @@ void Bridge::removeChat(int chatId) {
 	}
 	auto &owner = _session->data();
 	const auto user = i->second.user;
+	forgetDocuments(chatId);
 	for (const auto &[randomId, msgId] : i->second.items) {
 		_byMsg.erase(msgId);
 		if (const auto item = owner.message(user, msgId)) {
@@ -724,6 +831,11 @@ History *Bridge::history(int chatId) const {
 	return (i != _bindings.end()) ? i->second.history : nullptr;
 }
 
+UserData *Bridge::realUser(int chatId) const {
+	const auto i = _bindings.find(chatId);
+	return (i != _bindings.end()) ? i->second.real : nullptr;
+}
+
 int64_t Bridge::randomIdOf(int chatId, FullMsgId id) const {
 	const auto i = _byMsg.find(id.msg);
 	if (i == _byMsg.end() || i->second.first != chatId) {
@@ -732,7 +844,7 @@ int64_t Bridge::randomIdOf(int chatId, FullMsgId id) const {
 	return i->second.second;
 }
 
-void Bridge::itemsDeletedByUser(
+std::vector<not_null<HistoryItem*>> Bridge::itemsDeletedByUser(
 		const std::vector<not_null<HistoryItem*>> &items) {
 	auto byChat = std::map<int, std::vector<int64_t>>();
 	for (const auto &item : items) {
@@ -742,10 +854,6 @@ void Bridge::itemsDeletedByUser(
 		}
 		const auto [chatId, randomId] = i->second;
 		byChat[chatId].push_back(randomId);
-		_byMsg.erase(i);
-		if (const auto b = _bindings.find(chatId); b != _bindings.end()) {
-			b->second.items.erase(randomId);
-		}
 	}
 	_refreshing = true;
 	const auto guard = gsl::finally([&] { _refreshing = false; });
@@ -755,6 +863,24 @@ void Bridge::itemsDeletedByUser(
 			b->second.revision = _manager->revision(chatId);
 		}
 	}
+	auto result = std::vector<not_null<HistoryItem*>>();
+	for (const auto &item : items) {
+		const auto i = _byMsg.find(item->id);
+		if (i == _byMsg.end()) {
+			continue;
+		}
+		const auto [chatId, randomId] = i->second;
+		if (_manager->message(chatId, randomId)) {
+			item->setDeleted();
+			continue;
+		}
+		_byMsg.erase(i);
+		if (const auto b = _bindings.find(chatId); b != _bindings.end()) {
+			b->second.items.erase(randomId);
+		}
+		result.push_back(item);
+	}
+	return result;
 }
 
 void Bridge::historyClearedByUser(not_null<History*> history) {
@@ -793,6 +919,45 @@ void Bridge::mediaOpened(not_null<HistoryItem*> item) {
 
 Bridge &BridgeFor(not_null<Main::Session*> session) {
 	return Get(session).bridge();
+}
+
+void WatchActiveChat(not_null<Window::SessionController*> controller) {
+	const auto session = &controller->session();
+	controller->activeChatValue(
+	) | rpl::map([](Dialogs::Key key) {
+		return ChatIdOfPeer(key.peer());
+	}) | rpl::distinct_until_changed(
+	) | rpl::on_next([=](int chatId) {
+		if (!Enabled()) {
+			return;
+		}
+		auto &manager = Get(session);
+		manager.setOpenChat(chatId);
+		if (chatId) {
+			manager.bridge().promptRequest(chatId);
+		}
+	}, controller->lifetime());
+}
+
+bool IsSecretDocument(const DocumentData *document) {
+	const auto &documents = Documents();
+	return !documents.empty() && documents.contains(document->id);
+}
+
+QByteArray DocumentBytes(const DocumentData *document) {
+	const auto &documents = Documents();
+	const auto i = documents.find(document->id);
+	if (i == documents.end()) {
+		return QByteArray();
+	}
+	return Get(i->second.session).readFile(
+		i->second.chatId,
+		i->second.randomId);
+}
+
+UserData *RealUser(const PeerData *peer) {
+	const auto chatId = ChatIdOfPeer(peer);
+	return chatId ? BridgeFor(&peer->session()).realUser(chatId) : nullptr;
 }
 
 void Start(not_null<Main::Session*> session) {

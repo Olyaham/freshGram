@@ -5,7 +5,8 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
-#include "ayu/ui/boxes/secret_chat_actions.h"
+#include "ayu/features/peek/peek_online.h"
+#include "ayu/secret/secret_bridge.h"
 #include "ayu/secret/secret_peer.h"
 #include "history/view/history_view_top_bar_widget.h"
 
@@ -727,6 +728,12 @@ void TopBarWidget::paintTopBar(Painter &p) {
 			nameleft += skip + st::dialogsChatTypeSkip;
 			namewidth -= skip + st::dialogsChatTypeSkip;
 		}
+		if (AyuSecret::IsSecretPeer(namePeer)) {
+			const auto &lock = st::ayuSecretChatIcon.icon;
+			lock.paint(p, nameleft, nametop, width());
+			nameleft += lock.width() + st::dialogsChatTypeSkip;
+			namewidth -= lock.width() + st::dialogsChatTypeSkip;
+		}
 		const auto badgeWidth = _titleBadge.drawGetWidth(p, {
 			.peer = namePeer,
 			.rectForName = QRect(
@@ -897,8 +904,8 @@ void TopBarWidget::infoClicked() {
 	const auto key = _activeChat.key;
 	if (!key) {
 		return;
-	} else if (AyuSecret::IsSecretPeer(key.peer())) {
-		Ui::ShowSecretKey(_controller, key.peer());
+	} else if (const auto real = AyuSecret::RealUser(key.peer())) {
+		_controller->showPeerInfo(real);
 		return;
 	} else if (const auto topic = key.topic()) {
 		_controller->showSection(std::make_shared<Info::Memento>(topic));
@@ -2053,7 +2060,10 @@ void TopBarWidget::updateOnlineDisplay() {
 			text = QString::fromUtf8("\xe2\x9a\xa0\xef\xb8\x8f check info");
 			titlePeerTextOnline = false;
 		} else {
-			text = Data::OnlineText(user, now);
+			text = AyuPeek::augment(
+				user,
+				Data::OnlineText(user, now),
+				now);
 			titlePeerTextOnline = Data::OnlineTextActive(user, now);
 		}
 	} else if (const auto chat = peer->asChat()) {

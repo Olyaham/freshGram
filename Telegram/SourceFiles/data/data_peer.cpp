@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_bridge.h"
 #include "ayu/secret/secret_peer.h"
 #include "data/data_peer.h"
 
@@ -433,6 +434,9 @@ void PeerData::paintUserpic(
 		}
 		broadcast->paintUserpic(p, view, context);
 		return;
+	} else if (const auto real = AyuSecret::RealUser(this)) {
+		real->paintUserpic(p, view, context);
+		return;
 	}
 	const auto size = context.size;
 	const auto cloud = userpicCloudImage(view);
@@ -477,6 +481,8 @@ bool PeerData::useEmptyUserpic(Ui::PeerUserpicView &view) const {
 InMemoryKey PeerData::userpicUniqueKey(Ui::PeerUserpicView &view) const {
 	if (const auto broadcast = monoforumBroadcast()) {
 		return broadcast->userpicUniqueKey(view);
+	} else if (const auto real = AyuSecret::RealUser(this)) {
+		return real->userpicUniqueKey(view);
 	}
 	return useEmptyUserpic(view)
 		? ensureEmptyUserpic()->uniqueKey()
@@ -1274,6 +1280,8 @@ not_null<const PeerData*> PeerData::migrateToOrMe() const {
 not_null<PeerData*> PeerData::userpicPaintingPeer() {
 	if (const auto broadcast = monoforumBroadcast()) {
 		return broadcast;
+	} else if (const auto real = AyuSecret::RealUser(this)) {
+		return real;
 	}
 	return this;
 }

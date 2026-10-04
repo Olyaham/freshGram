@@ -3407,6 +3407,8 @@ bool History::shouldBeInChatList() const {
 		return false;
 	} else if (_ayuKept && !lastMessage()) {
 		return false;
+	} else if (AyuSecret::IsSecretPeer(peer)) {
+		return true;
 	} else if (const auto community = peer->asChannel()
 		; community && community->isCommunity()) {
 		return !(community->flags() & ChannelDataFlag::Forbidden)

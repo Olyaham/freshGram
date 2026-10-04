@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_bridge.h"
 #include "data/data_document_media.h"
 
 #include "data/data_document.h"
@@ -175,6 +176,7 @@ bool VideoPreviewState::loaded() const {
 
 DocumentMedia::DocumentMedia(not_null<DocumentData*> owner)
 : _owner(owner) {
+	setBytes(AyuSecret::DocumentBytes(owner));
 }
 
 // NB! Right now DocumentMedia can outlive Main::Session!

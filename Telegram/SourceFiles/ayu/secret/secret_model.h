@@ -103,6 +103,7 @@ struct MessageData {
 	int expiresAt = 0;
 	DeliveryState state = DeliveryState::Sent;
 	bool opened = false;
+	bool deleted = false;
 	int special = 0;
 	std::string text;
 	std::vector<Entity> entities;

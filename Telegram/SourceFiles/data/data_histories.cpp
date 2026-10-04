@@ -1024,7 +1024,6 @@ void Histories::deleteMessages(const MessageIdsList &ids, bool revoke) {
 			const auto history = item->history();
 			if (item->isAyuSecret()) {
 				secretItems.push_back(item);
-				remove.push_back(item);
 				continue;
 			}
 			if (item->isSavedMusicItem()) {
@@ -1080,7 +1079,10 @@ void Histories::deleteMessages(const MessageIdsList &ids, bool revoke) {
 	}
 
 	if (!secretItems.empty()) {
-		AyuSecret::BridgeFor(&session()).itemsDeletedByUser(secretItems);
+		for (const auto &gone : AyuSecret::BridgeFor(
+				&session()).itemsDeletedByUser(secretItems)) {
+			remove.push_back(gone);
+		}
 	}
 	for (const auto &[history, ids] : idsByPeer) {
 		history->owner().histories().deleteMessages(history, ids, revoke);

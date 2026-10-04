@@ -667,6 +667,9 @@ bool LookupReplyIsTopicPost(HistoryItem *replyTo) {
 }
 
 bool CanReplyToEphemeral(not_null<const HistoryItem*> item) {
+	if (item->isAyuSecret() && !item->isService()) {
+		return true;
+	}
 	const auto &session = item->history()->session();
 	return session.ephemeralMessages().replyBot(item) != nullptr;
 }

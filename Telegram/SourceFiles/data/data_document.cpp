@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_bridge.h"
 #include "data/data_document.h"
 
 #include "data/data_document_resolver.h"
@@ -1741,7 +1742,8 @@ bool DocumentData::isNull() const {
 		&& !hasWebLocation()
 		&& _url.isEmpty()
 		&& !uploading()
-		&& _location.isEmpty();
+		&& _location.isEmpty()
+		&& !AyuSecret::IsSecretDocument(this);
 }
 
 MTPInputDocument DocumentData::mtpInput() const {
