@@ -1,3 +1,10 @@
+7.2.17 beta (04.10.26)
+
+- Add the history of the messages you sent in all chats, with search and a jump to the message, behind a button in the chat top bar.
+- Keep deleted service messages (for example, a user joined) the same way as normal ones.
+- Drop the saved deleted messages that duplicate the real ones after returning to a chat or a channel.
+- Show the restored self-destructing photos and videos under a spoiler again.
+
 7.2.16 beta (04.10.26)
 
 - Keep chats and channels deleted by the other side, lost by a removal or a ban, and deleted or left by yourself in the chats list until they are deleted once more, including legacy groups and after a restart.
