@@ -360,7 +360,11 @@ void Sticker::paintAnimationFrame(
 			base::duplicate(image),
 			context.st->msgStickerOverlay()->c)
 		: image;
-	prepared = Images::Round(std::move(prepared), MediaRoundingMask(rounding));
+	if (Ui::MaterialBubbles()) {
+		prepared = Images::Round(
+			std::move(prepared),
+			MediaRoundingMask(rounding));
+	}
 	const auto size = prepared.size() / style::DevicePixelRatio();
 	p.drawImage(
 		QRect(
@@ -460,7 +464,9 @@ void Sticker::paintPath(
 }
 
 QPixmap Sticker::paintedPixmap(const PaintContext &context) const {
-	const auto roundOptions = Images::RoundOptions(ImageRoundRadius::Large);
+	const auto roundOptions = Ui::MaterialBubbles()
+		? Images::RoundOptions(ImageRoundRadius::Large)
+		: Images::Options();
 	auto helper = std::optional<style::owned_color>();
 	const auto sticker = _data->sticker();
 	const auto ratio = style::DevicePixelRatio();

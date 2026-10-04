@@ -594,6 +594,7 @@ private:
 [[nodiscard]] bool IsNewline(QChar ch);
 [[nodiscard]] bool IsSpace(QChar ch);
 [[nodiscard]] bool IsDiacritic(QChar ch);
+[[nodiscard]] bool IsEnclosingMark(QChar ch);
 [[nodiscard]] bool IsReplacedBySpace(QChar ch);
 [[nodiscard]] bool IsTrimmed(QChar ch);
 

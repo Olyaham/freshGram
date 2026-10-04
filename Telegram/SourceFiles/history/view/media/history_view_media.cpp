@@ -636,12 +636,9 @@ Ui::BubbleRounding Media::adjustedBubbleRounding(RectParts square) const {
 				? Corner::None
 				: already;
 		}
-		if (square & corner) {
-			return Corner::None;
-		} else if (already == Corner::Tail) {
-			return Corner::None;
-		}
-		return round ? already : Corner::Small;
+		return (already == Corner::Tail || !round || (square & corner))
+			? Corner::None
+			: already;
 	};
 	const auto top = isBubbleTop();
 	const auto bottom = isRoundedInBubbleBottom();

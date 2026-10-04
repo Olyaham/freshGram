@@ -2418,6 +2418,10 @@ bool IsDiacritic(QChar ch) { // diacritic and variation selectors
 		|| (ch.unicode() >= 64606 && ch.unicode() <= 64611);
 }
 
+bool IsEnclosingMark(QChar ch) {
+	return (ch.category() == QChar::Mark_Enclosing);
+}
+
 bool IsReplacedBySpace(QChar ch) {
 	// Those symbols are replaced by space on the Telegram server,
 	// so we replace them as well, for sent / received consistency.

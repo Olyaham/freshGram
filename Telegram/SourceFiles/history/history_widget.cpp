@@ -968,6 +968,17 @@ HistoryWidget::HistoryWidget(
 		this->update();
 	}, lifetime());
 
+	AyuSettings::getInstance().materialBubblesChanges(
+	) | rpl::on_next([=] {
+		if (_history) {
+			for (const auto &block : _history->blocks) {
+				for (const auto &view : block->messages) {
+					view->unloadHeavyPart();
+				}
+			}
+		}
+	}, lifetime());
+
 	AyuSettings::getInstance().translationProviderChanges(
 	) | rpl::on_next([=](TranslationProvider) {
 		if (_history) {

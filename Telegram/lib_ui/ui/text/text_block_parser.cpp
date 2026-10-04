@@ -687,6 +687,10 @@ void BlockParser::parseEmojiFromCurrent() {
 			++len;
 		}
 	}
+	while (_ptr + 1 < _end && IsEnclosingMark(*(_ptr + 1))) {
+		_tText.push_back(*++_ptr);
+		++len;
+	}
 
 	createBlock(-len);
 	_emoji = e;

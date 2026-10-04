@@ -8,7 +8,6 @@
 #include <QtCore/QCoreApplication>
 #include <QtCore/QDir>
 #include <QtCore/QFile>
-#include <QtCore/QFileInfo>
 #include <QtCore/QTimer>
 
 #include <execinfo.h>
@@ -26,7 +25,6 @@
 namespace AyuCrashTrace {
 namespace {
 
-constexpr auto kMaxTraceFileSize = 1024 * 1024;
 constexpr auto kFreezeSeconds = 20;
 constexpr auto kFramesLimit = 80;
 
@@ -104,11 +102,7 @@ void Install(const QString &directory) {
 	}
 	QDir().mkpath(directory);
 	const auto path = QFile::encodeName(directory + QStringLiteral("/crash_trace.txt"));
-	auto flags = O_WRONLY | O_CREAT | O_APPEND;
-	if (QFileInfo(directory + QStringLiteral("/crash_trace.txt")).size()
-		> kMaxTraceFileSize) {
-		flags |= O_TRUNC;
-	}
+	const auto flags = O_WRONLY | O_CREAT | O_TRUNC | O_APPEND;
 	TraceFd = ::open(path.constData(), flags, 0644);
 	if (TraceFd < 0) {
 		return;
