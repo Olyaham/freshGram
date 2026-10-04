@@ -3243,7 +3243,13 @@ void History::requestChatListMessage() {
 		}
 		return;
 	}
-	if (!lastMessageKnown()) {
+	if (!lastMessageKnown() && AyuSecret::IsSecretPeer(peer)) {
+		setLastMessage(nullptr);
+		if (!chatListMessageKnown()) {
+			setChatListMessage(nullptr);
+		}
+		return;
+	} else if (!lastMessageKnown()) {
 		owner().histories().requestDialogEntry(this, [=] {
 			requestChatListMessage();
 		});
