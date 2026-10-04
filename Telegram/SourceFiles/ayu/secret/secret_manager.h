@@ -1,7 +1,9 @@
 #pragma once
 
+#include "ayu/secret/secret_model.h"
 #include "base/basic_types.h"
 #include "rpl/event_stream.h"
+#include "ui/text/text_entity.h"
 
 #include <QtCore/QString>
 
@@ -20,12 +22,6 @@ enum class ChatState : int {
 	Discarded = 3,
 };
 
-enum class MessageKind : int {
-	Text = 0,
-	Attachment = 1,
-	Note = 2,
-};
-
 struct ChatInfo {
 	int id = 0;
 	uint64 peerUserId = 0;
@@ -34,16 +30,12 @@ struct ChatInfo {
 	int date = 0;
 	int lastDate = 0;
 	int unread = 0;
+	int ttl = 0;
+	int layer = 0;
+	bool typing = false;
+	int64 fingerprint = 0;
 	QString title;
 	QString lastText;
-};
-
-struct MessageInfo {
-	int64 randomId = 0;
-	bool outgoing = false;
-	int date = 0;
-	MessageKind kind = MessageKind::Text;
-	QString text;
 };
 
 class Manager final {
@@ -57,16 +49,27 @@ public:
 		int qts);
 
 	[[nodiscard]] std::vector<ChatInfo> chats() const;
-	[[nodiscard]] std::vector<MessageInfo> messages(int chatId);
+	[[nodiscard]] std::optional<ChatInfo> chat(int chatId) const;
+	[[nodiscard]] std::vector<MessageData> messages(int chatId);
 	[[nodiscard]] int pendingRequests() const;
 	[[nodiscard]] int unreadTotal() const;
+	[[nodiscard]] double progress(int chatId, int64 randomId) const;
 
 	void accept(int chatId);
 	void decline(int chatId);
 	void discard(int chatId);
-	void start(not_null<UserData*> user);
 	void remove(int chatId);
-	void send(int chatId, const QString &text);
+	void start(not_null<UserData*> user);
+
+	void sendText(int chatId, TextWithEntities text, int64 replyTo = 0);
+	void sendFile(int chatId, const QString &path, const QString &caption);
+	void downloadMedia(int chatId, int64 randomId);
+	void openMessage(int chatId, int64 randomId);
+	void setTtl(int chatId, int seconds);
+	void deleteMessages(int chatId, const std::vector<int64_t> &randomIds);
+	void clearHistory(int chatId);
+	void setTyping(int chatId);
+
 	void markRead(int chatId);
 	void setOpenChat(int chatId);
 

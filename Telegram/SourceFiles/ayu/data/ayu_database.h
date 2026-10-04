@@ -37,6 +37,7 @@ void saveSecretChat(const SecretChatRow &chat);
 std::vector<SecretChatRow> getSecretChats(ID userId);
 void removeSecretChat(ID userId, int chatId);
 bool addSecretMessage(const SecretMessageRow &message);
+void updateSecretMessage(const SecretMessageRow &message);
 std::vector<SecretMessageRow> getSecretMessages(ID userId, int chatId);
 void removeSecretMessage(ID userId, int chatId, ID randomId);
 void clearSecretMessages(ID userId, int chatId);

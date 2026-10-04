@@ -17,7 +17,7 @@
 9. Restore deleted messages in forums (chats with topics) after a restart.
 10. Show deleted messages in the regular chat search and in the shared media tabs.
 11. Kept chats: restore the senders' names and userpics in restored supergroups and show an explicit "removed" status on a kept chat.
-12. Secret chats: photos, files and voice messages, self-destruct timers, perfect forward secrecy key renewal, storing the keys encrypted with the local passcode, notifications with a badge in the chats list.
+12. Secret chats: storing the keys encrypted with the local passcode, recording voice and video notes, an in-app player, showing secret chats in the main chats list, system notifications. Checked against the specification and unit tests only, a live check against the server is still needed.
 13. Make the rest of the materialgram look (paddings, sizes, Google Sans font) switchable together with the icons; for now only the icons, message rounding and tails, and the reply background are switchable.
 
 ## Later

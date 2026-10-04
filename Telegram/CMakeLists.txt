@@ -252,7 +252,11 @@ set(ayugram_files
         ayu/data/kept_dialogs.h
         ayu/secret/secret_crypto.cpp
         ayu/secret/secret_crypto.h
+        ayu/secret/secret_files.cpp
+        ayu/secret/secret_files.h
         ayu/secret/secret_manager.cpp
+        ayu/secret/secret_model.cpp
+        ayu/secret/secret_model.h
         ayu/secret/secret_manager.h
         ayu/secret/secret_protocol.cpp
         ayu/secret/secret_protocol.h

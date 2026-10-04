@@ -686,6 +686,24 @@ bool addSecretMessage(const SecretMessageRow &message) {
 	});
 }
 
+void updateSecretMessage(const SecretMessageRow &message) {
+	runVoid("update secret message", [&] {
+		storage.update_all(
+			set(
+				assign(&SecretMessageRow::kind, message.kind),
+				assign(&SecretMessageRow::date, message.date),
+				assign(&SecretMessageRow::text, message.text),
+				assign(&SecretMessageRow::payload, message.payload)
+			),
+			where(
+				column<SecretMessageRow>(&SecretMessageRow::userId) == message.userId and
+				column<SecretMessageRow>(&SecretMessageRow::chatId) == message.chatId and
+				column<SecretMessageRow>(&SecretMessageRow::randomId) == message.randomId
+			)
+		);
+	});
+}
+
 std::vector<SecretMessageRow> getSecretMessages(ID userId, int chatId) {
 	return run<std::vector<SecretMessageRow>>("load secret messages", {}, [&] {
 		return storage.get_all<SecretMessageRow>(

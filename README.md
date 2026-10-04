@@ -17,7 +17,7 @@ The source code is published under GPLv3 with OpenSSL exception, the license is 
 - Messages history
 - Anti-recall
 - "Peek last seen" in a user profile (without Telegram Premium): briefly adds the user to the "Last seen & online" exceptions, reads their exact status and restores your privacy settings; the result is shown as a separate profile line
-- Secret chats inside freshGram: accept a request and exchange text messages from the "Secret chats" item of the main menu, start a chat from the user profile menu
+- Secret chats inside freshGram: accept or start a chat, formatted text, replies, photos, files, voice and other media with encrypted upload and download, self-destruct timers, typing and read marks, delete or clear for both sides, key renewal (PFS); available from the "Secret chats" item of the main menu and the user profile menu
 - Service messages (for example, "user joined") are kept when deleted, the same way as normal ones
 - Chats and channels deleted by the other side, that you were removed from or that you deleted yourself stay in the chats list together with the saved messages (deleting the chat once more removes it for real)
 - Font customization

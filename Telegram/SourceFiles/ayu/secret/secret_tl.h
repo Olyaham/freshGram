@@ -39,6 +39,9 @@ public:
 	void writeLong(int64_t value) {
 		write(&value, sizeof(value));
 	}
+	void writeDouble(double value) {
+		write(&value, sizeof(value));
+	}
 	void writeBytes(const uint8_t *data, size_t size) {
 		if (size < 254) {
 			_data.push_back(uint8_t(size));
@@ -106,6 +109,11 @@ public:
 	}
 	int64_t readLong() {
 		int64_t result = 0;
+		read(&result, sizeof(result));
+		return result;
+	}
+	double readDouble() {
+		double result = 0;
 		read(&result, sizeof(result));
 		return result;
 	}
