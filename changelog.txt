@@ -1,3 +1,15 @@
+7.3.2 (05.10.26)
+
+- Rework Streamer Mode: hide photos, videos, avatars, names, usernames, IDs and phone numbers behind spoilers.
+- Add Streamer Mode settings on Windows and macOS: hide the whole window and spoilers.
+- Reveal a hidden ID with the first click and copy it with the second.
+- Show the real name of unknown senders of deleted messages when it is known.
+- Remember known users to find them by id.
+- Allow deleting own messages inside forum topics.
+- Fix clearing the history and the reply bar in secret chats.
+- Fix a crash on a tooltip on Wayland.
+- Fix building the Windows version and the Flatpak package.
+
 7.3.1 (05.10.26)
 
 - Rework Streamer Mode: hide photos, videos, avatars, names, usernames, IDs and phone numbers behind spoilers.
