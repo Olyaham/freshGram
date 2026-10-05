@@ -10,6 +10,7 @@ sudo apt-get install -y flatpak flatpak-builder
 flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 flatpak install --user -y --noninteractive flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08
 
+mkdir -p "$(dirname "$bundle")"
 work="$(mktemp -d)"
 mkdir -p "$work/root"
 cp "$here/io.github.snowyfluffy.freshgram.yml" "$work/"
