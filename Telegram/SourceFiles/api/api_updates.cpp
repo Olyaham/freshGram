@@ -517,6 +517,9 @@ void Updates::differenceDone(const MTPupdates_Difference &result) {
 	case mtpc_updates_differenceEmpty: {
 		const auto &d = result.c_updates_differenceEmpty();
 		setState(_ptsWaiter.current(), d.vdate().v, _updatesQts, d.vseq().v);
+		if (AyuSecret::Enabled()) {
+			AyuSecret::SaveState(&session(), _updatesQts, d.vdate().v);
+		}
 
 		_lastUpdateTime = crl::now();
 		_noUpdatesTimer.callOnce(kNoUpdatesTimeout);
