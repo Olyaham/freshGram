@@ -430,6 +430,7 @@ void AyuSettings::load() {
 		ghost._sendOfflinePacketAfterOnline = true;
 	}
 
+	AyuFeatures::StreamerMode::refresh();
 	settings.validate();
 }
 
@@ -1112,6 +1113,7 @@ void AyuSettings::setStreamerMode(bool val) {
 	if (_streamerMode.current() == val) return;
 	_streamerMode = val;
 	AyuFeatures::StreamerMode::apply(val);
+	AyuFeatures::StreamerMode::refresh();
 	repaintApp();
 	save();
 }
@@ -1126,6 +1128,7 @@ void AyuSettings::setStreamerHideWholeWindow(bool val) {
 void AyuSettings::setStreamerSpoilers(bool val) {
 	if (_streamerSpoilers.current() == val) return;
 	_streamerSpoilers = val;
+	AyuFeatures::StreamerMode::refresh();
 	repaintApp();
 	save();
 }

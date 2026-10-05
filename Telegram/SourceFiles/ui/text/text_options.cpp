@@ -69,7 +69,7 @@ TextParseOptions HistoryBotNoMonoOptions = {
 };
 
 TextParseOptions TextNameOptions = {
-	0, // flags
+	TextParseHideName, // flags
 	4096, // maxw
 	1, // maxh
 	Qt::LayoutDirectionAuto, // lang-dependent

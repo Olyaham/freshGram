@@ -78,11 +78,15 @@ Fn<void()> ClearDeletedMessagesHandler(not_null<Window::SessionController*> cont
 	};
 }
 
-void DeleteMyMessagesAfterConfirm(not_null<PeerData*> peer) {
+void DeleteMyMessagesAfterConfirm(
+		not_null<PeerData*> peer,
+		MsgId topicRootId) {
 	const auto session = &peer->session();
 
 	if (const auto channel = peer->asChannel()) {
-		if (channel->isMegagroup() && channel->canDeleteMessages()) {
+		if (!topicRootId
+			&& channel->isMegagroup()
+			&& channel->canDeleteMessages()) {
 			session->api().deleteAllFromParticipant(channel, session->user());
 			return;
 		}
@@ -170,13 +174,14 @@ void DeleteMyMessagesAfterConfirm(not_null<PeerData*> peer) {
 	{
 		using Flag = MTPmessages_Search::Flag;
 		auto request = MTPmessages_Search(
-			MTP_flags(Flag::f_from_id),
+			MTP_flags(Flag::f_from_id
+				| (topicRootId ? Flag::f_top_msg_id : Flag())),
 			peer->input(),
 			MTP_string(),
 			MTP_inputPeerSelf(),
 			MTPInputPeer(),
 			MTPVector<MTPReaction>(),
-			MTP_int(0),
+			MTP_int(int32(topicRootId.bare)),
 			// top_msg_id
 			MTP_inputMessagesFilterEmpty(),
 			MTP_int(0),
@@ -220,7 +225,10 @@ void DeleteMyMessagesAfterConfirm(not_null<PeerData*> peer) {
 	(*requestNext)(MsgId(0));
 }
 
-Fn<void()> DeleteMyMessagesHandler(not_null<Window::SessionController*> controller, not_null<PeerData*> peer) {
+Fn<void()> DeleteMyMessagesHandler(
+		not_null<Window::SessionController*> controller,
+		not_null<PeerData*> peer,
+		MsgId topicRootId) {
 	return [=]
 	{
 		if (!controller->showFrozenError()) {
@@ -229,7 +237,7 @@ Fn<void()> DeleteMyMessagesHandler(not_null<Window::SessionController*> controll
 				.confirmed =
 				[=](Fn<void()> &&close)
 				{
-					DeleteMyMessagesAfterConfirm(peer);
+					DeleteMyMessagesAfterConfirm(peer, topicRootId);
 					close();
 				},
 				.confirmText = tr::lng_box_delete(),
@@ -466,7 +474,7 @@ void AddDeleteOwnMessagesAction(PeerData *peerData,
 								Data::ForumTopic *topic,
 								not_null<Window::SessionController*> sessionController,
 								const Window::PeerMenuCallback &addCallback) {
-	if (topic) {
+	if (topic && !peerData->isChannel()) {
 		return;
 	}
 	if (const auto chat = peerData->asChat()) {
@@ -482,7 +490,10 @@ void AddDeleteOwnMessagesAction(PeerData *peerData,
 	}
 	addCallback(
 		tr::ayu_DeleteOwnMessages(tr::now),
-		DeleteMyMessagesHandler(sessionController, peerData),
+		DeleteMyMessagesHandler(
+			sessionController,
+			peerData,
+			topic ? topic->rootId() : MsgId()),
 		&st::menuIconTTL);
 }
 

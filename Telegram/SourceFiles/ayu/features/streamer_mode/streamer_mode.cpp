@@ -14,13 +14,12 @@
 #include "rpl/distinct.h"
 #include "rpl/map.h"
 #include "ui/effects/spoiler_mess.h"
+#include "ui/text/text.h"
 #include "ui/text/text_utilities.h"
 #include "window/window_controller.h"
 
 #include <QtCore/QVariant>
 #include <algorithm>
-
-#include <range/v3/algorithm/any_of.hpp>
 #include <QtGui/QImage>
 #include <QtGui/QPainter>
 #include <QtWidgets/QApplication>
@@ -84,6 +83,10 @@ bool spoilersActive() {
 #endif // Q_OS_LINUX
 }
 
+void refresh() {
+	Ui::Text::SetNamesSpoilered(spoilersActive());
+}
+
 rpl::producer<bool> spoilersActiveValue() {
 	auto &settings = AyuSettings::getInstance();
 #ifdef Q_OS_LINUX
@@ -103,8 +106,9 @@ rpl::producer<TextWithEntities> spoilered(
 		std::move(text),
 		spoilersActiveValue()
 	) | rpl::map([](TextWithEntities &&text, bool active) {
-		const auto spoilered = ranges::any_of(
-			text.entities,
+		const auto spoilered = std::any_of(
+			text.entities.begin(),
+			text.entities.end(),
 			[](const EntityInText &entity) {
 				return entity.type() == EntityType::Spoiler;
 			});

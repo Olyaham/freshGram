@@ -96,6 +96,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ayu/ayu_settings.h"
 #include "ayu/data/kept_dialogs.h"
 #include "ayu/data/known_users.h"
+#include "ayu/features/streamer_mode/streamer_mode.h"
 #include "ayu/secret/secret_bridge.h"
 #include "ayu/data/messages_storage.h"
 #include "ayu/features/filters/filters_controller.h"
@@ -374,6 +375,17 @@ Session::Session(not_null<Main::Session*> session)
 	setupMigrationViewer();
 	setupChannelLeavingViewer();
 	AyuKept::setup(this, _lifetime);
+	AyuFeatures::StreamerMode::spoilersActiveValue(
+	) | rpl::skip(1) | rpl::on_next([=] {
+		auto items = std::vector<not_null<const HistoryItem*>>();
+		items.reserve(_views.size());
+		for (const auto &[item, views] : _views) {
+			items.push_back(item);
+		}
+		for (const auto item : items) {
+			requestItemViewRefresh(item);
+		}
+	}, _lifetime);
 	crl::on_main(_session, [=] {
 		AyuSecret::Start(_session);
 	});

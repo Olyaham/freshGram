@@ -195,6 +195,10 @@ struct LinePostprocess {
 
 [[nodiscard]] not_null<SpoilerMessCache*> DefaultSpoilerCache();
 
+[[nodiscard]] bool IsSpoilerLink(const ClickHandlerPtr &link);
+void SetNamesSpoilered(bool spoilered);
+[[nodiscard]] bool NamesSpoilered();
+
 [[nodiscard]] GeometryDescriptor SimpleGeometry(
 	int availableWidth,
 	int elisionLines,

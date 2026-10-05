@@ -171,6 +171,24 @@ void SpoilerMessCache::reset() {
 	_cache.clear();
 }
 
+namespace {
+
+bool NamesSpoileredValue = false;
+
+} // namespace
+
+bool IsSpoilerLink(const ClickHandlerPtr &link) {
+	return dynamic_cast<SpoilerClickHandler*>(link.get()) != nullptr;
+}
+
+void SetNamesSpoilered(bool spoilered) {
+	NamesSpoileredValue = spoilered;
+}
+
+bool NamesSpoilered() {
+	return NamesSpoileredValue;
+}
+
 not_null<SpoilerMessCache*> DefaultSpoilerCache() {
 	struct Data {
 		Data() : cache(kDefaultSpoilerCacheCapacity) {
@@ -752,6 +770,50 @@ void String::setMarkedText(
 		const TextWithEntities &textWithEntities,
 		const TextParseOptions &options,
 		const MarkedContext &context) {
+	if (NamesSpoilered() && !textWithEntities.entities.isEmpty()) {
+		auto mention = false;
+		auto spoiler = false;
+		for (const auto &entity : textWithEntities.entities) {
+			mention = mention || (entity.type() == EntityType::Mention);
+			spoiler = spoiler || (entity.type() == EntityType::Spoiler);
+		}
+		if (mention && !spoiler) {
+			auto hidden = textWithEntities;
+			for (const auto &entity : textWithEntities.entities) {
+				if (entity.type() == EntityType::Mention) {
+					hidden.entities.push_back(EntityInText(
+						EntityType::Spoiler,
+						entity.offset(),
+						entity.length()));
+				}
+			}
+			std::stable_sort(
+				hidden.entities.begin(),
+				hidden.entities.end(),
+				[](const EntityInText &a, const EntityInText &b) {
+					return a.offset() < b.offset();
+				});
+			setMarkedText(st, hidden, options, context);
+			return;
+		}
+	}
+	if ((options.flags & TextParseHideName)
+		&& NamesSpoilered()
+		&& !textWithEntities.text.isEmpty()
+		&& !std::any_of(
+			textWithEntities.entities.begin(),
+			textWithEntities.entities.end(),
+			[](const EntityInText &entity) {
+				return entity.type() == EntityType::Spoiler;
+			})) {
+		auto hidden = textWithEntities;
+		hidden.entities.insert(hidden.entities.begin(), EntityInText(
+			EntityType::Spoiler,
+			0,
+			hidden.text.size()));
+		setMarkedText(st, hidden, options, context);
+		return;
+	}
 	_st = &st;
 	clear();
 	{

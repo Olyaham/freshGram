@@ -452,7 +452,7 @@ void FlatLabel::overrideLinkClickHandler(Fn<void()> handler) {
 	setClickHandlerFilter([=](
 			const ClickHandlerPtr &link,
 			Qt::MouseButton button) {
-		if (button != Qt::LeftButton) {
+		if (button != Qt::LeftButton || Text::IsSpoilerLink(link)) {
 			return true;
 		}
 		handler();
@@ -464,7 +464,7 @@ void FlatLabel::overrideLinkClickHandler(Fn<void(QString url)> handler) {
 	setClickHandlerFilter([=](
 			const ClickHandlerPtr &link,
 			Qt::MouseButton button) {
-		if (button != Qt::LeftButton) {
+		if (button != Qt::LeftButton || Text::IsSpoilerLink(link)) {
 			return true;
 		}
 		handler(link->url());

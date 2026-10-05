@@ -19,6 +19,7 @@ void hideWidgetWindow(QWidget *widget);
 void showWidgetWindow(QWidget *widget);
 
 [[nodiscard]] bool spoilersActive();
+void refresh();
 [[nodiscard]] rpl::producer<bool> spoilersActiveValue();
 [[nodiscard]] rpl::producer<TextWithEntities> spoilered(
 	rpl::producer<TextWithEntities> text);

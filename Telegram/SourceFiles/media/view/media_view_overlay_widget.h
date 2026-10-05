@@ -595,6 +595,8 @@ private:
 
 	void applyVideoSize();
 	[[nodiscard]] bool videoShown() const;
+	[[nodiscard]] const void *streamerMediaKey() const;
+	[[nodiscard]] bool streamerHidden() const;
 	[[nodiscard]] QSize videoSize() const;
 	[[nodiscard]] bool streamingRequiresControls() const;
 	[[nodiscard]] QImage videoFrame() const; // ARGB (changes prepare format)
@@ -723,6 +725,7 @@ private:
 	int32 _dragging = 0;
 	QImage _staticContent;
 	bool _staticContentTransparent = false;
+	const void *_streamerRevealedFor = nullptr;
 	bool _blurred = true;
 	bool _reShow = false;
 

@@ -1585,16 +1585,12 @@ void Renderer::paintSpoilerRects(
 	if (rects.empty()) {
 		return;
 	}
-	if (_spoilerCache) {
-		const auto frame = _spoilerCache->lookup(color->c)->frame(index);
-		for (const auto &rect : rects) {
-			Ui::FillSpoilerRect(*_p, rect, frame, -rect.topLeft());
-		}
-	} else {
-		// Show forgotten spoiler context part.
-		for (const auto &rect : rects) {
-			_p->fillRect(rect, Qt::red);
-		}
+	const auto cache = _spoilerCache
+		? _spoilerCache
+		: DefaultSpoilerCache().get();
+	const auto frame = cache->lookup(color->c)->frame(index);
+	for (const auto &rect : rects) {
+		Ui::FillSpoilerRect(*_p, rect, frame, -rect.topLeft());
 	}
 }
 

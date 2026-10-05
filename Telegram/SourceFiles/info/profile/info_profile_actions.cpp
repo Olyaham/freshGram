@@ -179,9 +179,12 @@ base::options::toggle ShowChannelJoinedBelowAbout({
 				end(usernames));
 			for (auto &username : std::move(subrange)) {
 				const auto isLast = (usernames.back() == username);
-				result.append(tr::link(
+				auto link = tr::link(
 					'@' + base::take(username.text),
-					username.entities.front().data()));
+					username.entities.front().data());
+				result.append(AyuFeatures::StreamerMode::spoilersActive()
+					? Ui::Text::Wrapped(std::move(link), EntityType::Spoiler)
+					: std::move(link));
 				if (!isLast) {
 					result.append(u", "_q);
 				}
@@ -1907,8 +1910,11 @@ Section DetailsFiller::makeInfo() {
 				tr::ayu_ContextCopyID(tr::now)
 			);
 
-			idInfo.text->setClickHandlerFilter([=](auto &&...)
+			idInfo.text->setClickHandlerFilter([=](const ClickHandlerPtr &handler, auto &&...)
 			{
+				if (Ui::Text::IsSpoilerLink(handler)) {
+					return true;
+				}
 				const auto idText = IDString(user);
 				if (!idText.isEmpty()) {
 					QGuiApplication::clipboard()->setText(idText);
@@ -2023,8 +2029,11 @@ Section DetailsFiller::makeInfo() {
 				tr::ayu_ContextCopyID(tr::now)
 			);
 
-			idInfo.text->setClickHandlerFilter([=, peer = _peer](auto &&...)
+			idInfo.text->setClickHandlerFilter([=, peer = _peer](const ClickHandlerPtr &handler, auto &&...)
 			{
+				if (Ui::Text::IsSpoilerLink(handler)) {
+					return true;
+				}
 				const auto idText = IDString(peer);
 				if (!idText.isEmpty()) {
 					QGuiApplication::clipboard()->setText(idText);
@@ -2048,8 +2057,11 @@ Section DetailsFiller::makeInfo() {
 				tr::ayu_ContextCopyID(tr::now)
 			);
 
-			idInfo.text->setClickHandlerFilter([=, peer = _peer](auto &&...)
+			idInfo.text->setClickHandlerFilter([=, peer = _peer](const ClickHandlerPtr &handler, auto &&...)
 			{
+				if (Ui::Text::IsSpoilerLink(handler)) {
+					return true;
+				}
 				const auto idText = IDString(peer->forumTopicFor(topicRootId)->topicRootId());
 				if (!idText.isEmpty()) {
 					QGuiApplication::clipboard()->setText(idText);

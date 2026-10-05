@@ -8,6 +8,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "settings/sections/settings_main.h"
 
 #include "settings/settings_common_session.h"
+#include "ayu/features/streamer_mode/streamer_mode.h"
+#include "ui/text/text_utilities.h"
 
 #include "api/api_cloud_password.h"
 #include "api/api_credits.h"
@@ -277,9 +279,14 @@ void Cover::initViewers() {
 	Info::Profile::UsernameValue(
 		_user
 	) | rpl::on_next([=](const TextWithEntities &value) {
-		_username->setMarkedText(tr::link(value.text.isEmpty()
+		auto text = tr::link(value.text.isEmpty()
 			? tr::lng_settings_username_add(tr::now)
-			: value.text));
+			: value.text);
+		_username->setMarkedText(
+			(AyuFeatures::StreamerMode::spoilersActive()
+				&& !value.text.isEmpty())
+			? Ui::Text::Wrapped(std::move(text), EntityType::Spoiler)
+			: std::move(text));
 		refreshUsernameGeometry(width());
 	}, lifetime());
 
@@ -324,7 +331,13 @@ void Cover::refreshNameGeometry(int newWidth) {
 }
 
 void Cover::updateIdText() {
-	_id->setText(_idText);
+	if (AyuFeatures::StreamerMode::spoilersActive() && !_idText.isEmpty()) {
+		_id->setMarkedText(Ui::Text::Wrapped(
+			TextWithEntities{ _idText },
+			EntityType::Spoiler));
+	} else {
+		_id->setText(_idText);
+	}
 	refreshIdGeometry(width());
 }
 

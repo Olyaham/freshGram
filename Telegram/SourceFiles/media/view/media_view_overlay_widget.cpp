@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "media/view/media_view_overlay_widget.h"
 
 #include "apiwrap.h"
+#include "ayu/features/streamer_mode/streamer_mode.h"
 #include "api/api_attached_stickers.h"
 #include "api/api_peer_photo.h"
 #include "api/api_polls.h"
@@ -1477,7 +1478,20 @@ bool OverlayWidget::showCopyMediaRestriction(bool skipPRemiumCheck) {
 bool OverlayWidget::videoShown() const {
 	return _streamed
 		&& _streamed->ready
-		&& !_streamed->instance.info().video.cover.isNull();
+		&& !_streamed->instance.info().video.cover.isNull()
+		&& !streamerHidden();
+}
+
+const void *OverlayWidget::streamerMediaKey() const {
+	return _photo
+		? static_cast<const void*>(_photo)
+		: static_cast<const void*>(_document);
+}
+
+bool OverlayWidget::streamerHidden() const {
+	return AyuFeatures::StreamerMode::spoilersActive()
+		&& streamerMediaKey()
+		&& _streamerRevealedFor != streamerMediaKey();
 }
 
 QSize OverlayWidget::videoSize() const {
@@ -1551,6 +1565,9 @@ void OverlayWidget::setStaticContent(QImage image) {
 	image.setDevicePixelRatio(style::DevicePixelRatio());
 	if (_flip) {
 		image = image.mirrored(_flip & Qt::Horizontal, _flip & Qt::Vertical);
+	}
+	if (!image.isNull() && streamerHidden()) {
+		AyuFeatures::StreamerMode::spoilerImage(image);
 	}
 	_staticContent = std::move(image);
 	_staticContentTransparent = IsSemitransparent(_staticContent);
@@ -8449,6 +8466,16 @@ void OverlayWidget::handleMouseRelease(
 		QPoint position,
 		Qt::MouseButton button) {
 	updateOver(position);
+
+	if (button == Qt::LeftButton
+		&& streamerHidden()
+		&& (contentShown()
+			? contentGeometry().rect.contains(QPointF(position))
+			: _docRect.contains(position))) {
+		_streamerRevealedFor = streamerMediaKey();
+		redisplayContent();
+		return;
+	}
 
 	if (const auto activated = ClickHandler::unpressed()) {
 		if (activated->url() == u"internal:show_saved_message"_q) {
