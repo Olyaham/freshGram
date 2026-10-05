@@ -1771,21 +1771,30 @@ void Filler::addSendGift() {
 void Filler::fillSecretActions() {
 	const auto peer = _peer;
 	const auto controller = _controller;
-	_addAction(
-		tr::ayu_SecretTimer(tr::now),
-		[=] { Ui::ShowSecretTimer(controller, peer); },
-		&st::menuIconTTL);
-	_addAction(
-		tr::ayu_SecretKey(tr::now),
-		[=] { Ui::ShowSecretKey(controller, peer); },
-		&st::menuIconLock);
+	const auto info = AyuSecret::Get(&controller->session()).chat(
+		AyuSecret::ChatIdOfPeer(peer));
+	const auto ready = info && (info->state == AyuSecret::ChatState::Ready);
+	const auto ended = info
+		&& (info->state == AyuSecret::ChatState::Discarded);
+	if (ready) {
+		_addAction(
+			tr::ayu_SecretTimer(tr::now),
+			[=] { Ui::ShowSecretTimer(controller, peer); },
+			&st::menuIconTTL);
+		_addAction(
+			tr::ayu_SecretKey(tr::now),
+			[=] { Ui::ShowSecretKey(controller, peer); },
+			&st::menuIconLock);
+	}
 	_addAction(
 		tr::ayu_SecretClear(tr::now),
 		[=] { Ui::ConfirmSecretClear(controller, peer); },
 		&st::menuIconClear);
 	_addAction(PeerMenuCallback::Args{ .isSeparator = true });
 	_addAction(PeerMenuCallback::Args{
-		.text = tr::ayu_SecretChatDelete(tr::now),
+		.text = ended
+			? tr::ayu_SecretChatDelete(tr::now)
+			: tr::ayu_SecretChatEnd(tr::now),
 		.handler = [=] { Ui::ConfirmSecretEnd(controller, peer); },
 		.icon = &st::menuIconDeleteAttention,
 		.isAttention = true,

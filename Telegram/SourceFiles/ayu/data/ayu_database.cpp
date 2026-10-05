@@ -191,6 +191,13 @@ auto storage = make_storage(
 		make_column("always", &PeekRestoreRow::always),
 		make_column("never", &PeekRestoreRow::never)
 	),
+	make_table<SecretStateRow>(
+		"SecretState",
+		make_column("fakeId", &SecretStateRow::fakeId, primary_key().autoincrement()),
+		make_column("userId", &SecretStateRow::userId),
+		make_column("qts", &SecretStateRow::qts),
+		make_column("date", &SecretStateRow::date)
+	),
 	make_table<RegexFilter>(
 		"RegexFilter",
 		make_column("id", &RegexFilter::id, primary_key()),
@@ -771,6 +778,23 @@ void savePeekRestore(const PeekRestoreRow &row) {
 				where(column<PeekRestoreRow>(&PeekRestoreRow::userId) == row.userId));
 			storage.insert(row);
 		});
+	});
+}
+
+void saveSecretState(const SecretStateRow &row) {
+	runVoid("save secret state", [&] {
+		inTransaction([&] {
+			storage.remove_all<SecretStateRow>(
+				where(column<SecretStateRow>(&SecretStateRow::userId) == row.userId));
+			storage.insert(row);
+		});
+	});
+}
+
+std::vector<SecretStateRow> getSecretState(ID userId) {
+	return run<std::vector<SecretStateRow>>("load secret state", {}, [&] {
+		return storage.get_all<SecretStateRow>(
+			where(column<SecretStateRow>(&SecretStateRow::userId) == userId));
 	});
 }
 

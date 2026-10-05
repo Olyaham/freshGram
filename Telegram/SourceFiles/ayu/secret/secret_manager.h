@@ -81,6 +81,7 @@ public:
 	void decline(int chatId);
 	void discard(int chatId);
 	void remove(int chatId);
+	void end(int chatId);
 	void start(not_null<UserData*> user);
 
 	void sendText(int chatId, TextWithEntities text, int64 replyTo = 0);
@@ -112,6 +113,14 @@ private:
 	std::unique_ptr<Bridge> _bridge;
 
 };
+
+struct StoredState {
+	int qts = 0;
+	int date = 0;
+};
+
+[[nodiscard]] StoredState LoadState(not_null<Main::Session*> session);
+void SaveState(not_null<Main::Session*> session, int qts, int date);
 
 [[nodiscard]] Manager &Get(not_null<Main::Session*> session);
 

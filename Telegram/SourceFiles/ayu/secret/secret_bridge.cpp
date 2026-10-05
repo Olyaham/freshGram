@@ -442,6 +442,9 @@ Bridge::Binding &Bridge::ensureBinding(const ChatInfo &info) {
 			}
 		}, binding.lifetime);
 	}
+	if (binding.user->notify().settingsUnknown()) {
+		binding.user->notify().resetToDefault();
+	}
 	if (binding.user->name() != name) {
 		binding.user->setName(name, QString(), QString(), QString());
 	}
@@ -488,7 +491,7 @@ void Bridge::promptRequest(int chatId) {
 			close();
 		},
 		.cancelled = [=](Fn<void()> close) {
-			Get(session).remove(chatId);
+			Get(session).end(chatId);
 			close();
 		},
 		.confirmText = tr::ayu_SecretChatAccept(),
@@ -579,6 +582,7 @@ void Bridge::syncMessages(Binding &binding, const ChatInfo &info) {
 			item->destroy();
 		}
 	}
+	binding.synced = true;
 	owner.sendHistoryChangeNotifications();
 }
 
@@ -631,6 +635,11 @@ HistoryItem *Bridge::createItem(
 	HistoryItem *result = nullptr;
 	if (message.special) {
 		fields.flags = MessageFlags(MessageFlag::Local);
+		if (binding.synced
+			&& (message.special == kSpecialEnded
+				|| message.special == kSpecialRequest)) {
+			fields.flags |= MessageFlag::ClientSideUnread;
+		}
 		fields.from = PeerId();
 		fields.replyTo = FullReplyTo();
 		const auto service = history->makeMessage(
@@ -801,6 +810,11 @@ void Bridge::removeChat(int chatId) {
 	}
 	auto &owner = _session->data();
 	const auto user = i->second.user;
+	for (const auto &window : _session->windows()) {
+		if (window->activeChatCurrent().peer() == user) {
+			window->clearSectionStack();
+		}
+	}
 	forgetDocuments(chatId);
 	for (const auto &[randomId, msgId] : i->second.items) {
 		_byMsg.erase(msgId);

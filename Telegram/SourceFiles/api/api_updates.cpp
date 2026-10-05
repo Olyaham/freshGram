@@ -482,6 +482,22 @@ void Updates::stateDone(const MTPupdates_State &state) {
 	const auto &d = state.c_updates_state();
 	setState(d.vpts().v, d.vdate().v, d.vqts().v, d.vseq().v);
 
+	auto secretMissed = false;
+	if (AyuSecret::Enabled()) {
+		const auto stored = AyuSecret::LoadState(&session());
+		if (!stored.qts && !stored.date) {
+			AyuSecret::SaveState(&session(), d.vqts().v, d.vdate().v);
+		} else if (stored.qts < d.vqts().v || stored.date < d.vdate().v) {
+			if (stored.qts > 0 && stored.qts < _updatesQts) {
+				_updatesQts = stored.qts;
+			}
+			if (stored.date > 0 && stored.date < _updatesDate) {
+				_updatesDate = stored.date;
+			}
+			secretMissed = true;
+		}
+	}
+
 	_lastUpdateTime = crl::now();
 	_noUpdatesTimer.callOnce(kNoUpdatesTimeout);
 	_ptsWaiter.setRequesting(false);
@@ -489,6 +505,9 @@ void Updates::stateDone(const MTPupdates_State &state) {
 	session().api().requestDialogs();
 	updateOnline();
 	AyuPeek::restoreIfNeeded(&session());
+	if (secretMissed) {
+		getDifference();
+	}
 }
 
 void Updates::differenceDone(const MTPupdates_Difference &result) {
@@ -513,6 +532,7 @@ void Updates::differenceDone(const MTPupdates_Difference &result) {
 			AyuSecret::Get(&session()).handleDifference(
 				d.vnew_encrypted_messages().v,
 				s.vqts().v);
+			AyuSecret::SaveState(&session(), s.vqts().v, s.vdate().v);
 		}
 		setState(s.vpts().v, s.vdate().v, s.vqts().v, s.vseq().v);
 
@@ -531,6 +551,10 @@ void Updates::differenceDone(const MTPupdates_Difference &result) {
 			AyuSecret::Get(&session()).handleDifference(
 				d.vnew_encrypted_messages().v,
 				d.vstate().c_updates_state().vqts().v);
+			AyuSecret::SaveState(
+				&session(),
+				d.vstate().c_updates_state().vqts().v,
+				d.vstate().c_updates_state().vdate().v);
 		}
 		stateDone(d.vstate());
 	} break;
@@ -2221,6 +2245,19 @@ void Updates::feedUpdate(const MTPUpdate &update) {
 	case mtpc_updateEncryptedMessagesRead: {
 		if (AyuSecret::Enabled()) {
 			AyuSecret::Get(&session()).handleUpdate(update);
+			if (update.type() == mtpc_updateNewEncryptedMessage) {
+				const auto &data = update.c_updateNewEncryptedMessage();
+				const auto date = data.vmessage().match([](const auto &message) {
+					return message.vdate().v;
+				});
+				AyuSecret::SaveState(&session(), data.vqts().v, date);
+				setState(0, 0, data.vqts().v, 0);
+			} else if (update.type() == mtpc_updateEncryption) {
+				AyuSecret::SaveState(
+					&session(),
+					AyuSecret::LoadState(&session()).qts,
+					update.c_updateEncryption().vdate().v);
+			}
 		}
 	} break;
 

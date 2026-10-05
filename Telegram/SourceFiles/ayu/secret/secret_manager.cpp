@@ -47,6 +47,8 @@ constexpr auto kSpecialNote = 1;
 constexpr auto kSpecialHidden = 2;
 constexpr auto kKindHidden = 100;
 constexpr auto kKindNote = 101;
+constexpr auto kKindEnded = 102;
+constexpr auto kKindRequest = 103;
 
 [[nodiscard]] Bytes FromArray(const QByteArray &data) {
 	return Bytes(
@@ -408,7 +410,11 @@ struct Manager::Impl {
 		int64_t randomId,
 		DeleteOrigin origin);
 	[[nodiscard]] MessageData *findMessage(Chat &chat, int64_t randomId);
-	void addNote(Chat &chat, const QString &text, int date);
+	void addNote(
+		Chat &chat,
+		const QString &text,
+		int date,
+		int special = kSpecialNote);
 
 	struct SendFile {
 		bool big = false;
@@ -537,7 +543,13 @@ void Manager::Impl::onRequested(const MTPDencryptedChatRequested &data) {
 	chat.row.unread = 0;
 	chat.loaded = true;
 	saveChat(chat);
-	chats.emplace(id, std::move(chat));
+	const auto date = chat.row.date;
+	const auto inserted = chats.emplace(id, std::move(chat)).first;
+	addNote(
+		inserted->second,
+		QString("A secret chat was requested"),
+		date,
+		kSpecialRequest);
 	notify();
 }
 
@@ -552,7 +564,8 @@ void Manager::Impl::onChat(const MTPDencryptedChat &data) {
 			chat->row.chatId,
 			data.vg_a_or_b().v,
 			data.vkey_fingerprint().v);
-	} else if (chat->row.state == int(ChatState::Requested)) {
+	} else if (chat->row.state == int(ChatState::Requested)
+		&& !chat->working) {
 		chat->row.state = int(ChatState::Discarded);
 		chat->row.keyData.clear();
 		saveChat(*chat);
@@ -571,13 +584,28 @@ void Manager::Impl::onDiscarded(int chatId, bool historyDeleted) {
 	chat->key.clear();
 	chat->otherKey.clear();
 	if (historyDeleted) {
-		++chat->revision;
-		AyuDatabase::clearSecretMessages(userId, chatId);
-		chat->messages.clear();
+		if (AyuSettings::getInstance().saveDeletedMessages()) {
+			loadMessages(*chat);
+			auto ids = std::vector<int64_t>();
+			for (const auto &message : chat->messages) {
+				ids.push_back(message.randomId);
+			}
+			for (const auto id : ids) {
+				discardMessage(*chat, id, DeleteOrigin::Remote);
+			}
+		} else {
+			++chat->revision;
+			AyuDatabase::clearSecretMessages(userId, chatId);
+			chat->messages.clear();
+		}
 		chat->row.unread = 0;
 	}
 	saveChat(*chat);
-	toast(QString("%1 ended the secret chat.").arg(title(*chat)));
+	addNote(
+		*chat,
+		QString("The secret chat was ended"),
+		base::unixtime::now(),
+		kSpecialEnded);
 	notify(chatId);
 }
 
@@ -702,8 +730,15 @@ void Manager::Impl::accept(int chatId) {
 			if (const auto chat = find(chatId)) {
 				chat->working = false;
 			}
+			const auto type = error.type();
+			if (type == u"ENCRYPTION_ALREADY_DECLINED"_q
+				|| type == u"ENCRYPTION_DECLINED"_q
+				|| type == u"ENCRYPTION_ALREADY_ACCEPTED"_q
+				|| type == u"CHAT_ID_INVALID"_q) {
+				onDiscarded(chatId, false);
+			}
 			toast(QString("Could not accept the secret chat: %1")
-				.arg(error.type()));
+				.arg(type));
 		}).send();
 	}, [=] {
 		if (const auto chat = find(chatId)) {
@@ -1171,6 +1206,10 @@ void Manager::Impl::loadMessages(Chat &chat) {
 			data.special = kSpecialHidden;
 		} else if (row.kind == kKindNote) {
 			data.special = kSpecialNote;
+		} else if (row.kind == kKindEnded) {
+			data.special = kSpecialEnded;
+		} else if (row.kind == kKindRequest) {
+			data.special = kSpecialRequest;
 		} else if (data.media.type == MediaType::None && row.kind > 0) {
 			data.media.type = MediaType(row.kind);
 		}
@@ -1192,6 +1231,10 @@ SecretMessageRow Manager::Impl::rowFor(
 		? kKindHidden
 		: (data.special == kSpecialNote)
 		? kKindNote
+		: (data.special == kSpecialEnded)
+		? kKindEnded
+		: (data.special == kSpecialRequest)
+		? kKindRequest
 		: int(data.media.type);
 	row.seqIn = data.seqIn;
 	row.seqOut = data.seqOut;
@@ -1289,11 +1332,15 @@ void Manager::Impl::removeMessage(Chat &chat, int64_t randomId) {
 		chat.messages.end());
 }
 
-void Manager::Impl::addNote(Chat &chat, const QString &text, int date) {
+void Manager::Impl::addNote(
+		Chat &chat,
+		const QString &text,
+		int date,
+		int special) {
 	auto note = MessageData();
 	note.randomId = RandomId();
 	note.date = date;
-	note.special = kSpecialNote;
+	note.special = special;
 	note.text = text.toStdString();
 	addMessage(chat, std::move(note));
 }
@@ -2305,6 +2352,23 @@ void Manager::start(not_null<UserData*> user) {
 	_impl->start(user);
 }
 
+void Manager::end(int chatId) {
+	const auto chat = _impl->find(chatId);
+	if (!chat) {
+		return;
+	}
+	if (chat->row.state == int(ChatState::Ready)) {
+		_impl->discard(chatId);
+		_impl->addNote(
+			*chat,
+			QString("You ended the secret chat"),
+			base::unixtime::now());
+		_impl->notify(chatId);
+		return;
+	}
+	remove(chatId);
+}
+
 void Manager::remove(int chatId) {
 	const auto chat = _impl->find(chatId);
 	if (!chat) {
@@ -2388,6 +2452,28 @@ rpl::producer<> Manager::changes() const {
 
 rpl::producer<int> Manager::messageChanges() const {
 	return _impl->messageChanges.events();
+}
+
+StoredState LoadState(not_null<Main::Session*> session) {
+	const auto rows = AyuDatabase::getSecretState(
+		ID(session->userId().bare & PeerId::kChatTypeMask));
+	return rows.empty()
+		? StoredState()
+		: StoredState{ .qts = rows.front().qts, .date = rows.front().date };
+}
+
+void SaveState(not_null<Main::Session*> session, int qts, int date) {
+	const auto userId = ID(session->userId().bare & PeerId::kChatTypeMask);
+	const auto was = LoadState(session);
+	if (qts < was.qts || (qts == was.qts && date <= was.date)) {
+		return;
+	}
+	auto row = SecretStateRow();
+	row.fakeId = 0;
+	row.userId = userId;
+	row.qts = qts;
+	row.date = date;
+	AyuDatabase::saveSecretState(row);
 }
 
 Manager &Get(not_null<Main::Session*> session) {

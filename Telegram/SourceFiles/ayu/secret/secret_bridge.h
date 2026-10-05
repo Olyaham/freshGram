@@ -60,6 +60,7 @@ private:
 		std::set<int64_t> requested;
 		bool typing = false;
 		bool asked = false;
+		bool synced = false;
 		int lastState = -1;
 		rpl::lifetime lifetime;
 	};

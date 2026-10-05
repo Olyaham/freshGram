@@ -95,6 +95,9 @@ struct Media {
 	std::string path;
 };
 
+inline constexpr auto kSpecialEnded = 3;
+inline constexpr auto kSpecialRequest = 4;
+
 struct MessageData {
 	int64_t randomId = 0;
 	bool outgoing = false;

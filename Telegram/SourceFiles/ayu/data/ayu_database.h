@@ -44,6 +44,8 @@ void clearSecretMessages(ID userId, int chatId);
 
 void savePeekedStatus(const PeekedStatusRow &row);
 std::vector<PeekedStatusRow> getPeekedStatus(ID userId, ID targetId);
+void saveSecretState(const SecretStateRow &row);
+std::vector<SecretStateRow> getSecretState(ID userId);
 void savePeekRestore(const PeekRestoreRow &row);
 std::vector<PeekRestoreRow> getPeekRestore(ID userId);
 void clearPeekRestore(ID userId);

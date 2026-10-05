@@ -112,10 +112,15 @@ void ConfirmSecretEnd(
 		not_null<PeerData*> peer) {
 	const auto chatId = AyuSecret::ChatIdOfPeer(peer);
 	const auto session = &controller->session();
+	const auto info = AyuSecret::Get(session).chat(chatId);
+	const auto ended = info
+		&& (info->state == AyuSecret::ChatState::Discarded);
 	controller->show(Ui::MakeConfirmBox({
-		.text = tr::ayu_SecretChatEndAsk(),
+		.text = ended
+			? tr::ayu_SecretChatDeleteAsk()
+			: tr::ayu_SecretChatEndAsk(),
 		.confirmed = [=](Fn<void()> close) {
-			AyuSecret::Get(session).remove(chatId);
+			AyuSecret::Get(session).end(chatId);
 			close();
 		},
 	}));

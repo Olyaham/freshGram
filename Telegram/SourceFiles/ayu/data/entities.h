@@ -146,6 +146,15 @@ public:
 	std::string never;
 };
 
+class SecretStateRow
+{
+public:
+	ID fakeId;
+	ID userId;
+	int qts;
+	int date;
+};
+
 class RegexFilter
 {
 public:
