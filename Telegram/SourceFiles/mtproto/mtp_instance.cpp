@@ -27,6 +27,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/timer.h"
 #include "base/network_reachability.h"
 #include "test/test_rpc_retry.h"
+#include "ayu/utils/mtp_retry_log.h"
 
 namespace MTP {
 namespace {
@@ -986,7 +987,7 @@ void Instance::Private::checkDelayedRequests() {
 		if (const auto shiftedDcId = queryRequestByDc(requestId)) {
 			dcWithShift = *shiftedDcId;
 		} else {
-			LOG(("MTP Error: could not find request dc for delayed resend, requestId %1").arg(requestId));
+			AyuMtp::NoteDropped();
 			continue;
 		}
 
@@ -1501,6 +1502,7 @@ bool Instance::Private::onErrorDefault(
 
 		auto secs = 1;
 		auto nonPremiumDelay = false;
+		auto retryBody = uint32(0);
 		if (code < 0 || code >= 500) {
 			auto body = mtpTypeId(0);
 			{
@@ -1515,6 +1517,7 @@ bool Instance::Private::onErrorDefault(
 				}
 			}
 			Test::RecordRpcRetry(code, type, body);
+			retryBody = body;
 
 			const auto it = _requestsDelays.find(requestId);
 			if (it != _requestsDelays.cend()) {
@@ -1531,6 +1534,7 @@ bool Instance::Private::onErrorDefault(
 		} else if (m3.hasMatch()) {
 			secs = m3.captured(1).toInt();
 		}
+		AyuMtp::NoteRetry(code, type, retryBody);
 		auto sendAt = crl::now() + secs * 1000 + 10;
 		auto it = _delayedRequests.begin(), e = _delayedRequests.end();
 		for (; it != e; ++it) {
