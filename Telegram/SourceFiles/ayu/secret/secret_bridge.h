@@ -85,6 +85,8 @@ private:
 [[nodiscard]] Bridge &BridgeFor(not_null<Main::Session*> session);
 [[nodiscard]] UserData *RealUser(const PeerData *peer);
 [[nodiscard]] bool IsSecretDocument(const DocumentData *document);
+[[nodiscard]] QString NotificationTitle();
+[[nodiscard]] TextWithEntities NotificationText(not_null<HistoryItem*> item);
 [[nodiscard]] QByteArray DocumentBytes(const DocumentData *document);
 void Start(not_null<Main::Session*> session);
 void WatchActiveChat(not_null<Window::SessionController*> controller);

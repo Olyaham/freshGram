@@ -9130,6 +9130,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_SecretChatSend" = "Send";
 "ayu_SecretChatEnd" = "End chat";
 "ayu_SecretChatDelete" = "Delete chat";
+"ayu_SecretChatNotifyTitle" = "Secret chat";
+"ayu_SecretChatNewMessage" = "New secret message";
 "ayu_SecretChatDeleteAsk" = "Delete this secret chat and its messages from this device?";
 "ayu_SecretChatEndAsk" = "End this secret chat? The other side will be notified.";
 "ayu_SecretAttach" = "Attach a file";

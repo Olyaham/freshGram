@@ -24,6 +24,7 @@
 #include "ui/image/image_location_factory.h"
 #include "ui/text/text_entity.h"
 #include "ui/toast/toast.h"
+#include "window/notifications_manager.h"
 #include "window/window_controller.h"
 #include "window/window_session_controller.h"
 
@@ -582,7 +583,10 @@ void Bridge::syncMessages(Binding &binding, const ChatInfo &info) {
 			item->destroy();
 		}
 	}
-	binding.synced = true;
+	if (!binding.synced) {
+		binding.synced = true;
+		Core::App().notifications().clearFromHistory(binding.history);
+	}
 	owner.sendHistoryChangeNotifications();
 }
 
@@ -975,6 +979,16 @@ QByteArray DocumentBytes(const DocumentData *document) {
 	return Get(i->second.session).readFile(
 		i->second.chatId,
 		i->second.randomId);
+}
+
+QString NotificationTitle() {
+	return tr::ayu_SecretChatNotifyTitle(tr::now);
+}
+
+TextWithEntities NotificationText(not_null<HistoryItem*> item) {
+	return item->isService()
+		? item->notificationText({})
+		: TextWithEntities{ tr::ayu_SecretChatNewMessage(tr::now) };
 }
 
 UserData *RealUser(const PeerData *peer) {

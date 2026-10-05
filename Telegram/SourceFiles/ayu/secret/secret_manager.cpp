@@ -3,6 +3,8 @@
 #include "ayu/secret/secret_vault.h"
 
 #include "apiwrap.h"
+#include "core/application.h"
+#include "window/window_controller.h"
 #include "ayu/ayu_settings.h"
 #include "ayu/data/ayu_database.h"
 #include "ayu/secret/secret_crypto.h"
@@ -331,6 +333,13 @@ struct Manager::Impl {
 	rpl::event_stream<> changes;
 	rpl::event_stream<int> messageChanges;
 
+	[[nodiscard]] bool chatInView(int chatId) const {
+		if (openChat != chatId) {
+			return false;
+		}
+		const auto window = Core::App().activeWindow();
+		return window && window->widget()->isActiveWindow();
+	}
 	[[nodiscard]] Chat *find(int chatId) {
 		const auto i = chats.find(chatId);
 		return (i != chats.end()) ? &i->second : nullptr;
@@ -1039,9 +1048,7 @@ void Manager::Impl::process(
 	if (autoLoad) {
 		downloadMedia(chatId, id);
 	}
-	if (openChat != chatId) {
-		toast(QString("New secret message from %1").arg(title(chat)));
-	} else {
+	if (chatInView(chatId)) {
 		markRead(chatId);
 	}
 }
@@ -1266,7 +1273,7 @@ void Manager::Impl::addMessage(Chat &chat, MessageData data) {
 			chat.row.lastDate = std::max(chat.row.lastDate, date);
 		}
 		if (!outgoing && !special) {
-			if (openChat == chat.row.chatId) {
+			if (chatInView(chat.row.chatId)) {
 				chat.row.unread = 0;
 			} else {
 				++chat.row.unread;

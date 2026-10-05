@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_bridge.h"
 #include "window/notifications_manager.h"
 
 #include "base/options.h"
@@ -1121,6 +1122,12 @@ Manager::DisplayOptions Manager::getNotificationOptions(
 		|| (peer->slowmodeSecondsLeft() > 0)
 		|| (peer->starsPerMessageChecked() > 0)
 		|| HideReplyButtonOption.value();
+	if (item && item->isAyuSecret()) {
+		result.hideNameAndPhoto = true;
+		result.hideMessageText = true;
+		result.hideMarkAsRead = true;
+		result.hideReplyButton = true;
+	}
 	result.spoilerLoginCode = item
 		&& !item->out()
 		&& (peer->isNotificationsUser()
@@ -1586,7 +1593,10 @@ void NativeManager::doShowNotification(NotificationFields &&fields) {
 			? (sublist->sublistPeer()->shortName() + u" ("_q + name + ')')
 			: name;
 	};
-	const auto title = options.hideNameAndPhoto
+	const auto secret = item->isAyuSecret();
+	const auto title = secret
+		? AyuSecret::NotificationTitle()
+		: options.hideNameAndPhoto
 		? AppName.utf16()
 		: (scheduled && peer->isSelf())
 		? tr::lng_notification_reminder(tr::now)
@@ -1602,7 +1612,9 @@ void NativeManager::doShowNotification(NotificationFields &&fields) {
 		: options.hideNameAndPhoto
 		? QString()
 		: item->notificationHeader();
-	const auto text = pollVote
+	const auto text = secret
+		? TextWithPermanentSpoiler(AyuSecret::NotificationText(item))
+		: pollVote
 		? TextWithPermanentSpoiler(ComposePollVoteNotification(
 			item,
 			fields.pollVoteOption,
