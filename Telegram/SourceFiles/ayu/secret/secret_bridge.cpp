@@ -357,6 +357,14 @@ void Bridge::refreshAll() {
 	for (const auto chatId : dead) {
 		removeChat(chatId);
 	}
+	if (!_ready) {
+		_ready = true;
+		for (const auto &[chatId, binding] : _bindings) {
+			if (binding.history) {
+				Core::App().notifications().clearFromHistory(binding.history);
+			}
+		}
+	}
 }
 
 void Bridge::refreshChat(int chatId) {
@@ -583,10 +591,6 @@ void Bridge::syncMessages(Binding &binding, const ChatInfo &info) {
 			item->destroy();
 		}
 	}
-	if (!binding.synced) {
-		binding.synced = true;
-		Core::App().notifications().clearFromHistory(binding.history);
-	}
 	owner.sendHistoryChangeNotifications();
 }
 
@@ -639,7 +643,7 @@ HistoryItem *Bridge::createItem(
 	HistoryItem *result = nullptr;
 	if (message.special) {
 		fields.flags = MessageFlags(MessageFlag::Local);
-		if (binding.synced
+		if (_ready
 			&& (message.special == kSpecialEnded
 				|| message.special == kSpecialRequest)) {
 			fields.flags |= MessageFlag::ClientSideUnread;

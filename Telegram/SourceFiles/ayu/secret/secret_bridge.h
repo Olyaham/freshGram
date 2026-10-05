@@ -60,7 +60,6 @@ private:
 		std::set<int64_t> requested;
 		bool typing = false;
 		bool asked = false;
-		bool synced = false;
 		int lastState = -1;
 		rpl::lifetime lifetime;
 	};
@@ -78,6 +77,7 @@ private:
 	std::map<int, Binding> _bindings;
 	std::map<MsgId, std::pair<int, int64_t>> _byMsg;
 	bool _refreshing = false;
+	bool _ready = false;
 	rpl::lifetime _lifetime;
 
 };
