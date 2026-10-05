@@ -21,17 +21,71 @@ on:
         description: Publish a GitHub release with this tag (for example v7.2.18), leave empty to only build
         type: string
         required: false
+      source_ref:
+        description: Tag, branch or commit to build instead of the one the workflow is started on
+        type: string
+        required: false
 
 concurrency:
-  group: build-macos-${{ github.ref }}-${{ github.event_name }}
+  group: build-macos-${{ github.ref }}-${{ github.event_name }}-${{ github.event.inputs.release_tag }}
   cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/') }}
 
 permissions:
   contents: write
 
 jobs:
-  macos:
+  libraries:
+    name: macOS libraries
+    runs-on: macos-15
+    timeout-minutes: 360
+
+    steps:
+      - name: Free up disk space
+        run: |
+          df -h /
+          keep=$(readlink -f /Applications/Xcode.app || true)
+          for xcode in /Applications/Xcode_*.app; do
+            if [ "$(readlink -f "$xcode")" != "$keep" ]; then
+              sudo rm -rf "$xcode"
+            fi
+          done
+          sudo rm -rf /Library/Developer/CoreSimulator ~/Library/Developer/CoreSimulator || true
+          sudo rm -rf ~/Library/Android /Users/runner/Library/Android ~/.dotnet /usr/local/share/dotnet || true
+          sudo rm -rf ~/hostedtoolcache /Users/runner/hostedtoolcache || true
+          df -h /
+
+      - name: Clone
+        uses: actions/checkout@v4
+        with:
+          path: freshGram
+          ref: ${{ github.event.inputs.source_ref || github.ref }}
+          submodules: recursive
+
+      - name: Install tools
+        run: |
+          brew install automake libtool cmake wget pkg-config gnu-tar ninja nasm meson zstd
+          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Prepare libraries
+        timeout-minutes: 340
+        run: ./freshGram/Telegram/build/prepare/mac.sh silent
+
+      - name: Pack libraries
+        run: |
+          gtar -I 'zstd -T0 -3' -cf libraries.tar.zst Libraries ThirdParty
+          ls -la libraries.tar.zst
+
+      - name: Upload libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-libraries
+          path: libraries.tar.zst
+          retention-days: 1
+          compression-level: 0
+
+  app:
     name: macOS
+    needs: libraries
     runs-on: macos-15
     timeout-minutes: 360
 
@@ -64,43 +118,24 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: freshGram
+          ref: ${{ github.event.inputs.source_ref || github.ref }}
           submodules: recursive
 
       - name: Install tools
         run: |
-          brew install automake libtool cmake wget pkg-config gnu-tar ninja nasm meson
+          brew install automake libtool cmake wget pkg-config gnu-tar ninja nasm meson zstd
           sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
-      - name: Restore libraries
-        id: libraries
-        uses: actions/cache/restore@v4
+      - name: Download libraries
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            Libraries
-            ThirdParty
-          key: macos-libraries-${{ hashFiles('freshGram/Telegram/build/prepare/**', 'freshGram/Telegram/build/qt_version.py') }}-${{ github.run_id }}
-          restore-keys: macos-libraries-${{ hashFiles('freshGram/Telegram/build/prepare/**', 'freshGram/Telegram/build/qt_version.py') }}-
+          name: macos-libraries
 
-      - name: Prepare libraries
-        id: prepare
-        continue-on-error: true
-        timeout-minutes: 300
-        run: ./freshGram/Telegram/build/prepare/mac.sh silent
-
-      - name: Save libraries
-        if: always() && steps.libraries.outcome == 'success'
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            Libraries
-            ThirdParty
-          key: macos-libraries-${{ hashFiles('freshGram/Telegram/build/prepare/**', 'freshGram/Telegram/build/qt_version.py') }}-${{ github.run_id }}
-
-      - name: Stop when libraries are not ready
-        if: steps.prepare.outcome != 'success'
+      - name: Unpack libraries
         run: |
-          echo "::error::Preparing the libraries did not finish in time. The finished part is cached, run the workflow again to continue."
-          exit 1
+          gtar -I 'zstd -T0' -xf libraries.tar.zst
+          rm libraries.tar.zst
+          df -h /
 
       - name: Configure
         env:
