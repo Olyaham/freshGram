@@ -70,6 +70,18 @@ jobs:
         timeout-minutes: 340
         run: ./freshGram/Telegram/build/prepare/mac.sh silent
 
+      - name: Show why the libraries failed
+        if: failure()
+        run: |
+          df -h /
+          vm_stat | head -8
+          for dir in Libraries/tg_owt/out/*/; do
+            [ -f "$dir/build.ninja" ] || continue
+            echo "::group::$dir"
+            (cd "$dir" && ninja -v 2>&1 | tail -n 60) || true
+            echo "::endgroup::"
+          done
+
       - name: Pack libraries
         run: |
           gtar -I 'zstd -T0 -3' -cf libraries.tar.zst Libraries ThirdParty
