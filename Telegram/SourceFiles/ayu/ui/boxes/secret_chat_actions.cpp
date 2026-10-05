@@ -83,7 +83,7 @@ void ShowSecretKey(
 		not_null<Window::SessionController*> controller,
 		not_null<PeerData*> peer) {
 	const auto chatId = AyuSecret::ChatIdOfPeer(peer);
-	const auto info = AyuSecret::Get(&controller->session()).chat(chatId);
+	const auto info = AyuSecret::Get(&controller->session()).chat(chatId, true);
 	if (!info || info->keyHash.empty()) {
 		return;
 	}

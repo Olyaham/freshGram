@@ -70,8 +70,12 @@ public:
 		int qts);
 
 	[[nodiscard]] std::vector<ChatInfo> chats() const;
-	[[nodiscard]] std::optional<ChatInfo> chat(int chatId) const;
-	[[nodiscard]] std::vector<MessageData> messages(int chatId);
+	[[nodiscard]] std::optional<ChatInfo> chat(
+		int chatId,
+		bool withKey = false) const;
+	[[nodiscard]] std::vector<MessageData> messages(
+		int chatId,
+		int limit = 0);
 	[[nodiscard]] int revision(int chatId) const;
 	[[nodiscard]] int pendingRequests() const;
 	[[nodiscard]] int unreadTotal() const;

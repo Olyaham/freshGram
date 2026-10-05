@@ -32,6 +32,8 @@
 #include <QtGui/QImageReader>
 
 #include <map>
+#include <algorithm>
+#include <deque>
 #include <set>
 
 namespace AyuSecret {
@@ -328,6 +330,11 @@ struct Manager::Impl {
 	std::map<int, Chat> chats;
 	int openChat = 0;
 	std::set<int> removed;
+	std::set<int> pendingChats;
+	bool flushQueued = false;
+	std::map<int64_t, QByteArray> plainCache;
+	std::deque<int64_t> plainOrder;
+	int64_t plainBytes = 0;
 	Fn<void(int)> started;
 	base::Timer expireTimer;
 	rpl::event_stream<> changes;
@@ -339,6 +346,33 @@ struct Manager::Impl {
 		}
 		const auto window = Core::App().activeWindow();
 		return window && window->widget()->isActiveWindow();
+	}
+	void remember(int64_t randomId, const QByteArray &bytes) {
+		constexpr auto kLimit = int64_t(96) * 1024 * 1024;
+		if (int64_t(bytes.size()) > kLimit
+			|| plainCache.contains(randomId)) {
+			return;
+		}
+		while (!plainOrder.empty()
+			&& plainBytes + bytes.size() > kLimit) {
+			const auto oldest = plainOrder.front();
+			plainOrder.pop_front();
+			if (const auto i = plainCache.find(oldest)
+				; i != plainCache.end()) {
+				plainBytes -= i->second.size();
+				plainCache.erase(i);
+			}
+		}
+		plainCache.emplace(randomId, bytes);
+		plainOrder.push_back(randomId);
+		plainBytes += bytes.size();
+	}
+	void forget(int64_t randomId) {
+		if (const auto i = plainCache.find(randomId)
+			; i != plainCache.end()) {
+			plainBytes -= i->second.size();
+			plainCache.erase(i);
+		}
 	}
 	[[nodiscard]] Chat *find(int chatId) {
 		const auto i = chats.find(chatId);
@@ -366,10 +400,22 @@ struct Manager::Impl {
 		AyuDatabase::saveSecretChat(row);
 	}
 	void notify(int chatId = 0) {
-		changes.fire({});
-		if (chatId) {
-			messageChanges.fire_copy(chatId);
+		if (!chatId) {
+			changes.fire({});
+			return;
 		}
+		pendingChats.insert(chatId);
+		if (flushQueued) {
+			return;
+		}
+		flushQueued = true;
+		crl::on_main(session, [=] {
+			flushQueued = false;
+			auto ids = base::take(pendingChats);
+			for (const auto id : ids) {
+				messageChanges.fire_copy(id);
+			}
+		});
 	}
 	void toast(const QString &text) {
 		Ui::Toast::Show(text);
@@ -388,6 +434,7 @@ struct Manager::Impl {
 	void onRequested(const MTPDencryptedChatRequested &data);
 	void onChat(const MTPDencryptedChat &data);
 	void onDiscarded(int chatId, bool historyDeleted);
+	[[nodiscard]] ChatInfo makeInfo(const Chat &chat, bool withKey) const;
 	void finishCreator(int chatId, const QByteArray &gB, int64 fingerprint);
 	void becomeReady(Chat &chat, const Bytes &key);
 
@@ -1324,6 +1371,7 @@ void Manager::Impl::removeMessage(Chat &chat, int64_t randomId) {
 	loadMessages(chat);
 	++chat.revision;
 	AyuDatabase::removeSecretMessage(userId, chat.row.chatId, randomId);
+	forget(randomId);
 	if (const auto message = findMessage(chat, randomId)) {
 		if (!message->media.path.empty()) {
 			QFile::remove(Qs(message->media.path));
@@ -2252,33 +2300,31 @@ void Manager::handleDifference(
 	}
 }
 
+ChatInfo Manager::Impl::makeInfo(const Chat &chat, bool withKey) const {
+	auto info = ChatInfo();
+	info.id = chat.row.chatId;
+	info.peerUserId = uint64(chat.row.peerUserId);
+	info.creator = (chat.row.creator != 0);
+	info.state = ChatState(chat.row.state);
+	info.date = chat.row.date;
+	info.lastDate = chat.row.lastDate;
+	info.unread = chat.row.unread;
+	info.ttl = chat.ttl;
+	info.layer = chat.row.hisLayer;
+	info.typing = (chat.typingUntil > crl::now());
+	info.fingerprint = chat.row.fingerprint;
+	if (withKey && !chat.key.empty()) {
+		info.keyHash = KeyVisualHash(chat.key);
+	}
+	info.title = title(chat);
+	return info;
+}
+
 std::vector<ChatInfo> Manager::chats() const {
 	auto result = std::vector<ChatInfo>();
-	for (auto &[id, chat] : _impl->chats) {
-		_impl->loadMessages(chat);
-		auto info = ChatInfo();
-		info.id = id;
-		info.peerUserId = uint64(chat.row.peerUserId);
-		info.creator = (chat.row.creator != 0);
-		info.state = ChatState(chat.row.state);
-		info.date = chat.row.date;
-		info.lastDate = chat.row.lastDate;
-		info.unread = chat.row.unread;
-		info.ttl = chat.ttl;
-		info.layer = chat.row.hisLayer;
-		info.typing = (chat.typingUntil > crl::now());
-		info.fingerprint = chat.row.fingerprint;
-		if (!chat.key.empty()) {
-			info.keyHash = KeyVisualHash(chat.key);
-		}
-		info.title = _impl->title(chat);
-		for (auto i = chat.messages.rbegin(); i != chat.messages.rend(); ++i) {
-			if (i->special != kSpecialHidden) {
-				info.lastText = MediaPreview(*i);
-				break;
-			}
-		}
-		result.push_back(std::move(info));
+	result.reserve(_impl->chats.size());
+	for (const auto &[id, chat] : _impl->chats) {
+		result.push_back(_impl->makeInfo(chat, false));
 	}
 	std::sort(result.begin(), result.end(), [](const auto &a, const auto &b) {
 		return a.lastDate > b.lastDate;
@@ -2286,24 +2332,30 @@ std::vector<ChatInfo> Manager::chats() const {
 	return result;
 }
 
-std::optional<ChatInfo> Manager::chat(int chatId) const {
-	for (const auto &info : chats()) {
-		if (info.id == chatId) {
-			return info;
-		}
+std::optional<ChatInfo> Manager::chat(int chatId, bool withKey) const {
+	if (const auto chat = _impl->find(chatId)) {
+		return _impl->makeInfo(*chat, withKey);
 	}
 	return std::nullopt;
 }
 
-std::vector<MessageData> Manager::messages(int chatId) {
+std::vector<MessageData> Manager::messages(int chatId, int limit) {
 	auto result = std::vector<MessageData>();
 	if (const auto chat = _impl->find(chatId)) {
 		_impl->loadMessages(*chat);
-		for (const auto &message : chat->messages) {
-			if (message.special != kSpecialHidden) {
-				result.push_back(message);
+		for (auto i = chat->messages.rbegin();
+			i != chat->messages.rend();
+			++i) {
+			if (i->special == kSpecialHidden) {
+				continue;
+			}
+			result.push_back(*i);
+			result.back().object.clear();
+			if (limit > 0 && int(result.size()) >= limit) {
+				break;
 			}
 		}
+		std::reverse(result.begin(), result.end());
 	}
 	return result;
 }
@@ -2414,6 +2466,10 @@ std::optional<MessageData> Manager::message(int chatId, int64 randomId) {
 }
 
 QByteArray Manager::readFile(int chatId, int64 randomId) {
+	if (const auto i = _impl->plainCache.find(randomId)
+		; i != _impl->plainCache.end()) {
+		return i->second;
+	}
 	const auto data = message(chatId, randomId);
 	if (!data || data->media.path.empty()) {
 		return QByteArray();
@@ -2422,7 +2478,9 @@ QByteArray Manager::readFile(int chatId, int64 randomId) {
 	if (!Vault::OpenFromFile(Qs(data->media.path), plain)) {
 		return QByteArray();
 	}
-	return ToArray(plain);
+	auto result = ToArray(plain);
+	_impl->remember(randomId, result);
+	return result;
 }
 
 void Manager::openMessage(int chatId, int64 randomId) {

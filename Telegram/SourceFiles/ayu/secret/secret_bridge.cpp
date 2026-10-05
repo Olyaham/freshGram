@@ -536,7 +536,7 @@ void Bridge::promptClosed(int chatId) {
 
 void Bridge::syncMessages(Binding &binding, const ChatInfo &info) {
 	binding.revision = _manager->revision(info.id);
-	auto messages = _manager->messages(info.id);
+	auto messages = _manager->messages(info.id, kHistoryLimit);
 	if (int(messages.size()) > kHistoryLimit) {
 		messages.erase(
 			messages.begin(),
