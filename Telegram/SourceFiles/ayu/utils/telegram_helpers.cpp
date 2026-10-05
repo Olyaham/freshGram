@@ -15,6 +15,7 @@
 #include "ayu/ayu_worker.h"
 #include "ayu/data/entities.h"
 #include "ayu/data/kept_dialogs.h"
+#include "ayu/data/known_users.h"
 #include "ayu/data/messages_storage.h"
 #include "ayu/features/filters/filters_controller.h"
 #include "ayu/ui/toasts.h"
@@ -765,7 +766,7 @@ void searchUserById(ID userId, Main::Session *session, const UsernameResolverCal
 		return;
 	}
 
-	if (const auto userLoaded = session->data().userLoaded(userId)) {
+	if (const auto userLoaded = AyuUsers::find(session, UserId(userId))) {
 		callback(userLoaded->username(), userLoaded);
 		return;
 	}

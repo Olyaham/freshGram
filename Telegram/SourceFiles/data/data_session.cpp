@@ -95,6 +95,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "ayu/ayu_settings.h"
 #include "ayu/data/kept_dialogs.h"
+#include "ayu/data/known_users.h"
 #include "ayu/secret/secret_bridge.h"
 #include "ayu/data/messages_storage.h"
 #include "ayu/features/filters/filters_controller.h"
@@ -943,6 +944,7 @@ not_null<UserData*> Session::processUser(const MTPUser &data) {
 	if (flags) {
 		session().changes().peerUpdated(result, flags);
 	}
+	AyuUsers::note(result);
 	return result;
 }
 

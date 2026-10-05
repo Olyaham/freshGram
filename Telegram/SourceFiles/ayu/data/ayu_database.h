@@ -9,6 +9,7 @@
 #include "ayu/data/entities.h"
 
 #include <functional>
+#include <optional>
 
 class SchemaVersion
 {
@@ -53,6 +54,9 @@ void clearPeekRestore(ID userId);
 void saveKeptDialog(const KeptDialog &dialog);
 std::vector<KeptDialog> getKeptDialogs(ID userId);
 void removeKeptDialog(ID userId, ID dialogId);
+
+void saveKnownUsers(const std::vector<KnownUser> &users);
+std::optional<KnownUser> getKnownUser(ID userId, ID peerId);
 
 std::vector<RegexFilter> getAllRegexFilters();
 RegexFilter getById(std::vector<char> id);

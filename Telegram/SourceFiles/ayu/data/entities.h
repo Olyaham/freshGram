@@ -87,6 +87,19 @@ public:
 	int lost;
 };
 
+class KnownUser
+{
+public:
+	ID fakeId;
+	ID userId;
+	ID peerId;
+	ID accessHash;
+	std::string firstName;
+	std::string lastName;
+	std::string username;
+	int updatedAt;
+};
+
 class SecretChatRow
 {
 public:

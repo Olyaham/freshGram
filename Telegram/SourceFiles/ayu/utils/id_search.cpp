@@ -1,8 +1,7 @@
 #include "ayu/utils/id_search.h"
 
-#include "data/data_session.h"
+#include "ayu/data/known_users.h"
 #include "data/data_user.h"
-#include "main/main_session.h"
 
 namespace AyuIdSearch {
 namespace {
@@ -59,7 +58,7 @@ UserData *FindUser(
 	if (!query.canBeUser() || query.id <= 0) {
 		return nullptr;
 	}
-	return session->data().userLoaded(UserId(query.id));
+	return AyuUsers::find(session, UserId(query.id));
 }
 
 } // namespace AyuIdSearch

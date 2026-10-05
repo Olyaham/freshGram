@@ -135,6 +135,9 @@ auto storage = make_storage(
 		make_column("lastMessageDate", &KeptDialog::lastMessageDate),
 		make_column("lost", &KeptDialog::lost)
 	),
+	make_index("idx_known_user_userId_peerId",
+			   column<KnownUser>(&KnownUser::userId),
+			   column<KnownUser>(&KnownUser::peerId)),
 	make_index("idx_secret_chat_userId_chatId",
 			   column<SecretChatRow>(&SecretChatRow::userId),
 			   column<SecretChatRow>(&SecretChatRow::chatId)),
@@ -142,6 +145,17 @@ auto storage = make_storage(
 			   column<SecretMessageRow>(&SecretMessageRow::userId),
 			   column<SecretMessageRow>(&SecretMessageRow::chatId),
 			   column<SecretMessageRow>(&SecretMessageRow::randomId)),
+	make_table<KnownUser>(
+		"KnownUser",
+		make_column("fakeId", &KnownUser::fakeId, primary_key().autoincrement()),
+		make_column("userId", &KnownUser::userId),
+		make_column("peerId", &KnownUser::peerId),
+		make_column("accessHash", &KnownUser::accessHash),
+		make_column("firstName", &KnownUser::firstName),
+		make_column("lastName", &KnownUser::lastName),
+		make_column("username", &KnownUser::username),
+		make_column("updatedAt", &KnownUser::updatedAt)
+	),
 	make_table<SecretChatRow>(
 		"SecretChat",
 		make_column("fakeId", &SecretChatRow::fakeId, primary_key().autoincrement()),
@@ -650,6 +664,47 @@ void removeKeptDialog(ID userId, ID dialogId) {
 				column<KeptDialog>(&KeptDialog::dialogId) == dialogId
 			)
 		);
+	});
+}
+
+void saveKnownUsers(const std::vector<KnownUser> &users) {
+	if (users.empty()) {
+		return;
+	}
+	runVoid("save known users", [&] {
+		inTransaction([&] {
+			for (const auto &user : users) {
+				const auto same = [&](const KnownUser &row) {
+					return row.accessHash == user.accessHash
+						&& row.firstName == user.firstName
+						&& row.lastName == user.lastName
+						&& row.username == user.username;
+				};
+				const auto sameUser = where(
+					column<KnownUser>(&KnownUser::userId) == user.userId and
+					column<KnownUser>(&KnownUser::peerId) == user.peerId);
+				const auto existing = storage.get_all<KnownUser>(sameUser, limit(1));
+				if (!existing.empty() && same(existing.front())) {
+					continue;
+				}
+				storage.remove_all<KnownUser>(sameUser);
+				storage.insert(user);
+			}
+		});
+	});
+}
+
+std::optional<KnownUser> getKnownUser(ID userId, ID peerId) {
+	return run<std::optional<KnownUser>>("load known user", std::nullopt, [&] {
+		auto rows = storage.get_all<KnownUser>(
+			where(
+				column<KnownUser>(&KnownUser::userId) == userId and
+				column<KnownUser>(&KnownUser::peerId) == peerId
+			),
+			limit(1));
+		return rows.empty()
+			? std::optional<KnownUser>()
+			: std::optional<KnownUser>(std::move(rows.front()));
 	});
 }
 

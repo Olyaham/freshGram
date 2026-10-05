@@ -254,6 +254,8 @@ set(ayugram_files
         ayu/data/deleted_restore.h
         ayu/data/kept_dialogs.cpp
         ayu/data/kept_dialogs.h
+        ayu/data/known_users.cpp
+        ayu/data/known_users.h
         ayu/secret/secret_bridge.cpp
         ayu/secret/secret_bridge.h
         ayu/secret/secret_crypto.cpp
