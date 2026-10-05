@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "main/main_account.h"
+#include "ayu/secret/secret_manager.h"
 
 #include "base/platform/base_platform_info.h"
 #include "core/application.h"
@@ -554,6 +555,9 @@ void Account::forcedLogOut() {
 void Account::loggedOut() {
 	_loggingOut = false;
 	Media::Player::mixer()->stopAndClear();
+	if (const auto session = maybeSession()) {
+		AyuSecret::PurgeSession(session);
+	}
 	destroySession(DestroyReason::LoggedOut);
 	local().reset();
 	cSetOtherOnline(0);

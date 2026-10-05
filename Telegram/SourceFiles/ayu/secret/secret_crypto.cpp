@@ -5,6 +5,7 @@
 #include <openssl/sha.h>
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 
 namespace AyuSecret {
@@ -71,7 +72,9 @@ void IgeDecrypt(const Kdf &kdf, const uint8_t *from, uint8_t *to, size_t size) {
 } // namespace
 
 void RandomBytes(uint8_t *data, size_t size) {
-	RAND_bytes(data, int(size));
+	if (size && RAND_bytes(data, int(size)) != 1) {
+		std::abort();
+	}
 }
 
 Bytes RandomVector(size_t size) {
@@ -171,7 +174,7 @@ bool DecryptPacket(
 	}
 	int32_t length = 0;
 	std::memcpy(&length, plain.data(), 4);
-	if (length <= 0 || size_t(length) + 4 > size) {
+	if (length <= 0 || (length & 3) != 0 || size_t(length) + 4 > size) {
 		return false;
 	}
 	const auto padding = size - 4 - size_t(length);

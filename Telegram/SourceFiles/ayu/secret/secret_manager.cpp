@@ -34,9 +34,11 @@
 #include <QtGui/QImageReader>
 
 #include <array>
+#include <cstring>
 #include <map>
 #include <algorithm>
 #include <deque>
+#include <limits>
 #include <set>
 
 namespace AyuSecret {
@@ -1195,7 +1197,16 @@ void Manager::Impl::applyPacket(Chat &chat, ReadyPacket &&packet) {
 	}
 	if (!packet.decrypted) {
 		return;
-	} else if (!packet.parsed) {
+	}
+	if (!chat.otherKey.empty() && packet.bytes.size() >= 8) {
+		auto used = int64_t(0);
+		std::memcpy(&used, packet.bytes.constData(), sizeof(used));
+		if (used == chat.row.fingerprint) {
+			chat.otherKey.clear();
+			saveChat(chat);
+		}
+	}
+	if (!packet.parsed) {
 		sendNotifyLayer(chat);
 		return;
 	}
@@ -1641,7 +1652,11 @@ void Manager::Impl::removeMessage(Chat &chat, int64_t randomId) {
 	forget(chat.row.chatId, randomId);
 	if (const auto message = findMessage(chat, randomId)) {
 		if (!message->media.path.empty()) {
-			QFile::remove(Qs(message->media.path));
+			const auto path = QFileInfo(Qs(message->media.path)).absoluteFilePath();
+			const auto root = QDir(mediaDir(chat.row.chatId)).absolutePath();
+			if (path.startsWith(root + '/')) {
+				QFile::remove(path);
+			}
 		}
 	}
 	chat.messages.erase(
@@ -2318,7 +2333,9 @@ void Manager::Impl::startTimer(Chat &chat, MessageData &data, int from) {
 	if (data.ttl <= 0 || data.expiresAt > 0 || data.special || data.deleted) {
 		return;
 	}
-	data.expiresAt = from + data.ttl;
+	data.expiresAt = int(std::min<int64_t>(
+		int64_t(from) + data.ttl,
+		std::numeric_limits<int>::max()));
 	scheduleExpire();
 }
 
@@ -2706,6 +2723,16 @@ void Manager::end(int chatId) {
 	remove(chatId);
 }
 
+void Manager::purge() {
+	auto ids = std::vector<int>();
+	for (const auto &[id, chat] : _impl->chats) {
+		ids.push_back(id);
+	}
+	for (const auto id : ids) {
+		remove(id);
+	}
+}
+
 void Manager::remove(int chatId) {
 	const auto chat = _impl->find(chatId);
 	if (!chat) {
@@ -2825,6 +2852,10 @@ void SaveState(not_null<Main::Session*> session, int qts, int date) {
 	row.qts = qts;
 	row.date = date;
 	AyuDatabase::saveSecretState(row);
+}
+
+void PurgeSession(not_null<Main::Session*> session) {
+	Get(session).purge();
 }
 
 Manager &Get(not_null<Main::Session*> session) {

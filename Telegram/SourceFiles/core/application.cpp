@@ -1454,7 +1454,7 @@ void Application::checkAutoLockIn(crl::time time) {
 }
 
 void Application::localPasscodeChanged() {
-	AyuSecret::SyncPolicy();
+	AyuSecret::HandlePasscodeChange();
 	_shouldLockAt = 0;
 	_autoLockTimer.cancel();
 	checkAutoLock(crl::now());

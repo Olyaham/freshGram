@@ -86,6 +86,7 @@ public:
 	void discard(int chatId);
 	void remove(int chatId);
 	void end(int chatId);
+	void purge();
 	void start(not_null<UserData*> user);
 
 	void sendText(int chatId, TextWithEntities text, int64 replyTo = 0);
@@ -127,5 +128,6 @@ struct StoredState {
 void SaveState(not_null<Main::Session*> session, int qts, int date);
 
 [[nodiscard]] Manager &Get(not_null<Main::Session*> session);
+void PurgeSession(not_null<Main::Session*> session);
 
 } // namespace AyuSecret
