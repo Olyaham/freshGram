@@ -871,7 +871,9 @@ void BlockParser::finalize(const TextParseOptions &options) {
 		if (block->flags() & TextBlockFlag::Spoiler) {
 			auto &spoiler = _t->ensureExtended()->spoiler;
 			if (!spoiler) {
-				spoiler = std::make_unique<SpoilerData>(_context.repaint);
+				spoiler = std::make_unique<SpoilerData>(_context.repaint
+					? _context.repaint
+					: Fn<void()>([] {}));
 			}
 		}
 		const auto shiftedIndex = block->linkIndex();
