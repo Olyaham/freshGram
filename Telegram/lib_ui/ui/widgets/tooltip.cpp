@@ -119,10 +119,11 @@ void Tooltip::popup(const QPoint &m, const QString &text, const style::Tooltip *
 #if QT_VERSION >= QT_VERSION_CHECK(6, 11, 0) && defined QT_FEATURE_wayland && QT_CONFIG(wayland)
 	using namespace QNativeInterface::Private;
 	create();
-	if (const auto native
-			= windowHandle()->nativeInterface<QWaylandWindow>()) {
-		// Tooltip::performShow ensures our window is active
-		const auto w = not_null(QApplication::activeWindow())->pos();
+	const auto active = QApplication::activeWindow();
+	if (const auto native = active
+			? windowHandle()->nativeInterface<QWaylandWindow>()
+			: nullptr) {
+		const auto w = active->pos();
 		native->setParentControlGeometry(
 			QRect(
 				QPoint(
