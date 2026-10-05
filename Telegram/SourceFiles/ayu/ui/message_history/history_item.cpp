@@ -89,6 +89,9 @@ void GenerateItems(
 		base::flags<MessageFlag> flags = MessageFlag::AdminLogEntry;
 		if (from) {
 			flags |= MessageFlag::HasFromId;
+			if (from->isSelf()) {
+				flags |= MessageFlag::Outgoing;
+			}
 		} else {
 			flags |= MessageFlag::HasPostAuthor;
 		}

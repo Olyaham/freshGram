@@ -3120,7 +3120,7 @@ void Session::updateEditedMessage(const MTPMessage &data) {
 		goto proceed;
 	}
 	edit = HistoryMessageEdition(_session, data.c_message());
-	if (settings.saveMessagesHistory() && !existing->isLocal() && !existing->author()->isSelf() && !edit.isEditHide) {
+	if (settings.saveMessagesHistory() && !existing->isLocal() && !edit.isEditHide) {
 		const auto &msg = existing->originalText();
 		const auto unchanged = edit.richPage
 			? (Iv::FlattenRichPageSummary(edit.richPage) == msg)

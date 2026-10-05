@@ -6,6 +6,7 @@
 // Copyright @Radolyn, 2026
 #include "ayu/data/ayu_database.h"
 
+#include "ayu/data/ayu_database_backup.h"
 #include "ayu/data/entities.h"
 #include "ayu/libs/sqlite/sqlite_orm.h"
 #include "base/unixtime.h"
@@ -423,12 +424,16 @@ void initialize() {
 	std::lock_guard lock(DatabaseMutex);
 	DatabaseReady = false;
 
+	[[maybe_unused]] const auto backedUp = AyuDatabaseBackup::create();
+
 	auto retriedBusy = false;
 	auto resetCorrupted = false;
+	auto restoreIndex = 0;
 	while (true) {
 		try {
 			prepareStorage();
 			DatabaseReady = true;
+			AyuDatabaseBackup::startPeriodic();
 			return;
 		} catch (const std::system_error &ex) {
 			const auto code = ex.code().value() & 0xFF;
@@ -439,10 +444,14 @@ void initialize() {
 				std::this_thread::sleep_for(std::chrono::milliseconds(500));
 				continue;
 			}
-			if (sqliteError && (code == kSqliteCorrupt || code == kSqliteNotADatabase) && !resetCorrupted) {
-				resetCorrupted = true;
+			if (sqliteError && (code == kSqliteCorrupt || code == kSqliteNotADatabase)) {
 				moveCurrentDatabase();
-				continue;
+				if (AyuDatabaseBackup::restore(restoreIndex)) {
+					continue;
+				} else if (!resetCorrupted) {
+					resetCorrupted = true;
+					continue;
+				}
 			}
 			break;
 		} catch (const std::exception &ex) {
