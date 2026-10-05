@@ -153,14 +153,18 @@ bool SendDocument(
 	outgoing.width = document->dimensions.width();
 	outgoing.height = document->dimensions.height();
 	if (const auto sticker = document->sticker()) {
-		if (!sticker->isStatic()) {
-			Ui::Toast::Show(tr::ayu_SecretNotSupported(tr::now));
-			return true;
-		}
 		outgoing.kind = MediaType::Sticker;
-		outgoing.mime = u"image/webp"_q;
-		outgoing.name = u"sticker.webp"_q;
 		outgoing.emoji = sticker->alt;
+		if (sticker->isLottie()) {
+			outgoing.mime = u"application/x-tgsticker"_q;
+			outgoing.name = u"sticker.tgs"_q;
+		} else if (sticker->isWebm()) {
+			outgoing.mime = u"video/webm"_q;
+			outgoing.name = u"sticker.webm"_q;
+		} else {
+			outgoing.mime = u"image/webp"_q;
+			outgoing.name = u"sticker.webp"_q;
+		}
 	} else if (document->isAnimation() && !document->isVideoMessage()) {
 		outgoing.kind = MediaType::Animation;
 		outgoing.mime = document->mimeString();

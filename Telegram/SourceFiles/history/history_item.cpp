@@ -3462,7 +3462,7 @@ bool HistoryItem::canDeleteForEveryone(TimeId now) const {
 }
 
 bool HistoryItem::canBeSelected() const {
-	return (isRegular() || isEphemeral())
+	return (isRegular() || isEphemeral() || isAyuSecret())
 		&& !isService()
 		&& !IsAnchoredEphemeral(this);
 }

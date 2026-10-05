@@ -13,9 +13,9 @@ using "ui/widgets/widgets.style";
 using "dialogs/dialogs.style";
 
 ayuSecretChatIcon: ThreeStateIcon {
-	icon: icon {{ "ayu/secret_lock", dialogsChatIconFg, point(2px, 6px) }};
-	over: icon {{ "ayu/secret_lock", dialogsChatIconFgOver, point(2px, 6px) }};
-	active: icon {{ "ayu/secret_lock", dialogsChatIconFgActive, point(2px, 6px) }};
+	icon: icon {{ "ayu/secret_lock", dialogsChatIconFg, point(2px, 4px) }};
+	over: icon {{ "ayu/secret_lock", dialogsChatIconFgOver, point(2px, 4px) }};
+	active: icon {{ "ayu/secret_lock", dialogsChatIconFgActive, point(2px, 4px) }};
 }
 
 ayuGhostIcon: icon {{ "ayu/ghost", menuIconColor }};
