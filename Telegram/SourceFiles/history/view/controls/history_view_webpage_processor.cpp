@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/controls/history_view_webpage_processor.h"
 
+#include "ayu/secret/secret_peer.h"
 #include "base/unixtime.h"
 #include "data/data_chat_participant_status.h"
 #include "data/data_file_origin.h"
@@ -356,7 +357,8 @@ void WebpageProcessor::checkNow(bool force) {
 
 void WebpageProcessor::checkPreview() {
 	const auto previewRestricted = _history->peer
-		&& _history->peer->amRestricted(ChatRestriction::EmbedLinks);
+		&& (AyuSecret::IsSecretPeer(_history->peer)
+			|| _history->peer->amRestricted(ChatRestriction::EmbedLinks));
 	if (_parsedLinks.empty()) {
 		_draft.removed = false;
 	}

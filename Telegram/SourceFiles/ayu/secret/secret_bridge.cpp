@@ -154,7 +154,8 @@ struct DocumentRef {
 		if (type == ::EntityType::Invalid
 			|| entity.length <= 0
 			|| entity.offset < 0
-			|| entity.offset + entity.length > text.size()) {
+			|| entity.offset > text.size()
+			|| entity.length > text.size() - entity.offset) {
 			continue;
 		}
 		result.entities.push_back(EntityInText(
