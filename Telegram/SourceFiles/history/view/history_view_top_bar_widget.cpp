@@ -143,6 +143,7 @@ TopBarWidget::TopBarWidget(
 , _menuToggle(this, st::topBarMenuToggle)
 , _recentActions(this, st::topBarRecentActions)
 , _admins(this, st::topBarAdmins)
+, _peek(this, st::topBarPeek)
 , _titlePeerText(st::windowMinWidth / 3)
 , _onlineUpdater([=] { updateOnlineDisplay(); }) {
 	setAttribute(Qt::WA_OpaquePaintEvent);
@@ -196,6 +197,14 @@ TopBarWidget::TopBarWidget(
 			_activeChat.key.peer(),
 			ParticipantsBoxController::Role::Admins
 		);
+	});
+	_peek->setAccessibleName(tr::ayu_PeekButton(tr::now));
+	_peek->setClickedCallback([=] {
+		if (const auto peer = _activeChat.key.peer()) {
+			if (const auto user = peer->asUser()) {
+				AyuPeek::start(user);
+			}
+		}
 	});
 
 	AyuSettings::getInstance().quickAdminShortcutsChanges(
@@ -270,6 +279,10 @@ TopBarWidget::TopBarWidget(
 			}
 		} else if ((update.flags & UpdateFlag::Rights)
 			&& (_activeChat.key.peer() == update.peer)) {
+			updateControlsVisibility();
+		}
+		if ((update.flags & UpdateFlag::OnlineStatus)
+			&& (update.peer == _activeChat.key.peer())) {
 			updateControlsVisibility();
 		}
 		if ((update.flags & UpdateFlag::OnlineStatus)
@@ -1380,6 +1393,23 @@ void TopBarWidget::updateControlsGeometry() {
 		_rightTaken += _admins->width();
 	}
 
+	const auto searchTaken = _search->isHidden()
+		? 0
+		: (_search->width() + st::topBarCallSkip);
+	const auto peekRoom = width()
+		- _leftTaken
+		- _rightTaken
+		- searchTaken
+		- _peek->width()
+		- st::topBarNameRightPadding;
+	const auto peekShown = _peekWanted
+		&& (peekRoom >= st::topBarPeekMinNameWidth);
+	_peek->setVisible(peekShown);
+	_peek->moveToRight(_rightTaken, otherButtonsTop);
+	if (peekShown) {
+		_rightTaken += _peek->width();
+	}
+
 	_search->moveToRight(_rightTaken, otherButtonsTop);
 	if (!_search->isHidden()) {
 		_rightTaken += _search->width() + st::topBarCallSkip;
@@ -1539,6 +1569,10 @@ void TopBarWidget::updateControlsVisibility() {
 		return false;
 	}();
 	_admins->setVisible(showAdmins);
+	_peekWanted = historyMode
+		&& !_chooseForReportReason
+		&& !_activeChat.key.topic()
+		&& AyuPeek::shouldOffer(_activeChat.key.peer());
 
 	const auto callsEnabled = [&] {
 		if (const auto peer = _activeChat.key.peer()) {

@@ -5,6 +5,7 @@
 
 #include <optional>
 
+class PeerData;
 class UserData;
 
 namespace Main {
@@ -25,6 +26,7 @@ struct Result {
 };
 
 [[nodiscard]] bool available(not_null<UserData*> user);
+[[nodiscard]] bool shouldOffer(PeerData *peer);
 
 void start(not_null<UserData*> user);
 void restoreIfNeeded(not_null<Main::Session*> session);

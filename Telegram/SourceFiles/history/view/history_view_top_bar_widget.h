@@ -262,6 +262,8 @@ private:
 	object_ptr<Ui::IconButton> _menuToggle;
 	object_ptr<Ui::IconButton> _recentActions;
 	object_ptr<Ui::IconButton> _admins;
+	object_ptr<Ui::IconButton> _peek;
+	bool _peekWanted = false;
 	base::unique_qptr<Ui::PopupMenu> _menu;
 	base::weak_qptr<Ui::IconButton> _menuButton;
 

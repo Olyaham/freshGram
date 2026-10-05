@@ -59,6 +59,22 @@ topBarRecentActions: IconButton {
 	}
 }
 
+topBarPeek: IconButton {
+	width: 40px;
+	height: topBarHeight;
+
+	icon: icon {{ "menu/info", menuIconFg }};
+	iconOver: icon {{ "menu/info", menuIconFgOver }};
+	iconPosition: point(8px, 15px);
+
+	rippleAreaPosition: point(0px, 7px);
+	rippleAreaSize: 40px;
+	ripple: RippleAnimation(defaultRippleAnimation) {
+		color: windowBgOver;
+	}
+}
+topBarPeekMinNameWidth: 120px;
+
 unreadPillPadding: 12px;
 
 infoProfileLabeledButtonRegistrationDate: IconButton(defaultIconButton) {

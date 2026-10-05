@@ -316,6 +316,15 @@ bool available(not_null<UserData*> user) {
 		&& !user->session().user()->isPremium();
 }
 
+bool shouldOffer(PeerData *peer) {
+	const auto user = peer ? peer->asUser() : nullptr;
+	if (!user || !available(user)) {
+		return false;
+	}
+	const auto &lastseen = user->lastseen();
+	return lastseen.isHidden() && !lastseen.isLocalOnlineValue();
+}
+
 void start(not_null<UserData*> user) {
 	const auto session = &user->session();
 	if (session->user()->isPremium()) {
