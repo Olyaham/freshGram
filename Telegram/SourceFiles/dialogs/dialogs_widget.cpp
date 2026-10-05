@@ -109,6 +109,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtWidgets/QTextEdit>
 
 #include "ayu/ayu_settings.h"
+#include "ayu/utils/id_search.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "base/platform/base_platform_haptic.h"
 
@@ -119,62 +120,6 @@ namespace {
 constexpr auto kSearchPerPage = 50;
 constexpr auto kStoriesExpandDuration = crl::time(200);
 constexpr auto kSearchRequestDelay = crl::time(900);
-
-enum class IdSearchType {
-	None,
-	UserOnly,
-	ChatOnly,
-	Both,
-};
-
-struct IdSearchQuery {
-	IdSearchType type = IdSearchType::None;
-	qint64 id = 0;
-};
-
-[[nodiscard]] bool IsNumericString(const QString &str) {
-	if (str.isEmpty()) {
-		return false;
-	}
-	for (const auto &ch : str) {
-		if (!ch.isDigit()) {
-			return false;
-		}
-	}
-	return true;
-}
-
-[[nodiscard]] IdSearchQuery ParseIdSearchQuery(const QString &query) {
-	if (query.startsWith(u"id:"_q, Qt::CaseInsensitive)
-		|| query.startsWith(u"id "_q, Qt::CaseInsensitive)) {
-		const auto idPart = query.mid(3).trimmed();
-		if (idPart.startsWith(u"-100"_q)) {
-			const auto chatId = idPart.mid(4);
-			if (chatId.length() >= 1 && IsNumericString(chatId)) {
-				return { IdSearchType::ChatOnly, chatId.toLongLong() };
-			}
-			return {};
-		}
-		if (idPart.length() >= 5 && IsNumericString(idPart)) {
-			return { IdSearchType::Both, idPart.toLongLong() };
-		}
-		return {};
-	}
-
-	if (query.startsWith(u"-100"_q)) {
-		const auto idPart = query.mid(4);
-		if (idPart.length() >= 1 && IsNumericString(idPart)) {
-			return { IdSearchType::ChatOnly, idPart.toLongLong() };
-		}
-		return {};
-	}
-
-	if (query.length() >= 5 && IsNumericString(query)) {
-		return { IdSearchType::UserOnly, query.toLongLong() };
-	}
-
-	return {};
-}
 
 base::options::toggle OptionForumHideChatsList({
 	.id = kOptionForumHideChatsList,
@@ -3354,8 +3299,8 @@ bool Widget::search(bool inCache, SearchRequestDelay delay) {
 	}
 
 	const auto isGlobalSearch = !inPeer;
-	const auto idQuery = ParseIdSearchQuery(query);
-	const auto shouldIdSearch = isGlobalSearch && (idQuery.type != IdSearchType::None);
+	const auto idQuery = AyuIdSearch::Parse(query);
+	const auto shouldIdSearch = isGlobalSearch && idQuery.valid();
 
 	if (!isGlobalSearch || _idSearchQuery != query) {
 		if (!_idSearchResults.empty() || !_idSearchQuery.isEmpty()) {
@@ -3373,7 +3318,7 @@ bool Widget::search(bool inCache, SearchRequestDelay delay) {
 
 		_idSearchQuery = currentQuery;
 
-		if (searchType == IdSearchType::UserOnly || searchType == IdSearchType::Both) {
+		if (idQuery.canBeUser()) {
 			searchUserById(id, &session(), [=](const QString &, PeerData *peer) {
 				crl::on_main(weak, [=] {
 					if (_idSearchQuery != currentQuery) {
@@ -3387,7 +3332,7 @@ bool Widget::search(bool inCache, SearchRequestDelay delay) {
 			});
 		}
 
-		if (searchType == IdSearchType::ChatOnly || searchType == IdSearchType::Both) {
+		if (idQuery.canBeChat()) {
 			searchChatById(id, &session(), [=](const QString &, PeerData *peer) {
 				crl::on_main(weak, [=] {
 					if (_idSearchQuery != currentQuery) {

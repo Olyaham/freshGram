@@ -43,6 +43,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/window_session_controller.h"
 #include "info/profile/info_profile_icon.h"
 #include "apiwrap.h"
+#include "ayu/utils/id_search.h"
 #include "styles/style_boxes.h"
 #include "styles/style_edit_peer_members.h"
 #include "styles/style_layers.h"
@@ -1764,11 +1765,20 @@ void AddSpecialBoxSearchController::searchQuery(const QString &query) {
 		_chatsContactsAdded = false;
 		_chatMembersAdded = false;
 		_globalLoaded = false;
+		addUserById();
 		if (!_query.isEmpty() && !searchParticipantsInCache()) {
 			_timer.callOnce(AutoSearchTimeout);
 		} else {
 			_timer.cancel();
 		}
+	}
+}
+
+void AddSpecialBoxSearchController::addUserById() {
+	const auto query = AyuIdSearch::Parse(_query.trimmed());
+	if (const auto user = AyuIdSearch::FindUser(&_peer->session(), query)) {
+		delegate()->peerListSearchAddRow(user);
+		delegate()->peerListSearchRefreshRows();
 	}
 }
 

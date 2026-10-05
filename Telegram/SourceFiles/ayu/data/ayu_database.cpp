@@ -9,6 +9,7 @@
 #include "ayu/data/ayu_database_backup.h"
 #include "ayu/data/entities.h"
 #include "ayu/libs/sqlite/sqlite_orm.h"
+#include "ayu/utils/id_search.h"
 #include "base/unixtime.h"
 
 #include <chrono>
@@ -555,6 +556,9 @@ std::vector<DeletedMessage> getDeletedMessages(ID userId, ID dialogId, ID topicI
 			escaped += c;
 		}
 		const auto pattern = "%" + escaped + "%";
+		const auto idQuery = AyuIdSearch::Parse(
+			QString::fromStdString(searchQuery).trimmed());
+		const auto senderId = idQuery.valid() ? ID(idQuery.id) : ID(-1);
 		return storage.get_all<DeletedMessage>(
 			where(
 				column<DeletedMessage>(&DeletedMessage::userId) == userId and
@@ -562,7 +566,8 @@ std::vector<DeletedMessage> getDeletedMessages(ID userId, ID dialogId, ID topicI
 				(column<DeletedMessage>(&DeletedMessage::topicId) == topicId or topicId == 0) and
 				(column<DeletedMessage>(&DeletedMessage::messageId) > minId or minId == 0) and
 				(column<DeletedMessage>(&DeletedMessage::messageId) < maxId or maxId == 0) and
-				like(column<DeletedMessage>(&DeletedMessage::text), pattern, "\\")
+				(like(column<DeletedMessage>(&DeletedMessage::text), pattern, "\\") or
+				column<DeletedMessage>(&DeletedMessage::fromId) == senderId)
 			),
 			order_by(column<DeletedMessage>(&DeletedMessage::messageId)).desc(),
 			limit(totalLimit)
