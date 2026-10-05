@@ -21,6 +21,20 @@
 namespace AyuRestore {
 namespace {
 
+[[nodiscard]] UserData *unknownSender(Data::Session &owner, ID id) {
+	const auto user = owner.user(UserId(uint64(id)));
+	if (!user->isLoaded()) {
+		user->setName(
+			QString("unknown user (id: %1)").arg(id),
+			QString(),
+			QString(),
+			QString());
+		user->setFlags(user->flags() | UserDataFlag::Deleted);
+		user->setLoadedStatus(PeerData::LoadedStatus::Normal);
+	}
+	return user;
+}
+
 constexpr auto kLoadLimit = 800;
 constexpr auto kCreateBatch = 60;
 constexpr auto kOutgoingFlag = 0x00000002;
@@ -290,6 +304,9 @@ HistoryItem *State::create(Row &row) {
 	}
 	if (!from) {
 		from = owner.chatLoaded(message.fromId);
+	}
+	if (!from && message.fromId && !peer->isUser() && !peer->isBroadcast()) {
+		from = unknownSender(owner, message.fromId);
 	}
 
 	auto flags = MessageFlags(MessageFlag::Local);

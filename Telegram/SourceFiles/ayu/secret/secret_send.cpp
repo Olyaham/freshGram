@@ -61,6 +61,10 @@ struct Target {
 	return true;
 }
 
+void Announce(const Api::SendAction &action) {
+	action.history->session().api().sendAction(action);
+}
+
 void ObtainBytes(
 		not_null<DocumentData*> document,
 		Fn<void(QByteArray)> done) {
@@ -148,6 +152,7 @@ bool SendDocument(
 	if (!Ready(*target)) {
 		return true;
 	}
+	Announce(message.action);
 	auto outgoing = OutgoingFile();
 	outgoing.replyTo = target->replyTo;
 	outgoing.width = document->dimensions.width();
@@ -197,6 +202,7 @@ bool SendText(const Api::MessageToSend &message) {
 	if (text.text.trimmed().isEmpty()) {
 		return true;
 	}
+	Announce(message.action);
 	Get(target->session).sendText(
 		target->chatId,
 		std::move(text),
@@ -212,6 +218,7 @@ bool SendFiles(Ui::PreparedList &list, const Api::SendAction &action) {
 	if (!Ready(*target)) {
 		return true;
 	}
+	Announce(action);
 	auto replyTo = target->replyTo;
 	for (auto &file : list.files) {
 		auto outgoing = OutgoingFile();
@@ -239,6 +246,7 @@ bool SendBytes(const QByteArray &bytes, const Api::SendAction &action) {
 	if (!Ready(*target)) {
 		return true;
 	}
+	Announce(action);
 	auto outgoing = OutgoingFile();
 	outgoing.bytes = bytes;
 	outgoing.replyTo = target->replyTo;
@@ -259,6 +267,7 @@ bool SendVoice(
 	if (!Ready(*target)) {
 		return true;
 	}
+	Announce(action);
 	auto outgoing = OutgoingFile();
 	outgoing.bytes = bytes;
 	outgoing.replyTo = target->replyTo;

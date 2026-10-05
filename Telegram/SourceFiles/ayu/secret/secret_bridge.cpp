@@ -943,17 +943,24 @@ void Bridge::historyClearedByUser(not_null<History*> history) {
 		return;
 	}
 	const auto i = _bindings.find(chatId);
-	if (i != _bindings.end()) {
-		for (const auto &[randomId, msgId] : i->second.items) {
-			_byMsg.erase(msgId);
-		}
-		i->second.items.clear();
-	}
 	_refreshing = true;
 	const auto guard = gsl::finally([&] { _refreshing = false; });
+	if (i != _bindings.end()) {
+		auto &owner = _session->data();
+		const auto user = i->second.user;
+		for (const auto &[randomId, msgId] : i->second.items) {
+			_byMsg.erase(msgId);
+			if (const auto item = owner.message(user, msgId)) {
+				item->destroy();
+			}
+		}
+		i->second.items.clear();
+		i->second.requested.clear();
+	}
 	_manager->clearHistory(chatId);
 	if (i != _bindings.end()) {
 		i->second.revision = _manager->revision(chatId);
+		_session->data().sendHistoryChangeNotifications();
 	}
 }
 
