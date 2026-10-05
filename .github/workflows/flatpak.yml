@@ -1,0 +1,50 @@
+name: Flatpak
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag whose Linux tarball is packed into freshGram.flatpak (for example v7.3.0)
+        type: string
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  flatpak:
+    name: Flatpak bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.event.inputs.release_tag }}
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v4
+
+      - name: Download the Linux tarball
+        run: |
+          mkdir -p work/root
+          gh release download "$TAG" --pattern freshGram-linux-x86_64.tar.gz --dir work
+          tar -C work/root -xzf work/freshGram-linux-x86_64.tar.gz
+
+      - name: Build the bundle
+        run: Telegram/build/flatpak/build.sh work/root/usr dist/freshGram.flatpak
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: freshGram-flatpak
+          path: dist/freshGram.flatpak
+          retention-days: 7
+
+      - name: Attach to the release
+        run: |
+          gh release download "$TAG" --pattern SHA256SUMS --dir dist --clobber || true
+          touch dist/SHA256SUMS
+          grep -v ' freshGram.flatpak$' dist/SHA256SUMS > dist/SHA256SUMS.new || true
+          (cd dist && sha256sum freshGram.flatpak >> SHA256SUMS.new)
+          mv dist/SHA256SUMS.new dist/SHA256SUMS
+          gh release upload "$TAG" dist/freshGram.flatpak dist/SHA256SUMS --clobber
