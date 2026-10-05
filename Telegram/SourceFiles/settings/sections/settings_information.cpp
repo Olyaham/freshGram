@@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "settings/sections/settings_information.h"
 
+#include "ayu/features/streamer_mode/streamer_mode.h"
+#include "ui/text/text_utilities.h"
+
 #include "settings/sections/settings_main.h"
 #include "settings/settings_builder.h"
 #include "settings/settings_common_session.h"
@@ -654,7 +657,9 @@ void SetupRows(
 		tr::lng_settings_username_add()
 	) | rpl::map([](const TextWithEntities &username, const QString &add) {
 		if (!username.text.isEmpty()) {
-			return username;
+			return AyuFeatures::StreamerMode::spoilersActive()
+				? Ui::Text::Wrapped(username, EntityType::Spoiler)
+				: username;
 		}
 		auto result = TextWithEntities{ add };
 		result.entities.push_back({

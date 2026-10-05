@@ -1112,6 +1112,21 @@ void AyuSettings::setStreamerMode(bool val) {
 	if (_streamerMode.current() == val) return;
 	_streamerMode = val;
 	AyuFeatures::StreamerMode::apply(val);
+	repaintApp();
+	save();
+}
+
+void AyuSettings::setStreamerHideWholeWindow(bool val) {
+	if (_streamerHideWholeWindow.current() == val) return;
+	_streamerHideWholeWindow = val;
+	AyuFeatures::StreamerMode::apply(_streamerMode.current());
+	save();
+}
+
+void AyuSettings::setStreamerSpoilers(bool val) {
+	if (_streamerSpoilers.current() == val) return;
+	_streamerSpoilers = val;
+	repaintApp();
 	save();
 }
 
@@ -1215,6 +1230,8 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"avatarCorners", s._avatarCorners.current()},
 		{"singleCornerRadius", s._singleCornerRadius.current()},
 		{"streamerMode", s._streamerMode.current()},
+		{"streamerHideWholeWindow", s._streamerHideWholeWindow.current()},
+		{"streamerSpoilers", s._streamerSpoilers.current()},
 		{"messageShotSettings", s._messageShotSettings}
 	};
 }
@@ -1323,6 +1340,8 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._avatarCorners = j.value("avatarCorners", defaults._avatarCorners.current());
 	s._singleCornerRadius = j.value("singleCornerRadius", defaults._singleCornerRadius.current());
 	s._streamerMode = j.value("streamerMode", defaults._streamerMode.current());
+	s._streamerHideWholeWindow = j.value("streamerHideWholeWindow", defaults._streamerHideWholeWindow.current());
+	s._streamerSpoilers = j.value("streamerSpoilers", defaults._streamerSpoilers.current());
 
 	if (j.contains("messageShotSettings") && j["messageShotSettings"].is_object()) {
 		j["messageShotSettings"].get_to(s._messageShotSettings);

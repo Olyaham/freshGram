@@ -8,6 +8,7 @@
 
 #include "ayu/ayu_settings.h"
 #include "ayu/ayu_ui_settings.h"
+#include "ayu/features/streamer_mode/streamer_mode.h"
 #include "media/streaming/media_streaming_common.h"
 #include "ui/image/image_prepare.h"
 #include "ui/style/style_core.h"
@@ -50,7 +51,8 @@ bool IsCircle() {
 
 uint8 PackedState() {
 	return uint8(AyuUiSettings::getAvatarCorners() & 0x1F)
-		| (AyuSettings::getInstance().singleCornerRadius() ? 0x20 : 0);
+		| (AyuSettings::getInstance().singleCornerRadius() ? 0x20 : 0)
+		| (AyuFeatures::StreamerMode::spoilersActive() ? 0x40 : 0);
 }
 
 void PaintShape(QPainter &p, int x, int y, int size) {

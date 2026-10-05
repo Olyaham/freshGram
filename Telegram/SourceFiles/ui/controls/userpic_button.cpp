@@ -60,6 +60,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QClipboard>
 #include <QtGui/QGuiApplication>
 
+#include "ayu/features/streamer_mode/streamer_mode.h"
 #include "ayu/ui/ayu_userpic.h"
 
 
@@ -728,6 +729,7 @@ void UserpicButton::paintEvent(QPaintEvent *e) {
 void UserpicButton::paintUserpicFrame(Painter &p, QPoint photoPosition) {
 	checkStreamedIsStarted();
 	if (_streamed
+		&& !AyuFeatures::StreamerMode::spoilersActive()
 		&& _streamed->player().ready()
 		&& !_streamed->player().videoSize().isEmpty()) {
 		const auto paused = _controller

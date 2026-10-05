@@ -449,6 +449,11 @@ public:
 		Ui::PeerUserpicView &view,
 		int size,
 		std::optional<int> radius = {});
+	[[nodiscard]] static QImage GenerateUserpicImageRaw(
+		not_null<PeerData*> peer,
+		Ui::PeerUserpicView &view,
+		int size,
+		std::optional<int> radius);
 	[[nodiscard]] ImageLocation userpicLocation() const;
 
 	static constexpr auto kUnknownPhotoId = PhotoId(0xFFFFFFFFFFFFFFFFULL);

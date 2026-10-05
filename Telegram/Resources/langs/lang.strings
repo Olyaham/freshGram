@@ -9057,6 +9057,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_StreamerModeToggle" = "Streamer Mode";
 "ayu_EnableStreamerModeTray" = "Enable Streamer Mode";
 "ayu_DisableStreamerModeTray" = "Disable Streamer Mode";
+"ayu_StreamerModeHeader" = "Streamer Mode";
+"ayu_StreamerHideWholeWindow" = "Hide the whole window";
+"ayu_StreamerSpoilers" = "Hide photos, avatars and personal data";
+"ayu_StreamerSpoilersDescription" = "Photos, videos, avatars, usernames, IDs, phone numbers and registration dates are hidden behind spoilers while Streamer Mode is on.";
 "ayu_EditsHistoryTitle" = "Edits History";
 "ayu_EditsHistoryMenuText" = "History";
 "ayu_PeekOnlineMenuText" = "Peek Online";

@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/features/streamer_mode/streamer_mode.h"
 #include "ayu/secret/secret_peer.h"
 #include "history/history_widget.h"
 
@@ -976,6 +977,27 @@ HistoryWidget::HistoryWidget(
 					view->unloadHeavyPart();
 				}
 			}
+		}
+	}, lifetime());
+
+	AyuFeatures::StreamerMode::spoilersActiveValue(
+	) | rpl::skip(1) | rpl::on_next([=](bool) {
+		if (!_history) {
+			return;
+		}
+		auto items = std::vector<not_null<HistoryItem*>>();
+		for (const auto &block : _history->blocks) {
+			for (const auto &view : block->messages) {
+				const auto item = view->data();
+				if (const auto media = item->media()) {
+					if (media->photo() || media->document()) {
+						items.push_back(item);
+					}
+				}
+			}
+		}
+		for (const auto item : items) {
+			session().data().requestItemViewRefresh(item);
 		}
 	}, lifetime());
 

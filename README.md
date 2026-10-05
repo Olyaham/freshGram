@@ -21,7 +21,7 @@ The source code is published under GPLv3 with OpenSSL exception, the license is 
 - Service messages (for example, "user joined") are kept when deleted, the same way as normal ones
 - Chats and channels deleted by the other side, that you were removed from or that you deleted yourself stay in the chats list together with the saved messages (deleting the chat once more removes it for real)
 - Font customization
-- Streamer mode
+- Streamer mode: hides photos, videos, avatars, usernames, IDs, phone numbers and registration dates behind spoilers on every platform, and on Windows and macOS can also hide the whole window from screen capture (both parts are configurable there)
 - Local Telegram Premium
 - Translator
 - Media preview and quick reaction on force click (macOS)

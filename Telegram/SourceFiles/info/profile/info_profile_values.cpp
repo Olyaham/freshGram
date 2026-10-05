@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "api/api_chat_participants.h"
 #include "apiwrap.h"
+#include "ayu/features/streamer_mode/streamer_mode.h"
 #include "info/profile/info_profile_phone_menu.h"
 #include "info/profile/info_profile_badge.h"
 #include "core/application.h"
@@ -346,16 +347,16 @@ rpl::producer<TextWithEntities> PhoneWithSpoilerValue(
 		not_null<UserData*> user,
 		rpl::producer<TextWithEntities> phone) {
 	if (!user->isSelf()) {
-		return phone;
+		return AyuFeatures::StreamerMode::spoilered(std::move(phone));
 	}
-	return rpl::combine(
+	return AyuFeatures::StreamerMode::spoilered(rpl::combine(
 		std::move(phone),
 		user->session().settings().phoneNumberHiddenValue()
 	) | rpl::map([](const TextWithEntities &phone, bool hidden) {
 		return hidden
 			? Ui::Text::Wrapped(phone, EntityType::Spoiler)
 			: phone;
-	});
+	}));
 }
 
 void CopyPhoneToClipboard(rpl::producer<TextWithEntities> phone) {

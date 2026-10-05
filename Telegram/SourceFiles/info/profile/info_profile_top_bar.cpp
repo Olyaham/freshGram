@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "info/profile/info_profile_top_bar.h"
 
+#include "ayu/features/streamer_mode/streamer_mode.h"
+
 #include "api/api_peer_colors.h"
 #include "api/api_peer_photo.h"
 #include "api/api_user_privacy.h"
@@ -2788,7 +2790,9 @@ void TopBar::paintUserpic(QPainter &p, const QRect &geometry) {
 		p.drawImage(geometry, _cachedUserpic);
 		return;
 	}
-	if (_videoUserpicPlayer && _videoUserpicPlayer->ready()) {
+	if (_videoUserpicPlayer
+		&& _videoUserpicPlayer->ready()
+		&& !AyuFeatures::StreamerMode::spoilersActive()) {
 		const auto size = st::infoProfileTopBarPhotoSize;
 		const auto paused = _gifPausedChecker();
 		const auto frame = _videoUserpicPlayer->frame(

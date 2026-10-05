@@ -289,6 +289,26 @@ void BuildTrayElements(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	ayu.addSectionDivider();
 }
 
+#if defined Q_OS_WIN || defined Q_OS_MAC
+void BuildStreamerMode(SectionBuilder &builder, AyuSectionBuilder &ayu) {
+	builder.addSubsectionTitle(tr::ayu_StreamerModeHeader());
+
+	ayu.addSettingToggle({
+		.id = u"ayu/streamerHideWholeWindow"_q,
+		.title = tr::ayu_StreamerHideWholeWindow(),
+		.getter = &AyuSettings::streamerHideWholeWindow,
+		.setter = &AyuSettings::setStreamerHideWholeWindow,
+	});
+	ayu.addSettingToggle({
+		.id = u"ayu/streamerSpoilers"_q,
+		.title = tr::ayu_StreamerSpoilers(),
+		.getter = &AyuSettings::streamerSpoilers,
+		.setter = &AyuSettings::setStreamerSpoilers,
+	});
+	builder.addDividerText(tr::ayu_StreamerSpoilersDescription());
+}
+#endif
+
 void BuildDrawerElements(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	builder.addSubsectionTitle(tr::ayu_DrawerElementsHeader());
 
@@ -403,6 +423,9 @@ const auto kMeta = BuildHelper({
 	BuildChatFolders(builder, ayu);
 	BuildTrayElements(builder, ayu);
 	BuildDrawerElements(builder, ayu);
+#if defined Q_OS_WIN || defined Q_OS_MAC
+	BuildStreamerMode(builder, ayu);
+#endif
 	builder.addSkip();
 });
 

@@ -118,6 +118,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QClipboard>
 
 #include "ayu/features/peek/peek_online.h"
+#include "ayu/features/streamer_mode/streamer_mode.h"
 #include "ayu/ui/utils/ayu_profile_values.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "styles/style_ayu_styles.h"
@@ -1787,17 +1788,18 @@ Section DetailsFiller::makeInfo() {
 
 		const auto usernameLine = addInfoOneLine(
 			UsernamesSubtext(_peer, tr::lng_info_username_label()),
-			UsernameValue(user, true) | rpl::map([=](TextWithEntities u) {
-				return u.text.isEmpty()
-					? TextWithEntities()
-					: tr::link(u, UsernameUrl(user, u.text.mid(1)));
-			}),
+			AyuFeatures::StreamerMode::spoilered(
+				UsernameValue(user, true) | rpl::map([=](TextWithEntities u) {
+					return u.text.isEmpty()
+						? TextWithEntities()
+						: tr::link(u, UsernameUrl(user, u.text.mid(1)));
+				})),
 			QString(),
 			st::infoProfileLabeledUsernamePadding);
 		if (Core::App().settings().birthDateEnabled()) {
 			addInfoOneLine(
 				tr::lng_freshgram_info_registration(),
-				RegistrationValue(user),
+				AyuFeatures::StreamerMode::spoilered(RegistrationValue(user)),
 				tr::lng_context_copy_text(tr::now));
 		}
 		if (user->hasUserpic() && Core::App().settings().datacenterEnabled()) {
@@ -1901,7 +1903,7 @@ Section DetailsFiller::makeInfo() {
 			});
 			auto idInfo = addInfoOneLine(
 				rpl::single(idLabel),
-				std::move(idDrawableText),
+				AyuFeatures::StreamerMode::spoilered(std::move(idDrawableText)),
 				tr::ayu_ContextCopyID(tr::now)
 			);
 
@@ -1939,7 +1941,7 @@ Section DetailsFiller::makeInfo() {
 			(topicRootId
 				? TopicSubtext(_peer)
 				: UsernamesSubtext(_peer, tr::lng_info_link_label())),
-			std::move(linkText),
+			AyuFeatures::StreamerMode::spoilered(std::move(linkText)),
 			QString());
 		const auto controller = _controller->parentController();
 		const auto linkCallback = UsernamesLinkCallback(
@@ -2017,7 +2019,7 @@ Section DetailsFiller::makeInfo() {
 			});
 			auto idInfo = addInfoOneLine(
 				idLabel,
-				std::move(idDrawableText),
+				AyuFeatures::StreamerMode::spoilered(std::move(idDrawableText)),
 				tr::ayu_ContextCopyID(tr::now)
 			);
 
@@ -2042,7 +2044,7 @@ Section DetailsFiller::makeInfo() {
 			});
 			auto idInfo = addInfoOneLine(
 				rpl::single(u"ID"_q),
-				std::move(idDrawableText),
+				AyuFeatures::StreamerMode::spoilered(std::move(idDrawableText)),
 				tr::ayu_ContextCopyID(tr::now)
 			);
 

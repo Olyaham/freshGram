@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "ui/userpic_view.h"
 
+#include "ayu/features/streamer_mode/streamer_mode.h"
 #include "ui/empty_userpic.h"
 #include "ui/painter.h"
 #include "ui/image/image_prepare.h"
@@ -210,6 +211,9 @@ void ValidateUserpicCache(
 		} else {
 			empty->paintCircle(p, 0, 0, size, size);
 		}
+	}
+	if (AyuFeatures::StreamerMode::spoilersActive()) {
+		AyuFeatures::StreamerMode::spoilerImage(view.cached);
 	}
 }
 

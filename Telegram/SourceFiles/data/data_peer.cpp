@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/features/streamer_mode/streamer_mode.h"
 #include "ayu/secret/secret_bridge.h"
 #include "ayu/secret/secret_peer.h"
 #include "data/data_peer.h"
@@ -490,6 +491,18 @@ InMemoryKey PeerData::userpicUniqueKey(Ui::PeerUserpicView &view) const {
 }
 
 QImage PeerData::GenerateUserpicImage(
+		not_null<PeerData*> peer,
+		Ui::PeerUserpicView &view,
+		int size,
+		std::optional<int> radius) {
+	auto result = GenerateUserpicImageRaw(peer, view, size, radius);
+	if (AyuFeatures::StreamerMode::spoilersActive()) {
+		AyuFeatures::StreamerMode::spoilerImage(result);
+	}
+	return result;
+}
+
+QImage PeerData::GenerateUserpicImageRaw(
 		not_null<PeerData*> peer,
 		Ui::PeerUserpicView &view,
 		int size,

@@ -9,6 +9,7 @@
 #include "ayu/libs/json.hpp"
 #include "ayu/libs/json_ext.hpp"
 #include "rpl/lifetime.h"
+#include <QtCore/QtGlobal>
 #include "rpl/producer.h"
 #include "rpl/variable.h"
 
@@ -338,9 +339,21 @@ public:
 	[[nodiscard]] bool showSReadToggleInDrawer() const { return _showSReadToggleInDrawer.current(); }
 	[[nodiscard]] bool showNightModeToggleInDrawer() const { return _showNightModeToggleInDrawer.current(); }
 	[[nodiscard]] bool showGhostToggleInDrawer() const { return _showGhostToggleInDrawer.current(); }
-	[[nodiscard]] bool showStreamerToggleInDrawer() const { return _showStreamerToggleInDrawer.current(); }
+	[[nodiscard]] bool showStreamerToggleInDrawer() const {
+#ifdef Q_OS_LINUX
+		return true;
+#else // Q_OS_LINUX
+		return _showStreamerToggleInDrawer.current();
+#endif // Q_OS_LINUX
+	}
 	[[nodiscard]] bool showGhostToggleInTray() const { return _showGhostToggleInTray.current(); }
-	[[nodiscard]] bool showStreamerToggleInTray() const { return _showStreamerToggleInTray.current(); }
+	[[nodiscard]] bool showStreamerToggleInTray() const {
+#ifdef Q_OS_LINUX
+		return true;
+#else // Q_OS_LINUX
+		return _showStreamerToggleInTray.current();
+#endif // Q_OS_LINUX
+	}
 	[[nodiscard]] const QString &monoFont() const { return _monoFont.current(); }
 	[[nodiscard]] bool hideNotificationCounters() const { return _hideNotificationCounters.current(); }
 	[[nodiscard]] bool hideNotificationBadge() const { return _hideNotificationBadge.current(); }
@@ -363,6 +376,8 @@ public:
 	[[nodiscard]] int avatarCorners() const { return _avatarCorners.current(); }
 	[[nodiscard]] bool singleCornerRadius() const { return _singleCornerRadius.current(); }
 	[[nodiscard]] bool streamerMode() const { return _streamerMode.current(); }
+	[[nodiscard]] bool streamerHideWholeWindow() const { return _streamerHideWholeWindow.current(); }
+	[[nodiscard]] bool streamerSpoilers() const { return _streamerSpoilers.current(); }
 
 	void setSaveDeletedMessages(bool val);
 	void setSecretChatsEnabled(bool val);
@@ -454,6 +469,8 @@ public:
 	void setAvatarCorners(int val);
 	void setSingleCornerRadius(bool val);
 	void setStreamerMode(bool val);
+	void setStreamerHideWholeWindow(bool val);
+	void setStreamerSpoilers(bool val);
 
 	[[nodiscard]] rpl::producer<bool> useGlobalGhostModeValue() const { return _useGlobalGhostMode.value(); }
 	[[nodiscard]] rpl::producer<bool> useGlobalGhostModeChanges() const { return _useGlobalGhostMode.changes(); }
@@ -635,6 +652,9 @@ public:
 	[[nodiscard]] rpl::producer<bool> singleCornerRadiusChanges() const { return _singleCornerRadius.changes(); }
 	[[nodiscard]] rpl::producer<bool> streamerModeValue() const { return _streamerMode.value(); }
 	[[nodiscard]] rpl::producer<bool> streamerModeChanges() const { return _streamerMode.changes(); }
+	[[nodiscard]] rpl::producer<bool> streamerHideWholeWindowValue() const { return _streamerHideWholeWindow.value(); }
+	[[nodiscard]] rpl::producer<bool> streamerSpoilersValue() const { return _streamerSpoilers.value(); }
+	[[nodiscard]] rpl::producer<bool> streamerSpoilersChanges() const { return _streamerSpoilers.changes(); }
 
 	friend void to_json(nlohmann::json &j, const AyuSettings &s);
 	friend void from_json(const nlohmann::json &j, AyuSettings &s);
@@ -735,6 +755,8 @@ private:
 	rpl::variable<int> _avatarCorners = 23;
 	rpl::variable<bool> _singleCornerRadius = false;
 	rpl::variable<bool> _streamerMode = false;
+	rpl::variable<bool> _streamerHideWholeWindow = true;
+	rpl::variable<bool> _streamerSpoilers = true;
 
 	rpl::variable<bool> _useGlobalGhostMode = true;
 	std::map<uint64, std::unique_ptr<GhostModeAccountSettings>> _ghostAccounts;

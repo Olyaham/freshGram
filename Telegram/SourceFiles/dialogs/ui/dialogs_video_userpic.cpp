@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "dialogs/ui/dialogs_video_userpic.h"
 
+#include "ayu/features/streamer_mode/streamer_mode.h"
+
 #include "core/file_location.h"
 #include "data/data_peer.h"
 #include "data/data_photo.h"
@@ -86,7 +88,9 @@ void VideoUserpic::paintLeft(
 	if (rtl()) {
 		x = w - x - size;
 	}
-	if (_video && _video->ready()) {
+	if (_video
+		&& _video->ready()
+		&& !AyuFeatures::StreamerMode::spoilersActive()) {
 		startReady();
 
 		const auto now = paused ? crl::time(0) : crl::now();
