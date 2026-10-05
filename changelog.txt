@@ -1,3 +1,17 @@
+7.3.0 (05.10.26)
+
+- Harden secret chats: bind encrypted data to its chat and encrypt chat metadata.
+- Delete secret chats when the passcode is removed or on logout.
+- Keep secret data only in the newest database backups.
+- Stop link previews from reaching Telegram servers in secret chats.
+- Allow selecting, forwarding and deleting secret messages.
+- Send animated stickers in secret chats and enlarge the lock icon.
+- Search deleted messages and the from filter by user id.
+- Keep ended secret chats and pick up requests received while closed.
+- Show only "Secret chat" and "New secret message" in notifications.
+- Keep own message edits in the history and rotate database backups.
+- Add a Flatpak package and drop the plain Linux binary from releases.
+
 7.2.19 (04.10.26)
 
 - Add secret chats to the main chats list, with replies, photos, files, stickers and GIFs.
