@@ -1822,9 +1822,11 @@ void Manager::Impl::downloadChunk(
 	}
 	const auto &media = message->media;
 	const auto cloud = media.key.empty();
-	const auto total = media.size
-		? int64_t((media.size + 15) & ~int64_t(15))
-		: int64_t(0);
+	const auto total = !media.size
+		? int64_t(0)
+		: cloud
+		? int64_t(media.size)
+		: int64_t((media.size + 15) & ~int64_t(15));
 	const auto location = cloud
 		? MTPInputFileLocation(MTP_inputDocumentFileLocation(
 			MTP_long(media.fileId),
@@ -1835,15 +1837,17 @@ void Manager::Impl::downloadChunk(
 			MTP_long(media.fileId),
 			MTP_long(media.accessHash)));
 	const auto offset = int64_t(buffer->size());
-	const auto failed = [=] {
+	const auto failed = [=](const QString &reason) {
 		if (const auto chat = find(chatId)) {
 			chat->transfers.erase(randomId);
 			notify(chatId);
 		}
-		toast("Could not download the file.");
+		toast(reason.isEmpty()
+			? QString("Could not download the file.")
+			: QString("Could not download the file: %1").arg(reason));
 	};
-	const auto fail = [=](const MTP::Error &) {
-		failed();
+	const auto fail = [=](const MTP::Error &error) {
+		failed(error.type());
 	};
 	session->api().request(MTPupload_GetFile(
 		MTP_flags(0),
@@ -1863,17 +1867,17 @@ void Manager::Impl::downloadChunk(
 			}
 			const auto done = bytes.empty()
 				|| (total > 0 && int64_t(buffer->size()) >= total)
-				|| (total == 0 && int(bytes.size()) < kDownloadChunk);
+				|| int(bytes.size()) < kDownloadChunk;
 			if (done) {
 				finishDownload(chatId, randomId, *buffer);
 			} else {
 				downloadChunk(chatId, randomId, buffer);
 			}
 		}, [&](const auto &) {
-			failed();
+			failed(QString());
 		});
 	}).fail(fail).toDC(MTP::downloadDcId(
-		media.dcId ? media.dcId : 2,
+		media.dcId ? media.dcId : session->mtp().mainDcId(),
 		0)).send();
 }
 
@@ -1893,6 +1897,10 @@ void Manager::Impl::finishDownload(
 	auto plain = Bytes();
 	if (message->media.key.empty()) {
 		plain = buffer;
+		if (message->media.size > 0
+			&& int64_t(plain.size()) > message->media.size) {
+			plain.resize(size_t(message->media.size));
+		}
 	} else if (!DecryptFile(
 			buffer,
 			message->media.key,
@@ -1910,7 +1918,9 @@ void Manager::Impl::finishDownload(
 		case MediaType::Voice: suffix = "ogg"; break;
 		case MediaType::Sticker: suffix = "webp"; break;
 		case MediaType::Video: suffix = "mp4"; break;
-		case MediaType::Animation: suffix = "mp4"; break;
+		case MediaType::Animation:
+			suffix = Qs(message->media.mime).endsWith("gif") ? "gif" : "mp4";
+			break;
 		default: suffix = "bin"; break;
 		}
 		message->media.fileName = QString("file.%1").arg(suffix).toStdString();

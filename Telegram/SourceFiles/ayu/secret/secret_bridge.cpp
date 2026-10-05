@@ -269,8 +269,8 @@ struct DocumentRef {
 		break;
 	case MediaType::Sticker:
 		result.push_back(MTP_documentAttributeImageSize(
-			MTP_int(media.width),
-			MTP_int(media.height)));
+			MTP_int((media.width > 0) ? media.width : 512),
+			MTP_int((media.height > 0) ? media.height : 512)));
 		result.push_back(MTP_documentAttributeSticker(
 			MTP_flags(0),
 			MTP_string(Qs(media.emoji)),
@@ -709,7 +709,9 @@ HistoryItem *Bridge::createItem(
 		const auto docId = DocumentId(uint64(message.randomId) >> 1);
 		auto mime = Qs(media.mime);
 		if (mime.isEmpty()) {
-			mime = QString("application/octet-stream");
+			mime = (media.type == MediaType::Sticker)
+				? QString("image/webp")
+				: QString("application/octet-stream");
 		}
 		registerDocument(docId, info.id, message.randomId);
 		const auto document = owner.document(
@@ -735,6 +737,12 @@ HistoryItem *Bridge::createItem(
 			std::move(fields),
 			document,
 			BuildText(message));
+	} else if (message.media.type != MediaType::None
+		&& NeedsFile(message)) {
+		result = history->addNewLocalMessage(
+			std::move(fields),
+			TextWithEntities{ QString("[Attachment is not available]") },
+			MTP_messageMediaEmpty());
 	} else if (message.media.type == MediaType::Location
 		|| message.media.type == MediaType::Venue) {
 		result = history->addNewLocalMessage(
