@@ -15,6 +15,7 @@
 #include "base/openssl_help.h"
 #include "base/timer.h"
 #include "base/unixtime.h"
+#include "crl/crl.h"
 #include "crl/crl_time.h"
 #include "data/data_session.h"
 #include "data/data_user.h"
@@ -31,6 +32,7 @@
 #include <QtGui/QImage>
 #include <QtGui/QImageReader>
 
+#include <array>
 #include <map>
 #include <algorithm>
 #include <deque>
@@ -126,6 +128,39 @@ struct EarlyEntry {
 	std::optional<MTPEncryptedFile> file;
 };
 
+struct ReadyPacket {
+	int date = 0;
+	QByteArray bytes;
+	bool decrypted = false;
+	bool parsed = false;
+	Inbound inbound;
+	std::optional<MTPEncryptedFile> file;
+};
+
+[[nodiscard]] ReadyPacket PreparePacket(
+		const std::array<Bytes, 3> &keys,
+		bool creator,
+		ReadyPacket packet) {
+	const auto raw = FromArray(packet.bytes);
+	int64_t fingerprint = 0;
+	if (raw.size() >= 8) {
+		std::memcpy(&fingerprint, raw.data(), 8);
+	}
+	auto object = Bytes();
+	packet.decrypted = false;
+	packet.parsed = false;
+	for (const auto &key : keys) {
+		if (!key.empty() && KeyFingerprint(key) == fingerprint) {
+			packet.decrypted = DecryptPacket(key, creator, raw, object);
+			break;
+		}
+	}
+	if (packet.decrypted) {
+		packet.parsed = ParseLayerObject(object, packet.inbound);
+	}
+	return packet;
+}
+
 struct Chat {
 	SecretChatRow row;
 	Bytes key;
@@ -144,6 +179,9 @@ struct Chat {
 	std::map<int, PendingEntry> pending;
 	std::vector<EarlyEntry> early;
 	std::map<int64_t, Transfer> transfers;
+	int nextTicket = 0;
+	int nextApply = 0;
+	std::map<int, ReadyPacket> ready;
 };
 
 [[nodiscard]] std::vector<char> EncodeExtras(const Chat &chat) {
@@ -433,6 +471,8 @@ struct Manager::Impl {
 	void applyChat(const MTPEncryptedChat &chat);
 	void onRequested(const MTPDencryptedChatRequested &data);
 	void onChat(const MTPDencryptedChat &data);
+	void onPrepared(int chatId, int ticket, ReadyPacket &&packet);
+	void applyPacket(Chat &chat, ReadyPacket &&packet);
 	void onDiscarded(int chatId, bool historyDeleted);
 	[[nodiscard]] ChatInfo makeInfo(const Chat &chat, bool withKey) const;
 	void finishCreator(int chatId, const QByteArray &gB, int64 fingerprint);
@@ -917,53 +957,89 @@ void Manager::Impl::onEncrypted(
 	} else if (chat->row.state != int(ChatState::Ready)) {
 		return;
 	}
-	const auto packet = FromArray(bytes);
-	int64_t fingerprint = 0;
-	if (packet.size() >= 8) {
-		std::memcpy(&fingerprint, packet.data(), 8);
-	}
-	auto object = Bytes();
-	auto decrypted = false;
-	if (!chat->key.empty() && KeyFingerprint(chat->key) == fingerprint) {
-		decrypted = DecryptPacket(chat->key, creator(*chat), packet, object);
-	} else if (!chat->otherKey.empty()
-		&& KeyFingerprint(chat->otherKey) == fingerprint) {
-		decrypted = DecryptPacket(chat->otherKey, creator(*chat), packet, object);
-	} else if (!chat->pfsPending.empty()
-		&& KeyFingerprint(chat->pfsPending) == fingerprint) {
-		decrypted = DecryptPacket(chat->pfsPending, creator(*chat), packet, object);
-	}
-	if (!decrypted) {
+	const auto ticket = chat->nextTicket++;
+	const auto owner = session.get();
+	const auto isCreator = creator(*chat);
+	auto keys = std::array<Bytes, 3>{
+		chat->key,
+		chat->otherKey,
+		chat->pfsPending,
+	};
+	auto packet = ReadyPacket();
+	packet.date = date;
+	packet.bytes = bytes;
+	packet.file = file ? std::make_optional(*file) : std::nullopt;
+	crl::async([=, keys = std::move(keys), packet = std::move(packet)]() mutable {
+		auto prepared = PreparePacket(keys, isCreator, std::move(packet));
+		crl::on_main(owner, [=, prepared = std::move(prepared)]() mutable {
+			onPrepared(chatId, ticket, std::move(prepared));
+		});
+	});
+}
+
+void Manager::Impl::onPrepared(
+		int chatId,
+		int ticket,
+		ReadyPacket &&packet) {
+	auto chat = find(chatId);
+	if (!chat) {
 		return;
 	}
-	auto inbound = Inbound();
-	if (!ParseLayerObject(object, inbound)) {
-		sendNotifyLayer(*chat);
+	chat->ready.emplace(ticket, std::move(packet));
+	while (chat) {
+		const auto i = chat->ready.find(chat->nextApply);
+		if (i == chat->ready.end()) {
+			break;
+		}
+		auto next = std::move(i->second);
+		chat->ready.erase(i);
+		++chat->nextApply;
+		applyPacket(*chat, std::move(next));
+		chat = find(chatId);
+	}
+}
+
+void Manager::Impl::applyPacket(Chat &chat, ReadyPacket &&packet) {
+	if (chat.row.state != int(ChatState::Ready)) {
 		return;
 	}
+	if (!packet.decrypted) {
+		packet = PreparePacket(
+			{ chat.key, chat.otherKey, chat.pfsPending },
+			creator(chat),
+			std::move(packet));
+	}
+	if (!packet.decrypted) {
+		return;
+	} else if (!packet.parsed) {
+		sendNotifyLayer(chat);
+		return;
+	}
+	const auto &inbound = packet.inbound;
+	const auto file = packet.file ? &*packet.file : nullptr;
 	if (inbound.inSeqNo < 0 || inbound.outSeqNo < 0) {
 		return;
 	}
-	const auto mine = x(*chat);
+	const auto mine = x(chat);
 	if ((inbound.inSeqNo % 2) != (1 - mine)
 		|| (inbound.outSeqNo % 2) != mine) {
 		return;
 	}
 	const auto outIndex = inbound.outSeqNo / 2;
-	if (outIndex < chat->row.myIn) {
+	if (outIndex < chat.row.myIn) {
 		return;
 	}
-	if (outIndex > chat->row.myIn) {
-		chat->pending.emplace(outIndex, PendingEntry{
+	if (outIndex > chat.row.myIn) {
+		chat.pending.emplace(outIndex, PendingEntry{
 			inbound,
-			date,
-			file ? std::make_optional(*file) : std::nullopt,
+			packet.date,
+			packet.file,
 		});
-		requestResend(*chat, chat->row.myIn, chat->pending.begin()->first - 1);
+		requestResend(chat, chat.row.myIn, chat.pending.begin()->first - 1);
 		return;
 	}
-	process(*chat, inbound, date, file);
-	drainPending(*chat);
+	process(chat, inbound, packet.date, file);
+	drainPending(chat);
 }
 
 void Manager::Impl::drainPending(Chat &chat) {
