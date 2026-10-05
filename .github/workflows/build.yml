@@ -305,9 +305,8 @@ jobs:
           test -n "$binary"
           echo "Built $binary ($(stat -c %s "$binary") bytes)"
           mkdir -p dist
-          cp "$binary" dist/freshGram
           tar -C out/install -czf dist/freshGram-linux-x86_64.tar.gz usr
-          (cd dist && sha256sum freshGram freshGram-linux-x86_64.tar.gz > SHA256SUMS)
+          (cd dist && sha256sum freshGram-linux-x86_64.tar.gz > SHA256SUMS)
 
       - name: Arch Linux package
         run: |
@@ -324,7 +323,25 @@ jobs:
             su builder -c "cd /pkg && FRESHGRAM_VERSION=$FRESHGRAM_VERSION makepkg -f --nodeps"
           '
           cp arch/freshgram-*.pkg.tar.zst dist/freshGram.pacman
-          (cd dist && sha256sum freshGram freshGram-linux-x86_64.tar.gz freshGram.pacman > SHA256SUMS)
+          (cd dist && sha256sum freshGram-linux-x86_64.tar.gz freshGram.pacman > SHA256SUMS)
+
+      - name: Flatpak bundle
+        continue-on-error: true
+        run: |
+          set -e
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08
+          rm -rf flatpak
+          mkdir -p flatpak/root
+          cp Telegram/build/flatpak/io.github.snowyfluffy.freshgram.yml flatpak/
+          cp -a out/install/usr flatpak/root/usr
+          cd flatpak
+          flatpak-builder --user --force-clean --disable-rofiles-fuse --repo=repo build io.github.snowyfluffy.freshgram.yml
+          flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo repo ../dist/freshGram.flatpak io.github.snowyfluffy.freshgram
+          cd ../dist
+          sha256sum freshGram-linux-x86_64.tar.gz freshGram.pacman freshGram.flatpak > SHA256SUMS
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -360,5 +377,5 @@ jobs:
           files: |
             dist/freshGram-linux-x86_64.tar.gz
             dist/freshGram.pacman
-            dist/freshGram
+            dist/freshGram.flatpak
             dist/SHA256SUMS

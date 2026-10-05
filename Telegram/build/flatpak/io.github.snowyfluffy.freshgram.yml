@@ -1,0 +1,25 @@
+app-id: io.github.snowyfluffy.freshgram
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: freshGram
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=dri
+  - --filesystem=xdg-download
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --talk-name=org.freedesktop.portal.Desktop
+modules:
+  - name: freshgram
+    buildsystem: simple
+    build-commands:
+      - cp -a usr/. /app/
+      - sed -i 's|^Exec=.*|Exec=/app/bin/freshGram|' /app/share/dbus-1/services/io.github.snowyfluffy.freshgram.service
+    sources:
+      - type: dir
+        path: root
