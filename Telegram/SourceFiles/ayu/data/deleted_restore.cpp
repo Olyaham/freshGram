@@ -2,6 +2,7 @@
 
 #include "api/api_text_entities.h"
 #include "ayu/ayu_settings.h"
+#include "ayu/data/known_users.h"
 #include "ayu/data/messages_storage.h"
 #include "ayu/utils/ayu_mapper.h"
 #include "ayu/utils/telegram_helpers.h"
@@ -306,7 +307,10 @@ HistoryItem *State::create(Row &row) {
 		from = owner.chatLoaded(message.fromId);
 	}
 	if (!from && message.fromId && !peer->isUser() && !peer->isBroadcast()) {
-		from = unknownSender(owner, message.fromId);
+		from = AyuUsers::find(&peer->session(), UserId(uint64(message.fromId)));
+		if (!from) {
+			from = unknownSender(owner, message.fromId);
+		}
 	}
 
 	auto flags = MessageFlags(MessageFlag::Local);
