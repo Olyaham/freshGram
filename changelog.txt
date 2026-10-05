@@ -1,3 +1,11 @@
+7.4.0 (06.10.26)
+
+- Restore deleted messages in groups with topics.
+- Show deleted messages in replies instead of "Deleted message".
+- Keep deleted messages in the chat after the history is reloaded.
+- Show more deleted messages per chat after a restart.
+- Fix a crash on enabling Streamer Mode.
+
 7.3.2 (05.10.26)
 
 - Rework Streamer Mode: hide photos, videos, avatars, names, usernames, IDs and phone numbers behind spoilers.
