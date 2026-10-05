@@ -11,7 +11,6 @@
 #include "ayu/ayu_settings.h"
 #include "core/application.h"
 #include "rpl/combine.h"
-#include "rpl/distinct.h"
 #include "rpl/map.h"
 #include "ui/effects/spoiler_mess.h"
 #include "ui/text/text.h"
