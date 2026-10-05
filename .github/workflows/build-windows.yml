@@ -66,8 +66,8 @@ jobs:
             Libraries
             win64
             ThirdParty
-          key: windows-libraries-${{ hashFiles('freshGram/Telegram/build/prepare/**', 'freshGram/Telegram/build/qt_version.py') }}-${{ github.run_id }}
-          restore-keys: windows-libraries-${{ hashFiles('freshGram/Telegram/build/prepare/**', 'freshGram/Telegram/build/qt_version.py') }}-
+          key: windows-libraries-v2-${{ hashFiles('freshGram/Telegram/build/prepare/**', 'freshGram/Telegram/build/qt_version.py') }}-${{ github.run_id }}
+          restore-keys: windows-libraries-v2-${{ hashFiles('freshGram/Telegram/build/prepare/**', 'freshGram/Telegram/build/qt_version.py') }}-
 
       - name: Install ATL and MFC for the toolset
         shell: pwsh
@@ -98,7 +98,7 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
-          toolset_version: '14.44'
+          toolset: '14.44'
 
       - name: Prepare libraries
         id: prepare
@@ -115,7 +115,7 @@ jobs:
             Libraries
             win64
             ThirdParty
-          key: windows-libraries-${{ hashFiles('freshGram/Telegram/build/prepare/**', 'freshGram/Telegram/build/qt_version.py') }}-${{ github.run_id }}
+          key: windows-libraries-v2-${{ hashFiles('freshGram/Telegram/build/prepare/**', 'freshGram/Telegram/build/qt_version.py') }}-${{ github.run_id }}
 
       - name: Stop when libraries are not ready
         if: steps.prepare.outcome != 'success'
