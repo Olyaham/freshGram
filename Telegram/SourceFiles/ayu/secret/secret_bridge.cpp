@@ -2,7 +2,6 @@
 
 #include "ayu/secret/secret_peer.h"
 #include "ayu/secret/secret_policy.h"
-#include "ayu/secret/secret_vault.h"
 #include "ayu/ayu_settings.h"
 #include "base/unixtime.h"
 #include "core/application.h"
@@ -684,14 +683,13 @@ HistoryItem *Bridge::createItem(
 		result = history->addNewLocalMessage(service);
 	} else if (message.media.type == MediaType::Photo
 		&& HasStoredFile(message)) {
-		auto plain = Bytes();
-		if (!Vault::OpenFromFile(Qs(message.media.path), plain)) {
+		const auto bytes = _manager->readFile(info.id, message.randomId);
+		if (bytes.isEmpty()) {
 			result = history->addNewLocalMessage(
 				std::move(fields),
 				TextWithEntities{ QString("[Photo could not be opened]") },
 				MTP_messageMediaEmpty());
 		} else {
-			const auto bytes = ToArray(plain);
 			auto width = message.media.width;
 			auto height = message.media.height;
 			if (width <= 0 || height <= 0) {

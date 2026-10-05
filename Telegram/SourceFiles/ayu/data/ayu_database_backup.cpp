@@ -126,15 +126,6 @@ struct Handle {
 			0,
 			ScalarInt(handle.db, QString("SELECT count(*) FROM %1").arg(table)));
 	}
-	for (const auto &table : { "SecretMessage", "SecretChat" }) {
-		if (TableExists(handle.db, table)) {
-			total += std::max<qint64>(
-				0,
-				ScalarInt(
-					handle.db,
-					QString("SELECT count(*) FROM %1").arg(table)));
-		}
-	}
 	if (rows) {
 		*rows = total;
 	}
@@ -160,6 +151,33 @@ struct Handle {
 	return result;
 }
 
+void ScrubSecrets(const QString &path) {
+	auto handle = Handle();
+	if (!Open(handle, path, SQLITE_OPEN_READWRITE)) {
+		return;
+	}
+	auto dirty = false;
+	for (const auto &table : { "SecretMessage", "SecretChat", "SecretState" }) {
+		if (TableExists(handle.db, table)
+			&& ScalarInt(
+				handle.db,
+				QString("SELECT count(*) FROM %1").arg(table)) != 0) {
+			dirty = true;
+		}
+	}
+	if (!dirty) {
+		return;
+	}
+	static_cast<void>(Exec(handle.db, QString("PRAGMA secure_delete = ON")));
+	for (const auto &table : { "SecretMessage", "SecretChat", "SecretState" }) {
+		if (TableExists(handle.db, table)) {
+			static_cast<void>(
+				Exec(handle.db, QString("DELETE FROM %1").arg(table)));
+		}
+	}
+	static_cast<void>(Exec(handle.db, QString("VACUUM")));
+}
+
 void Rotate() {
 	const auto list = List();
 	auto richest = -1;
@@ -171,6 +189,8 @@ void Rotate() {
 	for (auto i = kKeep; i < int(list.size()); ++i) {
 		if (i != richest) {
 			QFile::remove(list[i].path);
+		} else {
+			ScrubSecrets(list[i].path);
 		}
 	}
 }

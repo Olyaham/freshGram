@@ -43,6 +43,8 @@ namespace AyuSecret {
 namespace {
 
 constexpr auto kExtrasMagic = 0x31435941U;
+constexpr auto kChatRowMagic = 0x32524359U;
+constexpr auto kPayloadMagic = 0x32595041U;
 constexpr auto kPartSize = 512 * 1024;
 constexpr auto kBigFileSize = 10 * 1024 * 1024;
 constexpr auto kMaxFileSize = int64(100) * 1024 * 1024;
@@ -176,6 +178,7 @@ struct Chat {
 	int64_t pfsExchange = 0;
 	Bytes pfsPending;
 	bool loaded = false;
+	bool locked = false;
 	bool working = false;
 	int resendRequestedTill = -1;
 	int revision = 0;
@@ -202,57 +205,189 @@ struct Chat {
 	return ToChars(writer.data());
 }
 
-[[nodiscard]] std::vector<char> SealChars(const std::vector<char> &plain) {
-	if (plain.empty()) {
-		return plain;
-	}
-	return ToChars(Vault::Seal(FromChars(plain)));
+[[nodiscard]] std::string ChatContext(ID userId, int chatId) {
+	return "chat:" + std::to_string(userId) + ":" + std::to_string(chatId);
 }
 
-[[nodiscard]] bool OpenChars(std::vector<char> &data) {
-	const auto raw = FromChars(data);
-	if (!Vault::IsSealed(raw)) {
-		return true;
-	}
-	auto plain = Bytes();
-	if (!Vault::Open(raw, plain)) {
+[[nodiscard]] std::string MessageContext(
+		ID userId,
+		int chatId,
+		int64_t randomId) {
+	return "msg:" + std::to_string(userId)
+		+ ":" + std::to_string(chatId)
+		+ ":" + std::to_string(randomId);
+}
+
+[[nodiscard]] std::string FileContext(
+		ID userId,
+		int chatId,
+		int64_t randomId) {
+	return "file:" + std::to_string(userId)
+		+ ":" + std::to_string(chatId)
+		+ ":" + std::to_string(randomId);
+}
+
+enum class RowState {
+	Failed,
+	Legacy,
+	Current,
+};
+
+[[nodiscard]] bool SealChatRow(SecretChatRow &row) {
+	auto writer = Writer();
+	writer.writeUInt(kChatRowMagic);
+	writer.writeLong(row.accessHash);
+	writer.writeLong(row.peerUserId);
+	writer.writeInt(row.creator);
+	writer.writeInt(row.state);
+	writer.writeLong(row.fingerprint);
+	writer.writeInt(row.myIn);
+	writer.writeInt(row.myOut);
+	writer.writeInt(row.hisIn);
+	writer.writeInt(row.hisLayer);
+	writer.writeInt(row.date);
+	writer.writeInt(row.lastDate);
+	writer.writeInt(row.unread);
+	writer.writeBytes(
+		reinterpret_cast<const uint8_t*>(row.keyData.data()),
+		row.keyData.size());
+	const auto sealed = Vault::Seal(
+		writer.data(),
+		ChatContext(row.userId, row.chatId));
+	if (sealed.empty()) {
 		return false;
 	}
-	data = ToChars(plain);
+	row.accessHash = 0;
+	row.peerUserId = 0;
+	row.creator = 0;
+	row.state = 0;
+	row.fingerprint = 0;
+	row.myIn = 0;
+	row.myOut = 0;
+	row.hisIn = 0;
+	row.hisLayer = 0;
+	row.date = 0;
+	row.lastDate = 0;
+	row.unread = 0;
+	row.keyData = ToChars(sealed);
 	return true;
 }
 
-[[nodiscard]] std::vector<char> PackPayload(const MessageData &data) {
+[[nodiscard]] RowState OpenChatRow(SecretChatRow &row) {
+	const auto raw = FromChars(row.keyData);
+	auto plain = Bytes();
+	if (!Vault::IsBound(raw)) {
+		if (Vault::IsSealed(raw)) {
+			if (!Vault::Open(raw, plain, std::string())) {
+				return RowState::Failed;
+			}
+			row.keyData = ToChars(plain);
+		}
+		return RowState::Legacy;
+	} else if (!Vault::Open(
+			raw,
+			plain,
+			ChatContext(row.userId, row.chatId))) {
+		return RowState::Failed;
+	}
+	auto reader = Reader(plain.data(), plain.size());
+	if (reader.readUInt() != kChatRowMagic) {
+		return RowState::Failed;
+	}
+	row.accessHash = reader.readLong();
+	row.peerUserId = reader.readLong();
+	row.creator = reader.readInt();
+	row.state = reader.readInt();
+	row.fingerprint = reader.readLong();
+	row.myIn = reader.readInt();
+	row.myOut = reader.readInt();
+	row.hisIn = reader.readInt();
+	row.hisLayer = reader.readInt();
+	row.date = reader.readInt();
+	row.lastDate = reader.readInt();
+	row.unread = reader.readInt();
+	const auto inner = reader.readBytes();
+	if (reader.failed()) {
+		return RowState::Failed;
+	}
+	row.keyData = ToChars(Bytes(inner.begin(), inner.end()));
+	return RowState::Current;
+}
+
+[[nodiscard]] std::vector<char> PackPayload(
+		ID userId,
+		int chatId,
+		const MessageData &data,
+		int kind) {
 	auto writer = Writer();
+	writer.writeUInt(kPayloadMagic);
+	writer.writeInt(data.outgoing ? 1 : 0);
+	writer.writeInt(data.date);
+	writer.writeInt(kind);
+	writer.writeInt(data.seqIn);
+	writer.writeInt(data.seqOut);
 	const auto meta = SerializeMeta(data);
 	writer.writeBytes(meta.data(), meta.size());
 	writer.writeString(data.text);
-	return ToChars(Vault::Seal(writer.data()));
+	return ToChars(Vault::Seal(
+		writer.data(),
+		MessageContext(userId, chatId, data.randomId)));
 }
 
-[[nodiscard]] bool UnpackPayload(
-		const std::vector<char> &payload,
-		const std::string &legacyText,
-		MessageData &data) {
-	const auto raw = FromChars(payload);
+[[nodiscard]] RowState UnpackRow(
+		ID userId,
+		const SecretMessageRow &row,
+		MessageData &data,
+		int &kind) {
+	const auto raw = FromChars(row.payload);
+	data.randomId = row.randomId;
+	auto plain = Bytes();
+	if (Vault::IsBound(raw)) {
+		if (!Vault::Open(
+				raw,
+				plain,
+				MessageContext(userId, row.chatId, row.randomId))) {
+			return RowState::Failed;
+		}
+		auto reader = Reader(plain.data(), plain.size());
+		if (reader.readUInt() != kPayloadMagic) {
+			return RowState::Failed;
+		}
+		data.outgoing = (reader.readInt() != 0);
+		data.date = reader.readInt();
+		kind = reader.readInt();
+		data.seqIn = reader.readInt();
+		data.seqOut = reader.readInt();
+		const auto meta = reader.readBytes();
+		const auto text = reader.readString();
+		if (reader.failed()) {
+			return RowState::Failed;
+		}
+		ParseMeta(meta, data);
+		data.text = text;
+		return RowState::Current;
+	}
+	data.outgoing = (row.outgoing != 0);
+	data.date = row.date;
+	kind = row.kind;
+	data.seqIn = row.seqIn;
+	data.seqOut = row.seqOut;
 	if (!Vault::IsSealed(raw)) {
 		ParseMeta(raw, data);
-		data.text = legacyText;
-		return true;
-	}
-	auto plain = Bytes();
-	if (!Vault::Open(raw, plain)) {
-		return false;
+		data.text = row.text;
+		return RowState::Legacy;
+	} else if (!Vault::Open(raw, plain, std::string())) {
+		return RowState::Failed;
 	}
 	auto reader = Reader(plain.data(), plain.size());
 	const auto meta = reader.readBytes();
 	const auto text = reader.readString();
 	if (reader.failed()) {
-		return false;
+		return RowState::Failed;
 	}
 	ParseMeta(meta, data);
 	data.text = text;
-	return true;
+	return RowState::Legacy;
 }
 
 void DecodeExtras(Chat &chat) {
@@ -347,16 +482,27 @@ struct Manager::Impl {
 	explicit Impl(not_null<Main::Session*> session)
 	: session(session)
 	, userId(ID(session->userId().bare & PeerId::kChatTypeMask)) {
+		auto resave = std::vector<int>();
 		for (auto &&row : AyuDatabase::getSecretChats(userId)) {
 			auto chat = Chat();
 			chat.row = std::move(row);
-			if (!OpenChars(chat.row.keyData)) {
+			const auto result = OpenChatRow(chat.row);
+			if (result == RowState::Failed) {
+				chat.locked = true;
 				chat.row.keyData.clear();
 				chat.row.state = int(ChatState::Discarded);
-			} else if (chat.row.state == int(ChatState::Ready)) {
-				DecodeExtras(chat);
+			} else {
+				if (chat.row.state == int(ChatState::Ready)) {
+					DecodeExtras(chat);
+				}
+				if (result == RowState::Legacy) {
+					resave.push_back(chat.row.chatId);
+				}
 			}
 			chats.emplace(chat.row.chatId, std::move(chat));
+		}
+		for (const auto chatId : resave) {
+			saveChat(chats.at(chatId));
 		}
 		QDir(tempDir()).removeRecursively();
 		expireTimer.setCallback([=] { expire(); });
@@ -454,12 +600,22 @@ struct Manager::Impl {
 		return QString("User %1").arg(chat.row.peerUserId);
 	}
 	void saveChat(Chat &chat) {
+		if (chat.locked) {
+			return;
+		}
 		if (chat.row.state == int(ChatState::Ready)) {
 			chat.row.keyData = EncodeExtras(chat);
 		}
 		auto row = chat.row;
-		row.keyData = SealChars(row.keyData);
-		AyuDatabase::saveSecretChat(row);
+		if (SealChatRow(row)) {
+			AyuDatabase::saveSecretChat(row);
+		}
+	}
+	void saveMessage(const Chat &chat, const MessageData &data) {
+		const auto row = rowFor(chat, data);
+		if (!row.payload.empty()) {
+			AyuDatabase::updateSecretMessage(row);
+		}
 	}
 	void notify(int chatId = 0) {
 		if (!chatId) {
@@ -1348,30 +1504,34 @@ void Manager::Impl::loadMessages(Chat &chat) {
 	}
 	chat.loaded = true;
 	chat.messages.clear();
+	auto legacy = std::vector<size_t>();
 	for (const auto &row : AyuDatabase::getSecretMessages(
 			userId,
 			chat.row.chatId)) {
 		auto data = MessageData();
-		if (!UnpackPayload(row.payload, row.text, data)) {
+		auto kind = 0;
+		const auto result = UnpackRow(userId, row, data, kind);
+		if (result == RowState::Failed) {
 			continue;
 		}
-		data.randomId = row.randomId;
-		data.outgoing = (row.outgoing != 0);
-		data.date = row.date;
-		data.seqIn = row.seqIn;
-		data.seqOut = row.seqOut;
-		if (row.kind == kKindHidden) {
+		if (kind == kKindHidden) {
 			data.special = kSpecialHidden;
-		} else if (row.kind == kKindNote) {
+		} else if (kind == kKindNote) {
 			data.special = kSpecialNote;
-		} else if (row.kind == kKindEnded) {
+		} else if (kind == kKindEnded) {
 			data.special = kSpecialEnded;
-		} else if (row.kind == kKindRequest) {
+		} else if (kind == kKindRequest) {
 			data.special = kSpecialRequest;
-		} else if (data.media.type == MediaType::None && row.kind > 0) {
-			data.media.type = MediaType(row.kind);
+		} else if (data.media.type == MediaType::None && kind > 0) {
+			data.media.type = MediaType(kind);
+		}
+		if (result == RowState::Legacy) {
+			legacy.push_back(chat.messages.size());
 		}
 		chat.messages.push_back(std::move(data));
+	}
+	for (const auto index : legacy) {
+		saveMessage(chat, chat.messages[index]);
 	}
 }
 
@@ -1383,9 +1543,13 @@ SecretMessageRow Manager::Impl::rowFor(
 	row.userId = userId;
 	row.chatId = chat.row.chatId;
 	row.randomId = data.randomId;
-	row.outgoing = data.outgoing ? 1 : 0;
-	row.date = data.date;
-	row.kind = (data.special == kSpecialHidden)
+	row.outgoing = 0;
+	row.date = 0;
+	row.kind = 0;
+	row.seqIn = 0;
+	row.seqOut = 0;
+	row.text = std::string();
+	const auto kind = (data.special == kSpecialHidden)
 		? kKindHidden
 		: (data.special == kSpecialNote)
 		? kKindNote
@@ -1394,10 +1558,7 @@ SecretMessageRow Manager::Impl::rowFor(
 		: (data.special == kSpecialRequest)
 		? kKindRequest
 		: int(data.media.type);
-	row.seqIn = data.seqIn;
-	row.seqOut = data.seqOut;
-	row.text = std::string();
-	row.payload = PackPayload(data);
+	row.payload = PackPayload(userId, chat.row.chatId, data, kind);
 	return row;
 }
 
@@ -1417,7 +1578,9 @@ void Manager::Impl::addMessage(Chat &chat, MessageData data) {
 	const auto special = data.special;
 	const auto date = data.date;
 	++chat.revision;
-	const auto added = AyuDatabase::addSecretMessage(rowFor(chat, data));
+	const auto row = rowFor(chat, data);
+	const auto added = !row.payload.empty()
+		&& AyuDatabase::addSecretMessage(row);
 	if (added) {
 		chat.messages.push_back(std::move(data));
 		if (special != kSpecialHidden) {
@@ -1438,7 +1601,7 @@ void Manager::Impl::addMessage(Chat &chat, MessageData data) {
 
 void Manager::Impl::updateMessage(Chat &chat, const MessageData &data) {
 	++chat.revision;
-	AyuDatabase::updateSecretMessage(rowFor(chat, data));
+	saveMessage(chat, data);
 	if (const auto message = findMessage(chat, data.randomId)) {
 		if (message != &data) {
 			*message = data;
@@ -1786,7 +1949,7 @@ QString Manager::Impl::storeFile(
 		int64_t randomId,
 		const Bytes &plain) const {
 	const auto path = QString("%1/%2.fge").arg(mediaDir(chatId)).arg(randomId);
-	if (!Vault::SealToFile(path, plain)) {
+	if (!Vault::SealToFile(path, plain, FileContext(userId, chatId, randomId))) {
 		return QString();
 	}
 	return QDir(path).absolutePath();
@@ -2270,7 +2433,7 @@ void Manager::Impl::markRead(int chatId) {
 				sendService(*chat, BuildReadMessages(RandomId(), { message.randomId }));
 			}
 			++chat->revision;
-			AyuDatabase::updateSecretMessage(rowFor(*chat, message));
+			saveMessage(*chat, message);
 			changed = true;
 		}
 	}
@@ -2394,7 +2557,7 @@ void Manager::handleUpdate(const MTPUpdate &update) {
 					_impl->startTimer(*chat, message, readAt);
 				}
 				++chat->revision;
-				AyuDatabase::updateSecretMessage(_impl->rowFor(*chat, message));
+				_impl->saveMessage(*chat, message);
 			}
 			_impl->notify(chat->row.chatId);
 		}
@@ -2591,8 +2754,15 @@ QByteArray Manager::readFile(int chatId, int64 randomId) {
 		return i->second;
 	}
 	auto plain = Bytes();
-	if (!Vault::OpenFromFile(Qs(data->media.path), plain)) {
+	auto legacy = false;
+	const auto context = FileContext(_impl->userId, chatId, randomId);
+	if (!Vault::OpenFromFile(Qs(data->media.path), plain, context, &legacy)) {
 		return QByteArray();
+	} else if (legacy) {
+		[[maybe_unused]] const auto resealed = Vault::SealToFile(
+			Qs(data->media.path),
+			plain,
+			context);
 	}
 	auto result = ToArray(plain);
 	_impl->remember(chatId, randomId, result);

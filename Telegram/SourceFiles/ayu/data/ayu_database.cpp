@@ -408,6 +408,9 @@ void prepareStorage() {
 
 	storage.sync_schema(true);
 
+	storage.on_open = [](sqlite3 *db) {
+		sqlite3_exec(db, "PRAGMA secure_delete = ON", nullptr, nullptr, nullptr);
+	};
 	storage.open_forever();
 	try {
 		storage.pragma.journal_mode(sqlite_orm::journal_mode::WAL);
@@ -707,6 +710,9 @@ void updateSecretMessage(const SecretMessageRow &message) {
 		storage.update_all(
 			set(
 				assign(&SecretMessageRow::kind, message.kind),
+				assign(&SecretMessageRow::outgoing, message.outgoing),
+				assign(&SecretMessageRow::seqIn, message.seqIn),
+				assign(&SecretMessageRow::seqOut, message.seqOut),
 				assign(&SecretMessageRow::date, message.date),
 				assign(&SecretMessageRow::text, message.text),
 				assign(&SecretMessageRow::payload, message.payload)
