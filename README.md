@@ -14,10 +14,10 @@ The source code is published under GPLv3 with OpenSSL exception, the license is 
 ### From AyuGram Desktop
 
 - Full ghost mode (flexible)
-- Messages history
+- Messages history: the edits of other people and your own and the deleted messages are kept in a local database, which is backed up automatically (the newest valid backup is restored if the database gets corrupted)
 - Anti-recall
 - "Peek last seen" in a user profile (without Telegram Premium): briefly adds the user to the "Last seen & online" exceptions, reads their exact status and restores your privacy settings; the result is shown as a separate profile line and next to the status in the chat top bar and the profile header, for example "last seen recently (peeked: last seen yesterday at 11:27 PM)"
-- Secret chats live in the main chat list (opt-in: Settings - AyuGram - Enable secret chats, requires a local passcode): text with formatting, replies, photos, files, static stickers and GIFs, voice messages and video notes recorded with the native composer, self-destruct timers, typing and read marks, forwarding, message shots, native media viewer, encryption key picture and hex for comparison. Keys, messages and attachments are encrypted with a key derived from the local passcode key
+- Secret chats live in the main chat list (opt-in: Settings - AyuGram - Enable secret chats, requires a local passcode): text with formatting, replies, photos, files, static stickers and GIFs, voice messages and video notes recorded with the native composer, self-destruct timers, typing and read marks, forwarding, message shots, native media viewer, encryption key picture and hex for comparison. Ended chats stay in the list, real notifications show only "Secret chat" and "New secret message", requests that arrived while freshGram was closed are picked up after a restart. Keys, messages and attachments are encrypted with a key derived from the local passcode key
 - Service messages (for example, "user joined") are kept when deleted, the same way as normal ones
 - Chats and channels deleted by the other side, that you were removed from or that you deleted yourself stay in the chats list together with the saved messages (deleting the chat once more removes it for real)
 - Font customization
