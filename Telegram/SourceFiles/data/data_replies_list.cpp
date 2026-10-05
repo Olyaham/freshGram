@@ -208,6 +208,10 @@ rpl::producer<MessagesSlice> RepliesList::source(
 		_listChanges.events(
 		) | rpl::on_next(pushDelayed, lifetime);
 
+		if (_history->peer->isForum()) {
+			_history->checkLocalMessages();
+		}
+
 		_instantChanges.events(
 		) | rpl::on_next(pushInstant, lifetime);
 

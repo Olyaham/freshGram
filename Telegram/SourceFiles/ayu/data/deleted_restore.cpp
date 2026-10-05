@@ -10,11 +10,14 @@
 #include "base/flat_set.h"
 #include "data/data_channel.h"
 #include "data/data_chat.h"
+#include "data/data_forum.h"
+#include "data/data_forum_topic.h"
 #include "data/data_peer.h"
 #include "data/data_session.h"
 #include "data/data_user.h"
 #include "history/history.h"
 #include "history/history_item.h"
+#include "history/history_item_components.h"
 #include "history/history_item_helpers.h"
 #include "main/main_session.h"
 #include "ui/text/text_utilities.h"
@@ -36,7 +39,7 @@ namespace {
 	return user;
 }
 
-constexpr auto kLoadLimit = 800;
+constexpr auto kLoadLimit = 3000;
 constexpr auto kCreateBatch = 60;
 constexpr auto kOutgoingFlag = 0x00000002;
 
@@ -51,7 +54,7 @@ base::flat_map<ID, DialogsEntry> DialogsWithDeleted;
 base::flat_map<ID, base::flat_set<ID>> NotedDialogs;
 
 [[nodiscard]] bool Supported(not_null<PeerData*> peer) {
-	return !peer->isForum() && !peer->isMonoforum();
+	return !peer->isMonoforum();
 }
 
 void WithDeletedDialogs(
@@ -129,10 +132,17 @@ void State::checkLoaded() {
 
 	const auto userId = AyuMessages::storageUserId(peer);
 	const auto dialogId = getDialogIdFromPeer(peer);
+	_pending = !_loaded;
 	const auto weak = base::make_weak(this);
 	WithDeletedDialogs(userId, [=](const base::flat_set<ID> &ids) {
-		if (const auto strong = weak.get(); strong && ids.contains(dialogId)) {
+		const auto strong = weak.get();
+		if (!strong) {
+			return;
+		} else if (ids.contains(dialogId)) {
 			strong->load(userId, dialogId);
+		} else {
+			strong->_pending = false;
+			strong->_waiting.clear();
 		}
 	});
 }
@@ -141,7 +151,10 @@ void State::disable() {
 	_disabled = true;
 	_requested = true;
 	_loaded = false;
+	_pending = false;
 	_rows.clear();
+	_index.clear();
+	_waiting.clear();
 }
 
 void State::load(ID userId, ID dialogId) {
@@ -176,12 +189,87 @@ void State::load(ID userId, ID dialogId) {
 				if (!known.emplace(message.messageId, message.date).second) {
 					continue;
 				}
+				strong->_index.emplace(
+					message.messageId,
+					int(strong->_rows.size()));
 				strong->_rows.push_back({ std::move(message), MsgId() });
 			}
 			strong->_loaded = true;
+			strong->_pending = false;
+			strong->resolveWaiting();
 			strong->_history->checkLocalMessages();
 		});
 	});
+}
+
+void State::resolveWaiting() {
+	auto waiting = std::move(_waiting);
+	_waiting.clear();
+	auto &owner = _history->owner();
+	for (const auto &fullId : waiting) {
+		const auto holder = owner.message(fullId);
+		const auto reply = holder ? holder->Get<HistoryMessageReply>() : nullptr;
+		if (reply
+			&& !reply->resolvedMessage
+			&& _index.contains(reply->messageId().bare)) {
+			holder->updateDependencyItem();
+		}
+	}
+}
+
+std::vector<not_null<HistoryItem*>> State::orphans(
+		TimeId from,
+		TimeId till) const {
+	auto result = std::vector<not_null<HistoryItem*>>();
+	if (!_loaded || _history->peer->isForum()) {
+		return result;
+	}
+	auto &owner = _history->owner();
+	for (const auto &row : _rows) {
+		if (row.dead) {
+			continue;
+		}
+		const auto item = owner.message(
+			_history->peer,
+			MsgId(row.message.messageId));
+		if (item
+			&& item->isDeleted()
+			&& !item->mainView()
+			&& item->date() >= from
+			&& item->date() < till) {
+			result.push_back(item);
+		}
+	}
+	return result;
+}
+
+HistoryItem *State::find(MsgId id, not_null<HistoryItem*> holder) {
+	if (_disabled || !id) {
+		return nullptr;
+	} else if (!_loaded) {
+		if (_pending) {
+			_waiting.emplace(holder->fullId());
+		}
+		return nullptr;
+	}
+	const auto i = _index.find(id.bare);
+	if (i == _index.end() || _rows[i->second].dead) {
+		return nullptr;
+	}
+	auto &row = _rows[i->second];
+	if (row.localId) {
+		if (const auto item = _history->owner().message(
+				_history->peer,
+				row.localId)) {
+			return item;
+		}
+	}
+	try {
+		return create(row);
+	} catch (...) {
+		row.dead = true;
+		return nullptr;
+	}
 }
 
 HistoryItem *State::duplicateOf(const Row &row) const {
@@ -314,6 +402,18 @@ HistoryItem *State::create(Row &row) {
 	}
 
 	auto flags = MessageFlags(MessageFlag::Local);
+	auto replyTo = FullReplyTo();
+	if (const auto forum = peer->forum()) {
+		const auto root = MsgId(message.topicId);
+		if (root.bare > Data::ForumTopic::kGeneralId) {
+			if (!forum->topicFor(root)) {
+				return nullptr;
+			}
+			flags |= MessageFlag::HasReplyInfo;
+			replyTo.messageId = FullMsgId(peer->id, root);
+			replyTo.topicRootId = root;
+		}
+	}
 	const auto outgoing = (message.flags & kOutgoingFlag) != 0;
 	if (outgoing) {
 		flags |= MessageFlag::Outgoing;
@@ -342,6 +442,7 @@ HistoryItem *State::create(Row &row) {
 		.id = owner.nextLocalMessageId(),
 		.flags = flags,
 		.from = from ? from->id : PeerId(),
+		.replyTo = std::move(replyTo),
 		.date = message.date,
 		.postAuthor = QString::fromStdString(message.postAuthor),
 	}, std::move(text), AyuMapper::deserializeMedia(message.documentSerialized));

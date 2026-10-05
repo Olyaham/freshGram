@@ -4210,6 +4210,9 @@ void History::checkLocalMessages() {
 	_ayuRestore->checkLoaded();
 	_ayuRestore->dropDuplicates();
 	if (isEmpty() && (!loadedAtTop() || !loadedAtBottom())) {
+		if (peer->isForum()) {
+			_ayuRestore->materialize(0, std::numeric_limits<TimeId>::max());
+		}
 		return;
 	}
 	const auto firstDate = loadedAtTop()
@@ -4229,6 +4232,11 @@ void History::checkLocalMessages() {
 			if (item->isDeleted()) {
 				insertedDeleted = true;
 			}
+		}
+	}
+	for (const auto &item : _ayuRestore->orphans(firstDate, lastDate)) {
+		if (!item->mainView()) {
+			insertMessageToBlocks(item);
 		}
 	}
 	if (_ayuKept && !lastMessage()) {
@@ -4274,6 +4282,16 @@ void History::setAyuKept(bool kept) {
 	}
 	_ayuKept = kept;
 	updateChatListExistence();
+}
+
+HistoryItem *History::ayuRestored(
+		MsgId id,
+		not_null<HistoryItem*> holder) {
+	if (!_ayuRestore) {
+		_ayuRestore = std::make_unique<AyuRestore::State>(this);
+		_ayuRestore->checkLoaded();
+	}
+	return _ayuRestore->find(id, holder);
 }
 
 void History::ayuRestoreMarkStale() {

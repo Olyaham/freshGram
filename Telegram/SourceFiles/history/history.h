@@ -112,6 +112,9 @@ public:
 	void setAyuKept(bool kept);
 	void restoreAyuKept();
 	void ayuRestoreMarkStale();
+	[[nodiscard]] HistoryItem *ayuRestored(
+		MsgId id,
+		not_null<HistoryItem*> holder);
 	void removeJoinedMessage();
 	void removeNewPeerMessages();
 

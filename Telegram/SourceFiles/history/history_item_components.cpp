@@ -549,6 +549,11 @@ void HistoryMessageReply::updateData(
 		resolvedMessage = holder->history()->owner().message(
 			peerId,
 			_fields.messageId);
+		if (!resolvedMessage && !_fields.externalPeerId) {
+			resolvedMessage = holder->history()->ayuRestored(
+				_fields.messageId,
+				holder);
+		}
 		if (resolvedMessage) {
 			if (resolvedMessage->isEmpty()) {
 				// Really it is deleted.
