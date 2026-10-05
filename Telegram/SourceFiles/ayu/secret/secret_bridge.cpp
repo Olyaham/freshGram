@@ -33,6 +33,10 @@
 #include <QtGui/QImage>
 #include <QtGui/QImageReader>
 
+#include <openssl/sha.h>
+
+#include <cstring>
+
 namespace AyuSecret {
 namespace {
 
@@ -47,6 +51,27 @@ struct DocumentRef {
 [[nodiscard]] std::map<DocumentId, DocumentRef> &Documents() {
 	static auto result = std::map<DocumentId, DocumentRef>();
 	return result;
+}
+
+[[nodiscard]] uint64 LocalMediaId(
+		uint8_t kind,
+		int chatId,
+		int64_t randomId) {
+	static const auto salt = RandomVector(32);
+	auto input = Bytes(salt);
+	input.push_back(kind);
+	for (auto i = 0; i != 4; ++i) {
+		input.push_back(uint8_t((uint32_t(chatId) >> (i * 8)) & 0xFF));
+	}
+	for (auto i = 0; i != 8; ++i) {
+		input.push_back(uint8_t((uint64_t(randomId) >> (i * 8)) & 0xFF));
+	}
+	uint8_t digest[SHA256_DIGEST_LENGTH];
+	SHA256(input.data(), input.size(), digest);
+	auto result = uint64(0);
+	std::memcpy(&result, digest, sizeof(result));
+	result &= 0x7FFFFFFFFFFFFFFFULL;
+	return result ? result : 1;
 }
 
 [[nodiscard]] QString Qs(const std::string &value) {
@@ -677,7 +702,7 @@ HistoryItem *Bridge::createItem(
 				width = size.width();
 				height = size.height();
 			}
-			const auto photoId = PhotoId(uint64(message.randomId) >> 1);
+			const auto photoId = PhotoId(LocalMediaId(1, info.id, message.randomId));
 			const auto thumb = ThumbOf(message.media);
 			const auto photo = owner.photo(
 				photoId,
@@ -724,7 +749,7 @@ HistoryItem *Bridge::createItem(
 		&& message.media.type != MediaType::Photo
 		&& HasStoredFile(message)) {
 		const auto &media = message.media;
-		const auto docId = DocumentId(uint64(message.randomId) >> 1);
+		const auto docId = DocumentId(LocalMediaId(2, info.id, message.randomId));
 		auto mime = Qs(media.mime);
 		if (mime.isEmpty()) {
 			mime = (media.type == MediaType::Sticker)

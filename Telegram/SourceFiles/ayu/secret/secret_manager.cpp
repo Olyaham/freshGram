@@ -50,6 +50,8 @@ constexpr auto kDownloadChunk = 128 * 1024;
 constexpr auto kTypingTimeout = crl::time(6000);
 constexpr auto kTypingSendEvery = crl::time(5000);
 constexpr auto kAutoDownloadLimit = 10 * 1024 * 1024;
+constexpr auto kMaxPending = 2000;
+constexpr auto kMaxEarly = 500;
 constexpr auto kSpecialNote = 1;
 constexpr auto kSpecialHidden = 2;
 constexpr auto kKindHidden = 100;
@@ -99,6 +101,10 @@ constexpr auto kKindRequest = 103;
 
 [[nodiscard]] QString Qs(const std::string &value) {
 	return QString::fromStdString(value);
+}
+
+[[nodiscard]] int ValidDc(int dcId) {
+	return (dcId >= 1 && dcId <= 5) ? dcId : 0;
 }
 
 struct DhConfig {
@@ -371,8 +377,8 @@ struct Manager::Impl {
 	std::set<int> removed;
 	std::set<int> pendingChats;
 	bool flushQueued = false;
-	std::map<int64_t, QByteArray> plainCache;
-	std::deque<int64_t> plainOrder;
+	std::map<std::pair<int, int64_t>, QByteArray> plainCache;
+	std::deque<std::pair<int, int64_t>> plainOrder;
 	int64_t plainBytes = 0;
 	Fn<void(int)> started;
 	base::Timer expireTimer;
@@ -386,10 +392,11 @@ struct Manager::Impl {
 		const auto window = Core::App().activeWindow();
 		return window && window->widget()->isActiveWindow();
 	}
-	void remember(int64_t randomId, const QByteArray &bytes) {
+	void remember(int chatId, int64_t randomId, const QByteArray &bytes) {
 		constexpr auto kLimit = int64_t(96) * 1024 * 1024;
+		const auto key = std::make_pair(chatId, randomId);
 		if (int64_t(bytes.size()) > kLimit
-			|| plainCache.contains(randomId)) {
+			|| plainCache.contains(key)) {
 			return;
 		}
 		while (!plainOrder.empty()
@@ -402,16 +409,32 @@ struct Manager::Impl {
 				plainCache.erase(i);
 			}
 		}
-		plainCache.emplace(randomId, bytes);
-		plainOrder.push_back(randomId);
+		plainCache.emplace(key, bytes);
+		plainOrder.push_back(key);
 		plainBytes += bytes.size();
 	}
-	void forget(int64_t randomId) {
-		if (const auto i = plainCache.find(randomId)
+	void forget(int chatId, int64_t randomId) {
+		if (const auto i = plainCache.find({ chatId, randomId })
 			; i != plainCache.end()) {
 			plainBytes -= i->second.size();
 			plainCache.erase(i);
 		}
+	}
+	void forgetChat(int chatId) {
+		for (auto i = plainCache.begin(); i != plainCache.end();) {
+			if (i->first.first == chatId) {
+				plainBytes -= i->second.size();
+				i = plainCache.erase(i);
+			} else {
+				++i;
+			}
+		}
+		plainOrder.erase(
+			std::remove_if(
+				plainOrder.begin(),
+				plainOrder.end(),
+				[&](const auto &key) { return key.first == chatId; }),
+			plainOrder.end());
 	}
 	[[nodiscard]] Chat *find(int chatId) {
 		const auto i = chats.find(chatId);
@@ -693,6 +716,7 @@ void Manager::Impl::onDiscarded(int chatId, bool historyDeleted) {
 		} else {
 			++chat->revision;
 			AyuDatabase::clearSecretMessages(userId, chatId);
+			forgetChat(chatId);
 			chat->messages.clear();
 		}
 		chat->row.unread = 0;
@@ -949,6 +973,9 @@ void Manager::Impl::onEncrypted(
 	if (!chat) {
 		return;
 	} else if (chat->row.state == int(ChatState::Waiting)) {
+		if (int(chat->early.size()) >= kMaxEarly) {
+			return;
+		}
 		chat->early.push_back({
 			date,
 			bytes,
@@ -1031,6 +1058,10 @@ void Manager::Impl::applyPacket(Chat &chat, ReadyPacket &&packet) {
 		return;
 	}
 	if (outIndex > chat.row.myIn) {
+		if (outIndex - chat.row.myIn > kMaxPending
+			|| int(chat.pending.size()) >= kMaxPending) {
+			return;
+		}
 		chat.pending.emplace(outIndex, PendingEntry{
 			inbound,
 			packet.date,
@@ -1073,27 +1104,22 @@ void Manager::Impl::requestResend(Chat &chat, int fromIndex, int tillIndex) {
 void Manager::Impl::answerResend(Chat &chat, int start, int end) {
 	const auto from = start / 2;
 	const auto till = std::min(end / 2, from + 100);
-	for (const auto &row : AyuDatabase::getSecretMessages(
-			userId,
-			chat.row.chatId)) {
-		if (!row.outgoing || row.seqOut <= 0) {
+	loadMessages(chat);
+	auto resend = std::vector<MessageData>();
+	for (const auto &message : chat.messages) {
+		if (!message.outgoing || message.seqOut <= 0) {
 			continue;
 		}
-		const auto index = row.seqOut / 2;
-		if (index < from || index > till) {
-			continue;
+		const auto index = message.seqOut / 2;
+		if (index >= from && index <= till && !message.object.empty()) {
+			resend.push_back(message);
 		}
-		auto data = MessageData();
-		if (!UnpackPayload(row.payload, row.text, data)) {
-			continue;
-		}
-		if (data.object.empty()) {
-			continue;
-		}
+	}
+	for (const auto &data : resend) {
 		const auto layerObject = BuildLayerObject(
 			data.object,
-			row.seqIn,
-			row.seqOut);
+			data.seqIn,
+			data.seqOut);
 		const auto media = data.media.type != MediaType::None
 			&& data.media.type != MediaType::Location
 			&& data.media.type != MediaType::Contact
@@ -1103,12 +1129,12 @@ void Manager::Impl::answerResend(Chat &chat, int start, int end) {
 			const auto existing = MTPInputEncryptedFile(MTP_inputEncryptedFile(
 				MTP_long(data.media.fileId),
 				MTP_long(data.media.accessHash)));
-			sendEncrypted(chat, layerObject, row.randomId, 2, std::nullopt, &existing, nullptr, nullptr);
+			sendEncrypted(chat, layerObject, data.randomId, 2, std::nullopt, &existing, nullptr, nullptr);
 		} else {
 			sendEncrypted(
 				chat,
 				layerObject,
-				row.randomId,
+				data.randomId,
 				data.special == kSpecialHidden ? 1 : 0,
 				std::nullopt,
 				nullptr,
@@ -1152,7 +1178,7 @@ void Manager::Impl::process(
 		file->match([&](const MTPDencryptedFile &fileData) {
 			data.media.fileId = fileData.vid().v;
 			data.media.accessHash = fileData.vaccess_hash().v;
-			data.media.dcId = fileData.vdc_id().v;
+			data.media.dcId = ValidDc(fileData.vdc_id().v);
 			if (data.media.size <= 0) {
 				data.media.size = fileData.vsize().v;
 			}
@@ -1160,7 +1186,7 @@ void Manager::Impl::process(
 		});
 	}
 	if (data.media.type == MediaType::External) {
-		data.media.dcId = std::max(data.media.dcId, 1);
+		data.media.dcId = ValidDc(data.media.dcId);
 	}
 	const auto id = data.randomId;
 	const auto autoLoad = (data.media.type == MediaType::Photo
@@ -1207,6 +1233,7 @@ void Manager::Impl::processService(
 		} else {
 			++chat.revision;
 			AyuDatabase::clearSecretMessages(userId, chatId);
+			forgetChat(chatId);
 			QDir(mediaDir(chatId)).removeRecursively();
 			chat.messages.clear();
 		}
@@ -1448,7 +1475,7 @@ void Manager::Impl::removeMessage(Chat &chat, int64_t randomId) {
 	loadMessages(chat);
 	++chat.revision;
 	AyuDatabase::removeSecretMessage(userId, chat.row.chatId, randomId);
-	forget(randomId);
+	forget(chat.row.chatId, randomId);
 	if (const auto message = findMessage(chat, randomId)) {
 		if (!message->media.path.empty()) {
 			QFile::remove(Qs(message->media.path));
@@ -1981,6 +2008,12 @@ void Manager::Impl::downloadMedia(int chatId, int64 randomId) {
 		&& QFile::exists(Qs(message->media.path))) {
 		return;
 	}
+	if (message->media.size > kMaxFileSize) {
+		++chat->revision;
+		notify(chatId);
+		toast("The file is too big for a secret chat (limit 100 MB).");
+		return;
+	}
 	chat->transfers[randomId] = Transfer();
 	notify(chatId);
 	downloadChunk(chatId, randomId, std::make_shared<Bytes>());
@@ -2037,6 +2070,10 @@ void Manager::Impl::downloadChunk(
 		result.match([&](const MTPDupload_file &data) {
 			const auto bytes = FromArray(data.vbytes().v);
 			buffer->insert(buffer->end(), bytes.begin(), bytes.end());
+			if (int64_t(buffer->size()) > kMaxFileSize + 16) {
+				failed("too big");
+				return;
+			}
 			if (const auto chat = find(chatId)) {
 				if (total > 0) {
 					chat->transfers[randomId].progress
@@ -2181,6 +2218,7 @@ void Manager::Impl::clearHistory(int chatId) {
 	}
 	++chat->revision;
 	AyuDatabase::clearSecretMessages(userId, chatId);
+	forgetChat(chatId);
 	QDir(mediaDir(chatId)).removeRecursively();
 	chat->messages.clear();
 	chat->loaded = true;
@@ -2514,6 +2552,7 @@ void Manager::remove(int chatId) {
 		_impl->discard(chatId);
 	}
 	AyuDatabase::removeSecretChat(_impl->userId, chatId);
+	_impl->forgetChat(chatId);
 	QDir(_impl->mediaDir(chatId)).removeRecursively();
 	_impl->removed.insert(chatId);
 	_impl->chats.erase(chatId);
@@ -2543,20 +2582,20 @@ std::optional<MessageData> Manager::message(int chatId, int64 randomId) {
 }
 
 QByteArray Manager::readFile(int chatId, int64 randomId) {
-	if (const auto i = _impl->plainCache.find(randomId)
-		; i != _impl->plainCache.end()) {
-		return i->second;
-	}
 	const auto data = message(chatId, randomId);
 	if (!data || data->media.path.empty()) {
 		return QByteArray();
+	}
+	if (const auto i = _impl->plainCache.find({ chatId, randomId })
+		; i != _impl->plainCache.end()) {
+		return i->second;
 	}
 	auto plain = Bytes();
 	if (!Vault::OpenFromFile(Qs(data->media.path), plain)) {
 		return QByteArray();
 	}
 	auto result = ToArray(plain);
-	_impl->remember(randomId, result);
+	_impl->remember(chatId, randomId, result);
 	return result;
 }
 
