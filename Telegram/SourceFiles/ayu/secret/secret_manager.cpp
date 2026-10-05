@@ -102,6 +102,12 @@ struct Transfer {
 	double progress = 0.;
 };
 
+enum class DeleteOrigin {
+	Remote,
+	User,
+	Expired,
+};
+
 struct PendingEntry {
 	Inbound inbound;
 	int date = 0;
@@ -397,7 +403,10 @@ struct Manager::Impl {
 	void addMessage(Chat &chat, MessageData data);
 	void updateMessage(Chat &chat, const MessageData &data);
 	void removeMessage(Chat &chat, int64_t randomId);
-	void discardMessage(Chat &chat, int64_t randomId);
+	void discardMessage(
+		Chat &chat,
+		int64_t randomId,
+		DeleteOrigin origin);
 	[[nodiscard]] MessageData *findMessage(Chat &chat, int64_t randomId);
 	void addNote(Chat &chat, const QString &text, int date);
 
@@ -1016,7 +1025,7 @@ void Manager::Impl::processService(
 		break;
 	case ActionKind::DeleteMessages:
 		for (const auto id : inbound.ids) {
-			discardMessage(chat, id);
+			discardMessage(chat, id, DeleteOrigin::Remote);
 		}
 		break;
 	case ActionKind::FlushHistory:
@@ -1027,7 +1036,7 @@ void Manager::Impl::processService(
 				ids.push_back(message.randomId);
 			}
 			for (const auto id : ids) {
-				discardMessage(chat, id);
+				discardMessage(chat, id, DeleteOrigin::Remote);
 			}
 		} else {
 			++chat.revision;
@@ -1237,13 +1246,23 @@ void Manager::Impl::updateMessage(Chat &chat, const MessageData &data) {
 	notify(chat.row.chatId);
 }
 
-void Manager::Impl::discardMessage(Chat &chat, int64_t randomId) {
+void Manager::Impl::discardMessage(
+		Chat &chat,
+		int64_t randomId,
+		DeleteOrigin origin) {
 	const auto message = findMessage(chat, randomId);
-	if (!message
-		|| message->deleted
-		|| message->special
-		|| !AyuSettings::getInstance().saveDeletedMessages()) {
+	if (!message) {
+		return;
+	}
+	const auto keep = !message->special
+		&& AyuSettings::getInstance().saveDeletedMessages();
+	if (!keep) {
 		removeMessage(chat, randomId);
+		return;
+	} else if (message->deleted) {
+		if (origin == DeleteOrigin::User) {
+			removeMessage(chat, randomId);
+		}
 		return;
 	}
 	message->deleted = true;
@@ -1952,11 +1971,16 @@ void Manager::Impl::deleteMessages(int chatId, const std::vector<int64_t> &ids) 
 	if (!chat || ids.empty()) {
 		return;
 	}
+	auto announce = std::vector<int64_t>();
 	for (const auto id : ids) {
-		discardMessage(*chat, id);
+		const auto message = findMessage(*chat, id);
+		if (!message || !message->deleted) {
+			announce.push_back(id);
+		}
+		discardMessage(*chat, id, DeleteOrigin::User);
 	}
-	if (chat->row.state == int(ChatState::Ready)) {
-		sendService(*chat, BuildDeleteMessages(RandomId(), ids));
+	if (chat->row.state == int(ChatState::Ready) && !announce.empty()) {
+		sendService(*chat, BuildDeleteMessages(RandomId(), announce));
 	}
 	notify(chatId);
 }
@@ -1981,7 +2005,9 @@ void Manager::Impl::clearHistory(int chatId) {
 
 void Manager::Impl::setTyping(int chatId) {
 	const auto chat = find(chatId);
-	if (!chat || chat->row.state != int(ChatState::Ready)) {
+	if (!chat
+		|| chat->row.state != int(ChatState::Ready)
+		|| !AyuSettings::ghost(session).sendUploadProgress()) {
 		return;
 	}
 	const auto now = crl::now();
@@ -2027,7 +2053,8 @@ void Manager::Impl::markRead(int chatId) {
 		changed = true;
 	}
 	if (maxDate > chat->lastReadSent
-		&& chat->row.state == int(ChatState::Ready)) {
+		&& chat->row.state == int(ChatState::Ready)
+		&& AyuSettings::ghost(session).sendReadMessages()) {
 		chat->lastReadSent = maxDate;
 		session->api().request(MTPmessages_ReadEncryptedHistory(
 			input(*chat),
@@ -2050,7 +2077,7 @@ void Manager::Impl::expire() {
 			}
 		}
 		for (const auto randomId : expired) {
-			discardMessage(chat, randomId);
+			discardMessage(chat, randomId, DeleteOrigin::Expired);
 		}
 		if (!expired.empty()) {
 			notify(id);
