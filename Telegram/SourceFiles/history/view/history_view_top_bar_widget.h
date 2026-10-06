@@ -285,6 +285,10 @@ private:
 	std::optional<Data::ReportInput> _chooseForReportReason;
 
 	base::Timer _onlineUpdater;
+	base::Timer _statusScrollTimer;
+	QRect _statusScrollRect;
+	crl::time _statusScrollStart = 0;
+	int _statusScrollFull = 0;
 
 	rpl::event_stream<> _forwardSelection;
 	rpl::event_stream<> _sendNowSelection;

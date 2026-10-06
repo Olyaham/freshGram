@@ -4187,13 +4187,7 @@ void HistoryItem::setDeleted() {
 	_deleted = true;
 	_deletedAnimated = true;
 
-	// cleanup mentions and reactions as they tend to bug with deleted messages (e.g. can't remove mention)
-	if (isUnreadMention()) {
-		history()->unreadMentions().erase(id);
-		if (const auto topic = this->topic()) {
-			topic->unreadMentions().erase(id);
-		}
-	}
+	// cleanup reactions as they tend to bug with deleted messages
 	if (hasUnreadReaction()) {
 		history()->unreadReactions().erase(id);
 		if (const auto topic = this->topic()) {

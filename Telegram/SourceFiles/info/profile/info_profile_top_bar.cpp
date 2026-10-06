@@ -113,6 +113,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QGuiApplication>
 
 #include "ayu/ui/ayu_userpic.h"
+#include "ayu/ui/status_marquee.h"
 #include "ayu/utils/telegram_helpers.h"
 
 
@@ -411,6 +412,7 @@ TopBar::TopBar(
 	: nullptr)
 , _status(this, QString(), statusStyle())
 , _statusLabel(std::make_unique<StatusLabel>(_status.data(), _peer))
+, _statusScrollTimer([=] { updateStatusPosition(_progress.current()); })
 , _customStatus(std::move(descriptor.customStatus))
 , _showLastSeen(
 	this,
@@ -2072,6 +2074,7 @@ void TopBar::updateStatusPosition(float64 progressCurrent) {
 		_forumButton->setVisible(!tabSwapActive());
 
 		_status->hide();
+		_statusScrollTimer.cancel();
 		// _starsRating->hide();
 		_showLastSeen->hide(anim::type::instant);
 		return;
@@ -2093,25 +2096,66 @@ void TopBar::updateStatusPosition(float64 progressCurrent) {
 	const auto totalElementsWidth = _status->width()
 		+ (_starsRating ? _starsRating->width() : 0)
 		+ (_showLastSeen->toggled() ? _showLastSeen->width() : 0);
-	const auto statusLeft = anim::interpolate(
+	auto statusLeft = anim::interpolate(
 		statusMostLeft(),
 		(width() - totalElementsWidth) / 2,
 		progressCurrent);
+	const auto statusShift = _statusShift.current()
+		* std::clamp((progressCurrent) / 0.15, 0., 1.);
+
+	const auto leftEdge = anim::interpolate(
+		statusMostLeft(),
+		st::boxRowPadding.left(),
+		progressCurrent);
+	const auto rightEdge = anim::interpolate(
+		calculateRightButtonsWidth(),
+		st::boxRowPadding.right(),
+		progressCurrent);
+	const auto lastSeenWidth = _showLastSeen->toggled()
+		? (_showLastSeen->width() + st::infoProfileTopBarLastSeenSkip.x())
+		: 0;
+	const auto viewport = width()
+		- leftEdge
+		- rightEdge
+		- int(statusShift)
+		- lastSeenWidth;
+	const auto fullWidth = _status->width();
+	const auto scrolling = (viewport > 0) && (fullWidth > viewport);
+	auto scroll = 0;
+	auto shownWidth = _status->textMaxWidth();
+	if (scrolling) {
+		const auto now = crl::now();
+		if (!_statusScrollStart || _statusScrollFull != fullWidth) {
+			_statusScrollStart = now;
+			_statusScrollFull = fullWidth;
+		}
+		statusLeft = leftEdge;
+		shownWidth = viewport;
+		scroll = AyuUi::StatusMarqueeOffset(
+			now - _statusScrollStart,
+			fullWidth - viewport);
+		_status->setMask(QRegion(scroll, 0, viewport, _status->height()));
+		if (!_statusScrollTimer.isActive()) {
+			_statusScrollTimer.callEach(33);
+		}
+	} else {
+		_statusScrollStart = 0;
+		_statusScrollTimer.cancel();
+		_status->clearMask();
+	}
 
 	if (const auto rating = _starsRating.get()) {
 		rating->moveTo(statusLeft, statusTop - st::lineWidth);
 		rating->setOpacity(progressCurrent);
 	}
-	const auto statusShift = _statusShift.current()
-		* std::clamp((progressCurrent) / 0.15, 0., 1.);
 
-	_status->moveToLeft(statusLeft + statusShift, statusTop);
+	_status->moveToLeft(statusLeft + statusShift - scroll, statusTop);
 
 	if (_showLastSeen->toggled()) {
 		_showLastSeen->moveToLeft(
 			statusLeft
 				+ statusShift
-				+ _status->textMaxWidth()
+				+ shownWidth
 				+ st::infoProfileTopBarLastSeenSkip.x(),
 			statusTop + st::infoProfileTopBarLastSeenSkip.y());
 		_showLastSeen->setOpacity(progressCurrent);

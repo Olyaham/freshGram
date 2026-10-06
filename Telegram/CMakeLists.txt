@@ -120,6 +120,8 @@ set(ayugram_files
         ayu/ayu_infra.cpp
         ayu/ayu_infra.h
         ayu/utils/ayu_mapper.cpp
+        ayu/data/mention_guard.cpp
+        ayu/data/mention_guard.h
         ayu/utils/crash_trace.cpp
         ayu/utils/mtp_retry_log.cpp
         ayu/utils/mtp_retry_log.h
@@ -132,6 +134,8 @@ set(ayugram_files
         ayu/utils/telegram_helpers.h
         ayu/utils/windows_utils.cpp
         ayu/utils/windows_utils.h
+        ayu/ui/status_marquee.cpp
+        ayu/ui/status_marquee.h
         ayu/ui/ayu_logo.cpp
         ayu/ui/ayu_logo.h
         ayu/ui/toasts.cpp

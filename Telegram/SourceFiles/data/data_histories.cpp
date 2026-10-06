@@ -270,8 +270,6 @@ void Histories::readInboxTill(not_null<HistoryItem*> item) {
 			}
 		}
 		if (!item->isRegular()) {
-			LOG(("App Error: "
-				"Can't read history till unknown local message."));
 			return;
 		}
 	}

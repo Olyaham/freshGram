@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ayu/features/peek/peek_online.h"
 #include "ayu/secret/secret_bridge.h"
 #include "ayu/secret/secret_peer.h"
+#include "ayu/ui/status_marquee.h"
 #include "history/view/history_view_top_bar_widget.h"
 
 #include "history/history.h"
@@ -145,7 +146,14 @@ TopBarWidget::TopBarWidget(
 , _admins(this, st::topBarAdmins)
 , _peek(this, st::topBarPeek)
 , _titlePeerText(st::windowMinWidth / 3)
-, _onlineUpdater([=] { updateOnlineDisplay(); }) {
+, _onlineUpdater([=] { updateOnlineDisplay(); })
+, _statusScrollTimer([=] {
+	if (isVisible()) {
+		update(_statusScrollRect);
+	} else {
+		_statusScrollTimer.cancel();
+	}
+}) {
 	setAttribute(Qt::WA_OpaquePaintEvent);
 
 	_clear->setTextTransform(Ui::RoundButtonTextTransform::ToUpper);
@@ -876,6 +884,36 @@ void TopBarWidget::paintStatus(
 		p.setPen(_titlePeerTextOnline
 			? st::historyStatusFgActive
 			: st::historyStatusFg);
+		const auto full = _titlePeerText.maxWidth();
+		if (full > availableWidth && !rtl()) {
+			const auto now = crl::now();
+			if (!_statusScrollStart || _statusScrollFull != full) {
+				_statusScrollStart = now;
+				_statusScrollFull = full;
+			}
+			_statusScrollRect = QRect(
+				left,
+				top,
+				availableWidth,
+				st::dialogsTextFont->height);
+			p.save();
+			p.setClipRect(_statusScrollRect);
+			_titlePeerText.drawLeft(
+				p,
+				left - AyuUi::StatusMarqueeOffset(
+					now - _statusScrollStart,
+					full - availableWidth),
+				top,
+				full,
+				outerWidth);
+			p.restore();
+			if (!_statusScrollTimer.isActive()) {
+				_statusScrollTimer.callEach(33);
+			}
+			return;
+		}
+		_statusScrollStart = 0;
+		_statusScrollTimer.cancel();
 		_titlePeerText.drawLeftElided(
 			p,
 			left,
