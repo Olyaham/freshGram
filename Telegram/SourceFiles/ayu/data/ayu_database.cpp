@@ -482,9 +482,18 @@ void initialize() {
 }
 
 void addEditedMessage(const EditedMessage &message) {
+	constexpr auto kMaxRevisions = 100;
 	runVoid("save edited message", [&] {
 		inTransaction([&] {
-			storage.insert(message);
+			const auto saved = storage.count<EditedMessage>(
+				where(
+					column<EditedMessage>(&EditedMessage::userId) == message.userId and
+					column<EditedMessage>(&EditedMessage::dialogId) == message.dialogId and
+					column<EditedMessage>(&EditedMessage::messageId) == message.messageId
+				));
+			if (saved < kMaxRevisions) {
+				storage.insert(message);
+			}
 		});
 	});
 }

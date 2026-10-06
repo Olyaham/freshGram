@@ -347,9 +347,8 @@ public:
 	[[nodiscard]] bool hasFailed() const {
 		return _flags & MessageFlag::SendingFailed;
 	}
-	[[nodiscard]] bool hideEditedBadge() const {
-		return (_flags & MessageFlag::HideEdited);
-	}
+	[[nodiscard]] bool hideEditedBadge() const;
+	void ayuShowEditedBadge();
 	[[nodiscard]] bool hideDisplayDate() const {
 		return isEmpty() || (_flags & MessageFlag::HideDisplayDate);
 	}
@@ -840,6 +839,7 @@ private:
 	bool _deletedAnimated = false;
 	int _unsupportedTTL = 0;
 	bool _ayuExpired = false;
+	mutable signed char _ayuEditedBadge = -1;
 	std::vector<char> _ayuSavedMedia;
 	bool _ayuSecretRead = false;
 

@@ -498,12 +498,8 @@ void AddDeleteOwnMessagesAction(PeerData *peerData,
 }
 
 void AddHistoryAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
-	if (item->hideEditedBadge()) {
-		return;
-	}
-
-	const auto edited = item->Get<HistoryMessageEdited>();
-	if (!edited) {
+	if (!AyuMessages::isBotMessage(item)
+		&& (item->hideEditedBadge() || !item->Get<HistoryMessageEdited>())) {
 		return;
 	}
 

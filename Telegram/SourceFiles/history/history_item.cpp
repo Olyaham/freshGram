@@ -4183,6 +4183,21 @@ void HistoryItem::setPostAuthor(const QString &postAuthor) {
 	history()->owner().requestItemResize(this);
 }
 
+bool HistoryItem::hideEditedBadge() const {
+	if (!(_flags & MessageFlag::HideEdited)) {
+		return false;
+	} else if (_ayuEditedBadge < 0) {
+		_ayuEditedBadge = (Has<HistoryMessageEdited>()
+			&& AyuMessages::isBotMessage(this)
+			&& AyuMessages::hasRevisions(this)) ? 1 : 0;
+	}
+	return !_ayuEditedBadge;
+}
+
+void HistoryItem::ayuShowEditedBadge() {
+	_ayuEditedBadge = 1;
+}
+
 void HistoryItem::setDeleted() {
 	_deleted = true;
 	_deletedAnimated = true;

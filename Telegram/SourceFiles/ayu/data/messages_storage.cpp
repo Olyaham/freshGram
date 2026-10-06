@@ -25,6 +25,7 @@
 #include "data/data_photo.h"
 #include "data/data_photo_media.h"
 #include "data/data_session.h"
+#include "data/data_user.h"
 #include "history/history.h"
 #include "history/history_item.h"
 #include "history/history_item_components.h"
@@ -304,6 +305,14 @@ void map(not_null<HistoryItem*> item, AyuMessageBase &message) {
 	// message.mimeType
 }
 
+bool isBotMessage(not_null<const HistoryItem*> item) {
+	const auto isBot = [](PeerData *peer) {
+		const auto user = peer ? peer->asUser() : nullptr;
+		return user && user->isBot();
+	};
+	return isBot(item->history()->peer) || isBot(item->from()) || item->viaBot();
+}
+
 void addEditedMessage(not_null<HistoryItem *> item) {
 	if (AyuSecret::IsSecretPeer(item->history()->peer)) {
 		return;
@@ -326,7 +335,7 @@ std::vector<AyuMessageBase> loadEditedMessages(ID userId, ID dialogId, ID messag
 	return convertToBase(AyuDatabase::getEditedMessages(userId, dialogId, messageId, minId, maxId, totalLimit));
 }
 
-bool hasRevisions(not_null<HistoryItem*> item) {
+bool hasRevisions(not_null<const HistoryItem*> item) {
 	const ID userId = item->history()->owner().session().userId().bare & PeerId::kChatTypeMask;
 	const auto dialogId = getDialogIdFromPeer(item->history()->peer);
 	const auto msgId = item->id.bare;

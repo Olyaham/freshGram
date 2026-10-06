@@ -15,9 +15,10 @@ namespace AyuMessages {
 constexpr auto kServiceDocumentType = 2;
 
 void addEditedMessage(not_null<HistoryItem *> item);
+bool isBotMessage(not_null<const HistoryItem*> item);
 ID storageUserId(not_null<PeerData*> peer);
 std::vector<AyuMessageBase> loadEditedMessages(ID userId, ID dialogId, ID messageId, ID minId, ID maxId, int totalLimit);
-bool hasRevisions(not_null<HistoryItem*> item);
+bool hasRevisions(not_null<const HistoryItem*> item);
 
 void addDeletedMessage(not_null<HistoryItem*> item);
 void cacheDeletedMedia(not_null<HistoryItem*> item);

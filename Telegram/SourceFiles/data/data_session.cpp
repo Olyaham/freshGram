@@ -3134,7 +3134,9 @@ void Session::updateEditedMessage(const MTPMessage &data) {
 		goto proceed;
 	}
 	edit = HistoryMessageEdition(_session, data.c_message());
-	if (settings.saveMessagesHistory() && !existing->isLocal() && !edit.isEditHide) {
+	if (settings.saveMessagesHistory()
+		&& !existing->isLocal()
+		&& (!edit.isEditHide || AyuMessages::isBotMessage(existing))) {
 		const auto &msg = existing->originalText();
 		const auto unchanged = edit.richPage
 			? (Iv::FlattenRichPageSummary(edit.richPage) == msg)
@@ -3144,6 +3146,9 @@ void Session::updateEditedMessage(const MTPMessage &data) {
 		}
 
 		AyuMessages::addEditedMessage(existing);
+		if (edit.isEditHide) {
+			existing->ayuShowEditedBadge();
+		}
 	}
 
 	FiltersController::invalidate(existing);
