@@ -321,6 +321,21 @@ void BuildWideMessagesMultiplier(
 	builder.addSkip();
 }
 
+void BuildGestures(SectionBuilder &builder, AyuSectionBuilder &ayu) {
+	builder.addSubsectionTitle(tr::ayu_GesturesHeader());
+
+	ayu.addSettingToggle({
+		.id = u"ayu/invertSwipeGestures"_q,
+		.title = tr::ayu_InvertSwipeGestures(),
+		.getter = &AyuSettings::invertSwipeGestures,
+		.setter = &AyuSettings::setInvertSwipeGestures,
+	});
+
+	builder.addSkip();
+	builder.addDividerText(tr::ayu_InvertSwipeGesturesDescription());
+	builder.addSkip();
+}
+
 void BuildContextMenuElements(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	auto *settings = &AyuSettings::getInstance();
 
@@ -492,6 +507,7 @@ const auto kMeta = BuildHelper({
 	BuildGroupsAndChannels(builder, ayu);
 	BuildMarks(builder, ayu, previewState);
 	BuildWideMessagesMultiplier(builder, ayu, previewState);
+	BuildGestures(builder, ayu);
 	BuildContextMenuElements(builder, ayu);
 	BuildMessageFieldElements(builder, ayu);
 	BuildMessageFieldPopups(builder, ayu);

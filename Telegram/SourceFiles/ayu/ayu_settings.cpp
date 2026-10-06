@@ -600,6 +600,12 @@ void AyuSettings::setSemiTransparentDeletedMessages(bool val) {
 	save();
 }
 
+void AyuSettings::setInvertSwipeGestures(bool val) {
+	if (_invertSwipeGestures.current() == val) return;
+	_invertSwipeGestures = val;
+	save();
+}
+
 void AyuSettings::setDisableAds(bool val) {
 	if (_disableAds.current() == val) return;
 	_disableAds = val;
@@ -1152,6 +1158,7 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"hideFromBlocked", s._hideFromBlocked.current()},
 		{"semiTransparentDeletedMessages", s._semiTransparentDeletedMessages.current()},
 		{"disableAds", s._disableAds.current()},
+		{"invertSwipeGestures", s._invertSwipeGestures.current()},
 		{"disableStories", s._disableStories.current()},
 		{"disableCustomBackgrounds", s._disableCustomBackgrounds.current()},
 		{"hidePremiumStatuses", s._hidePremiumStatuses.current()},
@@ -1262,6 +1269,7 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._hideFromBlocked = j.value("hideFromBlocked", defaults._hideFromBlocked.current());
 	s._semiTransparentDeletedMessages = j.value("semiTransparentDeletedMessages", defaults._semiTransparentDeletedMessages.current());
 	s._disableAds = j.value("disableAds", defaults._disableAds.current());
+	s._invertSwipeGestures = j.value("invertSwipeGestures", defaults._invertSwipeGestures.current());
 	s._disableStories = j.value("disableStories", defaults._disableStories.current());
 	s._disableCustomBackgrounds = j.value("disableCustomBackgrounds", defaults._disableCustomBackgrounds.current());
 	s._hidePremiumStatuses = j.value("hidePremiumStatuses", defaults._hidePremiumStatuses.current());
