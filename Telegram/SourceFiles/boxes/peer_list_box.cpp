@@ -1129,7 +1129,7 @@ void PeerListRow::paintDisabledCheckUserpic(
 }
 
 void PeerListRow::setStatusText(const QString &text) {
-	_status.setText(st::defaultTextStyle, text, Ui::NameTextOptions());
+	_status.setText(st::defaultTextStyle, text, Ui::PlainNameTextOptions());
 }
 
 float64 PeerListRow::checkedRatio() {

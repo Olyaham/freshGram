@@ -23,6 +23,7 @@ const TextParseOptions &WebpageTextTitleOptions();
 const TextParseOptions &WebpageTextDescriptionOptions();
 
 const TextParseOptions &NameTextOptions();
+const TextParseOptions &PlainNameTextOptions();
 const TextParseOptions &DialogTextOptions();
 
 } // namespace Ui

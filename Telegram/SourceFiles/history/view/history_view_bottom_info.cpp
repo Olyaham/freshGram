@@ -562,7 +562,7 @@ void BottomInfo::layoutDateText() {
 		_authorEditedDate.setMarkedText(
 			st::msgDateTextStyle,
 			marked,
-			Ui::NameTextOptions(),
+			Ui::PlainNameTextOptions(),
 			helper.context());
 	} else {
 		const auto editedIcon = !editedPrimary
@@ -660,7 +660,7 @@ void BottomInfo::layoutDateText() {
 		_authorEditedDate.setMarkedText(
 			st::msgDateTextStyle,
 			marked,
-			Ui::NameTextOptions(),
+			Ui::PlainNameTextOptions(),
 			helper.context());
 	}
 }
@@ -673,7 +673,7 @@ void BottomInfo::layoutViewsText() {
 	_views.setText(
 		st::msgDateTextStyle,
 		Lang::FormatCountToShort(std::max(*_data.views, 1)).string,
-		Ui::NameTextOptions());
+		Ui::PlainNameTextOptions());
 }
 
 void BottomInfo::layoutRepliesText() {
@@ -688,7 +688,7 @@ void BottomInfo::layoutRepliesText() {
 	_replies.setText(
 		st::msgDateTextStyle,
 		Lang::FormatCountToShort(*_data.replies).string,
-		Ui::NameTextOptions());
+		Ui::PlainNameTextOptions());
 }
 
 void BottomInfo::layoutEffectText() {

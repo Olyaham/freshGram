@@ -108,6 +108,7 @@ private:
 		uint64 key = 0;
 		int version = -1;
 		bool unread = false;
+		bool spoilered = false;
 	};
 
 	[[nodiscard]] QImage topicJumpRippleMask(

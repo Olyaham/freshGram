@@ -84,6 +84,7 @@ bool spoilersActive() {
 
 void refresh() {
 	Ui::Text::SetNamesSpoilered(spoilersActive());
+	Ui::SetSpoilersStatic(spoilersActive());
 }
 
 rpl::producer<bool> spoilersActiveValue() {

@@ -109,6 +109,7 @@ private:
 [[nodiscard]] SpoilerMessCached GenerateSpoilerMess(
 	const SpoilerMessDescriptor &descriptor);
 
+void SetSpoilersStatic(bool value);
 void PreloadTextSpoilerMask(rpl::lifetime &lifetime);
 [[nodiscard]] const SpoilerMessCached &DefaultTextSpoilerMask();
 void PreloadImageSpoiler();

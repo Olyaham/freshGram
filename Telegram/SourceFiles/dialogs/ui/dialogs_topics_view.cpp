@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "dialogs/ui/dialogs_topics_view.h"
 
+#include "ayu/features/streamer_mode/streamer_mode.h"
 #include "dialogs/ui/dialogs_layout.h"
 #include "data/stickers/data_custom_emoji.h"
 #include "data/data_forum.h"
@@ -70,8 +71,10 @@ void TopicsView::prepare(MsgId frontRootId, Fn<void()> customEmojiRepaint) {
 		}
 		auto &title = _titles[index++];
 		const auto unread = topic->chatListBadgesState().unread;
+		const auto spoilered = AyuFeatures::StreamerMode::spoilersActive();
 		if (title.key == key
 			&& title.unread == unread
+			&& title.spoilered == spoilered
 			&& title.version == topic->titleVersion()) {
 			continue;
 		}
@@ -81,9 +84,15 @@ void TopicsView::prepare(MsgId frontRootId, Fn<void()> customEmojiRepaint) {
 			.customEmojiLoopLimit = kIconLoopCount,
 		});
 		auto topicTitle = topic->titleWithIcon();
+		if (spoilered) {
+			topicTitle = Ui::Text::Wrapped(
+				std::move(topicTitle),
+				EntityType::Spoiler);
+		}
 		title.key = key;
 		title.version = topic->titleVersion();
 		title.unread = unread;
+		title.spoilered = spoilered;
 		title.title.setMarkedText(
 			st::dialogsTextStyle,
 			(unread
@@ -139,8 +148,10 @@ void TopicsView::prepare(PeerId frontPeerId, Fn<void()> customEmojiRepaint) {
 		}
 		auto &title = _titles[index++];
 		const auto unread = sublist->chatListBadgesState().unread;
+		const auto spoilered = AyuFeatures::StreamerMode::spoilersActive();
 		if (title.key == key
 			&& title.unread == unread
+			&& title.spoilered == spoilered
 			&& title.version == peer->nameVersion()) {
 			continue;
 		}
@@ -154,9 +165,15 @@ void TopicsView::prepare(PeerId frontPeerId, Fn<void()> customEmojiRepaint) {
 				manager->peerUserpicEmojiData(peer),
 				u"@"_q)
 		).append(' ').append(peer->shortName());
+		if (spoilered) {
+			topicTitle = Ui::Text::Wrapped(
+				std::move(topicTitle),
+				EntityType::Spoiler);
+		}
 		title.key = key;
 		title.version = peer->nameVersion();
 		title.unread = unread;
+		title.spoilered = spoilered;
 		title.title.setMarkedText(
 			st::dialogsTextStyle,
 			(unread

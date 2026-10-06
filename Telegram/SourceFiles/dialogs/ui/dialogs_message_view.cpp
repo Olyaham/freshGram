@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "dialogs/ui/dialogs_message_view.h"
 
+#include "ayu/features/streamer_mode/streamer_mode.h"
+
 #include "history/history.h"
 #include "history/history_item.h"
 #include "history/view/history_view_element.h"
@@ -145,6 +147,7 @@ bool MessageView::prepared(
 		Data::SavedMessages *monoforum) const {
 	return (_textCachedFor == item.get())
 		&& (_unreadMedia == item->isUnreadMedia())
+		&& (_spoilered == AyuFeatures::StreamerMode::spoilersActive())
 		&& ((!forum && !monoforum)
 			|| (_topics
 				&& _topics->forum() == forum
@@ -158,6 +161,7 @@ void MessageView::prepare(
 		Data::SavedMessages *monoforum,
 		Fn<void()> customEmojiRepaint,
 		ToPreviewOptions options) {
+	const auto spoilered = AyuFeatures::StreamerMode::spoilersActive();
 	if (!forum && !monoforum) {
 		_topics = nullptr;
 	} else if (!_topics
@@ -169,17 +173,18 @@ void MessageView::prepare(
 		} else {
 			_topics->prepare(item->sublistPeerId(), customEmojiRepaint);
 		}
-	} else if (!_topics->prepared()) {
+	} else if (!_topics->prepared() || _spoilered != spoilered) {
 		if (forum) {
 			_topics->prepare(item->topicRootId(), customEmojiRepaint);
 		} else {
 			_topics->prepare(item->sublistPeerId(), customEmojiRepaint);
 		}
 	}
-	if (_textCachedFor == item.get()) {
+	if (_textCachedFor == item.get() && _spoilered == spoilered) {
 		_unreadMedia = item->isUnreadMedia();
 		return;
 	}
+	_spoilered = spoilered;
 	options.existing = &_imagesCache;
 	options.ignoreTopic = true;
 	options.spoilerLoginCode = true;
@@ -456,6 +461,9 @@ void MessageView::paint(
 			.position = rect.topLeft(),
 			.availableWidth = rect.width(),
 			.palette = palette,
+			.spoiler = Text::DefaultSpoilerCache(),
+			.now = context.now,
+			.pausedSpoiler = pausedSpoiler,
 			.elisionHeight = rect.height(),
 		});
 		rect.setLeft(rect.x() + _senderCache.maxWidth());
@@ -617,6 +625,23 @@ HistoryView::ItemPreview PreviewWithSender(
 		std::move(preview.text),
 		TextWithTagOffset<lt_from_part>::FromString);
 	preview.text = std::move(fullWithOffset.text);
+	if (AyuFeatures::StreamerMode::spoilersActive()
+		&& fullWithOffset.offset >= 0
+		&& wrappedWithOffset.offset >= 0
+		&& senderWithOffset.offset >= 0) {
+		preview.text.entities.push_back(EntityInText(
+			EntityType::Spoiler,
+			(fullWithOffset.offset
+				+ wrappedWithOffset.offset
+				+ senderWithOffset.offset),
+			sender.size()));
+		std::stable_sort(
+			preview.text.entities.begin(),
+			preview.text.entities.end(),
+			[](const EntityInText &a, const EntityInText &b) {
+				return a.offset() < b.offset();
+			});
+	}
 	preview.arrowInTextPosition = (fullWithOffset.offset < 0
 		|| wrappedWithOffset.offset < 0
 		|| senderWithOffset.offset < 0)

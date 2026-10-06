@@ -1004,7 +1004,8 @@ void FakeRow::invalidateTopic() {
 }
 
 const Ui::Text::String &FakeRow::name() const {
-	if (_name.isEmpty()) {
+	if (_name.isEmpty() || _nameSpoilered != Ui::Text::NamesSpoilered()) {
+		_nameSpoilered = Ui::Text::NamesSpoilered();
 		const auto from = _searchInChat
 			&& !FiltersController::filtered(_item)
 			? _item->displayFrom()
