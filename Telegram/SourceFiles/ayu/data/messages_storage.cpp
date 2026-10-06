@@ -274,6 +274,12 @@ void map(not_null<HistoryItem*> item, AyuMessageBase &message) {
 	message.replyPeerId = 0;
 	message.replyTopId = 0;
 	message.replyForumTopic = false;
+	if (const auto reply = item->Get<HistoryMessageReply>();
+		reply && !reply->externalPeerId()) {
+		message.replyMessageId = int(reply->messageId().bare);
+		message.replyTopId = int(reply->topMessageId().bare);
+		message.replyForumTopic = reply->topicPost();
+	}
 	// message.replySerialized
 	// message.replyMarkupSerialized
 	message.entityCreateDate = base::unixtime::now();

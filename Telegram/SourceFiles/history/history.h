@@ -112,6 +112,7 @@ public:
 	void setAyuKept(bool kept);
 	void restoreAyuKept();
 	void ayuRestoreMarkStale();
+	void ayuRestoreThread(MsgId rootId);
 	[[nodiscard]] HistoryItem *ayuRestored(
 		MsgId id,
 		not_null<HistoryItem*> holder);

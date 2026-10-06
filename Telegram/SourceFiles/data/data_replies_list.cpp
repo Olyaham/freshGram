@@ -210,6 +210,8 @@ rpl::producer<MessagesSlice> RepliesList::source(
 
 		if (_history->peer->isForum()) {
 			_history->checkLocalMessages();
+		} else {
+			_history->ayuRestoreThread(_rootId);
 		}
 
 		_instantChanges.events(

@@ -4294,6 +4294,13 @@ HistoryItem *History::ayuRestored(
 	return _ayuRestore->find(id, holder);
 }
 
+void History::ayuRestoreThread(MsgId rootId) {
+	if (!_ayuRestore) {
+		_ayuRestore = std::make_unique<AyuRestore::State>(this);
+	}
+	_ayuRestore->restoreThread(rootId);
+}
+
 void History::ayuRestoreMarkStale() {
 	if (_ayuRestore) {
 		_ayuRestore->markStale();

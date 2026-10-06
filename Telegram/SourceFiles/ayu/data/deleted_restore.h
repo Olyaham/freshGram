@@ -29,6 +29,7 @@ public:
 	HistoryItem *materialize(TimeId from, TimeId till);
 	void dropDuplicates();
 	[[nodiscard]] HistoryItem *find(MsgId id, not_null<HistoryItem*> holder);
+	void restoreThread(MsgId rootId);
 	[[nodiscard]] std::vector<not_null<HistoryItem*>> orphans(
 		TimeId from,
 		TimeId till) const;
@@ -36,6 +37,7 @@ public:
 private:
 	void load(ID userId, ID dialogId);
 	void resolveWaiting();
+	void materializeThread(MsgId rootId);
 	HistoryItem *create(Row &row);
 	[[nodiscard]] HistoryItem *duplicateOf(const Row &row) const;
 
@@ -43,6 +45,7 @@ private:
 	std::vector<Row> _rows;
 	base::flat_map<ID, int> _index;
 	base::flat_set<FullMsgId> _waiting;
+	base::flat_set<MsgId> _threads;
 	bool _requested = false;
 	bool _loaded = false;
 	bool _pending = false;

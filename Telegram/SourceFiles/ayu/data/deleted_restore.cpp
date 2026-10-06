@@ -155,6 +155,7 @@ void State::disable() {
 	_rows.clear();
 	_index.clear();
 	_waiting.clear();
+	_threads.clear();
 }
 
 void State::load(ID userId, ID dialogId) {
@@ -197,6 +198,9 @@ void State::load(ID userId, ID dialogId) {
 			strong->_loaded = true;
 			strong->_pending = false;
 			strong->resolveWaiting();
+			for (const auto rootId : base::take(strong->_threads)) {
+				strong->materializeThread(rootId);
+			}
 			strong->_history->checkLocalMessages();
 		});
 	});
@@ -213,6 +217,31 @@ void State::resolveWaiting() {
 			&& !reply->resolvedMessage
 			&& _index.contains(reply->messageId().bare)) {
 			holder->updateDependencyItem();
+		}
+	}
+}
+
+void State::restoreThread(MsgId rootId) {
+	if (_disabled || !rootId) {
+		return;
+	}
+	checkLoaded();
+	if (_loaded) {
+		materializeThread(rootId);
+	} else if (_pending) {
+		_threads.emplace(rootId);
+	}
+}
+
+void State::materializeThread(MsgId rootId) {
+	for (auto &row : _rows) {
+		if (row.dead || row.message.replyTopId != rootId.bare) {
+			continue;
+		}
+		try {
+			create(row);
+		} catch (...) {
+			row.dead = true;
 		}
 	}
 }
@@ -413,6 +442,14 @@ HistoryItem *State::create(Row &row) {
 			replyTo.messageId = FullMsgId(peer->id, root);
 			replyTo.topicRootId = root;
 		}
+	} else if (message.replyTopId || message.replyMessageId) {
+		flags |= MessageFlag::HasReplyInfo;
+		replyTo.messageId = FullMsgId(
+			peer->id,
+			MsgId(message.replyMessageId
+				? message.replyMessageId
+				: message.replyTopId));
+		replyTo.topicRootId = MsgId(message.replyTopId);
 	}
 	const auto outgoing = (message.flags & kOutgoingFlag) != 0;
 	if (outgoing) {
