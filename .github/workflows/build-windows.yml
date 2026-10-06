@@ -139,25 +139,41 @@ jobs:
           call configure.bat x64 qt6 -D TDESKTOP_API_ID=%API_ID% -D TDESKTOP_API_HASH=%API_HASH% -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON -D DESKTOP_APP_DISABLE_CRASH_REPORTS=ON
 
       - name: Build
+        id: build
+        continue-on-error: true
+        shell: pwsh
+        run: ./freshGram/.github/scripts/windows-build.ps1
+
+      - name: Add paging space for the link
+        id: pagefile
+        if: steps.build.outcome == 'failure'
+        continue-on-error: true
+        shell: pwsh
+        run: ./freshGram/.github/scripts/windows-pagefile.ps1
+
+      - name: Link again with more paging space
+        id: relink
+        if: steps.build.outcome == 'failure' && steps.pagefile.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: ./freshGram/.github/scripts/windows-build.ps1
+
+      - name: Link again with lld-link
+        id: lld
+        if: steps.build.outcome == 'failure' && steps.relink.outcome != 'success'
+        continue-on-error: true
         shell: pwsh
         run: |
-          function Show-Resources {
-            $os = Get-CimInstance Win32_OperatingSystem
-            $pagefile = (Get-CimInstance Win32_PageFileUsage | ForEach-Object { "$($_.Name) $($_.CurrentUsage)/$($_.AllocatedBaseSize)MB" }) -join ', '
-            $drives = (Get-PSDrive -PSProvider FileSystem | ForEach-Object { "$($_.Name): $([math]::Round($_.Free / 1GB, 1))GB free" }) -join ', '
-            $top = (Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 5 | ForEach-Object { "$($_.ProcessName)=$([math]::Round($_.WorkingSet64 / 1MB))MB" }) -join ', '
-            Write-Host ("[resources] memory free {0}GB of {1}GB, virtual free {2}GB, pagefile {3}; {4}; top: {5}" -f [math]::Round($os.FreePhysicalMemory / 1MB, 1), [math]::Round($os.TotalVisibleMemorySize / 1MB, 1), [math]::Round($os.FreeVirtualMemory / 1MB, 1), $pagefile, $drives, $top)
-          }
-          Show-Resources
-          $build = Start-Process cmake -WorkingDirectory freshGram -NoNewWindow -PassThru -ArgumentList @(
-            '--build', 'out', '--config', 'Release', '--target', 'Telegram', '--',
-            '/m:2', '/p:UseMultiToolTask=true', '/p:EnforceProcessCountAcrossBuilds=true', '/p:MultiProcMaxCount=2')
-          while (-not $build.WaitForExit(300000)) {
-            Show-Resources
-          }
-          Show-Resources
-          $build.WaitForExit()
-          exit $build.ExitCode
+          $llvm = if ($env:llvmX64) { $env:llvmX64 } else { Join-Path $env:VCINSTALLDIR 'Tools\Llvm\x64\bin' }
+          Write-Host "lld-link: $(Test-Path (Join-Path $llvm 'lld-link.exe')) in $llvm"
+          ./freshGram/.github/scripts/windows-build.ps1 -ExtraArguments @("/p:LinkToolPath=$llvm", '/p:LinkToolExe=lld-link.exe')
+
+      - name: Stop when the build failed
+        if: steps.build.outcome == 'failure' && steps.relink.outcome != 'success' && steps.lld.outcome != 'success'
+        shell: pwsh
+        run: |
+          Write-Host "::error::Telegram.exe was not built: the compile or link failed, see the steps above."
+          exit 1
 
       - name: Package
         shell: pwsh
