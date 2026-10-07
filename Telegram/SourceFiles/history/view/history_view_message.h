@@ -538,6 +538,8 @@ private:
 	mutable std::unique_ptr<TranscribeButton> _summarize;
 
 	mutable Ui::Text::String _fromName;
+	mutable ClickHandlerPtr _revealNameLink;
+	mutable bool _fromNameRevealed = false;
 	mutable std::unique_ptr<FromNameStatus> _fromNameStatus;
 	mutable std::unique_ptr<Ui::RoundCheckbox> _selectionRoundCheckbox;
 	mutable uint32 _fromNameVersion : 16 = 0;

@@ -460,6 +460,11 @@ void PaintRow(
 		BadgesState badgesState,
 		base::flags<Flag> flags,
 		PaintItemCallback &&paintItemCallback) {
+	if (Text::NamesSpoilered() && rowName.hasSpoilers()) {
+		const_cast<Text::String&>(rowName).setSpoilerRevealed(
+			context.selected || context.active,
+			anim::type::instant);
+	}
 	const auto supportMode = entry->session().supportMode();
 	if (supportMode) {
 		draft = nullptr;

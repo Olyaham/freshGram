@@ -4368,6 +4368,22 @@ bool Message::getStateFromName(
 		if (point.x() >= availableLeft
 			&& point.x() < availableLeft + availableWidth
 			&& point.x() < availableLeft + nameWidth) {
+			if (from
+				&& Ui::Text::NamesSpoilered()
+				&& !_fromNameRevealed
+				&& _fromName.hasSpoilers()) {
+				if (!_revealNameLink) {
+					_revealNameLink = std::make_shared<LambdaClickHandler>([=] {
+						_fromNameRevealed = true;
+						_fromName.setSpoilerRevealed(
+							true,
+							anim::type::instant);
+						repaint();
+					});
+				}
+				outResult->link = _revealNameLink;
+				return true;
+			}
 			outResult->link = fromLink();
 			recordLinkRipplePoint(point, trect.topLeft());
 			_fromLinkRipplePointSet = 1;
@@ -5600,6 +5616,10 @@ void Message::validateFromNameText(PeerData *from) const {
 			st::msgNameStyle,
 			from->name(),
 			Ui::NameTextOptions());
+		_fromNameRevealed = false;
+	}
+	if (_fromNameRevealed && !Ui::Text::NamesSpoilered()) {
+		_fromNameRevealed = false;
 	}
 	if (from->isPremium()
 		|| (from->isChannel()

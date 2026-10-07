@@ -476,16 +476,26 @@ HistoryItem *State::create(Row &row) {
 		&_history->session(),
 		AyuMapper::deserializeTextWithEntities(message.textEntities).v);
 
-	const auto item = _history->makeMessage({
-		.id = owner.nextLocalMessageId(),
-		.flags = flags,
-		.from = from ? from->id : PeerId(),
-		.replyTo = std::move(replyTo),
-		.date = message.date,
-		.postAuthor = QString::fromStdString(message.postAuthor),
-	}, std::move(text), AyuMapper::deserializeMedia(message.documentSerialized));
+	const auto build = [&](TextWithEntities text) {
+		return _history->makeMessage({
+			.id = owner.nextLocalMessageId(),
+			.flags = flags,
+			.from = from ? from->id : PeerId(),
+			.replyTo = replyTo,
+			.date = message.date,
+			.postAuthor = QString::fromStdString(message.postAuthor),
+		}, std::move(text), AyuMapper::deserializeMedia(message.documentSerialized));
+	};
+	auto item = build(text);
+	if (item->isEmpty() && !text.entities.empty()) {
+		LOG(("AyuRestore: message %1 is empty, retrying without entities").arg(message.messageId));
+		item->destroy();
+		text.entities.clear();
+		item = build(text);
+	}
 
 	if (item->isEmpty()) {
+		LOG(("AyuRestore: message %1 stays empty, text %2 bytes").arg(message.messageId).arg(message.text.size()));
 		row.dead = true;
 		item->destroy();
 		return nullptr;
