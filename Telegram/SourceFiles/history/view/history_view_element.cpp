@@ -751,7 +751,7 @@ QString DateTooltipText(not_null<Element*> view) {
 					dateText += '\n' + tr::lng_forwarded_forwarded_date(
 						tr::now,
 						lt_date,
-						locale.toString(parsed, format));
+						formatLongDateTime(locale, parsed));
 				}
 			}
 		}
@@ -778,12 +778,12 @@ QString DateTooltipText(not_null<Element*> view) {
 	if (item->media() && item->media()->photo()) {
 		dateText += '\n' + QChar(0xD83D) + QChar(0xDDBC) + QChar(0xFE0F) + ' ' +
 			DcText(item->media()->photo()->_dc) + ", " +
-			locale.toString(base::unixtime::parse(item->media()->photo()->date()), format);
+			formatLongDateTime(locale, base::unixtime::parse(item->media()->photo()->date()));
 	}
 	if (item->media() && item->media()->document()) {
 		dateText += '\n' + QChar(0xD83D) + QChar(0xDCC4) + ' ' +
 			DcText(item->media()->document()->_dc) + ", " +
-			locale.toString(base::unixtime::parse(item->media()->document()->date), format);
+			formatLongDateTime(locale, base::unixtime::parse(item->media()->document()->date));
 	}
 	return dateText;
 }
