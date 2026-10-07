@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/rp_widget.h"
 #include "ui/unread_badge.h"
 #include "ui/effects/animations.h"
+#include "ayu/ui/status_marquee.h"
 #include "base/timer.h"
 #include "base/object_ptr.h"
 #include "base/weak_qptr.h"
@@ -287,7 +288,7 @@ private:
 	base::Timer _onlineUpdater;
 	base::Timer _statusScrollTimer;
 	QRect _statusScrollRect;
-	crl::time _statusScrollStart = 0;
+	AyuUi::StatusMarquee _statusMarquee;
 	int _statusScrollFull = 0;
 
 	rpl::event_stream<> _forwardSelection;

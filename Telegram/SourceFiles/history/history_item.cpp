@@ -4201,6 +4201,9 @@ void HistoryItem::ayuShowEditedBadge() {
 void HistoryItem::setDeleted() {
 	_deleted = true;
 	_deletedAnimated = true;
+	if (!_ayuDeletedAt) {
+		_ayuDeletedAt = base::unixtime::now();
+	}
 
 	// cleanup reactions as they tend to bug with deleted messages
 	if (hasUnreadReaction()) {

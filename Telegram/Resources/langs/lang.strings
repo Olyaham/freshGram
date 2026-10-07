@@ -9059,6 +9059,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_DisableStreamerModeTray" = "Disable Streamer Mode";
 "ayu_StreamerModeHeader" = "Streamer Mode";
 "ayu_StreamerHideWholeWindow" = "Hide the whole window";
+"ayu_DeletedAtDate" = "Deleted: {date}";
 "ayu_GesturesHeader" = "Gestures";
 "ayu_InvertSwipeGestures" = "Invert swipe gestures";
 "ayu_InvertSwipeGesturesDescription" = "Follow the scroll direction of the touchpad instead of the finger direction for swipes: opening and closing chats, replying to messages, quick actions.";

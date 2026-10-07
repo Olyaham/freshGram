@@ -412,7 +412,11 @@ TopBar::TopBar(
 	: nullptr)
 , _status(this, QString(), statusStyle())
 , _statusLabel(std::make_unique<StatusLabel>(_status.data(), _peer))
-, _statusScrollTimer([=] { updateStatusPosition(_progress.current()); })
+, _statusScrollTimer([=] {
+	if (_statusScroll) {
+		_statusScroll->update();
+	}
+})
 , _customStatus(std::move(descriptor.customStatus))
 , _showLastSeen(
 	this,
@@ -2075,6 +2079,7 @@ void TopBar::updateStatusPosition(float64 progressCurrent) {
 
 		_status->hide();
 		_statusScrollTimer.cancel();
+		_statusScroll = nullptr;
 		// _starsRating->hide();
 		_showLastSeen->hide(anim::type::instant);
 		return;
@@ -2121,27 +2126,60 @@ void TopBar::updateStatusPosition(float64 progressCurrent) {
 		- lastSeenWidth;
 	const auto fullWidth = _status->width();
 	const auto scrolling = (viewport > 0) && (fullWidth > viewport);
-	auto scroll = 0;
 	auto shownWidth = _status->textMaxWidth();
 	if (scrolling) {
-		const auto now = crl::now();
-		if (!_statusScrollStart || _statusScrollFull != fullWidth) {
-			_statusScrollStart = now;
-			_statusScrollFull = fullWidth;
-		}
 		statusLeft = leftEdge;
 		shownWidth = viewport;
-		scroll = AyuUi::StatusMarqueeOffset(
-			now - _statusScrollStart,
-			fullWidth - viewport);
-		_status->setMask(QRegion(scroll, 0, viewport, _status->height()));
+		if (!_statusScroll) {
+			_statusScroll = base::make_unique_q<Ui::RpWidget>(this);
+			_statusScroll->setAttribute(Qt::WA_TransparentForMouseEvents);
+			_statusScroll->paintRequest() | rpl::on_next([=] {
+				auto p = QPainter(_statusScroll.get());
+				const auto tape = _statusTape.size()
+					/ _statusTape.devicePixelRatio();
+				if (!_statusMarquee.step(
+						crl::now(),
+						tape.width(),
+						_statusScroll->width())) {
+					p.drawImage(0, 0, _statusTape);
+					return;
+				}
+				p.drawImage(0, 0, _statusMarquee.frame(
+					_statusScroll->size(),
+					tape.width(),
+					[=](Painter &q, int x) {
+						q.drawImage(x, 0, _statusTape);
+					}));
+			}, _statusScroll->lifetime());
+		}
+		const auto ratio = style::DevicePixelRatio();
+		_statusTape = QImage(
+			_status->size() * ratio,
+			QImage::Format_ARGB32_Premultiplied);
+		_statusTape.setDevicePixelRatio(ratio);
+		_statusTape.fill(Qt::transparent);
+		{
+			auto q = QPainter(&_statusTape);
+			_status->render(
+				&q,
+				QPoint(),
+				QRegion(),
+				QWidget::DrawChildren);
+		}
+		_statusScroll->setGeometry(
+			int(statusLeft + statusShift),
+			statusTop,
+			viewport,
+			_status->height());
+		_statusScroll->setVisible(swapProgress < 1.);
+		_statusScroll->raise();
 		if (!_statusScrollTimer.isActive()) {
 			_statusScrollTimer.callEach(33);
 		}
 	} else {
-		_statusScrollStart = 0;
+		_statusMarquee.reset();
 		_statusScrollTimer.cancel();
-		_status->clearMask();
+		_statusScroll = nullptr;
 	}
 
 	if (const auto rating = _starsRating.get()) {
@@ -2149,7 +2187,9 @@ void TopBar::updateStatusPosition(float64 progressCurrent) {
 		rating->setOpacity(progressCurrent);
 	}
 
-	_status->moveToLeft(statusLeft + statusShift - scroll, statusTop);
+	_status->moveToLeft(
+		scrolling ? -(fullWidth + st::boxRowPadding.left()) : statusLeft + statusShift,
+		statusTop);
 
 	if (_showLastSeen->toggled()) {
 		_showLastSeen->moveToLeft(

@@ -349,6 +349,12 @@ public:
 	}
 	[[nodiscard]] bool hideEditedBadge() const;
 	void ayuShowEditedBadge();
+	[[nodiscard]] TimeId ayuDeletedAt() const {
+		return _ayuDeletedAt;
+	}
+	void ayuSetDeletedAt(TimeId date) {
+		_ayuDeletedAt = date;
+	}
 	[[nodiscard]] bool hideDisplayDate() const {
 		return isEmpty() || (_flags & MessageFlag::HideDisplayDate);
 	}
@@ -840,6 +846,7 @@ private:
 	int _unsupportedTTL = 0;
 	bool _ayuExpired = false;
 	mutable signed char _ayuEditedBadge = -1;
+	TimeId _ayuDeletedAt = 0;
 	std::vector<char> _ayuSavedMedia;
 	bool _ayuSecretRead = false;
 

@@ -410,6 +410,7 @@ HistoryItem *State::create(Row &row) {
 		});
 		if (peer->isUser() || !_history->ayuKept()) {
 			service->setDeleted();
+			service->ayuSetDeletedAt(message.entityCreateDate);
 			service->markDeletedAnimated();
 		}
 		row.localId = service->id;
@@ -492,6 +493,7 @@ HistoryItem *State::create(Row &row) {
 	AyuMessages::restoreSavedMedia(item, message);
 	if (peer->isUser() || !_history->ayuKept()) {
 		item->setDeleted();
+		item->ayuSetDeletedAt(message.entityCreateDate);
 		item->markDeletedAnimated();
 	}
 	row.localId = item->id;

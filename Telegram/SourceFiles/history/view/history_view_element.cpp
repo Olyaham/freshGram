@@ -726,6 +726,12 @@ QString DateTooltipText(not_null<Element*> view) {
 			lt_date,
 			locale.toString(base::unixtime::parse(editedDate), format));
 	}
+	if (const auto deletedAt = item->isDeleted() ? item->ayuDeletedAt() : 0) {
+		dateText += '\n' + tr::ayu_DeletedAtDate(
+			tr::now,
+			lt_date,
+			locale.toString(base::unixtime::parse(deletedAt), format));
+	}
 	if (const auto forwarded = item->Get<HistoryMessageForwarded>()) {
 		if (!forwarded->story && forwarded->psaType.isEmpty()) {
 			dateText += '\n' + tr::lng_forwarded_date(

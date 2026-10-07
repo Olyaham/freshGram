@@ -885,34 +885,28 @@ void TopBarWidget::paintStatus(
 			? st::historyStatusFgActive
 			: st::historyStatusFg);
 		const auto full = _titlePeerText.maxWidth();
-		if (full > availableWidth && !rtl()) {
-			const auto now = crl::now();
-			if (!_statusScrollStart || _statusScrollFull != full) {
-				_statusScrollStart = now;
-				_statusScrollFull = full;
-			}
-			_statusScrollRect = QRect(
-				left,
-				top,
-				availableWidth,
-				st::dialogsTextFont->height);
-			p.save();
-			p.setClipRect(_statusScrollRect);
-			_titlePeerText.drawLeft(
-				p,
-				left - AyuUi::StatusMarqueeOffset(
-					now - _statusScrollStart,
-					full - availableWidth),
-				top,
+		if (_statusScrollFull != full) {
+			_statusScrollFull = full;
+			_statusMarquee.reset();
+		}
+		if (!rtl() && _statusMarquee.step(crl::now(), full, availableWidth)) {
+			const auto height = st::dialogsTextFont->height;
+			_statusScrollRect = QRect(left, top, availableWidth, height);
+			const auto &pen = _titlePeerTextOnline
+				? st::historyStatusFgActive
+				: st::historyStatusFg;
+			p.drawImage(left, top, _statusMarquee.frame(
+				QSize(availableWidth, height),
 				full,
-				outerWidth);
-			p.restore();
+				[&](Painter &q, int x) {
+					q.setPen(pen);
+					_titlePeerText.drawLeft(q, x, 0, full, full);
+				}));
 			if (!_statusScrollTimer.isActive()) {
 				_statusScrollTimer.callEach(33);
 			}
 			return;
 		}
-		_statusScrollStart = 0;
 		_statusScrollTimer.cancel();
 		_titlePeerText.drawLeftElided(
 			p,

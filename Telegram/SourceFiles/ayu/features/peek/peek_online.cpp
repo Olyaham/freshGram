@@ -17,6 +17,7 @@
 #include "rpl/event_stream.h"
 #include "ui/toast/toast.h"
 
+#include <QtCore/QLocale>
 #include <QtCore/QStringList>
 
 #include <map>
@@ -56,6 +57,35 @@ bool Running = false;
 
 void Toast(const QString &text) {
 	Ui::Toast::Show(text);
+}
+
+[[nodiscard]] bool HasRealPremium(not_null<Main::Session*> session) {
+	return (session->user()->flags() & UserDataFlag::Premium) != 0;
+}
+
+[[nodiscard]] QString ExactText(const Result &result, TimeId now) {
+	const auto seen = (result.kind == Kind::Online && result.checkedAt)
+		? result.checkedAt
+		: result.time;
+	const auto when = base::unixtime::parse(seen);
+	const auto today = base::unixtime::parse(now);
+	const auto locale = QLocale();
+	auto pattern = locale.timeFormat(QLocale::ShortFormat);
+	if (!pattern.contains(u"ss"_q)) {
+		pattern.replace(u"mm"_q, u"mm:ss"_q);
+	}
+	const auto time = locale.toString(when.time(), pattern);
+	if (when.date() == today.date()) {
+		return tr::lng_status_lastseen_today(tr::now, lt_time, time);
+	} else if (when.date().addDays(1) == today.date()) {
+		return tr::lng_status_lastseen_yesterday(tr::now, lt_time, time);
+	}
+	return tr::lng_status_lastseen_date_time(
+		tr::now,
+		lt_date,
+		locale.toString(when.date(), QLocale::ShortFormat),
+		lt_time,
+		time);
 }
 
 [[nodiscard]] ID UserKey(not_null<Main::Session*> session) {
@@ -313,7 +343,7 @@ bool available(not_null<UserData*> user) {
 		&& !user->isBot()
 		&& !user->isInaccessible()
 		&& !user->isServiceUser()
-		&& !user->session().user()->isPremium();
+		&& !HasRealPremium(&user->session());
 }
 
 bool shouldOffer(PeerData *peer) {
@@ -327,7 +357,7 @@ bool shouldOffer(PeerData *peer) {
 
 void start(not_null<UserData*> user) {
 	const auto session = &user->session();
-	if (session->user()->isPremium()) {
+	if (HasRealPremium(session)) {
 		Toast(tr::ayu_PeekPremium(tr::now));
 		return;
 	} else if (Running) {
@@ -386,12 +416,8 @@ rpl::producer<std::optional<Result>> value(not_null<UserData*> user) {
 	);
 }
 
-QString format(const Result &result, bool full) {
-	const auto status = Data::LastseenStatus::OnlineTill(result.time);
-	const auto now = base::unixtime::now();
-	return full
-		? Data::OnlineTextFull(status, now)
-		: Data::OnlineText(status, now);
+QString format(const Result &result, bool) {
+	return ExactText(result, base::unixtime::now());
 }
 
 QString augment(
@@ -402,7 +428,7 @@ QString augment(
 	if (user->isSelf()
 		|| user->isBot()
 		|| user->isServiceUser()
-		|| user->session().user()->isPremium()) {
+		|| HasRealPremium(&user->session())) {
 		return telegramText;
 	}
 	const auto &lastseen = user->lastseen();
@@ -413,15 +439,12 @@ QString augment(
 	if (!result) {
 		return telegramText;
 	}
-	const auto status = Data::LastseenStatus::OnlineTill(result->time);
 	return tr::ayu_PeekStatusFormat(
 		tr::now,
 		lt_status,
 		telegramText,
 		lt_peeked,
-		full
-			? Data::OnlineTextFull(status, now)
-			: Data::OnlineText(status, now));
+		ExactText(*result, now));
 }
 
 } // namespace AyuPeek
