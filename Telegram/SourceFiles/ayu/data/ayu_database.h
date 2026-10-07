@@ -53,6 +53,7 @@ std::vector<PeekRestoreRow> getPeekRestore(ID userId);
 void clearPeekRestore(ID userId);
 
 void saveKeptDialog(const KeptDialog &dialog);
+void syncKeptDialogs(const std::vector<KeptDialog> &dialogs);
 std::vector<KeptDialog> getKeptDialogs(ID userId);
 void removeKeptDialog(ID userId, ID dialogId);
 

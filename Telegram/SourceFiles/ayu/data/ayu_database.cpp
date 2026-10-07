@@ -353,14 +353,21 @@ void migrateToV2(decltype(storage) &storage) {
 	LOG(("Migration to V2 successful."));
 }
 
+void migrateToV3(decltype(storage) &storage) {
+	storage.remove_all<KeptDialog>(
+		where(column<KeptDialog>(&KeptDialog::lost) == 0));
+	LOG(("Migration to V3 successful."));
+}
+
 }
 
 void runMigrations(decltype(storage) &storage) {
-	constexpr int kLatestVersion = 2;
+	constexpr int kLatestVersion = 3;
 
 	const std::map<int, Fn<void(decltype(storage) &)>> migrations = {
 		{1, AyuMigrations::migrateToV1},
 		{2, AyuMigrations::migrateToV2},
+		{3, AyuMigrations::migrateToV3},
 	};
 
 	int currentVersion = 0;
@@ -678,6 +685,34 @@ void saveKeptDialog(const KeptDialog &dialog) {
 				)
 			);
 			storage.insert(dialog);
+		});
+	});
+}
+
+void syncKeptDialogs(const std::vector<KeptDialog> &dialogs) {
+	if (dialogs.empty()) {
+		return;
+	}
+	runVoid("sync kept dialogs", [&] {
+		inTransaction([&] {
+			for (const auto &dialog : dialogs) {
+				const auto lost = storage.count<KeptDialog>(
+					where(
+						column<KeptDialog>(&KeptDialog::userId) == dialog.userId and
+						column<KeptDialog>(&KeptDialog::dialogId) == dialog.dialogId and
+						column<KeptDialog>(&KeptDialog::lost) == 1
+					));
+				if (lost) {
+					continue;
+				}
+				storage.remove_all<KeptDialog>(
+					where(
+						column<KeptDialog>(&KeptDialog::userId) == dialog.userId and
+						column<KeptDialog>(&KeptDialog::dialogId) == dialog.dialogId
+					)
+				);
+				storage.insert(dialog);
+			}
 		});
 	});
 }

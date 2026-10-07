@@ -3412,6 +3412,7 @@ bool History::trackUnreadMessages() const {
 }
 
 bool History::shouldBeInChatList() const {
+	const auto hasLast = AyuKept::hasListableLastMessage(this);
 	if (peer->migrateTo() || !folderKnown()) {
 		return false;
 	} else if (_ayuKept && !lastMessage()) {
@@ -3432,14 +3433,14 @@ bool History::shouldBeInChatList() const {
 	} else if (const auto chat = peer->asChat()) {
 		return chat->amIn()
 			|| !lastMessageKnown()
-			|| (lastMessage() != nullptr);
+			|| hasLast;
 	} else if (const auto user = peer->asUser()) {
 		if (user->isBot() && isTopPromoted()) {
 			return true;
 		}
 	}
 	return !lastMessageKnown()
-		|| (lastMessage() != nullptr);
+		|| hasLast;
 }
 
 void History::unknownMessageDeleted(MsgId messageId) {

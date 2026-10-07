@@ -648,6 +648,54 @@ void BuildSpyEssentials(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	});
 }
 
+void BuildDeletedChats(SectionBuilder &builder, AyuSectionBuilder &ayu) {
+	builder.addSubsectionTitle(tr::ayu_DeletedChatsHeader());
+
+	ayu.addCollapsibleToggle({
+		.id = u"ayu/keepRemovedDialogs"_q,
+		.title = tr::ayu_KeepRemovedDialogs(),
+		.checkboxes = {
+			NestedEntry{
+				tr::ayu_KeepRemovedUserChats(tr::now),
+				[] { return AyuSettings::getInstance().keepRemovedUserChats(); },
+				[](bool v) { AyuSettings::getInstance().setKeepRemovedUserChats(v); }
+			},
+			NestedEntry{
+				tr::ayu_KeepRemovedGroups(tr::now),
+				[] { return AyuSettings::getInstance().keepRemovedGroups(); },
+				[](bool v) { AyuSettings::getInstance().setKeepRemovedGroups(v); }
+			},
+			NestedEntry{
+				tr::ayu_KeepRemovedChannels(tr::now),
+				[] { return AyuSettings::getInstance().keepRemovedChannels(); },
+				[](bool v) { AyuSettings::getInstance().setKeepRemovedChannels(v); }
+			}
+		},
+		.toggledWhenAll = false,
+	});
+	ayu.addSettingToggle({
+		.id = u"ayu/restoreDeletedInChats"_q,
+		.title = tr::ayu_RestoreDeletedInChats(),
+		.getter = &AyuSettings::restoreDeletedInChats,
+		.setter = &AyuSettings::setRestoreDeletedInChats,
+	});
+	ayu.addSettingToggle({
+		.id = u"ayu/showDeletedChatIcon"_q,
+		.title = tr::ayu_ShowDeletedChatIcon(),
+		.getter = &AyuSettings::showDeletedChatIcon,
+		.setter = &AyuSettings::setShowDeletedChatIcon,
+	});
+	ayu.addSettingToggle({
+		.id = u"ayu/markOldMessagesDeleted"_q,
+		.title = tr::ayu_MarkOldMessagesDeleted(),
+		.getter = &AyuSettings::markOldMessagesDeleted,
+		.setter = &AyuSettings::setMarkOldMessagesDeleted,
+	});
+
+	builder.addSkip();
+	builder.addDividerText(tr::ayu_DeletedChatsDescription());
+}
+
 constexpr auto kNever = std::numeric_limits<int>::max();
 
 void AddStorageSlider(
@@ -830,6 +878,9 @@ const auto kMeta = BuildHelper({
 
 	builder.addSkip();
 	BuildSpyEssentials(builder, ayu);
+
+	ayu.addSectionDivider();
+	BuildDeletedChats(builder, ayu);
 
 	ayu.addSectionDivider();
 	BuildStorage(builder, ayu);

@@ -1094,6 +1094,42 @@ void AyuSettings::setShowPeerId(PeerIdDisplay val) {
 	save();
 }
 
+void AyuSettings::setKeepRemovedUserChats(bool val) {
+	if (_keepRemovedUserChats.current() == val) return;
+	_keepRemovedUserChats = val;
+	save();
+}
+
+void AyuSettings::setKeepRemovedGroups(bool val) {
+	if (_keepRemovedGroups.current() == val) return;
+	_keepRemovedGroups = val;
+	save();
+}
+
+void AyuSettings::setKeepRemovedChannels(bool val) {
+	if (_keepRemovedChannels.current() == val) return;
+	_keepRemovedChannels = val;
+	save();
+}
+
+void AyuSettings::setRestoreDeletedInChats(bool val) {
+	if (_restoreDeletedInChats.current() == val) return;
+	_restoreDeletedInChats = val;
+	save();
+}
+
+void AyuSettings::setShowDeletedChatIcon(bool val) {
+	if (_showDeletedChatIcon.current() == val) return;
+	_showDeletedChatIcon = val;
+	save();
+}
+
+void AyuSettings::setMarkOldMessagesDeleted(bool val) {
+	if (_markOldMessagesDeleted.current() == val) return;
+	_markOldMessagesDeleted = val;
+	save();
+}
+
 void AyuSettings::setShowTimeZone(bool val) {
 	if (_showTimeZone.current() == val) return;
 	_showTimeZone = val;
@@ -1306,6 +1342,12 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"disableGreetingSticker", s._disableGreetingSticker.current()},
 		{"showPeerId", s._showPeerId.current()},
 		{"showMessageSeconds", s._showMessageSeconds.current()},
+		{"keepRemovedUserChats", s._keepRemovedUserChats.current()},
+		{"keepRemovedGroups", s._keepRemovedGroups.current()},
+		{"keepRemovedChannels", s._keepRemovedChannels.current()},
+		{"restoreDeletedInChats", s._restoreDeletedInChats.current()},
+		{"showDeletedChatIcon", s._showDeletedChatIcon.current()},
+		{"markOldMessagesDeleted", s._markOldMessagesDeleted.current()},
 		{"showTimeZone", s._showTimeZone.current()},
 		{"showMessageShot", s._showMessageShot.current()},
 		{"filterZalgo", s._filterZalgo.current()},
@@ -1425,6 +1467,12 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._disableGreetingSticker = j.value("disableGreetingSticker", defaults._disableGreetingSticker.current());
 	s._showPeerId = j.value("showPeerId", defaults._showPeerId.current());
 	s._showMessageSeconds = j.value("showMessageSeconds", defaults._showMessageSeconds.current());
+	s._keepRemovedUserChats = j.value("keepRemovedUserChats", defaults._keepRemovedUserChats.current());
+	s._keepRemovedGroups = j.value("keepRemovedGroups", defaults._keepRemovedGroups.current());
+	s._keepRemovedChannels = j.value("keepRemovedChannels", defaults._keepRemovedChannels.current());
+	s._restoreDeletedInChats = j.value("restoreDeletedInChats", defaults._restoreDeletedInChats.current());
+	s._showDeletedChatIcon = j.value("showDeletedChatIcon", defaults._showDeletedChatIcon.current());
+	s._markOldMessagesDeleted = j.value("markOldMessagesDeleted", defaults._markOldMessagesDeleted.current());
 	s._showTimeZone = j.value("showTimeZone", defaults._showTimeZone.current());
 	s._showMessageShot = j.value("showMessageShot", defaults._showMessageShot.current());
 	s._filterZalgo = j.value("filterZalgo", defaults._filterZalgo.current());

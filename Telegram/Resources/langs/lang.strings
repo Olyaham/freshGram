@@ -9245,6 +9245,15 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_UpdateAyuGram" = "Update freshGram";
 "ayu_UtilityRestartRequired" = "The app will close in 5 seconds.";
 "ayu_ProductName" = "freshGram";
+"ayu_DeletedChatsHeader" = "Deleted chats";
+"ayu_KeepRemovedDialogs" = "Keep chats you were removed from or deleted";
+"ayu_KeepRemovedUserChats" = "Private chats";
+"ayu_KeepRemovedGroups" = "Groups";
+"ayu_KeepRemovedChannels" = "Channels";
+"ayu_RestoreDeletedInChats" = "Show deleted messages in chats";
+"ayu_ShowDeletedChatIcon" = "Trash icon on deleted chats";
+"ayu_MarkOldMessagesDeleted" = "Mark old messages deleted when a chat is deleted";
+"ayu_DeletedChatsDescription" = "Turning an option off does not delete saved data; it is applied again when you turn it on. Changes in the kept chats apply after a restart. If deleted messages are not shown in chats, they are still saved and available in \"View deleted messages\".";
 "ayu_StorageHeader" = "Storage";
 "ayu_MaxEditRevisions" = "Edits kept per message";
 "ayu_DeletedRestoreLimit" = "Deleted messages loaded per chat";

@@ -125,6 +125,7 @@ void State::checkLoaded() {
 
 	const auto peer = _history->peer;
 	if (!AyuSettings::getInstance().saveDeletedMessages()
+		|| !AyuSettings::getInstance().restoreDeletedInChats()
 		|| !Supported(peer)) {
 		return;
 	}

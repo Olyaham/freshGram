@@ -371,6 +371,12 @@ public:
 	[[nodiscard]] bool disableGreetingSticker() const { return _disableGreetingSticker.current(); }
 	[[nodiscard]] PeerIdDisplay showPeerId() const { return _showPeerId.current(); }
 	[[nodiscard]] bool showMessageSeconds() const { return _showMessageSeconds.current(); }
+	[[nodiscard]] bool keepRemovedUserChats() const { return _keepRemovedUserChats.current(); }
+	[[nodiscard]] bool keepRemovedGroups() const { return _keepRemovedGroups.current(); }
+	[[nodiscard]] bool keepRemovedChannels() const { return _keepRemovedChannels.current(); }
+	[[nodiscard]] bool restoreDeletedInChats() const { return _restoreDeletedInChats.current(); }
+	[[nodiscard]] bool showDeletedChatIcon() const { return _showDeletedChatIcon.current(); }
+	[[nodiscard]] bool markOldMessagesDeleted() const { return _markOldMessagesDeleted.current(); }
 	[[nodiscard]] bool showTimeZone() const { return _showTimeZone.current(); }
 	[[nodiscard]] bool showMessageShot() const { return _showMessageShot.current(); }
 	[[nodiscard]] bool filterZalgo() const { return _filterZalgo.current(); }
@@ -473,6 +479,12 @@ public:
 	void setDisableGreetingSticker(bool val);
 	void setShowPeerId(PeerIdDisplay val);
 	void setShowMessageSeconds(bool val);
+	void setKeepRemovedUserChats(bool val);
+	void setKeepRemovedGroups(bool val);
+	void setKeepRemovedChannels(bool val);
+	void setRestoreDeletedInChats(bool val);
+	void setShowDeletedChatIcon(bool val);
+	void setMarkOldMessagesDeleted(bool val);
 	void setShowTimeZone(bool val);
 	void setShowMessageShot(bool val);
 	void setFilterZalgo(bool val);
@@ -768,6 +780,12 @@ private:
 	rpl::variable<bool> _disableGreetingSticker = false;
 	rpl::variable<PeerIdDisplay> _showPeerId = PeerIdDisplay::BotApi;
 	rpl::variable<bool> _showMessageSeconds = false;
+	rpl::variable<bool> _keepRemovedUserChats = true;
+	rpl::variable<bool> _keepRemovedGroups = true;
+	rpl::variable<bool> _keepRemovedChannels = true;
+	rpl::variable<bool> _restoreDeletedInChats = true;
+	rpl::variable<bool> _showDeletedChatIcon = true;
+	rpl::variable<bool> _markOldMessagesDeleted = true;
 	rpl::variable<bool> _showTimeZone = false;
 	rpl::variable<bool> _showMessageShot = true;
 	rpl::variable<bool> _filterZalgo = false;

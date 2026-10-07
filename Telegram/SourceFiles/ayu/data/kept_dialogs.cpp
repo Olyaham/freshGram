@@ -12,12 +12,16 @@
 #include "data/data_channel.h"
 #include "data/data_chat.h"
 #include "data/data_folder.h"
+#include "dialogs/dialogs_indexed_list.h"
+#include "dialogs/dialogs_main_list.h"
+#include "dialogs/dialogs_row.h"
 #include "data/data_peer.h"
 #include "data/data_session.h"
 #include "data/data_user.h"
 #include "history/history.h"
 #include "history/history_item.h"
 #include "history/view/history_view_element.h"
+#include "logs.h"
 #include "main/main_session.h"
 
 #include <set>
@@ -53,6 +57,22 @@ std::set<PeerData*> Leaving;
 		return !channel->isCommunity();
 	}
 	return peer->isUser() || peer->isChat();
+}
+
+[[nodiscard]] bool KindEnabled(not_null<PeerData*> peer) {
+	const auto &settings = AyuSettings::getInstance();
+	if (peer->isUser()) {
+		return settings.keepRemovedUserChats();
+	} else if (const auto channel = peer->asChannel()) {
+		return channel->isMegagroup()
+			? settings.keepRemovedGroups()
+			: settings.keepRemovedChannels();
+	}
+	return settings.keepRemovedGroups();
+}
+
+[[nodiscard]] bool Allowed(not_null<PeerData*> peer) {
+	return Supported(peer) && KindEnabled(peer);
 }
 
 [[nodiscard]] int KindOf(not_null<PeerData*> peer) {
@@ -91,6 +111,8 @@ std::set<PeerData*> Leaving;
 
 void SaveSnapshot(not_null<History*> history) {
 	const auto user = history->peer->isUser();
+	const auto mark = user
+		&& AyuSettings::getInstance().markOldMessagesDeleted();
 	const auto limit = AyuSettings::getInstance().keptSnapshotLimit();
 	const auto now = base::unixtime::now();
 	auto saved = 0;
@@ -103,7 +125,7 @@ void SaveSnapshot(not_null<History*> history) {
 			if (item->isDeleted() || item->isLocal()) {
 				continue;
 			}
-			if (user) {
+			if (mark) {
 				item->setDeleted();
 				item->ayuSetDeletedAt(now);
 			}
@@ -191,7 +213,7 @@ void Restore(not_null<Main::Session*> session, const KeptDialog &row) {
 		}
 	}
 	const auto peer = EnsurePeer(&owner, row);
-	if (!peer || !Supported(peer)) {
+	if (!peer || !Allowed(peer)) {
 		return;
 	}
 	if (const auto channel = peer->asChannel(); channel && channel->amIn()) {
@@ -199,6 +221,7 @@ void Restore(not_null<Main::Session*> session, const KeptDialog &row) {
 	} else if (const auto chat = peer->asChat(); chat && chat->amIn()) {
 		return;
 	}
+	LOG(("AyuKept: restoring dialog %1 (lost %2)").arg(row.dialogId).arg(row.lost));
 	const auto history = owner.history(peer);
 	history->setAyuKept(true);
 	if (!history->folderKnown()) {
@@ -261,22 +284,50 @@ void Check(
 	});
 }
 
+void RecordList(
+		not_null<Main::Session*> session,
+		Data::Folder *folder) {
+	auto &owner = session->data();
+	if (!AyuSettings::getInstance().saveDeletedMessages()
+		|| !owner.chatsListLoaded(folder)) {
+		return;
+	}
+	auto rows = std::vector<KeptDialog>();
+	for (const auto &row : owner.chatsList(folder)->indexed()->all()) {
+		const auto history = row->history();
+		if (history
+			&& history->folderKnown()
+			&& !history->ayuKept()
+			&& Allowed(history->peer)) {
+			rows.push_back(MakeRow(history, false));
+		}
+	}
+	if (rows.empty()) {
+		return;
+	}
+	crl::async([rows = std::move(rows)] {
+		AyuDatabase::syncKeptDialogs(rows);
+	});
+}
+
 } // namespace
 
 void setup(not_null<Data::Session*> owner, rpl::lifetime &lifetime) {
 	const auto state = std::make_shared<SessionState>();
 	const auto session = &owner->session();
 	owner->chatsListLoadedEvents(
-	) | rpl::on_next([=](Data::Folder*) {
+	) | rpl::on_next([=](Data::Folder *folder) {
 		Check(session, state);
+		RecordList(session, folder);
 	}, lifetime);
 }
 
 void markLost(not_null<History*> history) {
 	const auto peer = history->peer;
 	if (!AyuSettings::getInstance().saveDeletedMessages()
-		|| !Supported(peer)
+		|| !Allowed(peer)
 		|| history->ayuKept()
+		|| !history->inChatList()
 		|| !history->lastMessage()) {
 		return;
 	}
@@ -295,7 +346,10 @@ bool keepOnDelete(not_null<History*> history) {
 
 void note(not_null<History*> history) {
 	const auto peer = history->peer;
-	if (!Supported(peer) || history->ayuKept()) {
+	if (!Allowed(peer)
+		|| history->ayuKept()
+		|| !history->inChatList()
+		|| !history->folderKnown()) {
 		return;
 	}
 	const auto key = std::make_pair(
@@ -318,8 +372,22 @@ void forget(not_null<PeerData*> peer) {
 }
 
 bool showsDeleted(not_null<PeerData*> peer) {
+	if (!AyuSettings::getInstance().showDeletedChatIcon()) {
+		return false;
+	}
 	const auto history = peer->owner().historyLoaded(peer);
 	return history && history->ayuKept();
+}
+
+bool hasListableLastMessage(not_null<const History*> history) {
+	const auto last = history->lastMessage();
+	if (!last) {
+		return false;
+	}
+	return history->ayuKept()
+		|| history->inChatList()
+		|| !last->isLocal()
+		|| !last->isDeleted();
 }
 
 void revive(not_null<History*> history, not_null<HistoryItem*> item) {
@@ -335,7 +403,8 @@ void revive(not_null<History*> history, not_null<HistoryItem*> item) {
 void checkWiped(not_null<History*> history) {
 	if (!history->peer->isUser()
 		|| history->ayuKept()
-		|| !Supported(history->peer)
+		|| !Allowed(history->peer)
+		|| !history->inChatList()
 		|| !history->loadedAtTop()
 		|| history->isEmpty()) {
 		return;
