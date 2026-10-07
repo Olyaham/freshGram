@@ -7,6 +7,7 @@
 #include "ayu/ui/message_history/history_inner.h"
 
 #include "apiwrap.h"
+#include "logs.h"
 #include "mainwidget.h"
 #include "mainwindow.h"
 #include "api/api_attached_stickers.h"
@@ -764,6 +765,7 @@ void InnerWidget::preloadMore(Direction direction) {
 				messages = AyuMessages::loadDeletedMessages(userId, dialogId, topicId, minId, maxId, perPage, searchQuery);
 			}
 		} catch (...) {
+			LOG(("AyuMessageHistory: failed to load messages from the database"));
 			messages.clear();
 		}
 

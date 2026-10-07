@@ -18,8 +18,10 @@
 #include "ui/toast/toast.h"
 
 #include <QtCore/QLocale>
+#include <QtCore/QRegularExpression>
 #include <QtCore/QStringList>
 
+#include <algorithm>
 #include <map>
 
 namespace AyuPeek {
@@ -71,8 +73,14 @@ void Toast(const QString &text) {
 	const auto today = base::unixtime::parse(now);
 	const auto locale = QLocale();
 	auto pattern = locale.timeFormat(QLocale::ShortFormat);
-	if (!pattern.contains(u"ss"_q)) {
-		pattern.replace(u"mm"_q, u"mm:ss"_q);
+	const auto seconds = QRegularExpression(
+		u"(?<![A-Za-z])s{1,2}(?![A-Za-z])"_q);
+	if (!pattern.contains(seconds)) {
+		const auto minutes = QRegularExpression(
+			u"(?<![A-Za-z])m{1,2}(?![A-Za-z])"_q).match(pattern);
+		if (minutes.hasMatch()) {
+			pattern.insert(minutes.capturedEnd(), u":ss"_q);
+		}
 	}
 	const auto time = locale.toString(when.time(), pattern);
 	if (when.date() == today.date()) {
