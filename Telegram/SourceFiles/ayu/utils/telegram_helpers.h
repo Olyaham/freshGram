@@ -13,6 +13,8 @@
 #include "dialogs/dialogs_main_list.h"
 #include "info/profile/info_profile_badge.h"
 
+#include <QtCore/QLocale>
+
 namespace Api {
 struct SendOptions;
 }
@@ -72,6 +74,8 @@ void readHistory(not_null<HistoryItem*> message);
 QString formatTTL(int time, bool isDoc);
 QString formatDateTime(const QDateTime &date);
 QString formatMessageTime(const QTime &time);
+QString formatLongDateTime(const QLocale &locale, const QDateTime &value);
+QString formatLongTime(const QLocale &locale, const QTime &value);
 
 QString getDCName(int dc);
 

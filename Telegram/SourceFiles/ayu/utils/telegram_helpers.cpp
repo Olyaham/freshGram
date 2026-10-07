@@ -324,6 +324,42 @@ QString formatDateTime(const QDateTime &date) {
 	return datePart + getLocalizedAt() + timePart;
 }
 
+namespace {
+
+[[nodiscard]] QString WithoutTimeZone(const QString &pattern) {
+	auto result = QString();
+	auto quoted = false;
+	for (const auto ch : pattern) {
+		if (ch == '\'') {
+			quoted = !quoted;
+		} else if (!quoted && ch == 't') {
+			continue;
+		}
+		result += ch;
+	}
+	return result.trimmed();
+}
+
+} // namespace
+
+QString formatLongDateTime(const QLocale &locale, const QDateTime &value) {
+	if (AyuSettings::getInstance().showTimeZone()) {
+		return locale.toString(value, QLocale::LongFormat);
+	}
+	return locale.toString(
+		value,
+		WithoutTimeZone(locale.dateTimeFormat(QLocale::LongFormat)));
+}
+
+QString formatLongTime(const QLocale &locale, const QTime &value) {
+	if (AyuSettings::getInstance().showTimeZone()) {
+		return locale.toString(value, QLocale::LongFormat);
+	}
+	return locale.toString(
+		value,
+		WithoutTimeZone(locale.timeFormat(QLocale::LongFormat)));
+}
+
 QString formatMessageTime(const QTime &time) {
 	const auto &settings = AyuSettings::getInstance();
 

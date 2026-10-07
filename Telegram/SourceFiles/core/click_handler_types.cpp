@@ -47,6 +47,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtCore/QLocale>
 
 #include "ayu/ayu_settings.h"
+#include "ayu/utils/telegram_helpers.h"
 
 
 #include <ada.h>
@@ -777,7 +778,7 @@ auto FormattedDateClickHandler::getTextEntity() const -> TextEntity {
 }
 
 QString FormattedDateClickHandler::tooltip() const {
-	return QLocale().toString(
-		base::unixtime::parse(_date),
-		QLocale::LongFormat);
+	return formatLongDateTime(
+		QLocale(),
+		base::unixtime::parse(_date));
 }

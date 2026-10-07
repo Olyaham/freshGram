@@ -9214,6 +9214,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_LikelyOfflineStatus" = "offline ?";
 "ayu_GhostModeShortcut" = "Enter with Ghost";
 "ayu_SettingsShowMessageSeconds" = "Show Message Seconds";
+"ayu_SettingsShowTimeZone" = "Show Time Zone Name";
 "ayu_FilterZalgo" = "Filter Zalgo";
 "ayu_ImproveLinkPreviews" = "Improve Link Previews";
 "ayu_ShowOnlyAddedEmojisAndStickers" = "Show Only Added Emojis & Stickers";

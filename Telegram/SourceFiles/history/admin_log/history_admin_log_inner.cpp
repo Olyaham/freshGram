@@ -35,6 +35,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "mainwidget.h"
 #include "core/application.h"
 #include "apiwrap.h"
+#include "ayu/utils/telegram_helpers.h"
 #include "api/api_chat_participants.h"
 #include "api/api_attached_stickers.h"
 #include "api/api_report.h"
@@ -745,9 +746,9 @@ QString InnerWidget::tooltipText() const {
 				dateText += '\n' + tr::lng_sent_date(
 					tr::now,
 					lt_date,
-					QLocale().toString(
-						base::unixtime::parse(sentIt->second),
-						QLocale::LongFormat));
+					formatLongDateTime(
+						QLocale(),
+						base::unixtime::parse(sentIt->second)));
 			}
 			return dateText;
 		}

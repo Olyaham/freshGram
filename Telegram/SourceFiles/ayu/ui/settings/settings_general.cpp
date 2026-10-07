@@ -269,6 +269,13 @@ void BuildQoLToggles(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.getter = &AyuSettings::showMessageSeconds,
 		.setter = &AyuSettings::setShowMessageSeconds,
 	});
+	ayu.addSettingToggle({
+		.id = u"ayu/showTimeZone"_q,
+		.altIds = { u"ayu/timeZoneName"_q },
+		.title = tr::ayu_SettingsShowTimeZone(),
+		.getter = &AyuSettings::showTimeZone,
+		.setter = &AyuSettings::setShowTimeZone,
+	});
 
 	BuildShowPeerId(builder);
 

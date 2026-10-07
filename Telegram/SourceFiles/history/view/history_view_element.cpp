@@ -714,9 +714,8 @@ QString DcText(int dcId) {
 
 QString DateTooltipText(not_null<Element*> view) {
 	const auto locale = QLocale();
-	const auto format = QLocale::LongFormat;
 	const auto item = view->data();
-	auto dateText = locale.toString(view->dateTime(), format);
+	auto dateText = formatLongDateTime(locale, view->dateTime());
 	if (item->awaitingVideoProcessing()) {
 		dateText += '\n' + tr::lng_approximate_about(tr::now);
 	}
@@ -724,22 +723,22 @@ QString DateTooltipText(not_null<Element*> view) {
 		dateText += '\n' + tr::lng_edited_date(
 			tr::now,
 			lt_date,
-			locale.toString(base::unixtime::parse(editedDate), format));
+			formatLongDateTime(locale, base::unixtime::parse(editedDate)));
 	}
 	if (const auto deletedAt = item->isDeleted() ? item->ayuDeletedAt() : 0) {
 		dateText += '\n' + tr::ayu_DeletedAtDate(
 			tr::now,
 			lt_date,
-			locale.toString(base::unixtime::parse(deletedAt), format));
+			formatLongDateTime(locale, base::unixtime::parse(deletedAt)));
 	}
 	if (const auto forwarded = item->Get<HistoryMessageForwarded>()) {
 		if (!forwarded->story && forwarded->psaType.isEmpty()) {
 			dateText += '\n' + tr::lng_forwarded_date(
 				tr::now,
 				lt_date,
-				locale.toString(
-					base::unixtime::parse(forwarded->originalDate),
-					format));
+				formatLongDateTime(
+					locale,
+					base::unixtime::parse(forwarded->originalDate)));
 			if (forwarded->imported) {
 				dateText = tr::lng_forwarded_imported(tr::now)
 					+ "\n\n" + dateText;

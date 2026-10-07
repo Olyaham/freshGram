@@ -1094,6 +1094,12 @@ void AyuSettings::setShowPeerId(PeerIdDisplay val) {
 	save();
 }
 
+void AyuSettings::setShowTimeZone(bool val) {
+	if (_showTimeZone.current() == val) return;
+	_showTimeZone = val;
+	save();
+}
+
 void AyuSettings::setShowMessageSeconds(bool val) {
 	if (_showMessageSeconds.current() == val) return;
 	_showMessageSeconds = val;
@@ -1300,6 +1306,7 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"disableGreetingSticker", s._disableGreetingSticker.current()},
 		{"showPeerId", s._showPeerId.current()},
 		{"showMessageSeconds", s._showMessageSeconds.current()},
+		{"showTimeZone", s._showTimeZone.current()},
 		{"showMessageShot", s._showMessageShot.current()},
 		{"filterZalgo", s._filterZalgo.current()},
 		{"stickerConfirmation", s._stickerConfirmation.current()},
@@ -1418,6 +1425,7 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._disableGreetingSticker = j.value("disableGreetingSticker", defaults._disableGreetingSticker.current());
 	s._showPeerId = j.value("showPeerId", defaults._showPeerId.current());
 	s._showMessageSeconds = j.value("showMessageSeconds", defaults._showMessageSeconds.current());
+	s._showTimeZone = j.value("showTimeZone", defaults._showTimeZone.current());
 	s._showMessageShot = j.value("showMessageShot", defaults._showMessageShot.current());
 	s._filterZalgo = j.value("filterZalgo", defaults._filterZalgo.current());
 	s._stickerConfirmation = j.value("stickerConfirmation", defaults._stickerConfirmation.current());

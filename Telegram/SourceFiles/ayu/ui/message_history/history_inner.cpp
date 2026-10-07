@@ -482,9 +482,9 @@ QString InnerWidget::tooltipText() const {
 				dateText += '\n' + tr::lng_sent_date(
 					tr::now,
 					lt_date,
-					QLocale().toString(
-						base::unixtime::parse(sentIt->second),
-						QLocale::LongFormat));
+					formatLongDateTime(
+						QLocale(),
+						base::unixtime::parse(sentIt->second)));
 			}
 			return dateText;
 		}
