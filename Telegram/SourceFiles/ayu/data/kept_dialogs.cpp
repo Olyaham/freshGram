@@ -6,6 +6,7 @@
 #include "ayu/data/messages_storage.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "base/flat_set.h"
+#include "base/unixtime.h"
 #include "crl/crl_async.h"
 #include "crl/crl_on_main.h"
 #include "data/data_channel.h"
@@ -91,15 +92,21 @@ std::set<PeerData*> Leaving;
 }
 
 void SaveSnapshot(not_null<History*> history) {
+	const auto user = history->peer->isUser();
+	const auto now = base::unixtime::now();
 	auto saved = 0;
 	for (const auto &block : ranges::views::reverse(history->blocks)) {
 		for (const auto &view : ranges::views::reverse(block->messages)) {
-			if (saved >= kSnapshotLimit) {
+			if (!user && saved >= kSnapshotLimit) {
 				return;
 			}
 			const auto item = view->data();
 			if (item->isDeleted() || item->isLocal()) {
 				continue;
+			}
+			if (user) {
+				item->setDeleted();
+				item->ayuSetDeletedAt(now);
 			}
 			AyuMessages::addDeletedMessage(item);
 			++saved;
@@ -309,6 +316,40 @@ void forget(not_null<PeerData*> peer) {
 	const auto dialogId = getDialogIdFromPeer(peer);
 	Noted.erase(std::make_pair(userId, dialogId));
 	AyuDatabase::removeKeptDialog(userId, dialogId);
+}
+
+bool showsDeleted(not_null<PeerData*> peer) {
+	const auto history = peer->owner().historyLoaded(peer);
+	return history && history->ayuKept();
+}
+
+void revive(not_null<History*> history, not_null<HistoryItem*> item) {
+	if (!history->ayuKept()
+		|| !history->peer->isUser()
+		|| item->isLocal()
+		|| item->isDeleted()) {
+		return;
+	}
+	forget(history->peer);
+}
+
+void checkWiped(not_null<History*> history) {
+	if (!history->peer->isUser()
+		|| history->ayuKept()
+		|| !Supported(history->peer)
+		|| !history->loadedAtTop()
+		|| history->isEmpty()) {
+		return;
+	}
+	for (const auto &block : history->blocks) {
+		for (const auto &view : block->messages) {
+			const auto item = view->data();
+			if (!item->isLocal() && !item->isDeleted()) {
+				return;
+			}
+		}
+	}
+	markLost(history);
 }
 
 void userLeaving(not_null<PeerData*> peer) {

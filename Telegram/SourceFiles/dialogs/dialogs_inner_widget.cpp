@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/data/kept_dialogs.h"
 #include "dialogs/dialogs_inner_widget.h"
 
 #include "dialogs/dialogs_three_state_icon.h"
@@ -1983,6 +1984,16 @@ void InnerWidget::paintPeerSearchResult(
 		chatTypeIcon->paint(p, rectForName.topLeft(), context.width);
 		rectForName.setLeft(rectForName.left()
 			+ chatTypeIcon->width()
+			+ st::dialogsChatTypeSkip);
+	}
+	if (AyuKept::showsDeleted(peer)) {
+		const auto &trash = ThreeStateIcon(
+			st::ayuDeletedChatIcon,
+			context.active,
+			context.selected);
+		trash.paint(p, rectForName.topLeft(), context.width);
+		rectForName.setLeft(rectForName.left()
+			+ trash.width()
 			+ st::dialogsChatTypeSkip);
 	}
 	const auto badgeWidth = result->badge.drawGetWidth(p, {

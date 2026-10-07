@@ -52,6 +52,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_window.h"
 
 #include "ayu/features/filters/filters_controller.h"
+#include "ayu/data/kept_dialogs.h"
 #include "ayu/secret/secret_peer.h"
 #include "styles/style_ayu_icons.h"
 
@@ -620,6 +621,16 @@ void PaintRow(
 				+ chatTypeIcon->width()
 				+ st::dialogsChatTypeSkip);
 		}
+	}
+	if (from && AyuKept::showsDeleted(from)) {
+		const auto &trash = ThreeStateIcon(
+			st::ayuDeletedChatIcon,
+			context.active,
+			context.selected);
+		trash.paint(p, rectForName.topLeft(), context.width);
+		rectForName.setLeft(rectForName.left()
+			+ trash.width()
+			+ st::dialogsChatTypeSkip);
 	}
 	auto texttop = context.st->textTop;
 	if (const auto folder = entry->asFolder()) {

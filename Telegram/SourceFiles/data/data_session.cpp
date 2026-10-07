@@ -3464,6 +3464,7 @@ void Session::processMessagesDeleted(
 		if (!history->chatListMessageKnown()) {
 			history->requestChatListMessage();
 		}
+		AyuKept::checkWiped(history);
 	}
 }
 
@@ -3491,6 +3492,7 @@ void Session::processNonChannelMessagesDeleted(const QVector<MTPint> &data) {
 		if (!history->chatListMessageKnown()) {
 			history->requestChatListMessage();
 		}
+		AyuKept::checkWiped(history);
 	}
 }
 

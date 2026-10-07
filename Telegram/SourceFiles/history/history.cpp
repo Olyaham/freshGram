@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/data/kept_dialogs.h"
 #include "ayu/secret/secret_peer.h"
 #include "history/history.h"
 
@@ -872,6 +873,8 @@ not_null<HistoryItem*> History::addNewItem(
 	if (const auto sublist = item->savedSublist()) {
 		sublist->applyMaybeLast(item);
 	}
+
+	AyuKept::revive(this, item);
 
 	return item;
 }
@@ -4282,6 +4285,7 @@ void History::setAyuKept(bool kept) {
 	}
 	_ayuKept = kept;
 	updateChatListExistence();
+	updateChatListEntryPostponed();
 }
 
 HistoryItem *History::ayuRestored(

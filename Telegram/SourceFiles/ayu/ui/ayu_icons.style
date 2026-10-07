@@ -18,6 +18,12 @@ ayuSecretChatIcon: ThreeStateIcon {
 	active: icon {{ "ayu/secret_lock", dialogsChatIconFgActive, point(2px, 4px) }};
 }
 
+ayuDeletedChatIcon: ThreeStateIcon {
+	icon: icon {{ "ayu/deleted_chat", dialogsChatIconFg, point(1px, 4px) }};
+	over: icon {{ "ayu/deleted_chat", dialogsChatIconFgOver, point(1px, 4px) }};
+	active: icon {{ "ayu/deleted_chat", dialogsChatIconFgActive, point(1px, 4px) }};
+}
+
 ayuGhostIcon: icon {{ "ayu/ghost", menuIconColor }};
 ayuGhostModeGlobalIcon: icon {{ "ayu/ghost_mode_global", historyPeerUserpicFg }};
 ayuEditsHistoryIcon: icon {{ "ayu/edits_history", menuIconColor }};

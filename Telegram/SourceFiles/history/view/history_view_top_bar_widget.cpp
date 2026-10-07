@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/data/kept_dialogs.h"
 #include "ayu/features/peek/peek_online.h"
 #include "ayu/secret/secret_bridge.h"
 #include "ayu/secret/secret_peer.h"
@@ -754,6 +755,12 @@ void TopBarWidget::paintTopBar(Painter &p) {
 			lock.paint(p, nameleft, nametop, width());
 			nameleft += lock.width() + st::dialogsChatTypeSkip;
 			namewidth -= lock.width() + st::dialogsChatTypeSkip;
+		}
+		if (AyuKept::showsDeleted(namePeer)) {
+			const auto &trash = st::ayuDeletedChatIcon.icon;
+			trash.paint(p, nameleft, nametop, width());
+			nameleft += trash.width() + st::dialogsChatTypeSkip;
+			namewidth -= trash.width() + st::dialogsChatTypeSkip;
 		}
 		const auto badgeWidth = _titleBadge.drawGetWidth(p, {
 			.peer = namePeer,
