@@ -263,6 +263,13 @@ void BuildChatFolders(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.getter = &AyuSettings::hideAllChatsFolder,
 		.setter = &AyuSettings::setHideAllChatsFolder,
 	});
+	ayu.addSettingToggle({
+		.id = u"ayu/hideBirthdayNotifications"_q,
+		.altIds = { u"ayu/hideBirthdays"_q },
+		.title = tr::ayu_HideBirthdayNotifications(),
+		.getter = &AyuSettings::hideBirthdayNotifications,
+		.setter = &AyuSettings::setHideBirthdayNotifications,
+	});
 
 	ayu.addSectionDivider();
 }

@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/ayu_settings.h"
 #include "dialogs/suggestions/suggestion.h"
 
 #include "boxes/star_gift_box.h"
@@ -31,7 +32,8 @@ constexpr auto kSugBirthdayContacts = "BIRTHDAY_CONTACTS_TODAY"_cs;
 
 bool Available(const Context &context) {
 	const auto session = context.session.get();
-	return session->premiumCanBuy()
+	return !AyuSettings::getInstance().hideBirthdayNotifications()
+		&& session->premiumCanBuy()
 		&& session->promoSuggestions().current(kSugBirthdayContacts.utf8());
 }
 

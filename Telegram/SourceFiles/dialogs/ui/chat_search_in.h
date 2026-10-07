@@ -28,6 +28,20 @@ enum class ChatSearchTab : uchar {
 	ThisCommunity,
 };
 
+enum class SearchMediaFilter : uchar {
+	All,
+	Photos,
+	Videos,
+	Files,
+	Music,
+	Voice,
+	RoundVideo,
+	Links,
+	Gifs,
+};
+
+[[nodiscard]] QString SearchMediaLabel(SearchMediaFilter media);
+
 enum class ChatSearchPeerTabType : uchar {
 	Chat,
 	Channel,
@@ -48,12 +62,15 @@ public:
 		ChatSearchTab active,
 		ChatSearchPeerTabType peerTabType,
 		std::shared_ptr<Ui::DynamicImage> fromUserpic,
-		QString fromName);
+		QString fromName,
+		SearchMediaFilter media,
+		bool showMedia);
 
 	[[nodiscard]] rpl::producer<> cancelInRequests() const;
 	[[nodiscard]] rpl::producer<> cancelFromRequests() const;
 	[[nodiscard]] rpl::producer<> changeFromRequests() const;
 	[[nodiscard]] rpl::producer<ChatSearchTab> tabChanges() const;
+	[[nodiscard]] rpl::producer<SearchMediaFilter> mediaChanges() const;
 
 private:
 	struct Section {
@@ -72,6 +89,7 @@ private:
 	int resizeGetHeight(int newWidth) override;
 	void paintEvent(QPaintEvent *e) override;
 	void showMenu();
+	void showMediaMenu();
 
 	void updateSection(
 		not_null<Section*> section,
@@ -80,7 +98,10 @@ private:
 
 	Section _in;
 	Section _from;
+	Section _media;
 	rpl::variable<ChatSearchTab> _active;
+	SearchMediaFilter _mediaCurrent = SearchMediaFilter::All;
+	rpl::event_stream<SearchMediaFilter> _mediaChanges;
 
 	base::unique_qptr<Ui::PopupMenu> _menu;
 

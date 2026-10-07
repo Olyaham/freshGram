@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/ayu_settings.h"
 #include "info/profile/info_profile_top_bar.h"
 
 #include "ayu/features/streamer_mode/streamer_mode.h"
@@ -619,7 +620,9 @@ TopBar::TopBar(
 
 void TopBar::setupBirthdayEffect() {
 	const auto user = _peer->asUser();
-	if (!user || !Data::IsBirthdayToday(user->birthday())) {
+	if (!user
+		|| AyuSettings::getInstance().hideBirthdayNotifications()
+		|| !Data::IsBirthdayToday(user->birthday())) {
 		return;
 	} else if (_wrap.current() == Wrap::Side) {
 		return;

@@ -5589,7 +5589,8 @@ void ComposeControls::refreshSendGiftToggle() {
 		&& !user->isBot()
 		&& ((disallowed & Type::SendHide)
 			|| (session().user()->disallowedGiftTypes() & Type::SendHide)
-			|| Data::IsBirthdayToday(user->birthday()))
+			|| (Data::IsBirthdayToday(user->birthday())
+				&& !AyuSettings::getInstance().hideBirthdayNotifications()))
 		&& ((disallowed & all) != all);
 	if (!_giftToUser && has) {
 		_giftToUser = base::make_unique_q<Ui::IconButton>(

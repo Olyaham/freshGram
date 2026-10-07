@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/ayu_settings.h"
 #include "dialogs/dialogs_top_bar_suggestion.h"
 
 #include "api/api_authorizations.h"
@@ -237,7 +238,9 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 			session->promoSuggestions().value(),
 			session->api().authorizations().unreviewedChanges(),
 			Data::AmPremiumValue(session) | rpl::skip(1) | rpl::to_empty,
-			session->giftAuctions().hasActiveChanges() | rpl::to_empty
+			session->giftAuctions().hasActiveChanges() | rpl::to_empty,
+			AyuSettings::getInstance().hideBirthdayNotificationsChanges(
+			) | rpl::to_empty
 		) | rpl::on_next([=] {
 			const auto was = state->wrap.get();
 			const auto weak = base::make_weak(was);

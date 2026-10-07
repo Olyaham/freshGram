@@ -4056,7 +4056,8 @@ void HistoryWidget::refreshSendGiftToggle() {
 		&& settings.showGiftButtonInMessageField()
 		&& ((disallowed & Type::SendHide)
 			|| (session().user()->disallowedGiftTypes() & Type::SendHide)
-			|| Data::IsBirthdayToday(user->birthday()))
+			|| (Data::IsBirthdayToday(user->birthday())
+				&& !AyuSettings::getInstance().hideBirthdayNotifications()))
 		&& ((disallowed & all) != all);
 	if (!_giftToUser && has) {
 		_giftToUser.create(this, st::historyGiftToUser);

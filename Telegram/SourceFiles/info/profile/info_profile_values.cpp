@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/ayu_settings.h"
 #include "info/profile/info_profile_values.h"
 
 #include "api/api_chat_participants.h"
@@ -941,11 +942,23 @@ rpl::producer<EmojiStatusId> EmojiStatusIdValue(not_null<PeerData*> peer) {
 	) | rpl::map([=] { return peer->emojiStatusId(); });
 }
 
+namespace {
+
+[[nodiscard]] rpl::producer<bool> BirthdayTodayShownValue(
+		Data::Birthday value) {
+	if (AyuSettings::getInstance().hideBirthdayNotifications()) {
+		return rpl::single(false);
+	}
+	return Data::IsBirthdayTodayValue(value);
+}
+
+} // namespace
+
 rpl::producer<QString> BirthdayLabelText(
 		rpl::producer<Data::Birthday> birthday) {
 	return std::move(birthday) | rpl::map([](Data::Birthday value) {
 		return rpl::conditional(
-			Data::IsBirthdayTodayValue(value),
+			BirthdayTodayShownValue(value),
 			tr::lng_info_birthday_today_label(),
 			tr::lng_info_birthday_label());
 	}) | rpl::flatten_latest();
@@ -990,7 +1003,7 @@ rpl::producer<QString> BirthdayValueText(
 		if (!value) {
 			return rpl::single(QString());
 		}
-		return Data::IsBirthdayTodayValue(
+		return BirthdayTodayShownValue(
 			value
 		) | rpl::map([=](bool today) {
 			auto text = Data::BirthdayText(value, fullMonth);

@@ -17,7 +17,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/dynamic_image.h"
 #include "ui/painter.h"
 #include "styles/style_dialogs.h"
+#include "styles/style_menu_icons.h"
 #include "styles/style_window.h"
+
+#include <array>
 
 namespace Dialogs {
 namespace {
@@ -86,6 +89,18 @@ private:
 	}
 	Unexpected("Tab in Dialogs::TabLabel.");
 }
+
+constexpr auto kMediaFilters = std::array{
+	SearchMediaFilter::All,
+	SearchMediaFilter::Photos,
+	SearchMediaFilter::Videos,
+	SearchMediaFilter::Files,
+	SearchMediaFilter::Music,
+	SearchMediaFilter::Voice,
+	SearchMediaFilter::RoundVideo,
+	SearchMediaFilter::Links,
+	SearchMediaFilter::Gifs,
+};
 
 Action::Action(
 	not_null<Ui::PopupMenu*> parentMenu,
@@ -204,6 +219,21 @@ void Action::handleKeyPress(not_null<QKeyEvent*> e) {
 
 } // namespace
 
+QString SearchMediaLabel(SearchMediaFilter media) {
+	switch (media) {
+	case SearchMediaFilter::All: return tr::ayu_SearchMediaAll(tr::now);
+	case SearchMediaFilter::Photos: return tr::lng_media_type_photos(tr::now);
+	case SearchMediaFilter::Videos: return tr::lng_media_type_videos(tr::now);
+	case SearchMediaFilter::Files: return tr::lng_media_type_files(tr::now);
+	case SearchMediaFilter::Music: return tr::lng_media_type_songs(tr::now);
+	case SearchMediaFilter::Voice: return tr::lng_media_type_audios(tr::now);
+	case SearchMediaFilter::RoundVideo: return tr::lng_media_type_rounds(tr::now);
+	case SearchMediaFilter::Links: return tr::lng_media_type_links(tr::now);
+	case SearchMediaFilter::Gifs: return tr::lng_media_type_gifs(tr::now);
+	}
+	Unexpected("Media in Dialogs::SearchMediaLabel.");
+}
+
 FixedHashtagSearchQuery FixHashtagSearchQuery(
 		const QString &query,
 		int cursorPosition,
@@ -268,6 +298,12 @@ ChatSearchIn::ChatSearchIn(QWidget *parent)
 	_in.clicks.events() | rpl::on_next([=] {
 		showMenu();
 	}, lifetime());
+	_media.clicks.events() | rpl::on_next([=] {
+		showMediaMenu();
+	}, lifetime());
+	_media.cancelRequests.events() | rpl::on_next([=] {
+		_mediaChanges.fire(SearchMediaFilter::All);
+	}, lifetime());
 }
 
 ChatSearchIn::~ChatSearchIn() = default;
@@ -277,7 +313,9 @@ void ChatSearchIn::apply(
 		ChatSearchTab active,
 		ChatSearchPeerTabType peerTabType,
 		std::shared_ptr<Ui::DynamicImage> fromUserpic,
-		QString fromName) {
+		QString fromName,
+		SearchMediaFilter media,
+		bool showMedia) {
 	_tabs = std::move(tabs);
 	_peerTabType = peerTabType;
 	_active = active;
@@ -296,6 +334,19 @@ void ChatSearchIn::apply(
 		tr::marked);
 	updateSection(&_from, std::move(fromUserpic), std::move(text));
 
+	_mediaCurrent = media;
+	updateSection(
+		&_media,
+		showMedia ? Ui::MakeIconThumbnail(st::menuIconShowAll) : nullptr,
+		tr::ayu_SearchMediaType(
+			tr::now,
+			lt_type,
+			tr::semibold(SearchMediaLabel(media)),
+			tr::marked));
+	if (_media.cancel) {
+		_media.cancel->setVisible(media != SearchMediaFilter::All);
+	}
+
 	resizeToWidth(width());
 }
 
@@ -313,6 +364,44 @@ rpl::producer<> ChatSearchIn::changeFromRequests() const {
 
 rpl::producer<ChatSearchTab> ChatSearchIn::tabChanges() const {
 	return _active.changes();
+}
+
+rpl::producer<SearchMediaFilter> ChatSearchIn::mediaChanges() const {
+	return _mediaChanges.events();
+}
+
+void ChatSearchIn::showMediaMenu() {
+	_menu = base::make_unique_q<Ui::PopupMenu>(
+		this,
+		st::dialogsSearchInMenu);
+	auto activeIndex = 0;
+	const auto icon = Ui::MakeIconThumbnail(st::menuIconShowAll);
+	for (const auto value : kMediaFilters) {
+		if (value == _mediaCurrent) {
+			activeIndex = _menu->actions().size();
+		}
+		auto action = base::make_unique_q<Action>(
+			_menu.get(),
+			icon,
+			SearchMediaLabel(value),
+			(value == _mediaCurrent));
+		action->setActionTriggered([=] {
+			_mediaChanges.fire_copy(value);
+		});
+		_menu->addAction(std::move(action));
+	}
+	const auto count = int(_menu->actions().size());
+	const auto bottomLeft = (activeIndex * 2 >= count);
+	const auto single = st::dialogsSearchInHeight;
+	const auto in = mapToGlobal(_media.outer->pos()
+		+ QPoint(0, bottomLeft ? count * single : 0));
+	_menu->setForcedOrigin(bottomLeft
+		? Ui::PanelAnimation::Origin::BottomLeft
+		: Ui::PanelAnimation::Origin::TopLeft);
+	if (_menu->prepareGeometryFor(in)) {
+		_menu->move(_menu->pos() - QPoint(_menu->inner().x(), activeIndex * single));
+		_menu->popupPrepared();
+	}
 }
 
 void ChatSearchIn::showMenu() {
@@ -382,6 +471,13 @@ int ChatSearchIn::resizeGetHeight(int newWidth) {
 		raw->move(0, result);
 		result += raw->height();
 		_from.shadow->setGeometry(0, result, newWidth, st::lineWidth);
+		result += st::lineWidth;
+	}
+	if (const auto raw = _media.outer.get()) {
+		raw->resizeToWidth(newWidth);
+		raw->move(0, result);
+		result += raw->height();
+		_media.shadow->setGeometry(0, result, newWidth, st::lineWidth);
 		result += st::lineWidth;
 	}
 	return result;

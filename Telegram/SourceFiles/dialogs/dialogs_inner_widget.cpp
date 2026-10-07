@@ -191,7 +191,8 @@ constexpr auto kPreviewPostsLimit = 3;
 		: state.fromPeer;
 	const auto waiting = trimmed.isEmpty()
 		&& state.tags.empty()
-		&& !fromPeer;
+		&& !fromPeer
+		&& state.activeMedia() == SearchMediaFilter::All;
 	const auto suggestAllChats = !waiting
 		&& state.tab == ChatSearchTab::MyMessages
 		&& (state.filter != ChatTypeFilter::All || !state.fromArchive);
@@ -4690,6 +4691,10 @@ rpl::producer<> InnerWidget::listBottomReached() const {
 	return _listBottomReached.events();
 }
 
+rpl::producer<SearchMediaFilter> InnerWidget::changeSearchMediaRequests() const {
+	return _changeSearchMediaRequests.events();
+}
+
 rpl::producer<ChatSearchTab> InnerWidget::changeSearchTabRequests() const {
 	return _changeSearchTabRequests.events();
 }
@@ -5325,6 +5330,9 @@ void InnerWidget::updateSearchIn() {
 		_searchIn->tabChanges() | rpl::start_to_stream(
 			_changeSearchTabRequests,
 			_searchIn->lifetime());
+		_searchIn->mediaChanges() | rpl::start_to_stream(
+			_changeSearchMediaRequests,
+			_searchIn->lifetime());
 	}
 
 	const auto sublist = _searchState.inChat.sublist();
@@ -5391,6 +5399,10 @@ void InnerWidget::updateSearchIn() {
 	const auto fromName = _searchFromShown
 		? _searchFromShown->shortName()
 		: QString();
+	const auto showMedia = _searchState.inChat
+		&& !sublist
+		&& ((_searchState.tab == ChatSearchTab::ThisPeer)
+			|| (_searchState.tab == ChatSearchTab::ThisTopic));
 	_searchIn->apply({
 		{ ChatSearchTab::ThisTopic, topicIcon },
 		{ ChatSearchTab::ThisPeer, peerIcon },
@@ -5398,7 +5410,7 @@ void InnerWidget::updateSearchIn() {
 		{ ChatSearchTab::Archive, archiveIcon },
 		{ ChatSearchTab::MyMessages, myIcon },
 		{ ChatSearchTab::PublicPosts, publicIcon },
-	}, _searchState.tab, peerTabType, fromImage, fromName);
+	}, _searchState.tab, peerTabType, fromImage, fromName, _searchState.media, showMedia);
 }
 
 void InnerWidget::repaintSearchResult(int index) {

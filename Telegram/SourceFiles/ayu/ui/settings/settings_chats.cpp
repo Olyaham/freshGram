@@ -246,16 +246,13 @@ void BuildMarks(
 		},
 	});
 
-	const auto semiTransparent = ayu.addSettingToggle({
+	ayu.addSettingToggle({
 		.id = u"ayu/semiTransparentDeletedMessages"_q,
 		.altIds = { u"ayu/translucentDeletedMessages"_q },
 		.title = tr::ayu_SemiTransparentDeletedMessages(),
 		.getter = &AyuSettings::semiTransparentDeletedMessages,
 		.setter = &AyuSettings::setSemiTransparentDeletedMessages,
 	});
-	if (semiTransparent) {
-		ayu.addBetaBadge(semiTransparent);
-	}
 
 	ayu.addSectionDivider();
 }

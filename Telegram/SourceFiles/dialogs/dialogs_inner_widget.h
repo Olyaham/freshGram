@@ -208,6 +208,7 @@ public:
 	void setLoadMoreCallback(Fn<void()> callback);
 	void setLoadMoreFilteredCallback(Fn<void()> callback);
 	[[nodiscard]] rpl::producer<> listBottomReached() const;
+	[[nodiscard]] rpl::producer<SearchMediaFilter> changeSearchMediaRequests() const;
 	[[nodiscard]] auto changeSearchTabRequests() const
 		-> rpl::producer<ChatSearchTab>;
 	[[nodiscard]] auto changeSearchFilterRequests() const
@@ -758,6 +759,7 @@ private:
 
 	std::unique_ptr<ChatSearchIn> _searchIn;
 	rpl::event_stream<ChatSearchTab> _changeSearchTabRequests;
+	rpl::event_stream<SearchMediaFilter> _changeSearchMediaRequests;
 	rpl::event_stream<ChatTypeFilter> _changeSearchFilterRequests;
 	rpl::event_stream<bool> _changeSearchFromArchiveRequests;
 	rpl::event_stream<> _resetSearchRestrictionsRequests;

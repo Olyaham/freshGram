@@ -8891,6 +8891,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_SingleCornerRadius" = "Single Corner Radius";
 "ayu_SingleCornerRadiusDescription" = "Forums will have the same avatar shape as chats.";
 "ayu_HideAllChats" = "Hide \"All Chats\" Tab";
+"ayu_HideBirthdayNotifications" = "Hide birthday notifications";
+"ayu_SearchMediaType" = "Type: {type}";
+"ayu_SearchMediaAll" = "All";
 "ayu_ChannelBottomButton" = "Channel Bottom Button";
 "ayu_ChannelBottomButtonHide" = "Hide";
 "ayu_ChannelBottomButtonMute" = "Mute";
@@ -9255,7 +9258,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_RestoreDeletedInChats" = "Show deleted messages in chats";
 "ayu_ShowDeletedChatIcon" = "Trash icon on deleted chats";
 "ayu_MarkOldMessagesDeleted" = "Mark old messages deleted when a chat is deleted";
-"ayu_DeletedChatsDescription" = "For groups with topics only the topics and messages loaded in the app are saved. A deleted topic stays in the list marked as deleted, with its loaded messages. Turning an option off does not delete saved data; it is applied again when you turn it on. Changes in the kept chats apply after a restart. If deleted messages are not shown in chats, they are still saved and available in \"View deleted messages\".";
+"ayu_DeletedChatsDescription" = "A deleted topic stays in the list marked as deleted, with its loaded messages. Turning an option off does not delete saved data; it is applied again when you turn it on. Changes in the kept chats apply after a restart. If deleted messages are not shown in chats, they are still saved and available in \"View deleted messages\".";
 "ayu_StorageHeader" = "Storage";
 "ayu_MaxEditRevisions" = "Edits kept per message";
 "ayu_DeletedRestoreLimit" = "Deleted messages loaded per chat";

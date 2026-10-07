@@ -6,6 +6,8 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "dialogs/dialogs_widget.h"
+#include "storage/storage_shared_media.h"
+#include "data/data_search_controller.h"
 
 #include "base/call_delayed.h"
 #include "base/qt/qt_key_modifiers.h"
@@ -396,6 +398,31 @@ void Widget::BottomButton::paintEvent(QPaintEvent *e) {
 	}
 }
 
+[[nodiscard]] static MTPMessagesFilter MediaFilter(SearchMediaFilter media) {
+	using Type = Storage::SharedMediaType;
+	switch (media) {
+	case SearchMediaFilter::Photos:
+		return Api::PrepareSearchFilter(Type::Photo);
+	case SearchMediaFilter::Videos:
+		return Api::PrepareSearchFilter(Type::Video);
+	case SearchMediaFilter::Files:
+		return Api::PrepareSearchFilter(Type::File);
+	case SearchMediaFilter::Music:
+		return Api::PrepareSearchFilter(Type::MusicFile);
+	case SearchMediaFilter::Voice:
+		return Api::PrepareSearchFilter(Type::VoiceFile);
+	case SearchMediaFilter::RoundVideo:
+		return Api::PrepareSearchFilter(Type::RoundFile);
+	case SearchMediaFilter::Links:
+		return Api::PrepareSearchFilter(Type::Link);
+	case SearchMediaFilter::Gifs:
+		return Api::PrepareSearchFilter(Type::GIF);
+	case SearchMediaFilter::All:
+		break;
+	}
+	return MTP_inputMessagesFilterEmpty();
+}
+
 Widget::Widget(
 	QWidget *parent,
 	not_null<Window::SessionController*> controller,
@@ -541,6 +568,14 @@ Widget::Widget(
 	}) | rpl::on_next([=](ChatSearchTab tab) {
 		auto copy = _searchState;
 		copy.tab = tab;
+		applySearchState(std::move(copy));
+	}, lifetime());
+	_inner->changeSearchMediaRequests(
+	) | rpl::filter([=](SearchMediaFilter media) {
+		return _searchState.media != media;
+	}) | rpl::on_next([=](SearchMediaFilter media) {
+		auto copy = _searchState;
+		copy.media = media;
 		applySearchState(std::move(copy));
 	}, lifetime());
 	_inner->changeSearchFilterRequests(
@@ -3132,12 +3167,16 @@ bool Widget::search(bool inCache, SearchRequestDelay delay) {
 		? _openedCommunity->channel().get()
 		: nullptr;
 	const auto filter = _searchState.filter;
+	const auto media = _searchState.activeMedia();
 	const auto fromArchive = _searchState.fromArchive;
 	const auto fromStartType = SearchRequestType{
 		.start = true,
 		.peer = (inPeer != nullptr),
 	};
-	if (trimmed.isEmpty() && !fromPeer && inTags.empty()) {
+	if (trimmed.isEmpty()
+		&& !fromPeer
+		&& inTags.empty()
+		&& media == SearchMediaFilter::All) {
 		cancelSearchRequest();
 
 		// Otherwise inside first searchApplyEmpty we call searchMode(),
@@ -3177,6 +3216,7 @@ bool Widget::search(bool inCache, SearchRequestDelay delay) {
 			_searchQueryTab = tab;
 			_searchQueryCommunity = community;
 			_searchQueryFilter = filter;
+			_searchQueryMedia = media;
 			_searchQueryFromArchive = fromArchive;
 			process->nextRate = 0;
 			process->full = false;
@@ -3191,6 +3231,7 @@ bool Widget::search(bool inCache, SearchRequestDelay delay) {
 		|| _searchQueryTab != tab
 		|| _searchQueryCommunity != community
 		|| _searchQueryFilter != filter
+		|| _searchQueryMedia != media
 		|| _searchQueryFromArchive != fromArchive) {
 		const auto process = currentSearchProcess();
 		_searchQuery = query;
@@ -3199,6 +3240,7 @@ bool Widget::search(bool inCache, SearchRequestDelay delay) {
 		_searchQueryTab = tab;
 		_searchQueryCommunity = community;
 		_searchQueryFilter = filter;
+		_searchQueryMedia = media;
 		_searchQueryFromArchive = fromArchive;
 		process->nextRate = 0;
 		process->full = false;
@@ -3240,7 +3282,7 @@ bool Widget::search(bool inCache, SearchRequestDelay delay) {
 								Data::ReactionToMTP
 							)),
 						MTP_int(topic ? topic->rootId() : 0),
-						MTP_inputMessagesFilterEmpty(),
+						MediaFilter(media),
 						MTP_int(0), // min_date
 						MTP_int(0), // max_date
 						MTP_int(0), // offset_id
@@ -3504,7 +3546,7 @@ void Widget::searchMore() {
 								Data::ReactionToMTP
 							)),
 						MTP_int(topic ? topic->rootId() : 0),
-						MTP_inputMessagesFilterEmpty(),
+						MediaFilter(_searchQueryMedia),
 						MTP_int(0), // min_date
 						MTP_int(0), // max_date
 						MTP_int(process->lastId),
@@ -3558,7 +3600,7 @@ void Widget::searchMore() {
 					MTPInputPeer(), // saved_peer_id
 					MTPVector<MTPReaction>(), // saved_reaction
 					MTPint(), // top_msg_id
-					MTP_inputMessagesFilterEmpty(),
+					MediaFilter(_searchQueryMedia),
 					MTP_int(0), // min_date
 					MTP_int(0), // max_date
 					MTP_int(_migratedProcess.lastId),
@@ -4237,6 +4279,10 @@ bool Widget::applySearchState(SearchState state) {
 	const auto tagsChanged = (_searchState.tags != state.tags);
 	const auto queryChanged = (_searchState.query != state.query);
 	const auto tabChanged = (_searchState.tab != state.tab);
+	if (!state.inChat) {
+		state.media = SearchMediaFilter::All;
+	}
+	const auto mediaChanged = (_searchState.media != state.media);
 	const auto queryEmptyChanged = queryChanged
 		? (_searchState.query.isEmpty() != state.query.isEmpty())
 		: false;
@@ -4330,8 +4376,10 @@ bool Widget::applySearchState(SearchState state) {
 
 	const auto searchCleared = state.query.isEmpty()
 		&& !state.fromPeer
-		&& state.tags.empty();
+		&& state.tags.empty()
+		&& state.activeMedia() == SearchMediaFilter::All;
 	if (searchCleared
+		|| mediaChanged
 		|| inChatChanged
 		|| communityChanged
 		|| fromPeerChanged

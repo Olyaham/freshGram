@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/ayu_settings.h"
 #include "info/profile/info_profile_actions.h"
 
 #include "api/api_blocked_peers.h"
@@ -957,7 +958,10 @@ void DeleteContactNote(
 
 	rpl::duplicate(
 		birthday
-	) | rpl::map([](Data::Birthday value) {
+	) | rpl::map([](Data::Birthday value) -> rpl::producer<bool> {
+		if (AyuSettings::getInstance().hideBirthdayNotifications()) {
+			return rpl::single(false);
+		}
 		return Data::IsBirthdayTodayValue(value);
 	}) | rpl::flatten_latest(
 	) | rpl::distinct_until_changed(
