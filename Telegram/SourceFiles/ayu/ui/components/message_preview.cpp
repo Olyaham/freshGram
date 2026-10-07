@@ -6,6 +6,7 @@
 // Copyright @Radolyn, 2026
 #include "ayu/ui/components/message_preview.h"
 
+#include "lang_auto.h"
 #include "ayu/ayu_settings.h"
 #include "base/unixtime.h"
 #include "data/data_session.h"
@@ -75,7 +76,7 @@ MessagePreview::MessagePreview(
 
 	const auto ayugramUser = HistoryView::GenerateUser(
 		history,
-		u"AyuGram Releases"_q);
+		tr::ayu_ProductName(tr::now) + u" Releases"_q);
 	const auto messageItem = history->addNewLocalMessage({
 		.id = history->nextNonHistoryEntryId(),
 		.flags = (MessageFlag::FakeHistoryItem

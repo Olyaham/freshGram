@@ -11,7 +11,9 @@
 #include "ayu/libs/sqlite/sqlite_orm.h"
 #include "ayu/utils/id_search.h"
 #include "base/unixtime.h"
+#include "crl/crl_async.h"
 
+#include <atomic>
 #include <chrono>
 #include <mutex>
 #include <system_error>
@@ -251,6 +253,7 @@ namespace {
 
 std::recursive_mutex DatabaseMutex;
 bool DatabaseReady = false;
+std::atomic<int> PurgeDays = 0;
 
 constexpr auto kBusyTimeoutMs = 5000;
 constexpr auto kSqliteBusy = 5;
@@ -452,6 +455,9 @@ void initialize() {
 			prepareStorage();
 			DatabaseReady = true;
 			AyuDatabaseBackup::startPeriodic();
+			if (const auto days = PurgeDays.load()) {
+				purgeOlderThan(days);
+			}
 			return;
 		} catch (const std::system_error &ex) {
 			const auto code = ex.code().value() & 0xFF;
@@ -481,8 +487,26 @@ void initialize() {
 	LOG(("[AyuGram] Database is unavailable, messages will not be saved in this session."));
 }
 
-void addEditedMessage(const EditedMessage &message) {
-	constexpr auto kMaxRevisions = 100;
+void purgeOlderThan(int days) {
+	if (days <= 0) {
+		PurgeDays = 0;
+		return;
+	}
+	PurgeDays = days;
+	crl::async([=] {
+		const auto cutoff = int(base::unixtime::now() - int64(days) * 86400);
+		runVoid("purge old messages", [&] {
+			inTransaction([&] {
+				storage.remove_all<DeletedMessage>(
+					where(column<DeletedMessage>(&DeletedMessage::entityCreateDate) < cutoff));
+				storage.remove_all<EditedMessage>(
+					where(column<EditedMessage>(&EditedMessage::entityCreateDate) < cutoff));
+			});
+		});
+	});
+}
+
+void addEditedMessage(const EditedMessage &message, int maxRevisions) {
 	runVoid("save edited message", [&] {
 		inTransaction([&] {
 			const auto saved = storage.count<EditedMessage>(
@@ -491,7 +515,7 @@ void addEditedMessage(const EditedMessage &message) {
 					column<EditedMessage>(&EditedMessage::dialogId) == message.dialogId and
 					column<EditedMessage>(&EditedMessage::messageId) == message.messageId
 				));
-			if (saved < kMaxRevisions) {
+			if (!maxRevisions || saved < maxRevisions) {
 				storage.insert(message);
 			}
 		});

@@ -40,7 +40,10 @@ namespace AyuMessages {
 
 namespace {
 
-constexpr auto kMaxCachedDocumentSize = int64(32) * 1024 * 1024;
+[[nodiscard]] int64 MaxCachedDocumentSize() {
+	return int64(AyuSettings::getInstance().deletedMediaMaxSizeMb())
+		* 1024 * 1024;
+}
 
 constexpr auto kPhotoSaveAttempts = 60;
 constexpr auto kLongSaveAttempts = 900;
@@ -151,7 +154,7 @@ void SavePhotoBytes(
 	const auto &location = media->owner()->location(true);
 	if (location.accessEnable()) {
 		auto file = QFile(location.name());
-		if (file.size() <= kMaxCachedDocumentSize
+		if (file.size() <= MaxCachedDocumentSize()
 			&& file.open(QIODevice::ReadOnly)) {
 			bytes = file.readAll();
 		}
@@ -184,7 +187,7 @@ void SaveDocumentBytes(
 		int maxAttempts) {
 	if (QFile::exists(path)
 		|| document->size <= 0
-		|| document->size > kMaxCachedDocumentSize) {
+		|| document->size > MaxCachedDocumentSize()) {
 		return;
 	}
 	auto media = document->createMediaView();
@@ -324,7 +327,9 @@ void addEditedMessage(not_null<HistoryItem *> item) {
 		return;
 	}
 
-	AyuDatabase::addEditedMessage(message);
+	AyuDatabase::addEditedMessage(
+		message,
+		AyuSettings::getInstance().maxEditRevisions());
 }
 
 ID storageUserId(not_null<PeerData*> peer) {
@@ -348,7 +353,7 @@ void cacheDeletedMedia(not_null<HistoryItem*> item) {
 		return;
 	}
 	const auto media = item->media();
-	if (!media) {
+	if (!media || !AyuSettings::getInstance().deletedMediaMaxSizeMb()) {
 		return;
 	}
 	const auto origin = item->fullId();

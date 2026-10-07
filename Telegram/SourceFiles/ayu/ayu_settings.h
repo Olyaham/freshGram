@@ -299,6 +299,13 @@ public:
 	[[nodiscard]] bool materialSwitches() const { return _materialSwitches.current(); }
 	[[nodiscard]] bool materialBubbles() const { return _materialBubbles.current(); }
 	[[nodiscard]] bool materialIcons() const { return _materialIcons.current(); }
+	[[nodiscard]] int maxEditRevisions() const { return _maxEditRevisions.current(); }
+	[[nodiscard]] int deletedRestoreLimit() const { return _deletedRestoreLimit.current(); }
+	[[nodiscard]] int keptSnapshotLimit() const { return _keptSnapshotLimit.current(); }
+	[[nodiscard]] int deletedMediaMaxSizeMb() const { return _deletedMediaMaxSizeMb.current(); }
+	[[nodiscard]] int keepDeletedDays() const { return _keepDeletedDays.current(); }
+	[[nodiscard]] int backupKeepCount() const { return _backupKeepCount.current(); }
+	[[nodiscard]] int backupIntervalHours() const { return _backupIntervalHours.current(); }
 	[[nodiscard]] int replyBackgroundOpacity() const { return _replyBackgroundOpacity.current(); }
 	[[nodiscard]] int reactionBackgroundOpacity() const { return _reactionBackgroundOpacity.current(); }
 	[[nodiscard]] bool disableNotificationsDelay() const { return _disableNotificationsDelay.current(); }
@@ -405,6 +412,13 @@ public:
 	void setMaterialSwitches(bool val);
 	void setMaterialBubbles(bool val);
 	void setMaterialIcons(bool val);
+	void setMaxEditRevisions(int val);
+	void setDeletedRestoreLimit(int val);
+	void setKeptSnapshotLimit(int val);
+	void setDeletedMediaMaxSizeMb(int val);
+	void setKeepDeletedDays(int val);
+	void setBackupKeepCount(int val);
+	void setBackupIntervalHours(int val);
 	void setReplyBackgroundOpacity(int val);
 	void setReactionBackgroundOpacity(int val);
 	void setDisableNotificationsDelay(bool val);
@@ -691,6 +705,13 @@ private:
 	rpl::variable<bool> _materialSwitches = true;
 	rpl::variable<bool> _materialBubbles = true;
 	rpl::variable<bool> _materialIcons = true;
+	rpl::variable<int> _maxEditRevisions = 100;
+	rpl::variable<int> _deletedRestoreLimit = 3000;
+	rpl::variable<int> _keptSnapshotLimit = 100;
+	rpl::variable<int> _deletedMediaMaxSizeMb = 32;
+	rpl::variable<int> _keepDeletedDays = 0;
+	rpl::variable<int> _backupKeepCount = 5;
+	rpl::variable<int> _backupIntervalHours = 6;
 	rpl::variable<int> _replyBackgroundOpacity = 12;
 	rpl::variable<int> _reactionBackgroundOpacity = 16;
 	rpl::variable<bool> _disableNotificationsDelay = false;

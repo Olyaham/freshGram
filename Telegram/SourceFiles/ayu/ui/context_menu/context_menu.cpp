@@ -276,7 +276,7 @@ void AddAyuGramActions(PeerData *peerData,
 	const auto topicId = topic ? topic->rootId().bare : 0;
 
 	addCallback(Window::PeerMenuCallback::Args{
-		.text = u"AyuGram"_q,
+		.text = tr::ayu_ProductName(tr::now),
 		.handler = nullptr,
 		.icon = &st::menuIconGroupReactions,
 		.fillSubmenu = [=](not_null<Ui::PopupMenu*> menu) {
@@ -312,12 +312,10 @@ void AddAyuGramActions(PeerData *peerData,
 					tr::ayu_ViewDeletedMenuText(tr::now),
 					[=]
 					{
-						if (const auto window = sessionController->session().tryResolveWindow()) {
-							window->showSection(std::make_shared<MessageHistory::SectionMemento>(
-								peerData,
-								nullptr,
-								topicId));
-						}
+						sessionController->showSection(std::make_shared<MessageHistory::SectionMemento>(
+							peerData,
+							nullptr,
+							topicId));
 					},
 					&st::menuIconArchive);
 				if (showFilters || filteredToggleShown.value_or(false)) addAction({ .isSeparator = true });

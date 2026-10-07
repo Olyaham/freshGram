@@ -101,7 +101,7 @@ void BuildCategories(SectionBuilder &builder) {
 	builder.addSubsectionTitle(tr::ayu_CategoriesHeader());
 
 	builder.addSectionButton({
-		.title = rpl::single(QString("freshGram")),
+		.title = tr::ayu_ProductName(),
 		.targetSection = AyuGhost::Id(),
 		.icon = { &st::menuIconGroupReactions },
 	});

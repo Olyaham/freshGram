@@ -39,7 +39,6 @@ namespace {
 	return user;
 }
 
-constexpr auto kLoadLimit = 3000;
 constexpr auto kCreateBatch = 60;
 constexpr auto kOutgoingFlag = 0x00000002;
 
@@ -159,6 +158,7 @@ void State::disable() {
 }
 
 void State::load(ID userId, ID dialogId) {
+	const auto limit = AyuSettings::getInstance().deletedRestoreLimit();
 	const auto weak = base::make_weak(this);
 	AyuMessages::flushPending();
 	crl::async([=] {
@@ -170,7 +170,7 @@ void State::load(ID userId, ID dialogId) {
 				0,
 				0,
 				0,
-				kLoadLimit,
+				limit ? limit : std::numeric_limits<int>::max(),
 				std::string());
 		} catch (...) {
 			messages.clear();

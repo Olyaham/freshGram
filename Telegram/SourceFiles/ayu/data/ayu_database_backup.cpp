@@ -1,5 +1,6 @@
 #include "ayu/data/ayu_database_backup.h"
 
+#include "ayu/ayu_settings.h"
 #include "ayu/libs/sqlite/sqlite3.h"
 #include "base/timer.h"
 #include "logs.h"
@@ -20,11 +21,15 @@
 namespace AyuDatabaseBackup {
 namespace {
 
-constexpr auto kKeep = 5;
-constexpr auto kPeriod = crl::time(6 * 60 * 60 * 1000);
+constexpr auto kHour = crl::time(60 * 60 * 1000);
 constexpr auto kBusyTimeout = 5000;
 
 std::atomic<bool> Running = false;
+// Nothing is rotated out until the settings are known.
+std::atomic<bool> Configured = false;
+std::atomic<int> KeepCount = 5;
+std::atomic<int> IntervalHours = 6;
+std::unique_ptr<base::Timer> PeriodicTimer;
 
 struct Entry {
 	QString path;
@@ -186,7 +191,10 @@ void Rotate() {
 			richest = i;
 		}
 	}
-	for (auto i = kKeep; i < int(list.size()); ++i) {
+	if (!Configured) {
+		return;
+	}
+	for (auto i = KeepCount.load(); i < int(list.size()); ++i) {
 		if (i != richest) {
 			QFile::remove(list[i].path);
 		} else {
@@ -276,16 +284,30 @@ bool restore(int &index) {
 }
 
 void startPeriodic() {
-	static auto timer = std::unique_ptr<base::Timer>();
-	if (timer) {
+	if (PeriodicTimer) {
 		return;
 	}
-	timer = std::make_unique<base::Timer>([] {
+	PeriodicTimer = std::make_unique<base::Timer>([] {
+		if (!Configured) {
+			const auto &settings = AyuSettings::getInstance();
+			configure(
+				settings.backupKeepCount(),
+				settings.backupIntervalHours());
+		}
 		crl::async([] {
 			[[maybe_unused]] const auto created = create();
 		});
 	});
-	timer->callEach(kPeriod);
+	PeriodicTimer->callEach(IntervalHours.load() * kHour);
+}
+
+void configure(int keepCount, int intervalHours) {
+	Configured = true;
+	KeepCount = keepCount;
+	IntervalHours = intervalHours;
+	if (PeriodicTimer) {
+		PeriodicTimer->callEach(intervalHours * kHour);
+	}
 }
 
 } // namespace AyuDatabaseBackup

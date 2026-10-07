@@ -15,9 +15,10 @@ The source code is published under GPLv3 with OpenSSL exception, the license is 
 
 - Full ghost mode (flexible)
 - Messages history: the edits of other people and your own and the deleted messages are kept in a local database, which is backed up automatically (the newest valid backup is restored if the database gets corrupted)
+- Storage settings (Settings - freshGram - Storage): how many edits are kept per message, how many deleted messages are loaded when a chat opens, how many messages are saved when you leave a chat, the size limit of saved deleted media, how long deleted messages and edits are kept, and how many database backups are made and how often
 - Anti-recall
 - "Peek last seen" in a user profile (without Telegram Premium): briefly adds the user to the "Last seen & online" exceptions, reads their exact status and restores your privacy settings; the result is shown as a separate profile line and next to the status in the chat top bar and the profile header, for example "last seen recently (peeked: last seen yesterday at 11:27 PM)"
-- Secret chats live in the main chat list (opt-in: Settings - AyuGram - Enable secret chats, requires a local passcode): text with formatting, replies, photos, files, static stickers and GIFs, voice messages and video notes recorded with the native composer, self-destruct timers, typing and read marks, forwarding, message shots, native media viewer, encryption key picture and hex for comparison. Ended chats stay in the list, real notifications show only "Secret chat" and "New secret message", requests that arrived while freshGram was closed are picked up after a restart. Keys, messages and attachments are encrypted with a key derived from the local passcode key, together with chat metadata and bound to their chat and message; removing the passcode or logging out deletes secret chats, and database backups keep secret data only in the newest snapshots, links are never previewed through Telegram servers
+- Secret chats live in the main chat list (opt-in: Settings - freshGram - Enable secret chats, requires a local passcode): text with formatting, replies, photos, files, static stickers and GIFs, voice messages and video notes recorded with the native composer, self-destruct timers, typing and read marks, forwarding, message shots, native media viewer, encryption key picture and hex for comparison. Ended chats stay in the list, real notifications show only "Secret chat" and "New secret message", requests that arrived while freshGram was closed are picked up after a restart. Keys, messages and attachments are encrypted with a key derived from the local passcode key, together with chat metadata and bound to their chat and message; removing the passcode or logging out deletes secret chats, and database backups keep secret data only in the newest snapshots, links are never previewed through Telegram servers
 - Service messages (for example, "user joined") are kept when deleted, the same way as normal ones
 - Chats and channels deleted by the other side, that you were removed from or that you deleted yourself stay in the chats list together with the saved messages (deleting the chat once more removes it for real)
 - Font customization
@@ -34,8 +35,8 @@ See the [AyuGram documentation](https://docs.ayugram.one/desktop/) for the full 
 
 - Own Material You themes (Google Day and Google Dark, applied on the first launch)
 - **Google Sans** font everywhere (except for Arabic characters, they use the **Vazirmatn** font)
-- Material icons instead of default ones (can be turned off in the AyuGram appearance settings, restart required)
-- Rounded photos and videos and no message bubble tails, plus reverted old paddings (the "Message Rounding and Tail" setting in the AyuGram chat settings turns the rounding and tails back to the classic look)
+- Material icons instead of default ones (can be turned off in the freshGram appearance settings, restart required)
+- Rounded photos and videos and no message bubble tails, plus reverted old paddings (the "Message Rounding and Tail" setting in the freshGram chat settings turns the rounding and tails back to the classic look)
 - Colored reply background with an adjustable opacity
 - Removed "large emoji" outline
 - Reduced use of uppercase in the interface
@@ -47,7 +48,7 @@ See the [AyuGram documentation](https://docs.ayugram.one/desktop/) for the full 
 - Copy usernames as @example if possible
 - Use photos from @gamee in profile photo list (optional)
 - Removed delay when recording voice messages
-- Webview platform is reported as "android" (enabled by default, can be turned off in the AyuGram settings)
+- Webview platform is reported as "android" (enabled by default, can be turned off in the freshGram settings)
 - Replaced all sounds
 - Reduced jpeg compression (94-95% on photos, 100% on wallpapers)
 - Reduced minimum window size and minimum brush thickness in the photo editor

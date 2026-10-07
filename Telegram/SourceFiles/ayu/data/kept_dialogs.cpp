@@ -25,8 +25,6 @@
 namespace AyuKept {
 namespace {
 
-constexpr auto kSnapshotLimit = 100;
-
 enum class Kind : int {
 	User = 0,
 	Chat = 1,
@@ -93,11 +91,12 @@ std::set<PeerData*> Leaving;
 
 void SaveSnapshot(not_null<History*> history) {
 	const auto user = history->peer->isUser();
+	const auto limit = AyuSettings::getInstance().keptSnapshotLimit();
 	const auto now = base::unixtime::now();
 	auto saved = 0;
 	for (const auto &block : ranges::views::reverse(history->blocks)) {
 		for (const auto &view : ranges::views::reverse(block->messages)) {
-			if (!user && saved >= kSnapshotLimit) {
+			if (!user && limit && saved >= limit) {
 				return;
 			}
 			const auto item = view->data();

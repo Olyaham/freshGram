@@ -10,6 +10,8 @@
 #include "tray.h"
 #include "ayu/ayu_ui_settings.h"
 #include "ayu/ayu_worker.h"
+#include "ayu/data/ayu_database.h"
+#include "ayu/data/ayu_database_backup.h"
 #include "ayu/features/streamer_mode/streamer_mode.h"
 #include "ayu/ui/ayu_logo.h"
 #include "core/application.h"
@@ -22,6 +24,7 @@
 #include "ui/style/style_core.h"
 #include "window/window_controller.h"
 
+#include <filesystem>
 #include <fstream>
 #include <QApplication>
 
@@ -29,8 +32,13 @@ using json = nlohmann::json;
 
 namespace {
 
-std::string getSettingsPath() {
-	return (cWorkingDir() + u"tdata/ayu_settings.json"_q).toStdString();
+std::filesystem::path getSettingsPath() {
+	const auto path = cWorkingDir() + u"tdata/ayu_settings.json"_q;
+#ifdef Q_OS_WIN
+	return std::filesystem::path(path.toStdWString());
+#else // Q_OS_WIN
+	return std::filesystem::path(path.toStdString());
+#endif // !Q_OS_WIN
 }
 
 void repaintApp() {
@@ -382,6 +390,13 @@ AyuSettings &AyuSettings::getInstance() {
 }
 
 void AyuSettings::load() {
+	const auto applied = gsl::finally([] {
+		const auto &settings = getInstance();
+		AyuDatabaseBackup::configure(
+			settings.backupKeepCount(),
+			settings.backupIntervalHours());
+		AyuDatabase::purgeOlderThan(settings.keepDeletedDays());
+	});
 	std::ifstream file(getSettingsPath());
 	if (!file.good()) {
 		return;
@@ -534,6 +549,13 @@ void AyuSettings::validate() {
 	}
 
 	validateRange(_messageBubbleRadius, 0, 16, defaults._messageBubbleRadius);
+	validateRange(_maxEditRevisions, 0, 100000, defaults._maxEditRevisions);
+	validateRange(_deletedRestoreLimit, 0, 1000000, defaults._deletedRestoreLimit);
+	validateRange(_keptSnapshotLimit, 0, 100000, defaults._keptSnapshotLimit);
+	validateRange(_deletedMediaMaxSizeMb, 0, 4096, defaults._deletedMediaMaxSizeMb);
+	validateRange(_keepDeletedDays, 0, 3650, defaults._keepDeletedDays);
+	validateRange(_backupKeepCount, 1, 100, defaults._backupKeepCount);
+	validateRange(_backupIntervalHours, 1, 168, defaults._backupIntervalHours);
 	validateRange(_replyBackgroundOpacity, 0, 50, defaults._replyBackgroundOpacity);
 	validateRange(_reactionBackgroundOpacity, 0, 50, defaults._reactionBackgroundOpacity);
 	validateRange(_wideMultiplier, 0.5, 4.0, defaults._wideMultiplier);
@@ -705,6 +727,50 @@ void AyuSettings::setMaterialBubbles(bool val) {
 void AyuSettings::setMaterialIcons(bool val) {
 	if (_materialIcons.current() == val) return;
 	_materialIcons = val;
+	save();
+}
+
+void AyuSettings::setMaxEditRevisions(int val) {
+	if (_maxEditRevisions.current() == val) return;
+	_maxEditRevisions = val;
+	save();
+}
+
+void AyuSettings::setDeletedRestoreLimit(int val) {
+	if (_deletedRestoreLimit.current() == val) return;
+	_deletedRestoreLimit = val;
+	save();
+}
+
+void AyuSettings::setKeptSnapshotLimit(int val) {
+	if (_keptSnapshotLimit.current() == val) return;
+	_keptSnapshotLimit = val;
+	save();
+}
+
+void AyuSettings::setDeletedMediaMaxSizeMb(int val) {
+	if (_deletedMediaMaxSizeMb.current() == val) return;
+	_deletedMediaMaxSizeMb = val;
+	save();
+}
+
+void AyuSettings::setKeepDeletedDays(int val) {
+	if (_keepDeletedDays.current() == val) return;
+	_keepDeletedDays = val;
+	save();
+}
+
+void AyuSettings::setBackupKeepCount(int val) {
+	if (_backupKeepCount.current() == val) return;
+	_backupKeepCount = val;
+	AyuDatabaseBackup::configure(_backupKeepCount.current(), _backupIntervalHours.current());
+	save();
+}
+
+void AyuSettings::setBackupIntervalHours(int val) {
+	if (_backupIntervalHours.current() == val) return;
+	_backupIntervalHours = val;
+	AyuDatabaseBackup::configure(_backupKeepCount.current(), _backupIntervalHours.current());
 	save();
 }
 
@@ -1174,6 +1240,13 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"materialSwitches", s._materialSwitches.current()},
 		{"materialBubbles", s._materialBubbles.current()},
 		{"materialIcons", s._materialIcons.current()},
+		{"maxEditRevisions", s._maxEditRevisions.current()},
+		{"deletedRestoreLimit", s._deletedRestoreLimit.current()},
+		{"keptSnapshotLimit", s._keptSnapshotLimit.current()},
+		{"deletedMediaMaxSizeMb", s._deletedMediaMaxSizeMb.current()},
+		{"keepDeletedDays", s._keepDeletedDays.current()},
+		{"backupKeepCount", s._backupKeepCount.current()},
+		{"backupIntervalHours", s._backupIntervalHours.current()},
 		{"replyBackgroundOpacity", s._replyBackgroundOpacity.current()},
 		{"reactionBackgroundOpacity", s._reactionBackgroundOpacity.current()},
 		{"disableNotificationsDelay", s._disableNotificationsDelay.current()},
@@ -1285,6 +1358,13 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._materialSwitches = j.value("materialSwitches", defaults._materialSwitches.current());
 	s._materialBubbles = j.value("materialBubbles", defaults._materialBubbles.current());
 	s._materialIcons = j.value("materialIcons", defaults._materialIcons.current());
+	s._maxEditRevisions = j.value("maxEditRevisions", defaults._maxEditRevisions.current());
+	s._deletedRestoreLimit = j.value("deletedRestoreLimit", defaults._deletedRestoreLimit.current());
+	s._keptSnapshotLimit = j.value("keptSnapshotLimit", defaults._keptSnapshotLimit.current());
+	s._deletedMediaMaxSizeMb = j.value("deletedMediaMaxSizeMb", defaults._deletedMediaMaxSizeMb.current());
+	s._keepDeletedDays = j.value("keepDeletedDays", defaults._keepDeletedDays.current());
+	s._backupKeepCount = j.value("backupKeepCount", defaults._backupKeepCount.current());
+	s._backupIntervalHours = j.value("backupIntervalHours", defaults._backupIntervalHours.current());
 	s._replyBackgroundOpacity = j.value("replyBackgroundOpacity", defaults._replyBackgroundOpacity.current());
 	s._reactionBackgroundOpacity = j.value("reactionBackgroundOpacity", defaults._reactionBackgroundOpacity.current());
 	s._disableNotificationsDelay = j.value("disableNotificationsDelay", defaults._disableNotificationsDelay.current());

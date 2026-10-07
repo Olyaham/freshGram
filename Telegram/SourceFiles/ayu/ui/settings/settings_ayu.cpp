@@ -40,6 +40,8 @@
 #include "ui/wrap/vertical_layout.h"
 #include "window/window_session_controller.h"
 
+#include <limits>
+
 namespace Settings {
 
 using namespace Builder;
@@ -646,6 +648,118 @@ void BuildSpyEssentials(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	});
 }
 
+constexpr auto kNever = std::numeric_limits<int>::max();
+
+void AddStorageSlider(
+		AyuSectionBuilder &ayu,
+		const QString &id,
+		rpl::producer<QString> title,
+		std::vector<int> values,
+		const QString &unit,
+		int current,
+		Fn<void(int)> apply) {
+	const auto wasZero = (current == 0) && (values.back() == kNever);
+	const auto steps = int(values.size());
+	ayu.addSlider({
+		.id = id,
+		.title = std::move(title),
+		.steps = steps,
+		.current = wasZero ? kNever : current,
+		.indexToValue = [=](int index) { return values[index]; },
+		.onFinalChanged = [=](int value) {
+			apply((value == kNever) ? 0 : value);
+		},
+		.formatLabel = [=](int value) {
+			return (value == kNever)
+				? tr::ayu_StorageUnlimited(tr::now)
+				: (value == 0)
+				? tr::ayu_StorageOff(tr::now)
+				: unit.isEmpty()
+				? QString::number(value)
+				: QString::number(value) + ' ' + unit;
+		},
+	});
+}
+
+void BuildStorage(SectionBuilder &builder, AyuSectionBuilder &ayu) {
+	const auto &settings = AyuSettings::getInstance();
+	builder.addSubsectionTitle(tr::ayu_StorageHeader());
+
+	AddStorageSlider(
+		ayu,
+		u"ayu/maxEditRevisions"_q,
+		tr::ayu_MaxEditRevisions(),
+		{ 10, 25, 50, 100, 250, 500, kNever },
+		QString(),
+		settings.maxEditRevisions(),
+		[](int value) {
+			AyuSettings::getInstance().setMaxEditRevisions(value);
+		});
+	AddStorageSlider(
+		ayu,
+		u"ayu/deletedRestoreLimit"_q,
+		tr::ayu_DeletedRestoreLimit(),
+		{ 100, 500, 1000, 3000, 10000, kNever },
+		QString(),
+		settings.deletedRestoreLimit(),
+		[](int value) {
+			AyuSettings::getInstance().setDeletedRestoreLimit(value);
+		});
+	AddStorageSlider(
+		ayu,
+		u"ayu/keptSnapshotLimit"_q,
+		tr::ayu_KeptSnapshotLimit(),
+		{ 25, 50, 100, 250, 500, 1000, kNever },
+		QString(),
+		settings.keptSnapshotLimit(),
+		[](int value) {
+			AyuSettings::getInstance().setKeptSnapshotLimit(value);
+		});
+	AddStorageSlider(
+		ayu,
+		u"ayu/deletedMediaMaxSizeMb"_q,
+		tr::ayu_DeletedMediaMaxSize(),
+		{ 0, 8, 16, 32, 64, 128, 256 },
+		tr::ayu_StorageUnitMb(tr::now),
+		settings.deletedMediaMaxSizeMb(),
+		[](int value) {
+			AyuSettings::getInstance().setDeletedMediaMaxSizeMb(value);
+		});
+	AddStorageSlider(
+		ayu,
+		u"ayu/keepDeletedDays"_q,
+		tr::ayu_KeepDeletedDays(),
+		{ 30, 90, 180, 365, kNever },
+		tr::ayu_StorageUnitDays(tr::now),
+		settings.keepDeletedDays(),
+		[](int value) {
+			AyuSettings::getInstance().setKeepDeletedDays(value);
+		});
+	AddStorageSlider(
+		ayu,
+		u"ayu/backupKeepCount"_q,
+		tr::ayu_BackupKeepCount(),
+		{ 2, 5, 10, 20 },
+		QString(),
+		settings.backupKeepCount(),
+		[](int value) {
+			AyuSettings::getInstance().setBackupKeepCount(value);
+		});
+	AddStorageSlider(
+		ayu,
+		u"ayu/backupIntervalHours"_q,
+		tr::ayu_BackupInterval(),
+		{ 1, 3, 6, 12, 24 },
+		tr::ayu_StorageUnitHours(tr::now),
+		settings.backupIntervalHours(),
+		[](int value) {
+			AyuSettings::getInstance().setBackupIntervalHours(value);
+		});
+
+	builder.addSkip();
+	builder.addDividerText(tr::ayu_StorageDescription());
+}
+
 void BuildOther(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	builder.addSubsectionTitle(tr::ayu_MessageSavingOtherHeader());
 
@@ -706,7 +820,7 @@ void BuildSecretChats(SectionBuilder &builder) {
 const auto kMeta = BuildHelper({
 	.id = AyuGhost::Id(),
 	.parentId = AyuMain::Id(),
-	.title = u"AyuGram"_q,
+	.title = u"freshGram"_q,
 	.icon = &st::menuIconGroupReactions,
 }, [](SectionBuilder &builder) {
 	auto ayu = AyuSectionBuilder(builder);
@@ -718,6 +832,7 @@ const auto kMeta = BuildHelper({
 	BuildSpyEssentials(builder, ayu);
 
 	ayu.addSectionDivider();
+	BuildStorage(builder, ayu);
 	BuildOther(builder, ayu);
 	ayu.addSectionDivider();
 	BuildSecretChats(builder);
@@ -727,7 +842,7 @@ const auto kMeta = BuildHelper({
 } // namespace
 
 rpl::producer<QString> AyuGhost::title() {
-	return rpl::single(QString("AyuGram"));
+	return tr::ayu_ProductName();
 }
 
 AyuGhost::AyuGhost(
