@@ -1,6 +1,7 @@
 #pragma once
 
 #include "base/basic_types.h"
+#include "data/data_msg_id.h"
 #include "rpl/lifetime.h"
 
 class History;
@@ -11,9 +12,16 @@ class ChatData;
 
 namespace Data {
 class Session;
+class Forum;
+class ForumTopic;
 } // namespace Data
 
 namespace AyuKept {
+
+[[nodiscard]] bool keepDeletedTopic(not_null<Data::Forum*> forum, MsgId rootId);
+[[nodiscard]] bool purgeDeletedTopic(not_null<Data::Forum*> forum, MsgId rootId);
+[[nodiscard]] bool isKeptDeletedTopic(not_null<Data::ForumTopic*> topic);
+void releaseDeletedTopics();
 
 void setup(not_null<Data::Session*> owner, rpl::lifetime &lifetime);
 

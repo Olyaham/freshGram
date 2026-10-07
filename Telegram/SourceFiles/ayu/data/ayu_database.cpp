@@ -739,6 +739,18 @@ std::vector<KeptTopic> getKeptTopicsFor(ID userId) {
 	});
 }
 
+void removeKeptTopic(ID userId, ID dialogId, ID rootId) {
+	runVoid("remove kept topic", [&] {
+		storage.remove_all<KeptTopic>(
+			where(
+				column<KeptTopic>(&KeptTopic::userId) == userId and
+				column<KeptTopic>(&KeptTopic::dialogId) == dialogId and
+				column<KeptTopic>(&KeptTopic::rootId) == rootId
+			)
+		);
+	});
+}
+
 void removeKeptTopics(ID userId, ID dialogId) {
 	runVoid("remove kept topics", [&] {
 		storage.remove_all<KeptTopic>(

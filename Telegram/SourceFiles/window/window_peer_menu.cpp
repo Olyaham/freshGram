@@ -139,6 +139,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QAction>
 #include <QtWidgets/QApplication>
 
+#include "ayu/data/kept_dialogs.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "ayu/features/peek/peek_online.h"
 #include "ayu/secret/secret_manager.h"
@@ -1286,7 +1287,8 @@ void Filler::addDeleteContact() {
 }
 
 void Filler::addDeleteTopic() {
-	if (!_topic || !_topic->canDelete()) {
+	if (!_topic
+		|| (!_topic->canDelete() && !AyuKept::isKeptDeletedTopic(_topic))) {
 		return;
 	}
 	const auto controller = _controller;
@@ -2401,6 +2403,10 @@ void PeerMenuDeleteTopic(
 		not_null<Window::SessionNavigation*> navigation,
 		not_null<PeerData*> peer,
 		MsgId rootId) {
+	if (const auto forum = peer->forum()
+		; forum && AyuKept::purgeDeletedTopic(forum, rootId)) {
+		return;
+	}
 	const auto api = &peer->session().api();
 	api->request(MTPmessages_DeleteTopicHistory(
 		peer->input(),

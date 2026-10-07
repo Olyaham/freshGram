@@ -6,6 +6,8 @@
 #include "ayu/data/messages_storage.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "base/flat_map.h"
+#include "core/application.h"
+#include "window/notifications_manager.h"
 #include "base/flat_set.h"
 #include "base/unixtime.h"
 #include "crl/crl_async.h"
@@ -30,6 +32,7 @@
 
 #include <map>
 #include <set>
+#include <tuple>
 
 namespace AyuKept {
 namespace {
@@ -120,31 +123,55 @@ std::set<PeerData*> Leaving;
 	return row;
 }
 
+using TopicKey = std::tuple<ID, PeerId, MsgId>;
+
+[[nodiscard]] TopicKey KeyFor(not_null<PeerData*> peer, MsgId rootId) {
+	return { AyuMessages::storageUserId(peer), peer->id, rootId };
+}
+
+std::map<TopicKey, QString> KeptDeletedTopics;
+std::map<TopicKey, base::weak_ptr<Data::ForumTopic>> KeptTopicObjects;
+std::set<TopicKey> PurgeOnce;
+
+[[nodiscard]] QString MarkedTitle(const QString &title) {
+	const auto &mark = AyuSettings::getInstance().deletedMark();
+	return mark.isEmpty() ? title : (mark + ' ' + title);
+}
+
+[[nodiscard]] KeptTopic MakeTopicRow(
+		not_null<PeerData*> peer,
+		not_null<Data::ForumTopic*> topic) {
+	auto row = KeptTopic();
+	row.fakeId = 0;
+	row.userId = AyuMessages::storageUserId(peer);
+	row.dialogId = getDialogIdFromPeer(peer);
+	row.rootId = ID(topic->rootId().bare);
+	row.title = topic->title().toStdString();
+	row.colorId = topic->colorId();
+	row.iconId = ID(topic->iconId());
+	row.creatorId = ID(topic->creatorId().value);
+	row.date = topic->creationDate();
+	row.flags = (topic->closed() ? 1 : 0)
+		| (topic->isPinnedDialog(FilterId()) ? 2 : 0);
+	const auto i = KeptDeletedTopics.find(KeyFor(peer, topic->rootId()));
+	if (i != KeptDeletedTopics.end()) {
+		row.title = i->second.toStdString();
+		row.flags |= 4;
+	}
+	return row;
+}
+
 void SaveTopics(not_null<History*> history) {
 	const auto forum = history->peer->forum();
 	if (!forum) {
 		return;
 	}
-	const auto userId = AyuMessages::storageUserId(history->peer);
-	const auto dialogId = getDialogIdFromPeer(history->peer);
 	auto rows = std::vector<KeptTopic>();
 	forum->enumerateTopics([&](not_null<Data::ForumTopic*> topic) {
 		if (topic->creating() || !topic->rootId()) {
 			return;
 		}
-		auto row = KeptTopic();
-		row.fakeId = 0;
-		row.userId = userId;
-		row.dialogId = dialogId;
-		row.rootId = ID(topic->rootId().bare);
-		row.title = topic->title().toStdString();
-		row.colorId = topic->colorId();
-		row.iconId = ID(topic->iconId());
-		row.creatorId = ID(topic->creatorId().value);
-		row.date = topic->creationDate();
-		row.flags = (topic->closed() ? 1 : 0)
-			| (topic->isPinnedDialog(FilterId()) ? 2 : 0);
-		rows.push_back(std::move(row));
+		rows.push_back(MakeTopicRow(history->peer, topic));
 	});
 	AyuDatabase::saveKeptTopics(rows);
 }
@@ -161,15 +188,24 @@ void RestoreTopics(
 		if (!rootId || forum->topicFor(rootId)) {
 			continue;
 		}
+		auto title = QString::fromStdString(row.title);
+		if (row.flags & 4) {
+			KeptDeletedTopics[KeyFor(peer, rootId)] = title;
+			title = MarkedTitle(title);
+		}
 		const auto topic = forum->applyTopicAdded(
 			rootId,
-			QString::fromStdString(row.title),
+			title,
 			row.colorId,
 			DocumentId(row.iconId),
 			PeerId(uint64(row.creatorId)),
 			row.date,
 			false);
 		topic->setClosed(row.flags & 1);
+		if (row.flags & 4) {
+			KeptTopicObjects[KeyFor(peer, rootId)]
+				= base::make_weak(topic);
+		}
 		if ((row.flags & 2) && topic->folderKnown()) {
 			peer->owner().setChatPinned(topic, FilterId(), true);
 		}
@@ -197,6 +233,57 @@ void WatchTopics(not_null<History*> history) {
 			SaveTopics(strong);
 		}
 	}, forum->lifetime());
+}
+
+std::set<PeerData*> DeletedTopicsRestored;
+
+void RestoreDeletedTopics(not_null<History*> history) {
+	const auto peer = history->peer;
+	if (!peer->forum()
+		|| !AyuSettings::getInstance().keepDeletedTopics()
+		|| !DeletedTopicsRestored.emplace(peer.get()).second) {
+		return;
+	}
+	peer->forum()->lifetime().add([=] {
+		DeletedTopicsRestored.erase(peer.get());
+	});
+	const auto userId = AyuMessages::storageUserId(peer);
+	const auto dialogId = getDialogIdFromPeer(peer);
+	const auto weak = base::make_weak(history.get());
+	crl::async([=] {
+		auto rows = AyuDatabase::getKeptTopics(userId, dialogId);
+		crl::on_main(&history->session(), [=, rows = std::move(rows)] {
+			const auto strong = weak.get();
+			const auto forum = strong ? strong->peer->forum() : nullptr;
+			if (!forum) {
+				return;
+			}
+			auto restored = false;
+			for (const auto &row : rows) {
+				const auto rootId = MsgId(row.rootId);
+				if (!(row.flags & 4) || !rootId || forum->topicFor(rootId)) {
+					continue;
+				}
+				auto title = QString::fromStdString(row.title);
+				KeptDeletedTopics[KeyFor(strong->peer, rootId)] = title;
+				const auto topic = forum->applyTopicAdded(
+					rootId,
+					MarkedTitle(title),
+					row.colorId,
+					DocumentId(row.iconId),
+					PeerId(uint64(row.creatorId)),
+					row.date,
+					false);
+				topic->setClosed(row.flags & 1);
+				KeptTopicObjects[KeyFor(strong->peer, rootId)]
+					= base::make_weak(topic);
+				restored = true;
+			}
+			if (restored) {
+				strong->checkLocalMessages();
+			}
+		});
+	});
 }
 
 void SaveSnapshot(not_null<History*> history) {
@@ -436,6 +523,9 @@ void RecordList(
 			rows.push_back(MakeRow(history, false));
 			WatchTopics(history);
 		}
+		if (history && history->peer->isForum()) {
+			RestoreDeletedTopics(history);
+		}
 	}
 	if (rows.empty()) {
 		return;
@@ -494,6 +584,82 @@ void note(not_null<History*> history) {
 		return;
 	}
 	AyuDatabase::saveKeptDialog(MakeRow(history, false));
+}
+
+bool keepDeletedTopic(not_null<Data::Forum*> forum, MsgId rootId) {
+	const auto &settings = AyuSettings::getInstance();
+	const auto channel = forum->channel();
+	if (PurgeOnce.erase(KeyFor(forum->peer(), rootId))) {
+		return false;
+	}
+	if (!settings.keepDeletedTopics()
+		|| !settings.saveDeletedMessages()
+		|| !channel
+		|| !channel->amIn()
+		|| rootId.bare == Data::ForumTopic::kGeneralId) {
+		return false;
+	}
+	const auto key = KeyFor(channel, rootId);
+	if (KeptDeletedTopics.contains(key)) {
+		return true;
+	}
+	const auto topic = forum->topicFor(rootId);
+	if (!topic || topic->creating()) {
+		return false;
+	}
+	const auto now = base::unixtime::now();
+	for (const auto &item : forum->owner().messagesOf(channel->id)) {
+		if (item->topicRootId() != rootId
+			|| item->isLocal()
+			|| item->isDeleted()) {
+			continue;
+		}
+		item->setDeleted();
+		item->ayuSetDeletedAt(now);
+		AyuMessages::addDeletedMessage(item);
+	}
+	KeptDeletedTopics.emplace(key, topic->title());
+	KeptTopicObjects[key] = base::make_weak(topic);
+	AyuDatabase::saveKeptTopics({ MakeTopicRow(channel, topic) });
+	topic->applyTitle(MarkedTitle(topic->title()));
+	Core::App().notifications().clearFromTopic(topic);
+	topic->readTillEnd();
+	return true;
+}
+
+bool isKeptDeletedTopic(not_null<Data::ForumTopic*> topic) {
+	return KeptDeletedTopics.contains(KeyFor(topic->peer(), topic->rootId()));
+}
+
+bool purgeDeletedTopic(not_null<Data::Forum*> forum, MsgId rootId) {
+	const auto peer = forum->peer();
+	const auto key = KeyFor(peer, rootId);
+	if (!KeptDeletedTopics.contains(key)) {
+		return false;
+	}
+	KeptDeletedTopics.erase(key);
+	KeptTopicObjects.erase(key);
+	AyuDatabase::removeKeptTopic(
+		AyuMessages::storageUserId(peer),
+		getDialogIdFromPeer(peer),
+		ID(rootId.bare));
+	AyuMessages::clearDeletedMessages(peer, ID(rootId.bare));
+	PurgeOnce.emplace(key);
+	forum->applyTopicDeleted(rootId);
+	forum->history()->ayuRestoreMarkStale();
+	return true;
+}
+
+void releaseDeletedTopics() {
+	auto topics = std::move(KeptTopicObjects);
+	KeptTopicObjects.clear();
+	KeptDeletedTopics.clear();
+	for (const auto &[key, weak] : topics) {
+		if (const auto topic = weak.get()) {
+			PurgeOnce.emplace(key);
+			topic->forum()->applyTopicDeleted(std::get<2>(key));
+		}
+	}
 }
 
 void forget(not_null<PeerData*> peer) {

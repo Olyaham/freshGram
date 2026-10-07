@@ -11,6 +11,7 @@
 #include "ayu/ayu_ui_settings.h"
 #include "ayu/ayu_worker.h"
 #include "ayu/data/ayu_database.h"
+#include "ayu/data/kept_dialogs.h"
 #include "ayu/data/ayu_database_backup.h"
 #include "ayu/features/streamer_mode/streamer_mode.h"
 #include "ayu/ui/ayu_logo.h"
@@ -1106,6 +1107,15 @@ void AyuSettings::setKeepRemovedGroups(bool val) {
 	save();
 }
 
+void AyuSettings::setKeepDeletedTopics(bool val) {
+	if (_keepDeletedTopics.current() == val) return;
+	_keepDeletedTopics = val;
+	save();
+	if (!val) {
+		AyuKept::releaseDeletedTopics();
+	}
+}
+
 void AyuSettings::setKeepRemovedForums(bool val) {
 	if (_keepRemovedForums.current() == val) return;
 	_keepRemovedForums = val;
@@ -1352,6 +1362,7 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"keepRemovedGroups", s._keepRemovedGroups.current()},
 		{"keepRemovedChannels", s._keepRemovedChannels.current()},
 		{"keepRemovedForums", s._keepRemovedForums.current()},
+		{"keepDeletedTopics", s._keepDeletedTopics.current()},
 		{"restoreDeletedInChats", s._restoreDeletedInChats.current()},
 		{"showDeletedChatIcon", s._showDeletedChatIcon.current()},
 		{"markOldMessagesDeleted", s._markOldMessagesDeleted.current()},
@@ -1478,6 +1489,7 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._keepRemovedGroups = j.value("keepRemovedGroups", defaults._keepRemovedGroups.current());
 	s._keepRemovedChannels = j.value("keepRemovedChannels", defaults._keepRemovedChannels.current());
 	s._keepRemovedForums = j.value("keepRemovedForums", defaults._keepRemovedForums.current());
+	s._keepDeletedTopics = j.value("keepDeletedTopics", defaults._keepDeletedTopics.current());
 	s._restoreDeletedInChats = j.value("restoreDeletedInChats", defaults._restoreDeletedInChats.current());
 	s._showDeletedChatIcon = j.value("showDeletedChatIcon", defaults._showDeletedChatIcon.current());
 	s._markOldMessagesDeleted = j.value("markOldMessagesDeleted", defaults._markOldMessagesDeleted.current());

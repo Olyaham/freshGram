@@ -58,6 +58,7 @@ void saveKeptTopics(const std::vector<KeptTopic> &topics);
 std::vector<KeptTopic> getKeptTopics(ID userId, ID dialogId);
 std::vector<KeptTopic> getKeptTopicsFor(ID userId);
 void removeKeptTopics(ID userId, ID dialogId);
+void removeKeptTopic(ID userId, ID dialogId, ID rootId);
 std::vector<KeptDialog> getKeptDialogs(ID userId);
 void removeKeptDialog(ID userId, ID dialogId);
 

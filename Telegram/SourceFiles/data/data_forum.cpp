@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/data/kept_dialogs.h"
 #include "data/data_forum.h"
 
 #include "data/components/recent_peers.h"
@@ -208,6 +209,9 @@ void Forum::requestTopics() {
 }
 
 void Forum::applyTopicDeleted(MsgId rootId) {
+	if (AyuKept::keepDeletedTopic(this, rootId)) {
+		return;
+	}
 	_topicsDeleted.emplace(rootId);
 
 	const auto i = _topics.find(rootId);

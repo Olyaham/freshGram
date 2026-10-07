@@ -679,6 +679,12 @@ void BuildDeletedChats(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.toggledWhenAll = false,
 	});
 	ayu.addSettingToggle({
+		.id = u"ayu/keepDeletedTopics"_q,
+		.title = tr::ayu_KeepDeletedTopics(),
+		.getter = &AyuSettings::keepDeletedTopics,
+		.setter = &AyuSettings::setKeepDeletedTopics,
+	});
+	ayu.addSettingToggle({
 		.id = u"ayu/restoreDeletedInChats"_q,
 		.title = tr::ayu_RestoreDeletedInChats(),
 		.getter = &AyuSettings::restoreDeletedInChats,
