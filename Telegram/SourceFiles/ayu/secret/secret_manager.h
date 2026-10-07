@@ -127,6 +127,19 @@ struct StoredState {
 [[nodiscard]] StoredState LoadState(not_null<Main::Session*> session);
 void SaveState(not_null<Main::Session*> session, int qts, int date);
 
+struct CatchUp {
+	bool missed = false;
+	int qts = 0;
+	int date = 0;
+};
+
+[[nodiscard]] CatchUp CatchUpRange(
+	not_null<Main::Session*> session,
+	int serverQts,
+	int serverDate);
+void CatchUpFinished(not_null<Main::Session*> session);
+void NoteDate(not_null<Main::Session*> session, int date);
+
 [[nodiscard]] Manager &Get(not_null<Main::Session*> session);
 void PurgeSession(not_null<Main::Session*> session);
 

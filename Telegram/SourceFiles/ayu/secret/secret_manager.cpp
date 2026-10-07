@@ -2854,6 +2854,80 @@ void SaveState(not_null<Main::Session*> session, int qts, int date) {
 	AyuDatabase::saveSecretState(row);
 }
 
+namespace {
+
+constexpr auto kDateSaveEvery = crl::time(60 * 1000);
+
+struct DateState {
+	bool hold = true;
+	int pending = 0;
+	base::Timer timer;
+};
+
+std::map<Main::Session*, std::unique_ptr<DateState>> DateStates;
+
+[[nodiscard]] DateState &DateStateFor(not_null<Main::Session*> session) {
+	const auto i = DateStates.find(session.get());
+	if (i != DateStates.end()) {
+		return *i->second;
+	}
+	const auto raw = session.get();
+	auto &state = *DateStates.emplace(
+		raw,
+		std::make_unique<DateState>()).first->second;
+	state.timer.setCallback([=] {
+		const auto j = DateStates.find(raw);
+		if (j == DateStates.end() || j->second->hold || !j->second->pending) {
+			return;
+		}
+		const auto date = base::take(j->second->pending);
+		SaveState(raw, LoadState(raw).qts, date);
+	});
+	raw->lifetime().add([=] {
+		DateStates.erase(raw);
+	});
+	return state;
+}
+
+} // namespace
+
+CatchUp CatchUpRange(
+		not_null<Main::Session*> session,
+		int serverQts,
+		int serverDate) {
+	auto &state = DateStateFor(session);
+	const auto stored = LoadState(session);
+	if (!stored.qts) {
+		SaveState(session, serverQts, serverDate);
+		state.hold = false;
+		state.pending = 0;
+		state.timer.callEach(kDateSaveEvery);
+		return {};
+	}
+	if (stored.qts >= serverQts && stored.date >= serverDate) {
+		state.hold = false;
+		state.pending = 0;
+		state.timer.callEach(kDateSaveEvery);
+		return {};
+	}
+	state.hold = true;
+	return { .missed = true, .qts = stored.qts, .date = stored.date };
+}
+
+void CatchUpFinished(not_null<Main::Session*> session) {
+	auto &state = DateStateFor(session);
+	state.hold = false;
+	state.pending = 0;
+	state.timer.callEach(kDateSaveEvery);
+}
+
+void NoteDate(not_null<Main::Session*> session, int date) {
+	auto &state = DateStateFor(session);
+	if (!state.hold && date > state.pending) {
+		state.pending = date;
+	}
+}
+
 void PurgeSession(not_null<Main::Session*> session) {
 	Get(session).purge();
 }

@@ -367,6 +367,9 @@ void Updates::setState(int32 pts, int32 date, int32 qts, int32 seq) {
 	}
 	if (_updatesDate < date && !_byMinChannelTimer.isActive()) {
 		_updatesDate = date;
+		if (AyuSecret::Enabled()) {
+			AyuSecret::NoteDate(&session(), date);
+		}
 	}
 	if (qts && _updatesQts < qts) {
 		_updatesQts = qts;
@@ -484,15 +487,16 @@ void Updates::stateDone(const MTPupdates_State &state) {
 
 	auto secretMissed = false;
 	if (AyuSecret::Enabled()) {
-		const auto stored = AyuSecret::LoadState(&session());
-		if (!stored.qts && !stored.date) {
-			AyuSecret::SaveState(&session(), d.vqts().v, d.vdate().v);
-		} else if (stored.qts < d.vqts().v || stored.date < d.vdate().v) {
-			if (stored.qts > 0 && stored.qts < _updatesQts) {
-				_updatesQts = stored.qts;
+		const auto range = AyuSecret::CatchUpRange(
+			&session(),
+			d.vqts().v,
+			d.vdate().v);
+		if (range.missed) {
+			if (range.qts > 0 && range.qts < _updatesQts) {
+				_updatesQts = range.qts;
 			}
-			if (stored.date > 0 && stored.date < _updatesDate) {
-				_updatesDate = stored.date;
+			if (range.date > 0 && range.date < _updatesDate) {
+				_updatesDate = range.date;
 			}
 			secretMissed = true;
 		}
@@ -519,6 +523,7 @@ void Updates::differenceDone(const MTPupdates_Difference &result) {
 		setState(_ptsWaiter.current(), d.vdate().v, _updatesQts, d.vseq().v);
 		if (AyuSecret::Enabled()) {
 			AyuSecret::SaveState(&session(), _updatesQts, d.vdate().v);
+			AyuSecret::CatchUpFinished(&session());
 		}
 
 		_lastUpdateTime = crl::now();
@@ -558,6 +563,7 @@ void Updates::differenceDone(const MTPupdates_Difference &result) {
 				&session(),
 				d.vstate().c_updates_state().vqts().v,
 				d.vstate().c_updates_state().vdate().v);
+			AyuSecret::CatchUpFinished(&session());
 		}
 		stateDone(d.vstate());
 	} break;
