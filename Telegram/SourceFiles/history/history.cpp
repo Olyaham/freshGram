@@ -3415,7 +3415,9 @@ bool History::shouldBeInChatList() const {
 	const auto hasLast = AyuKept::hasListableLastMessage(this);
 	if (peer->migrateTo() || !folderKnown()) {
 		return false;
-	} else if (_ayuKept && !lastMessage()) {
+	} else if (_ayuKept
+		&& !lastMessage()
+		&& !AyuKept::hasKeptTopics(this)) {
 		return false;
 	} else if (AyuSecret::IsSecretPeer(peer)) {
 		return true;
@@ -3428,7 +3430,9 @@ bool History::shouldBeInChatList() const {
 		return true;
 	} else if (const auto channel = peer->asChannel()) {
 		if (!channel->amIn()) {
-			return isTopPromoted() || (_ayuKept && lastMessage());
+			return isTopPromoted()
+				|| (_ayuKept
+					&& (lastMessage() || AyuKept::hasKeptTopics(this)));
 		}
 	} else if (const auto chat = peer->asChat()) {
 		return chat->amIn()
@@ -4213,9 +4217,15 @@ void History::checkLocalMessages() {
 	}
 	_ayuRestore->checkLoaded();
 	_ayuRestore->dropDuplicates();
-	if (isEmpty() && (!loadedAtTop() || !loadedAtBottom())) {
+	if (isEmpty()
+		&& (peer->isForum() || !loadedAtTop() || !loadedAtBottom())) {
 		if (peer->isForum()) {
-			_ayuRestore->materialize(0, std::numeric_limits<TimeId>::max());
+			const auto last = _ayuRestore->materialize(
+				0,
+				std::numeric_limits<TimeId>::max());
+			if (_ayuKept && !lastMessage() && last) {
+				setLastMessage(last);
+			}
 		}
 		return;
 	}

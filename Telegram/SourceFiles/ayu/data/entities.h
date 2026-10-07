@@ -87,6 +87,21 @@ public:
 	int lost;
 };
 
+class KeptTopic
+{
+public:
+	ID fakeId;
+	ID userId;
+	ID dialogId;
+	ID rootId;
+	std::string title;
+	int colorId;
+	ID iconId;
+	ID creatorId;
+	int date;
+	int flags;
+};
+
 class KnownUser
 {
 public:

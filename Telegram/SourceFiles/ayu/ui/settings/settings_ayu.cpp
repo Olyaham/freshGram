@@ -666,6 +666,11 @@ void BuildDeletedChats(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 				[](bool v) { AyuSettings::getInstance().setKeepRemovedGroups(v); }
 			},
 			NestedEntry{
+				tr::ayu_KeepRemovedForums(tr::now),
+				[] { return AyuSettings::getInstance().keepRemovedForums(); },
+				[](bool v) { AyuSettings::getInstance().setKeepRemovedForums(v); }
+			},
+			NestedEntry{
 				tr::ayu_KeepRemovedChannels(tr::now),
 				[] { return AyuSettings::getInstance().keepRemovedChannels(); },
 				[](bool v) { AyuSettings::getInstance().setKeepRemovedChannels(v); }

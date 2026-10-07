@@ -367,7 +367,12 @@ HistoryItem *State::materialize(TimeId from, TimeId till) {
 		}
 		try {
 			if (const auto item = create(row)) {
-				last = item;
+				if (!last
+					|| item->date() > last->date()
+					|| (item->date() == last->date()
+						&& item->id > last->id)) {
+					last = item;
+				}
 				++created;
 			}
 		} catch (...) {
@@ -508,6 +513,13 @@ HistoryItem *State::create(Row &row) {
 		item->markDeletedAnimated();
 	}
 	row.localId = item->id;
+	if (peer->isForum() && message.topicId) {
+		if (const auto topic = item->topic()) {
+			if (topic->rootId() == item->topicRootId()) {
+				topic->maybeSetLastMessage(item);
+			}
+		}
+	}
 	return item;
 }
 

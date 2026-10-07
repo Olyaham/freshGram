@@ -137,6 +137,19 @@ auto storage = make_storage(
 		make_column("lastMessageDate", &KeptDialog::lastMessageDate),
 		make_column("lost", &KeptDialog::lost)
 	),
+	make_table<KeptTopic>(
+		"KeptTopic",
+		make_column("fakeId", &KeptTopic::fakeId, primary_key().autoincrement()),
+		make_column("userId", &KeptTopic::userId),
+		make_column("dialogId", &KeptTopic::dialogId),
+		make_column("rootId", &KeptTopic::rootId),
+		make_column("title", &KeptTopic::title),
+		make_column("colorId", &KeptTopic::colorId),
+		make_column("iconId", &KeptTopic::iconId),
+		make_column("creatorId", &KeptTopic::creatorId),
+		make_column("date", &KeptTopic::date),
+		make_column("flags", &KeptTopic::flags)
+	),
 	make_index("idx_known_user_userId_peerId",
 			   column<KnownUser>(&KnownUser::userId),
 			   column<KnownUser>(&KnownUser::peerId)),
@@ -686,6 +699,54 @@ void saveKeptDialog(const KeptDialog &dialog) {
 			);
 			storage.insert(dialog);
 		});
+	});
+}
+
+void saveKeptTopics(const std::vector<KeptTopic> &topics) {
+	if (topics.empty()) {
+		return;
+	}
+	runVoid("save kept topics", [&] {
+		inTransaction([&] {
+			for (const auto &topic : topics) {
+				storage.remove_all<KeptTopic>(
+					where(
+						column<KeptTopic>(&KeptTopic::userId) == topic.userId and
+						column<KeptTopic>(&KeptTopic::dialogId) == topic.dialogId and
+						column<KeptTopic>(&KeptTopic::rootId) == topic.rootId
+					)
+				);
+				storage.insert(topic);
+			}
+		});
+	});
+}
+
+std::vector<KeptTopic> getKeptTopics(ID userId, ID dialogId) {
+	return run<std::vector<KeptTopic>>("load kept topics", {}, [&] {
+		return storage.get_all<KeptTopic>(
+			where(
+				column<KeptTopic>(&KeptTopic::userId) == userId and
+				column<KeptTopic>(&KeptTopic::dialogId) == dialogId
+			));
+	});
+}
+
+std::vector<KeptTopic> getKeptTopicsFor(ID userId) {
+	return run<std::vector<KeptTopic>>("load all kept topics", {}, [&] {
+		return storage.get_all<KeptTopic>(
+			where(column<KeptTopic>(&KeptTopic::userId) == userId));
+	});
+}
+
+void removeKeptTopics(ID userId, ID dialogId) {
+	runVoid("remove kept topics", [&] {
+		storage.remove_all<KeptTopic>(
+			where(
+				column<KeptTopic>(&KeptTopic::userId) == userId and
+				column<KeptTopic>(&KeptTopic::dialogId) == dialogId
+			)
+		);
 	});
 }
 

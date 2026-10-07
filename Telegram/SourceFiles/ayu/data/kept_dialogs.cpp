@@ -5,6 +5,7 @@
 #include "ayu/data/ayu_database.h"
 #include "ayu/data/messages_storage.h"
 #include "ayu/utils/telegram_helpers.h"
+#include "base/flat_map.h"
 #include "base/flat_set.h"
 #include "base/unixtime.h"
 #include "crl/crl_async.h"
@@ -12,6 +13,9 @@
 #include "data/data_channel.h"
 #include "data/data_chat.h"
 #include "data/data_folder.h"
+#include "dialogs/dialogs_key.h"
+#include "data/data_forum_topic.h"
+#include "data/data_forum.h"
 #include "dialogs/dialogs_indexed_list.h"
 #include "dialogs/dialogs_main_list.h"
 #include "dialogs/dialogs_row.h"
@@ -24,6 +28,7 @@
 #include "logs.h"
 #include "main/main_session.h"
 
+#include <map>
 #include <set>
 
 namespace AyuKept {
@@ -34,12 +39,14 @@ enum class Kind : int {
 	Chat = 1,
 	Broadcast = 2,
 	Megagroup = 3,
+	Forum = 4,
 };
 
 struct SessionState {
 	bool requested = false;
 	bool loaded = false;
 	std::vector<KeptDialog> rows;
+	std::map<ID, std::vector<KeptTopic>> topics;
 	base::flat_set<ID> done;
 };
 
@@ -50,7 +57,7 @@ std::set<PeerData*> Leaving;
 	if (AyuSecret::IsSecretPeer(peer)) {
 		return false;
 	}
-	if (peer->isForum() || peer->isMonoforum() || peer->migrateTo()) {
+	if (peer->isMonoforum() || peer->migrateTo()) {
 		return false;
 	}
 	if (const auto channel = peer->asChannel()) {
@@ -64,7 +71,9 @@ std::set<PeerData*> Leaving;
 	if (peer->isUser()) {
 		return settings.keepRemovedUserChats();
 	} else if (const auto channel = peer->asChannel()) {
-		return channel->isMegagroup()
+		return channel->isForum()
+			? settings.keepRemovedForums()
+			: channel->isMegagroup()
 			? settings.keepRemovedGroups()
 			: settings.keepRemovedChannels();
 	}
@@ -81,7 +90,9 @@ std::set<PeerData*> Leaving;
 	} else if (peer->isChat()) {
 		return int(Kind::Chat);
 	} else if (const auto channel = peer->asChannel()) {
-		return int(channel->isMegagroup()
+		return int(channel->isForum()
+			? Kind::Forum
+			: channel->isMegagroup()
 			? Kind::Megagroup
 			: Kind::Broadcast);
 	}
@@ -109,13 +120,114 @@ std::set<PeerData*> Leaving;
 	return row;
 }
 
+void SaveTopics(not_null<History*> history) {
+	const auto forum = history->peer->forum();
+	if (!forum) {
+		return;
+	}
+	const auto userId = AyuMessages::storageUserId(history->peer);
+	const auto dialogId = getDialogIdFromPeer(history->peer);
+	auto rows = std::vector<KeptTopic>();
+	forum->enumerateTopics([&](not_null<Data::ForumTopic*> topic) {
+		if (topic->creating() || !topic->rootId()) {
+			return;
+		}
+		auto row = KeptTopic();
+		row.fakeId = 0;
+		row.userId = userId;
+		row.dialogId = dialogId;
+		row.rootId = ID(topic->rootId().bare);
+		row.title = topic->title().toStdString();
+		row.colorId = topic->colorId();
+		row.iconId = ID(topic->iconId());
+		row.creatorId = ID(topic->creatorId().value);
+		row.date = topic->creationDate();
+		row.flags = (topic->closed() ? 1 : 0)
+			| (topic->isPinnedDialog(FilterId()) ? 2 : 0);
+		rows.push_back(std::move(row));
+	});
+	AyuDatabase::saveKeptTopics(rows);
+}
+
+void RestoreTopics(
+		not_null<PeerData*> peer,
+		const std::vector<KeptTopic> &topics) {
+	const auto forum = peer->forum();
+	if (!forum) {
+		return;
+	}
+	for (const auto &row : topics) {
+		const auto rootId = MsgId(row.rootId);
+		if (!rootId || forum->topicFor(rootId)) {
+			continue;
+		}
+		const auto topic = forum->applyTopicAdded(
+			rootId,
+			QString::fromStdString(row.title),
+			row.colorId,
+			DocumentId(row.iconId),
+			PeerId(uint64(row.creatorId)),
+			row.date,
+			false);
+		topic->setClosed(row.flags & 1);
+		if ((row.flags & 2) && topic->folderKnown()) {
+			peer->owner().setChatPinned(topic, FilterId(), true);
+		}
+	}
+	if (const auto channel = peer->asChannel(); channel && channel->isForbidden()) {
+		forum->topicsList()->setLoaded();
+	}
+}
+
+std::set<PeerData*> TopicsWatched;
+
+void WatchTopics(not_null<History*> history) {
+	const auto peer = history->peer;
+	const auto forum = peer->forum();
+	if (!forum || !TopicsWatched.emplace(peer.get()).second) {
+		return;
+	}
+	forum->lifetime().add([=] {
+		TopicsWatched.erase(peer.get());
+	});
+	const auto weak = base::make_weak(history.get());
+	forum->chatsListLoadedEvents(
+	) | rpl::on_next([=] {
+		if (const auto strong = weak.get()) {
+			SaveTopics(strong);
+		}
+	}, forum->lifetime());
+}
+
 void SaveSnapshot(not_null<History*> history) {
+	if (history->peer->isForum()) {
+		SaveTopics(history);
+	}
 	const auto user = history->peer->isUser();
 	const auto mark = user
 		&& AyuSettings::getInstance().markOldMessagesDeleted();
 	const auto limit = AyuSettings::getInstance().keptSnapshotLimit();
 	const auto now = base::unixtime::now();
 	auto saved = 0;
+	if (history->peer->isForum()) {
+		auto items = history->owner().messagesOf(history->peer->id);
+		ranges::sort(items, std::greater<>(), [](not_null<HistoryItem*> item) {
+			return item->id.bare;
+		});
+		auto perTopic = base::flat_map<MsgId, int>();
+		for (const auto &item : items) {
+			if (item->isDeleted() || item->isLocal()) {
+				continue;
+			}
+			auto &count = perTopic[item->topicRootId()];
+			if (limit && count >= limit) {
+				continue;
+			}
+			AyuMessages::addDeletedMessage(item);
+			++count;
+		}
+		return;
+	}
 	for (const auto &block : ranges::views::reverse(history->blocks)) {
 		for (const auto &view : ranges::views::reverse(block->messages)) {
 			if (!user && limit && saved >= limit) {
@@ -144,6 +256,7 @@ void SaveSnapshot(not_null<History*> history) {
 	case Kind::User: return peerFromUser(UserId(bare));
 	case Kind::Chat: return peerFromChat(ChatId(bare));
 	case Kind::Broadcast:
+	case Kind::Forum:
 	case Kind::Megagroup: return peerFromChannel(ChannelId(bare));
 	}
 	return PeerId();
@@ -178,9 +291,11 @@ PeerData *EnsurePeer(not_null<Data::Session*> owner, const KeptDialog &row) {
 		return owner->chatLoaded(peerToChat(peerId));
 	}
 	case Kind::Broadcast:
+	case Kind::Forum:
 	case Kind::Megagroup: {
 		if (!owner->channelLoaded(peerToChannel(peerId))) {
-			const auto megagroup = (Kind(row.kind) == Kind::Megagroup);
+			const auto megagroup = (Kind(row.kind) == Kind::Megagroup)
+				|| (Kind(row.kind) == Kind::Forum);
 			owner->processChat(MTP_channelForbidden(
 				MTP_flags(megagroup
 					? MTPDchannelForbidden::Flag::f_megagroup
@@ -190,13 +305,22 @@ PeerData *EnsurePeer(not_null<Data::Session*> owner, const KeptDialog &row) {
 				MTP_string(title),
 				MTPint()));
 		}
-		return owner->channelLoaded(peerToChannel(peerId));
+		const auto channel = owner->channelLoaded(peerToChannel(peerId));
+		if (channel
+			&& Kind(row.kind) == Kind::Forum
+			&& !channel->isForum()) {
+			channel->addFlags(ChannelDataFlag::Forum);
+		}
+		return channel;
 	}
 	}
 	return nullptr;
 }
 
-void Restore(not_null<Main::Session*> session, const KeptDialog &row) {
+void Restore(
+		not_null<Main::Session*> session,
+		const std::shared_ptr<SessionState> &state,
+		const KeptDialog &row) {
 	auto &owner = session->data();
 	const auto peerId = PeerIdOf(row);
 	if (!peerId) {
@@ -223,6 +347,12 @@ void Restore(not_null<Main::Session*> session, const KeptDialog &row) {
 	}
 	LOG(("AyuKept: restoring dialog %1 (lost %2)").arg(row.dialogId).arg(row.lost));
 	const auto history = owner.history(peer);
+	if (peer->isForum()) {
+		const auto i = state->topics.find(row.dialogId);
+		if (i != state->topics.end()) {
+			RestoreTopics(peer, i->second);
+		}
+	}
 	history->setAyuKept(true);
 	if (!history->folderKnown()) {
 		history->clearFolder();
@@ -255,7 +385,7 @@ void Process(
 			continue;
 		}
 		state->done.emplace(row.dialogId);
-		Restore(session, row);
+		Restore(session, state, row);
 	}
 }
 
@@ -276,8 +406,12 @@ void Check(
 	const auto userId = ID(session->userId().bare & PeerId::kChatTypeMask);
 	crl::async([=] {
 		auto rows = AyuDatabase::getKeptDialogs(userId);
-		crl::on_main(session, [=, rows = std::move(rows)]() mutable {
+		auto topics = AyuDatabase::getKeptTopicsFor(userId);
+		crl::on_main(session, [=, rows = std::move(rows), topics = std::move(topics)]() mutable {
 			state->rows = std::move(rows);
+			for (auto &topic : topics) {
+				state->topics[topic.dialogId].push_back(std::move(topic));
+			}
 			state->loaded = true;
 			Process(session, state);
 		});
@@ -300,6 +434,7 @@ void RecordList(
 			&& !history->ayuKept()
 			&& Allowed(history->peer)) {
 			rows.push_back(MakeRow(history, false));
+			WatchTopics(history);
 		}
 	}
 	if (rows.empty()) {
@@ -328,7 +463,7 @@ void markLost(not_null<History*> history) {
 		|| !Allowed(peer)
 		|| history->ayuKept()
 		|| !history->inChatList()
-		|| !history->lastMessage()) {
+		|| (!history->lastMessage() && !hasKeptTopics(history))) {
 		return;
 	}
 	history->setAyuKept(true);
@@ -369,6 +504,7 @@ void forget(not_null<PeerData*> peer) {
 	const auto dialogId = getDialogIdFromPeer(peer);
 	Noted.erase(std::make_pair(userId, dialogId));
 	AyuDatabase::removeKeptDialog(userId, dialogId);
+	AyuDatabase::removeKeptTopics(userId, dialogId);
 }
 
 bool showsDeleted(not_null<PeerData*> peer) {
@@ -377,6 +513,19 @@ bool showsDeleted(not_null<PeerData*> peer) {
 	}
 	const auto history = peer->owner().historyLoaded(peer);
 	return history && history->ayuKept();
+}
+
+bool serverUnavailable(not_null<const History*> history) {
+	if (!history->ayuKept()) {
+		return false;
+	}
+	const auto channel = history->peer->asChannel();
+	return channel && channel->isForbidden();
+}
+
+bool hasKeptTopics(not_null<const History*> history) {
+	const auto forum = history->peer->forum();
+	return forum && !forum->topicsList()->indexed()->empty();
 }
 
 bool hasListableLastMessage(not_null<const History*> history) {

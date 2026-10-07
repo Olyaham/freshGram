@@ -374,6 +374,7 @@ public:
 	[[nodiscard]] bool keepRemovedUserChats() const { return _keepRemovedUserChats.current(); }
 	[[nodiscard]] bool keepRemovedGroups() const { return _keepRemovedGroups.current(); }
 	[[nodiscard]] bool keepRemovedChannels() const { return _keepRemovedChannels.current(); }
+	[[nodiscard]] bool keepRemovedForums() const { return _keepRemovedForums.current(); }
 	[[nodiscard]] bool restoreDeletedInChats() const { return _restoreDeletedInChats.current(); }
 	[[nodiscard]] bool showDeletedChatIcon() const { return _showDeletedChatIcon.current(); }
 	[[nodiscard]] bool markOldMessagesDeleted() const { return _markOldMessagesDeleted.current(); }
@@ -482,6 +483,7 @@ public:
 	void setKeepRemovedUserChats(bool val);
 	void setKeepRemovedGroups(bool val);
 	void setKeepRemovedChannels(bool val);
+	void setKeepRemovedForums(bool val);
 	void setRestoreDeletedInChats(bool val);
 	void setShowDeletedChatIcon(bool val);
 	void setMarkOldMessagesDeleted(bool val);
@@ -783,6 +785,7 @@ private:
 	rpl::variable<bool> _keepRemovedUserChats = true;
 	rpl::variable<bool> _keepRemovedGroups = true;
 	rpl::variable<bool> _keepRemovedChannels = true;
+	rpl::variable<bool> _keepRemovedForums = true;
 	rpl::variable<bool> _restoreDeletedInChats = true;
 	rpl::variable<bool> _showDeletedChatIcon = true;
 	rpl::variable<bool> _markOldMessagesDeleted = true;

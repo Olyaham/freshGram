@@ -23,6 +23,8 @@ void note(not_null<History*> history);
 void forget(not_null<PeerData*> peer);
 [[nodiscard]] bool showsDeleted(not_null<PeerData*> peer);
 [[nodiscard]] bool hasListableLastMessage(not_null<const History*> history);
+[[nodiscard]] bool hasKeptTopics(not_null<const History*> history);
+[[nodiscard]] bool serverUnavailable(not_null<const History*> history);
 void revive(not_null<History*> history, not_null<HistoryItem*> item);
 void checkWiped(not_null<History*> history);
 

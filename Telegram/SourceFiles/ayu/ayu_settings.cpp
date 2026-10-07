@@ -1106,6 +1106,12 @@ void AyuSettings::setKeepRemovedGroups(bool val) {
 	save();
 }
 
+void AyuSettings::setKeepRemovedForums(bool val) {
+	if (_keepRemovedForums.current() == val) return;
+	_keepRemovedForums = val;
+	save();
+}
+
 void AyuSettings::setKeepRemovedChannels(bool val) {
 	if (_keepRemovedChannels.current() == val) return;
 	_keepRemovedChannels = val;
@@ -1345,6 +1351,7 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"keepRemovedUserChats", s._keepRemovedUserChats.current()},
 		{"keepRemovedGroups", s._keepRemovedGroups.current()},
 		{"keepRemovedChannels", s._keepRemovedChannels.current()},
+		{"keepRemovedForums", s._keepRemovedForums.current()},
 		{"restoreDeletedInChats", s._restoreDeletedInChats.current()},
 		{"showDeletedChatIcon", s._showDeletedChatIcon.current()},
 		{"markOldMessagesDeleted", s._markOldMessagesDeleted.current()},
@@ -1470,6 +1477,7 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._keepRemovedUserChats = j.value("keepRemovedUserChats", defaults._keepRemovedUserChats.current());
 	s._keepRemovedGroups = j.value("keepRemovedGroups", defaults._keepRemovedGroups.current());
 	s._keepRemovedChannels = j.value("keepRemovedChannels", defaults._keepRemovedChannels.current());
+	s._keepRemovedForums = j.value("keepRemovedForums", defaults._keepRemovedForums.current());
 	s._restoreDeletedInChats = j.value("restoreDeletedInChats", defaults._restoreDeletedInChats.current());
 	s._showDeletedChatIcon = j.value("showDeletedChatIcon", defaults._showDeletedChatIcon.current());
 	s._markOldMessagesDeleted = j.value("markOldMessagesDeleted", defaults._markOldMessagesDeleted.current());

@@ -54,6 +54,10 @@ void clearPeekRestore(ID userId);
 
 void saveKeptDialog(const KeptDialog &dialog);
 void syncKeptDialogs(const std::vector<KeptDialog> &dialogs);
+void saveKeptTopics(const std::vector<KeptTopic> &topics);
+std::vector<KeptTopic> getKeptTopics(ID userId, ID dialogId);
+std::vector<KeptTopic> getKeptTopicsFor(ID userId);
+void removeKeptTopics(ID userId, ID dialogId);
 std::vector<KeptDialog> getKeptDialogs(ID userId);
 void removeKeptDialog(ID userId, ID dialogId);
 

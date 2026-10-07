@@ -3227,6 +3227,17 @@ const Session::Messages *Session::messagesList(PeerId peerId) const {
 	return (i != end(_messages)) ? &i->second : nullptr;
 }
 
+std::vector<not_null<HistoryItem*>> Session::messagesOf(PeerId peerId) const {
+	auto result = std::vector<not_null<HistoryItem*>>();
+	if (const auto list = messagesList(peerId)) {
+		result.reserve(list->size());
+		for (const auto &[id, item] : *list) {
+			result.push_back(item);
+		}
+	}
+	return result;
+}
+
 auto Session::messagesListForInsert(PeerId peerId)
 -> not_null<Messages*> {
 	return &_messages[peerId];

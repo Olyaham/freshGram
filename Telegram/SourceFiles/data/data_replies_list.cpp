@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/data/kept_dialogs.h"
 #include "data/data_replies_list.h"
 
 #include "history/history.h"
@@ -361,7 +362,8 @@ void RepliesList::injectRootDivider(
 
 bool RepliesList::buildFromData(not_null<Viewer*> viewer) {
 	if (_creating
-		|| (_list.empty() && _skippedBefore == 0 && _skippedAfter == 0)) {
+		|| (_list.empty() && _skippedBefore == 0 && _skippedAfter == 0)
+		|| (_list.empty() && AyuKept::serverUnavailable(_history))) {
 		viewer->slice.ids.clear();
 		viewer->slice.nearestToAround = FullMsgId();
 		viewer->slice.fullCount
