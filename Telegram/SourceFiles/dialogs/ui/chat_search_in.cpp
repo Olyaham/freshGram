@@ -14,12 +14,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/popup_menu.h"
 #include "ui/widgets/shadow.h"
 #include "ui/widgets/menu/menu_item_base.h"
-#include "data/data_msg_id.h"
 #include "ui/dynamic_image.h"
-#include "ui/dynamic_thumbnails.h"
 #include "ui/painter.h"
 #include "styles/style_dialogs.h"
-#include "styles/style_menu_icons.h"
 #include "styles/style_window.h"
 
 #include <array>
@@ -317,7 +314,7 @@ void ChatSearchIn::apply(
 		std::shared_ptr<Ui::DynamicImage> fromUserpic,
 		QString fromName,
 		SearchMediaFilter media,
-		bool showMedia) {
+		std::shared_ptr<Ui::DynamicImage> mediaIcon) {
 	_tabs = std::move(tabs);
 	_peerTabType = peerTabType;
 	_active = active;
@@ -337,9 +334,10 @@ void ChatSearchIn::apply(
 	updateSection(&_from, std::move(fromUserpic), std::move(text));
 
 	_mediaCurrent = media;
+	_mediaIcon = mediaIcon;
 	updateSection(
 		&_media,
-		showMedia ? Ui::MakeIconThumbnail(st::menuIconShowAll) : nullptr,
+		std::move(mediaIcon),
 		tr::ayu_SearchMediaType(
 			tr::now,
 			lt_type,
@@ -377,7 +375,7 @@ void ChatSearchIn::showMediaMenu() {
 		this,
 		st::dialogsSearchInMenu);
 	auto activeIndex = 0;
-	const auto icon = Ui::MakeIconThumbnail(st::menuIconShowAll);
+	const auto icon = _mediaIcon;
 	for (const auto value : kMediaFilters) {
 		if (value == _mediaCurrent) {
 			activeIndex = _menu->actions().size();

@@ -53,7 +53,7 @@ public:
 		std::shared_ptr<Ui::DynamicImage> fromUserpic,
 		QString fromName,
 		SearchMediaFilter media,
-		bool showMedia);
+		std::shared_ptr<Ui::DynamicImage> mediaIcon);
 
 	[[nodiscard]] rpl::producer<> cancelInRequests() const;
 	[[nodiscard]] rpl::producer<> cancelFromRequests() const;
@@ -90,6 +90,7 @@ private:
 	Section _media;
 	rpl::variable<ChatSearchTab> _active;
 	SearchMediaFilter _mediaCurrent = SearchMediaFilter::All;
+	std::shared_ptr<Ui::DynamicImage> _mediaIcon;
 	rpl::event_stream<SearchMediaFilter> _mediaChanges;
 
 	base::unique_qptr<Ui::PopupMenu> _menu;

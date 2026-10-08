@@ -5410,7 +5410,9 @@ void InnerWidget::updateSearchIn() {
 		{ ChatSearchTab::Archive, archiveIcon },
 		{ ChatSearchTab::MyMessages, myIcon },
 		{ ChatSearchTab::PublicPosts, publicIcon },
-	}, _searchState.tab, peerTabType, fromImage, fromName, _searchState.media, showMedia);
+	}, _searchState.tab, peerTabType, fromImage, fromName, _searchState.media, showMedia
+		? Ui::MakeIconThumbnail(st::menuIconShowAll)
+		: std::shared_ptr<Ui::DynamicImage>());
 }
 
 void InnerWidget::repaintSearchResult(int index) {
