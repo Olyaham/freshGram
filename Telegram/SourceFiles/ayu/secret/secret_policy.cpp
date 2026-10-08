@@ -3,6 +3,7 @@
 #include "ayu/ayu_settings.h"
 #include "ayu/secret/secret_manager.h"
 #include "core/application.h"
+#include "lang/lang_keys.h"
 #include "main/main_account.h"
 #include "main/main_session.h"
 #include "main/main_domain.h"
@@ -39,8 +40,7 @@ void HandlePasscodeChange() {
 		}
 	}
 	if (purged) {
-		Ui::Toast::Show(
-			"Secret chats were deleted because the local passcode was removed.");
+		Ui::Toast::Show(tr::ayu_SecretToastPasscodeRemoved(tr::now));
 	}
 }
 

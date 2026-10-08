@@ -122,6 +122,8 @@ set(ayugram_files
         ayu/utils/ayu_mapper.cpp
         ayu/data/mention_guard.cpp
         ayu/data/mention_guard.h
+        ayu/utils/builtin_lang.cpp
+        ayu/utils/builtin_lang.h
         ayu/utils/crash_trace.cpp
         ayu/utils/mtp_retry_log.cpp
         ayu/utils/mtp_retry_log.h

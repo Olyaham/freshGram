@@ -15,6 +15,7 @@
 #include "base/openssl_help.h"
 #include "base/timer.h"
 #include "base/unixtime.h"
+#include "lang/lang_keys.h"
 #include <crl/crl_async.h>
 #include <crl/crl_on_main.h>
 #include "crl/crl_time.h"
@@ -436,19 +437,22 @@ void DecodeExtras(Chat &chat) {
 		return Qs(data.text);
 	}
 	switch (data.media.type) {
-	case MediaType::Photo: return "Photo";
-	case MediaType::Video: return "Video";
-	case MediaType::Voice: return "Voice message";
-	case MediaType::Audio: return "Audio";
-	case MediaType::Sticker: return Qs(data.media.emoji) + " Sticker";
+	case MediaType::Photo: return tr::ayu_SecretMediaPhoto(tr::now);
+	case MediaType::Video: return tr::ayu_SecretMediaVideo(tr::now);
+	case MediaType::Voice: return tr::ayu_SecretMediaVoice(tr::now);
+	case MediaType::Audio: return tr::ayu_SecretMediaAudio(tr::now);
+	case MediaType::Sticker:
+		return Qs(data.media.emoji)
+			+ QChar(u' ')
+			+ tr::ayu_SecretMediaSticker(tr::now);
 	case MediaType::Animation: return "GIF";
 	case MediaType::Location:
-	case MediaType::Venue: return "Location";
-	case MediaType::Contact: return "Contact";
+	case MediaType::Venue: return tr::ayu_SecretMediaLocation(tr::now);
+	case MediaType::Contact: return tr::ayu_SecretMediaContact(tr::now);
 	case MediaType::Document:
 	case MediaType::External:
 		return data.media.fileName.empty()
-			? QString("File")
+			? tr::ayu_SecretMediaFile(tr::now)
 			: Qs(data.media.fileName);
 	default: break;
 	}
@@ -457,17 +461,20 @@ void DecodeExtras(Chat &chat) {
 
 [[nodiscard]] QString TtlText(int seconds) {
 	if (seconds <= 0) {
-		return "off";
+		return tr::ayu_SecretTtlOff(tr::now);
 	} else if (seconds < 60) {
-		return QString("%1 s").arg(seconds);
+		return tr::ayu_SecretTtlSeconds(tr::now, lt_count, seconds);
 	} else if (seconds < 3600) {
-		return QString("%1 min").arg(seconds / 60);
+		return tr::ayu_SecretTtlMinutes(tr::now, lt_count, seconds / 60);
 	} else if (seconds < 86400) {
-		return QString("%1 h").arg(seconds / 3600);
+		return tr::ayu_SecretTtlHours(tr::now, lt_count, seconds / 3600);
 	} else if (seconds < 7 * 86400) {
-		return QString("%1 d").arg(seconds / 86400);
+		return tr::ayu_SecretTtlDays(tr::now, lt_count, seconds / 86400);
 	}
-	return QString("%1 w").arg(seconds / (7 * 86400));
+	return tr::ayu_SecretTtlWeeks(
+		tr::now,
+		lt_count,
+		seconds / (7 * 86400));
 }
 
 [[nodiscard]] int SentDate(const MTPmessages_SentEncryptedMessage &result) {
@@ -599,7 +606,10 @@ struct Manager::Impl {
 				UserId(uint64(chat.row.peerUserId)))) {
 			return user->name();
 		}
-		return QString("User %1").arg(chat.row.peerUserId);
+		return tr::ayu_SecretUserFallback(
+			tr::now,
+			lt_id,
+			QString::number(chat.row.peerUserId));
 	}
 	void saveChat(Chat &chat) {
 		if (chat.locked) {
@@ -825,7 +835,7 @@ void Manager::Impl::onRequested(const MTPDencryptedChatRequested &data) {
 	const auto inserted = chats.emplace(id, std::move(chat)).first;
 	addNote(
 		inserted->second,
-		QString("A secret chat was requested"),
+		tr::ayu_SecretNoteRequested(tr::now),
 		date,
 		kSpecialRequest);
 	notify();
@@ -847,7 +857,7 @@ void Manager::Impl::onChat(const MTPDencryptedChat &data) {
 		chat->row.state = int(ChatState::Discarded);
 		chat->row.keyData.clear();
 		saveChat(*chat);
-		toast("The secret chat was accepted on another device.");
+		toast(tr::ayu_SecretToastAcceptedElsewhere(tr::now));
 		notify();
 	}
 }
@@ -882,7 +892,7 @@ void Manager::Impl::onDiscarded(int chatId, bool historyDeleted) {
 	saveChat(*chat);
 	addNote(
 		*chat,
-		QString("The secret chat was ended"),
+		tr::ayu_SecretNoteEnded(tr::now),
 		base::unixtime::now(),
 		kSpecialEnded);
 	notify(chatId);
@@ -932,12 +942,12 @@ void Manager::Impl::finishCreator(
 			Span(secret),
 			Span(config.p));
 		if (raw.empty()) {
-			toast("Secret chat key exchange failed.");
+			toast(tr::ayu_SecretToastKeyFailed(tr::now));
 			return;
 		}
 		const auto key = PadKey(FromBytesVector(raw));
 		if (KeyFingerprint(key) != fingerprint) {
-			toast("Secret chat key fingerprint mismatch.");
+			toast(tr::ayu_SecretToastFingerprint(tr::now));
 			discard(chatId);
 			return;
 		}
@@ -966,7 +976,7 @@ void Manager::Impl::accept(int chatId) {
 		const auto prime = openssl::BigNum(Span(config.p));
 		if (!MTP::IsGoodModExpFirst(openssl::BigNum(Span(gA)), prime)) {
 			chat->working = false;
-			toast("The secret chat request is invalid.");
+			toast(tr::ayu_SecretToastInvalidRequest(tr::now));
 			discard(chatId);
 			return;
 		}
@@ -980,7 +990,7 @@ void Manager::Impl::accept(int chatId) {
 			Span(config.p));
 		if (raw.empty()) {
 			chat->working = false;
-			toast("Secret chat key exchange failed.");
+			toast(tr::ayu_SecretToastKeyFailed(tr::now));
 			return;
 		}
 		const auto key = PadKey(FromBytesVector(raw));
@@ -997,7 +1007,7 @@ void Manager::Impl::accept(int chatId) {
 			chat->working = false;
 			result.match([&](const MTPDencryptedChat &data) {
 				if (data.vkey_fingerprint().v != fingerprint) {
-					toast("Secret chat key fingerprint mismatch.");
+					toast(tr::ayu_SecretToastFingerprint(tr::now));
 					return;
 				}
 				chat->row.accessHash = data.vaccess_hash().v;
@@ -1016,14 +1026,16 @@ void Manager::Impl::accept(int chatId) {
 				|| type == u"CHAT_ID_INVALID"_q) {
 				onDiscarded(chatId, false);
 			}
-			toast(QString("Could not accept the secret chat: %1")
-				.arg(type));
+			toast(tr::ayu_SecretToastAcceptFailed(
+				tr::now,
+				lt_reason,
+				type));
 		}).send();
 	}, [=] {
 		if (const auto chat = find(chatId)) {
 			chat->working = false;
 		}
-		toast("Could not get the encryption parameters.");
+		toast(tr::ayu_SecretToastNoDhConfig(tr::now));
 	});
 }
 
@@ -1053,7 +1065,7 @@ void Manager::Impl::start(not_null<UserData*> user) {
 		if (uint64(chat.row.peerUserId) == peerId
 			&& creator(chat)
 			&& chat.row.state == int(ChatState::Waiting)) {
-			toast("Waiting for the other side to accept the secret chat.");
+			toast(tr::ayu_SecretToastWaitingAccept(tr::now));
 			return;
 		}
 	}
@@ -1094,7 +1106,7 @@ void Manager::Impl::start(not_null<UserData*> user) {
 				chat.loaded = true;
 				saveChat(chat);
 				chats[chat.row.chatId] = std::move(chat);
-				toast("The secret chat request was sent.");
+				toast(tr::ayu_SecretToastRequestSent(tr::now));
 				notify();
 				if (started) {
 					started(data.vid().v);
@@ -1102,11 +1114,13 @@ void Manager::Impl::start(not_null<UserData*> user) {
 			}, [&](const auto &) {
 			});
 		}).fail([=](const MTP::Error &error) {
-			toast(QString("Could not start the secret chat: %1")
-				.arg(error.type()));
+			toast(tr::ayu_SecretToastStartFailed(
+				tr::now,
+				lt_reason,
+				error.type()));
 		}).send();
 	}, [=] {
-		toast("Could not get the encryption parameters.");
+		toast(tr::ayu_SecretToastNoDhConfig(tr::now));
 	});
 }
 
@@ -1427,14 +1441,18 @@ void Manager::Impl::processService(
 		chat.ttl = std::max(0, inbound.actionValue);
 		addNote(
 			chat,
-			QString("%1 set the self-destruct timer to %2")
-				.arg(title(chat), TtlText(chat.ttl)),
+			tr::ayu_SecretNoteTtlSet(
+				tr::now,
+				lt_name,
+				title(chat),
+				lt_time,
+				TtlText(chat.ttl)),
 			date);
 		break;
 	case ActionKind::ScreenshotMessages:
 		addNote(
 			chat,
-			QString("%1 took a screenshot").arg(title(chat)),
+			tr::ayu_SecretNoteScreenshot(tr::now, lt_name, title(chat)),
 			date);
 		break;
 	case ActionKind::RequestKey:
@@ -1984,14 +2002,14 @@ void Manager::Impl::sendFile(int chatId, OutgoingFile outgoing) {
 	if (!outgoing.path.isEmpty()) {
 		auto file = QFile(outgoing.path);
 		if (!file.open(QIODevice::ReadOnly)) {
-			toast("Could not read the file.");
+			toast(tr::ayu_SecretToastReadFailed(tr::now));
 			return;
 		}
 		if (file.size() <= 0) {
-			toast("Could not read the file.");
+			toast(tr::ayu_SecretToastReadFailed(tr::now));
 			return;
 		} else if (file.size() > kMaxFileSize) {
-			toast("The file is too big for a secret chat (limit 100 MB).");
+			toast(tr::ayu_SecretToastTooBig(tr::now));
 			return;
 		}
 		plain = FromArray(file.readAll());
@@ -2001,10 +2019,10 @@ void Manager::Impl::sendFile(int chatId, OutgoingFile outgoing) {
 		}
 	} else {
 		if (outgoing.bytes.isEmpty()) {
-			toast("Could not read the file.");
+			toast(tr::ayu_SecretToastReadFailed(tr::now));
 			return;
 		} else if (outgoing.bytes.size() > kMaxFileSize) {
-			toast("The file is too big for a secret chat (limit 100 MB).");
+			toast(tr::ayu_SecretToastTooBig(tr::now));
 			return;
 		}
 		plain = FromArray(outgoing.bytes);
@@ -2091,7 +2109,7 @@ void Manager::Impl::sendFile(int chatId, OutgoingFile outgoing) {
 	data.media = media;
 	const auto stored = storeFile(chatId, data.randomId, plain);
 	if (stored.isEmpty()) {
-		toast("Could not store the file.");
+		toast(tr::ayu_SecretToastStoreFailed(tr::now));
 		return;
 	}
 	data.media.path = stored.toStdString();
@@ -2153,7 +2171,7 @@ void Manager::Impl::uploadParts(
 			message->state = DeliveryState::Failed;
 			updateMessage(*chat, *message);
 		}
-		toast("Could not upload the file.");
+		toast(tr::ayu_SecretToastUploadFailed(tr::now));
 	};
 	if (file.big) {
 		session->api().request(MTPupload_SaveBigFilePart(
@@ -2189,7 +2207,7 @@ void Manager::Impl::downloadMedia(int chatId, int64 randomId) {
 	if (message->media.size > kMaxFileSize) {
 		++chat->revision;
 		notify(chatId);
-		toast("The file is too big for a secret chat (limit 100 MB).");
+		toast(tr::ayu_SecretToastTooBig(tr::now));
 		return;
 	}
 	chat->transfers[randomId] = Transfer();
@@ -2233,8 +2251,11 @@ void Manager::Impl::downloadChunk(
 			notify(chatId);
 		}
 		toast(reason.isEmpty()
-			? QString("Could not download the file.")
-			: QString("Could not download the file: %1").arg(reason));
+			? tr::ayu_SecretToastDownloadFailed(tr::now)
+			: tr::ayu_SecretToastDownloadFailedReason(
+				tr::now,
+				lt_reason,
+				reason));
 	};
 	const auto fail = [=](const MTP::Error &error) {
 		failed(error.type());
@@ -2301,7 +2322,7 @@ void Manager::Impl::finishDownload(
 			message->media.iv,
 			message->media.size,
 			plain)) {
-		toast("Could not decrypt the file.");
+		toast(tr::ayu_SecretToastDecryptFailed(tr::now));
 		notify(chatId);
 		return;
 	}
@@ -2321,7 +2342,7 @@ void Manager::Impl::finishDownload(
 	}
 	const auto path = storeFile(chatId, randomId, plain);
 	if (path.isEmpty()) {
-		toast("Could not save the file.");
+		toast(tr::ayu_SecretToastSaveFailed(tr::now));
 		notify(chatId);
 		return;
 	}
@@ -2365,8 +2386,10 @@ void Manager::Impl::setTtl(int chatId, int seconds) {
 	sendService(*chat, BuildSetTtl(RandomId(), chat->ttl));
 	addNote(
 		*chat,
-		QString("You set the self-destruct timer to %1")
-			.arg(TtlText(chat->ttl)),
+		tr::ayu_SecretNoteTtlSetByYou(
+			tr::now,
+			lt_time,
+			TtlText(chat->ttl)),
 		base::unixtime::now());
 	saveChat(*chat);
 	notify(chatId);
@@ -2715,7 +2738,7 @@ void Manager::end(int chatId) {
 		_impl->discard(chatId);
 		_impl->addNote(
 			*chat,
-			QString("You ended the secret chat"),
+			tr::ayu_SecretNoteEndedByYou(tr::now),
 			base::unixtime::now());
 		_impl->notify(chatId);
 		return;

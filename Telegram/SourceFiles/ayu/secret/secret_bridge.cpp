@@ -132,7 +132,7 @@ struct DocumentRef {
 		.arg(media.longitude, 0, 'f', 6);
 	switch (media.type) {
 	case MediaType::Location:
-		append("Location", geo);
+		append(tr::ayu_SecretMediaLocation(tr::now), geo);
 		append(
 			QString("%1, %2")
 				.arg(media.latitude, 0, 'f', 5)
@@ -153,7 +153,7 @@ struct DocumentRef {
 		append(Qs(media.url), Qs(media.url));
 		break;
 	case MediaType::Unsupported:
-		append("Unsupported attachment", QString());
+		append(tr::ayu_SecretMediaUnsupported(tr::now), QString());
 		break;
 	default:
 		break;
@@ -687,7 +687,7 @@ HistoryItem *Bridge::createItem(
 		if (bytes.isEmpty()) {
 			result = history->addNewLocalMessage(
 				std::move(fields),
-				TextWithEntities{ QString("[Photo could not be opened]") },
+				TextWithEntities{ tr::ayu_SecretMediaPhotoFailed(tr::now) },
 				MTP_messageMediaEmpty());
 		} else {
 			auto width = message.media.width;
@@ -782,7 +782,7 @@ HistoryItem *Bridge::createItem(
 		&& NeedsFile(message)) {
 		result = history->addNewLocalMessage(
 			std::move(fields),
-			TextWithEntities{ QString("[Attachment is not available]") },
+			TextWithEntities{ tr::ayu_SecretMediaUnavailable(tr::now) },
 			MTP_messageMediaEmpty());
 	} else if (message.media.type == MediaType::Location
 		|| message.media.type == MediaType::Venue) {

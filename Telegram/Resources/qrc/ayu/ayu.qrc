@@ -25,5 +25,10 @@
         <file alias="art/ayu/yaplus/app.svg">../../art/ayu/yaplus/app.svg</file>
         <file alias="art/ayu/yaplus/app_icon.ico">../../art/ayu/yaplus/app_icon.ico</file>
         <file alias="icons/ayu/nocover.svg">../../icons/ayu/nocover.svg</file>
+        <file alias="ayu_lang/de.strings">../../langs/ayu/de.strings</file>
+        <file alias="ayu_lang/fr.strings">../../langs/ayu/fr.strings</file>
+        <file alias="ayu_lang/it.strings">../../langs/ayu/it.strings</file>
+        <file alias="ayu_lang/ru.strings">../../langs/ayu/ru.strings</file>
+        <file alias="ayu_lang/zh.strings">../../langs/ayu/zh.strings</file>
     </qresource>
 </RCC>

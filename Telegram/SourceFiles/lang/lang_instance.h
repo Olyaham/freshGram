@@ -125,6 +125,7 @@ private:
 		const QString &relativePath,
 		const QByteArray &content);
 	void updateChoosingStickerReplacement();
+	bool applyBuiltin();
 
 	Instance *_derived = nullptr;
 
