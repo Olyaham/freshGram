@@ -27,6 +27,18 @@ namespace Dialogs {
 class Entry;
 enum class ChatSearchTab : uchar;
 
+enum class SearchMediaFilter : uchar {
+	All,
+	Photos,
+	Videos,
+	Files,
+	Music,
+	Voice,
+	RoundVideo,
+	Links,
+	Gifs,
+};
+
 class Key {
 public:
 	Key() = default;

@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #pragma once
 
 #include "base/unique_qptr.h"
+#include "dialogs/dialogs_key.h"
 #include "ui/rp_widget.h"
 
 namespace Ui {
@@ -26,18 +27,6 @@ enum class ChatSearchTab : uchar {
 	PublicPosts,
 	Archive,
 	ThisCommunity,
-};
-
-enum class SearchMediaFilter : uchar {
-	All,
-	Photos,
-	Videos,
-	Files,
-	Music,
-	Voice,
-	RoundVideo,
-	Links,
-	Gifs,
 };
 
 [[nodiscard]] QString SearchMediaLabel(SearchMediaFilter media);

@@ -15,6 +15,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/shadow.h"
 #include "ui/widgets/menu/menu_item_base.h"
 #include "ui/dynamic_image.h"
+#include "ui/dynamic_thumbnails.h"
 #include "ui/painter.h"
 #include "styles/style_dialogs.h"
 #include "styles/style_menu_icons.h"
