@@ -510,6 +510,15 @@ std::optional<MTPMessageMedia> savedTtlMedia(
 	return WithSpoiler(media);
 }
 
+MTPMessageMedia restoredMedia(const AyuMessageBase &message) {
+	auto media = AyuMapper::deserializeMedia(message.documentSerialized);
+	const auto path = TtlMediaPath(SavedMediaPath(
+		message.userId,
+		message.dialogId,
+		message.messageId));
+	return QFile::exists(path) ? WithSpoiler(media) : media;
+}
+
 void restoreTtlBytes(not_null<HistoryItem*> item) {
 	PutMediaBytesIntoCache(item, SavedMediaPath(item));
 }

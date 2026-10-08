@@ -5381,7 +5381,9 @@ MessageIdsList HistoryInner::getSelectedItems() const {
 		_selected.end()
 	) | views::filter([](const auto &item) {
 		return !item->isService()
-			&& (item->isRegular() || item->isAyuSecret());
+			&& (item->isRegular()
+				|| item->isAyuSecret()
+				|| item->isAyuRestored());
 	}) | views::transform([](const auto &item) {
 		return item->fullId();
 	}) | to_vector;

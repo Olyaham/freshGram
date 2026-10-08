@@ -364,6 +364,9 @@ public:
 	[[nodiscard]] bool isEphemeral() const {
 		return _flags & MessageFlag::Ephemeral;
 	}
+	[[nodiscard]] bool isAyuRestored() const {
+		return _deleted && isLocal() && !isService();
+	}
 	[[nodiscard]] bool canBeSelected() const;
 	[[nodiscard]] bool isFakeAboutView() const {
 		return _flags & MessageFlag::FakeAboutView;

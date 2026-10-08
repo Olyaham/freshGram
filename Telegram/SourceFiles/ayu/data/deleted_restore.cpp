@@ -490,7 +490,7 @@ HistoryItem *State::create(Row &row) {
 			.replyTo = replyTo,
 			.date = message.date,
 			.postAuthor = QString::fromStdString(message.postAuthor),
-		}, std::move(text), AyuMapper::deserializeMedia(message.documentSerialized));
+		}, std::move(text), AyuMessages::restoredMedia(message));
 	};
 	auto item = build(text);
 	if (item->isEmpty() && !text.entities.empty()) {
