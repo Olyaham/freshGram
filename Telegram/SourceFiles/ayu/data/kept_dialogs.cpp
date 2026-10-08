@@ -681,6 +681,11 @@ bool showsDeleted(not_null<PeerData*> peer) {
 	return history && history->ayuKept();
 }
 
+bool isKept(not_null<PeerData*> peer) {
+	const auto history = peer->owner().historyLoaded(peer);
+	return history && history->ayuKept();
+}
+
 bool serverUnavailable(not_null<const History*> history) {
 	if (!history->ayuKept()) {
 		return false;

@@ -922,7 +922,21 @@ void Filler::addScreenshotAction() {
 }
 
 void Filler::addDeleteChat() {
-	if (_topic || (!_sublist && _peer->isChannel())) {
+	if (_topic) {
+		return;
+	} else if (!_sublist && _peer->isChannel()) {
+		if (AyuKept::isKept(_peer)) {
+			const auto peer = _peer;
+			_addAction({
+				.text = tr::lng_box_delete(tr::now),
+				.handler = [=] {
+					Core::App().closeChatFromWindows(peer);
+					peer->owner().deleteConversationLocally(peer);
+				},
+				.icon = &st::menuIconDeleteAttention,
+				.isAttention = true,
+			});
+		}
 		return;
 	}
 	_addAction({
