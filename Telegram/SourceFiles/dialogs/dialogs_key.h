@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #pragma once
 
 #include "base/qt/qt_compare.h"
+#include "dialogs/dialogs_search_media.h"
 #include "data/data_message_reaction_id.h"
 
 class History;
@@ -26,18 +27,6 @@ namespace Dialogs {
 
 class Entry;
 enum class ChatSearchTab : uchar;
-
-enum class SearchMediaFilter : uchar {
-	All,
-	Photos,
-	Videos,
-	Files,
-	Music,
-	Voice,
-	RoundVideo,
-	Links,
-	Gifs,
-};
 
 class Key {
 public:

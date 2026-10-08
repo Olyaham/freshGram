@@ -8,7 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #pragma once
 
 #include "base/unique_qptr.h"
-#include "dialogs/dialogs_key.h"
+#include "dialogs/dialogs_search_media.h"
 #include "ui/rp_widget.h"
 
 namespace Ui {
