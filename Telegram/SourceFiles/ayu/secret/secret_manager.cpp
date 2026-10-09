@@ -10,6 +10,8 @@
 #include "ayu/secret/secret_crypto.h"
 #include "ayu/secret/secret_files.h"
 #include "ayu/secret/secret_protocol.h"
+
+#include "ayu/secret/secret_rekey.h"
 #include "ayu/secret/secret_tl.h"
 #include "base/call_delayed.h"
 #include "base/openssl_help.h"
@@ -1547,17 +1549,19 @@ void Manager::Impl::handleRequestKey(Chat &chat, const Inbound &inbound) {
 		return;
 	}
 	if (chat.pfsOurExchange != 0) {
-		// Concurrent re-keying: keep only the instance with the larger
-		// exchange id (compared as a signed long). Our instance wins:
-		// ignore the incoming one silently, the other side applies the
-		// same rule. On exact match (2^-64) abort both silently.
-		if (chat.pfsOurExchange == exchangeId) {
+		// Concurrent re-keying, see DecideConcurrent: our instance wins
+		// (the other side applies the same rule), otherwise abandon ours
+		// and answer the incoming one. On exact match abort both.
+		switch (DecideConcurrent(chat.pfsOurExchange, exchangeId)) {
+		case ConcurrentDecision::AnswerIncoming:
+			clearOurExchange(chat);
+			break;
+		case ConcurrentDecision::AbortBoth:
 			clearOurExchange(chat);
 			return;
-		} else if (chat.pfsOurExchange > exchangeId) {
+		case ConcurrentDecision::IgnoreIncoming:
 			return;
 		}
-		clearOurExchange(chat);
 	}
 	if (chat.pfsExchange != 0) {
 		// Already answering another instance: keep the first one.
@@ -1575,13 +1579,16 @@ void Manager::Impl::handleRequestKey(Chat &chat, const Inbound &inbound) {
 			return;
 		}
 		if (chat->pfsOurExchange != 0) {
-			if (chat->pfsOurExchange == exchangeId) {
+			switch (DecideConcurrent(chat->pfsOurExchange, exchangeId)) {
+			case ConcurrentDecision::AnswerIncoming:
+				clearOurExchange(*chat);
+				break;
+			case ConcurrentDecision::AbortBoth:
 				clearOurExchange(*chat);
 				return;
-			} else if (chat->pfsOurExchange > exchangeId) {
+			case ConcurrentDecision::IgnoreIncoming:
 				return;
 			}
-			clearOurExchange(*chat);
 		}
 		const auto prime = openssl::BigNum(Span(config.p));
 		if (gA.empty()
@@ -1715,10 +1722,14 @@ void Manager::Impl::maybeStartRekey(Chat &chat) {
 		// Never start a new instance while one is uncompleted.
 		return;
 	}
-	const auto overused = (chat.keyUsesOut + chat.keyUsesIn) > kRekeyAfterUses;
-	const auto aged = (chat.keyUsesOut > 0)
-		&& ((base::unixtime::now() - chat.keyInstalledAt) > kRekeyAfterTime);
-	if (!overused && !aged) {
+	const auto due = ShouldRekey(
+		chat.keyUsesOut,
+		chat.keyUsesIn,
+		chat.keyInstalledAt,
+		base::unixtime::now(),
+		kRekeyAfterUses,
+		kRekeyAfterTime);
+	if (!due) {
 		return;
 	}
 	startRekey(chat);
