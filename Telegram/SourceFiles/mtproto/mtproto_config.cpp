@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "mtproto/mtproto_config.h"
 
+#include "mtproto/core_types.h"
 #include "storage/serialize_common.h"
 #include "mtproto/type_utils.h"
 #include "logs.h"
@@ -256,7 +257,13 @@ void Config::apply(const MTPDconfig &data) {
 	_fields.stickersRecentLimit = data.vstickers_recent_limit().v;
 	_fields.internalLinksDomain = qs(data.vme_url_prefix());
 	_fields.channelsReadMediaPeriod = data.vchannels_read_media_period().v;
-	_fields.webFileDcId = data.vwebfile_dc_id().v;
+	if (const auto webFileDcId = data.vwebfile_dc_id().v;
+		webFileDcId > 0 && webFileDcId < kDcShift) {
+		_fields.webFileDcId = webFileDcId;
+	} else {
+		LOG(("MTP Error: ignoring out-of-range webfile_dc_id %1 in config."
+			).arg(webFileDcId));
+	}
 	_fields.callReceiveTimeoutMs = data.vcall_receive_timeout_ms().v;
 	_fields.callRingTimeoutMs = data.vcall_ring_timeout_ms().v;
 	_fields.callConnectTimeoutMs = data.vcall_connect_timeout_ms().v;
