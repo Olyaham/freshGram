@@ -1,5 +1,6 @@
 #include "ayu/secret/secret_vault.h"
 
+#include "ayu/utils/file_perms.h"
 #include "core/application.h"
 #include "main/main_domain.h"
 #include "mtproto/mtproto_auth_key.h"
@@ -196,7 +197,11 @@ bool SealToFile(
 	const auto written = file.write(
 		reinterpret_cast<const char*>(sealed.data()),
 		qint64(sealed.size()));
-	return (written == qint64(sealed.size())) && file.commit();
+	if (written != qint64(sealed.size()) || !file.commit()) {
+		return false;
+	}
+	AyuUtils::RestrictFile(path);
+	return true;
 }
 
 bool OpenFromFile(

@@ -11,6 +11,7 @@
 #include "ayu/ayu_settings.h"
 #include "ayu/data/ayu_database.h"
 #include "ayu/utils/ayu_mapper.h"
+#include "ayu/utils/file_perms.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "base/timer.h"
 #include "base/unixtime.h"
@@ -99,10 +100,12 @@ bool WritePhotoBytes(
 	}
 	const auto bytes = media->imageBytes(Data::PhotoSize::Large);
 	if (!bytes.isEmpty()) {
-		QDir().mkpath(QFileInfo(path).absolutePath());
+		AyuUtils::EnsurePrivateDir(QFileInfo(path).absolutePath());
 		auto file = QFile(path);
 		if (file.open(QIODevice::WriteOnly)) {
 			file.write(bytes);
+			file.close();
+			AyuUtils::RestrictFile(path);
 		}
 	}
 	return true;
@@ -171,10 +174,12 @@ bool WriteDocumentBytes(
 	}
 	const auto bytes = DocumentBytes(media);
 	if (!bytes.isEmpty()) {
-		QDir().mkpath(QFileInfo(path).absolutePath());
+		AyuUtils::EnsurePrivateDir(QFileInfo(path).absolutePath());
 		auto file = QFile(path);
 		if (file.open(QIODevice::WriteOnly)) {
 			file.write(bytes);
+			file.close();
+			AyuUtils::RestrictFile(path);
 		}
 	}
 	return true;
@@ -442,10 +447,12 @@ void saveTtlMedia(not_null<HistoryItem*> item) {
 	if (QFile::exists(path)) {
 		return;
 	}
-	QDir().mkpath(QFileInfo(path).absolutePath());
+	AyuUtils::EnsurePrivateDir(QFileInfo(path).absolutePath());
 	auto file = QFile(path);
 	if (file.open(QIODevice::WriteOnly)) {
 		file.write(saved.data(), qint64(saved.size()));
+		file.close();
+		AyuUtils::RestrictFile(path);
 		LOG(("Ayu: saved self-destructing media of %1").arg(item->id.bare));
 	} else {
 		LOG(("Ayu: could not save self-destructing media of %1").arg(item->id.bare));

@@ -6,6 +6,7 @@
 // Copyright @Radolyn, 2026
 #include "ayu/ayu_settings.h"
 
+#include "ayu/utils/file_perms.h"
 #include "lang_auto.h"
 #include "tray.h"
 #include "ayu/ayu_ui_settings.h"
@@ -458,6 +459,7 @@ void AyuSettings::save() {
 	file.open(getSettingsPath());
 	file << p.dump(4);
 	file.close();
+	AyuUtils::RestrictFile(QString::fromStdString(getSettingsPath().string()));
 }
 
 void AyuSettings::reset() {

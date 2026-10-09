@@ -9,6 +9,7 @@
 #include "ayu/data/ayu_database_backup.h"
 #include "ayu/data/entities.h"
 #include "ayu/libs/sqlite/sqlite_orm.h"
+#include "ayu/utils/file_perms.h"
 #include "ayu/utils/id_search.h"
 #include "base/unixtime.h"
 #include "crl/crl_async.h"
@@ -321,7 +322,10 @@ void renameDatabaseFiles(const QString &suffix) {
 	for (const auto &extension : {QString(), QString("-shm"), QString("-wal")}) {
 		const auto from = databasePath() + extension;
 		if (QFile::exists(from)) {
-			QFile::rename(from, QString("./tdata/ayudata_%1.db%2").arg(suffix, extension));
+			const auto to = QString("./tdata/ayudata_%1.db%2").arg(suffix, extension);
+			if (QFile::rename(from, to)) {
+				AyuUtils::RestrictFile(to);
+			}
 		}
 	}
 }
@@ -330,7 +334,10 @@ void copyDatabaseFiles(const QString &suffix) {
 	for (const auto &extension : {QString(), QString("-shm"), QString("-wal")}) {
 		const auto from = databasePath() + extension;
 		if (QFile::exists(from)) {
-			QFile::copy(from, QString("./tdata/ayudata_%1.db%2").arg(suffix, extension));
+			const auto to = QString("./tdata/ayudata_%1.db%2").arg(suffix, extension);
+			if (QFile::copy(from, to)) {
+				AyuUtils::RestrictFile(to);
+			}
 		}
 	}
 }
@@ -473,6 +480,9 @@ void initialize() {
 	while (true) {
 		try {
 			prepareStorage();
+			for (const auto &extension : {QString(), QString("-shm"), QString("-wal")}) {
+				AyuUtils::RestrictFile(databasePath() + extension);
+			}
 			DatabaseReady = true;
 			AyuDatabaseBackup::startPeriodic();
 			if (const auto days = PurgeDays.load()) {

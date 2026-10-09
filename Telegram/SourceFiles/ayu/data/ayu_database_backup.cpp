@@ -2,6 +2,7 @@
 
 #include "ayu/ayu_settings.h"
 #include "ayu/libs/sqlite/sqlite3.h"
+#include "ayu/utils/file_perms.h"
 #include "base/timer.h"
 #include "logs.h"
 
@@ -229,7 +230,7 @@ bool create() {
 		return false;
 	}
 	const auto guard = gsl::finally([] { Running = false; });
-	QDir().mkpath(Directory());
+	AyuUtils::EnsurePrivateDir(Directory());
 	const auto temporary = Directory() + "/.pending.db";
 	QFile::remove(temporary);
 	{
@@ -249,6 +250,7 @@ bool create() {
 		QFile::remove(temporary);
 		return false;
 	}
+	AyuUtils::RestrictFile(temporary);
 	const auto name = QString("%1/ayudata_%2_%3.db")
 		.arg(Directory())
 		.arg(QDateTime::currentDateTimeUtc().toString("yyyyMMdd_HHmmss"))
@@ -257,9 +259,7 @@ bool create() {
 		QFile::remove(temporary);
 		return false;
 	}
-	QFile::setPermissions(
-		name,
-		QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+	AyuUtils::RestrictFile(name);
 	Rotate();
 	return true;
 }
