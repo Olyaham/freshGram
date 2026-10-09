@@ -115,7 +115,7 @@ std::vector<std::unique_ptr<DocumentSaveTask>> DocumentSaveTasks;
 // one, which is opportunistically sealed for next time). Genuinely
 // corrupt sealed blobs are returned as-is, like corrupt plaintext before.
 [[nodiscard]] bool ReadMediaBytes(const QString &path, QByteArray &out) {
-	auto plain = Bytes();
+	auto plain = AyuSecret::Bytes();
 	if (AyuSecret::Vault::OpenFromFile(path, plain, MediaContext(path))) {
 		if (plain.empty()) {
 			return false;
@@ -135,7 +135,7 @@ std::vector<std::unique_ptr<DocumentSaveTask>> DocumentSaveTasks;
 		return false;
 	}
 	out = raw;
-	const auto rawBytes = Bytes(raw.begin(), raw.end());
+	const auto rawBytes = AyuSecret::Bytes(raw.begin(), raw.end());
 	if (!AyuSecret::Vault::IsSealed(rawBytes)
 		&& AyuSecret::Vault::Available()) {
 		AyuSecret::Vault::SealToFile(path, rawBytes, MediaContext(path));
@@ -160,7 +160,7 @@ bool WritePhotoBytes(
 	if (!bytes.isEmpty()) {
 		WriteSealedOrPlain(
 			path,
-			Bytes(bytes.begin(), bytes.end()));
+			AyuSecret::Bytes(bytes.begin(), bytes.end()));
 	}
 	return true;
 }
@@ -230,7 +230,7 @@ bool WriteDocumentBytes(
 	if (!bytes.isEmpty()) {
 		WriteSealedOrPlain(
 			path,
-			Bytes(bytes.begin(), bytes.end()));
+			AyuSecret::Bytes(bytes.begin(), bytes.end()));
 	}
 	return true;
 }
@@ -495,7 +495,7 @@ void saveTtlMedia(not_null<HistoryItem*> item) {
 	if (QFile::exists(path)) {
 		return;
 	}
-	if (WriteSealedOrPlain(path, Bytes(saved.begin(), saved.end()))) {
+	if (WriteSealedOrPlain(path, AyuSecret::Bytes(saved.begin(), saved.end()))) {
 		LOG(("Ayu: saved self-destructing media of %1").arg(item->id.bare));
 	} else {
 		LOG(("Ayu: could not save self-destructing media of %1").arg(item->id.bare));

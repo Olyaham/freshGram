@@ -61,12 +61,12 @@ struct Entry {
 		return false;
 	}
 	const auto head = file.read(32);
-	const auto bytes = Bytes(head.begin(), head.end());
+	const auto bytes = AyuSecret::Bytes(head.begin(), head.end());
 	return AyuSecret::Vault::IsSealed(bytes);
 }
 
 [[nodiscard]] bool UnsealTo(const QString &sealed, const QString &plain) {
-	auto bytes = Bytes();
+	auto bytes = AyuSecret::Bytes();
 	if (!AyuSecret::Vault::OpenFromFile(
 			sealed,
 			bytes,
@@ -96,7 +96,7 @@ struct Entry {
 	file.close();
 	return AyuSecret::Vault::SealToFile(
 		sealed,
-		Bytes(raw.begin(), raw.end()),
+		AyuSecret::Bytes(raw.begin(), raw.end()),
 		BackupContext(sealed));
 }
 
@@ -197,7 +197,7 @@ struct Handle {
 	if (!HasVaultMagic(path)) {
 		return VerifyPlain(path, rows);
 	}
-	auto plain = Bytes();
+	auto plain = AyuSecret::Bytes();
 	if (!AyuSecret::Vault::OpenFromFile(
 			path,
 			plain,
@@ -266,7 +266,7 @@ void ScrubSecrets(const QString &path) {
 		ScrubSecretsPlain(path);
 		return;
 	}
-	auto plain = Bytes();
+	auto plain = AyuSecret::Bytes();
 	if (!AyuSecret::Vault::OpenFromFile(
 			path,
 			plain,
@@ -282,7 +282,7 @@ void ScrubSecrets(const QString &path) {
 		qint64(plain.size()));
 	temp.close();
 	ScrubSecretsPlain(temp.fileName());
-	SealFile(temp.fileName(), path);
+	static_cast<void>(SealFile(temp.fileName(), path));
 }
 
 void Rotate() {
