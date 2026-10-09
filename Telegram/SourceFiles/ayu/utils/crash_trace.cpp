@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <atomic>
@@ -107,6 +108,9 @@ void Install(const QString &directory) {
 	if (TraceFd < 0) {
 		return;
 	}
+	// open() does not change the mode of an already existing file, so
+	// traces left by older versions are tightened explicitly.
+	::fchmod(TraceFd, 0600);
 	const auto header = QByteArray("\n=== started, version ")
 		+ AppVersionStr
 		+ " ===\n";
