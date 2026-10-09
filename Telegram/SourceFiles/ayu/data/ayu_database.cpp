@@ -9,14 +9,18 @@
 #include "ayu/data/ayu_database_backup.h"
 #include "ayu/data/entities.h"
 #include "ayu/libs/sqlite/sqlite_orm.h"
+#include "ayu/secret/secret_vault.h"
 #include "ayu/utils/file_perms.h"
 #include "ayu/utils/id_search.h"
 #include "base/unixtime.h"
 #include "crl/crl_async.h"
 
+#include <QtCore/QByteArray>
+
 #include <atomic>
 #include <chrono>
 #include <mutex>
+#include <string>
 #include <system_error>
 #include <thread>
 
@@ -314,6 +318,157 @@ void inTransaction(Callback &&callback) {
 	}
 }
 
+// At-rest envelope for message content columns, using the existing Vault
+// (AES-256-GCM over localKey, no new crypto). TEXT columns carry
+// "ayu1:" + base64(sealed) so the schema is untouched; BLOB columns
+// carry the sealed bytes directly. Absent markers mean legacy plaintext,
+// which keeps working. A present-but-unopenable marker means corruption
+// or a key mismatch and decodes to empty (logged), never to raw bytes.
+constexpr auto kSealedTextPrefix = "ayu1:";
+
+[[nodiscard]] std::string RowContext(
+		const char *table,
+		const AyuMessageBase &message,
+		const char *field) {
+	auto result = std::string("ayu-row-v1:");
+	result += table;
+	result += ':';
+	result += std::to_string(message.userId);
+	result += ':';
+	result += std::to_string(message.dialogId);
+	result += ':';
+	result += std::to_string(message.messageId);
+	result += ':';
+	result += field;
+	return result;
+}
+
+[[nodiscard]] std::string SealText(
+		const std::string &plain,
+		const std::string &context) {
+	if (plain.empty() || !AyuSecret::Vault::Available()) {
+		return plain;
+	}
+	const auto sealed = AyuSecret::Vault::Seal(
+		AyuSecret::Bytes(plain.begin(), plain.end()),
+		context);
+	if (sealed.empty()) {
+		return plain;
+	}
+	const auto base64 = QByteArray(
+		reinterpret_cast<const char*>(sealed.data()),
+		int(sealed.size())).toBase64().toStdString();
+	return kSealedTextPrefix + base64;
+}
+
+[[nodiscard]] std::string OpenText(
+		const std::string &stored,
+		const std::string &context) {
+	if (stored.rfind(kSealedTextPrefix, 0) != 0) {
+		return stored;
+	}
+	const auto raw = QByteArray::fromBase64(
+		QByteArray::fromStdString(stored.substr(5)));
+	const auto sealed = AyuSecret::Bytes(raw.begin(), raw.end());
+	auto plain = AyuSecret::Bytes();
+	if (!AyuSecret::Vault::IsSealed(sealed)
+		|| !AyuSecret::Vault::Open(sealed, plain, context)) {
+		LOG(("[AyuGram] Database: cannot open sealed text field."));
+		return std::string();
+	}
+	return std::string(plain.begin(), plain.end());
+}
+
+[[nodiscard]] std::vector<char> SealBlob(
+		const std::vector<char> &plain,
+		const std::string &context) {
+	if (plain.empty() || !AyuSecret::Vault::Available()) {
+		return plain;
+	}
+	const auto sealed = AyuSecret::Vault::Seal(
+		AyuSecret::Bytes(plain.begin(), plain.end()),
+		context);
+	if (sealed.empty()) {
+		return plain;
+	}
+	return std::vector<char>(sealed.begin(), sealed.end());
+}
+
+[[nodiscard]] std::vector<char> OpenBlob(
+		const std::vector<char> &stored,
+		const std::string &context) {
+	const auto sealed = AyuSecret::Bytes(stored.begin(), stored.end());
+	if (!AyuSecret::Vault::IsSealed(sealed)) {
+		return stored;
+	}
+	auto plain = AyuSecret::Bytes();
+	if (!AyuSecret::Vault::Open(sealed, plain, context)) {
+		LOG(("[AyuGram] Database: cannot open sealed blob field."));
+		return std::vector<char>();
+	}
+	return std::vector<char>(plain.begin(), plain.end());
+}
+
+void SealRow(const char *table, AyuMessageBase &message) {
+	const auto context = [&](const char *field) {
+		return RowContext(table, message, field);
+	};
+	message.text = SealText(message.text, context("text"));
+	message.textEntities = SealBlob(message.textEntities, context("textEntities"));
+	message.documentSerialized = SealBlob(
+		message.documentSerialized,
+		context("documentSerialized"));
+	message.replySerialized = SealBlob(
+		message.replySerialized,
+		context("replySerialized"));
+	message.replyMarkupSerialized = SealBlob(
+		message.replyMarkupSerialized,
+		context("replyMarkupSerialized"));
+	message.fwdName = SealText(message.fwdName, context("fwdName"));
+	message.fwdPostAuthor = SealText(
+		message.fwdPostAuthor,
+		context("fwdPostAuthor"));
+	message.postAuthor = SealText(message.postAuthor, context("postAuthor"));
+	message.thumbsSerialized = SealBlob(
+		message.thumbsSerialized,
+		context("thumbsSerialized"));
+	message.documentAttributesSerialized = SealBlob(
+		message.documentAttributesSerialized,
+		context("documentAttributesSerialized"));
+	message.mediaPath = SealText(message.mediaPath, context("mediaPath"));
+	message.mimeType = SealText(message.mimeType, context("mimeType"));
+}
+
+void OpenRow(const char *table, AyuMessageBase &message) {
+	const auto context = [&](const char *field) {
+		return RowContext(table, message, field);
+	};
+	message.text = OpenText(message.text, context("text"));
+	message.textEntities = OpenBlob(message.textEntities, context("textEntities"));
+	message.documentSerialized = OpenBlob(
+		message.documentSerialized,
+		context("documentSerialized"));
+	message.replySerialized = OpenBlob(
+		message.replySerialized,
+		context("replySerialized"));
+	message.replyMarkupSerialized = OpenBlob(
+		message.replyMarkupSerialized,
+		context("replyMarkupSerialized"));
+	message.fwdName = OpenText(message.fwdName, context("fwdName"));
+	message.fwdPostAuthor = OpenText(
+		message.fwdPostAuthor,
+		context("fwdPostAuthor"));
+	message.postAuthor = OpenText(message.postAuthor, context("postAuthor"));
+	message.thumbsSerialized = OpenBlob(
+		message.thumbsSerialized,
+		context("thumbsSerialized"));
+	message.documentAttributesSerialized = OpenBlob(
+		message.documentAttributesSerialized,
+		context("documentAttributesSerialized"));
+	message.mediaPath = OpenText(message.mediaPath, context("mediaPath"));
+	message.mimeType = OpenText(message.mimeType, context("mimeType"));
+}
+
 QString databasePath() {
 	return "./tdata/ayudata.db";
 }
@@ -546,7 +701,9 @@ void addEditedMessage(const EditedMessage &message, int maxRevisions) {
 					column<EditedMessage>(&EditedMessage::messageId) == message.messageId
 				));
 			if (!maxRevisions || saved < maxRevisions) {
-				storage.insert(message);
+				auto sealed = message;
+				SealRow("EditedMessage", sealed);
+				storage.insert(sealed);
 			}
 		});
 	});
@@ -554,7 +711,7 @@ void addEditedMessage(const EditedMessage &message, int maxRevisions) {
 
 std::vector<EditedMessage> getEditedMessages(ID userId, ID dialogId, ID messageId, ID minId, ID maxId, int totalLimit) {
 	return run<std::vector<EditedMessage>>("load edited messages", {}, [&] {
-		return storage.get_all<EditedMessage>(
+		auto result = storage.get_all<EditedMessage>(
 			where(
 				column<EditedMessage>(&EditedMessage::userId) == userId and
 				column<EditedMessage>(&EditedMessage::dialogId) == dialogId and
@@ -565,6 +722,10 @@ std::vector<EditedMessage> getEditedMessages(ID userId, ID dialogId, ID messageI
 			order_by(column<EditedMessage>(&EditedMessage::fakeId)).desc(),
 			limit(totalLimit)
 		);
+		for (auto &row : result) {
+			OpenRow("EditedMessage", row);
+		}
+		return result;
 	});
 }
 
@@ -597,7 +758,9 @@ void addDeletedMessages(const std::vector<DeletedMessage> &messages) {
 					)
 				) > 0;
 				if (!exists) {
-					storage.insert(message);
+					auto sealed = message;
+					SealRow("DeletedMessage", sealed);
+					storage.insert(sealed);
 				}
 			}
 		});
@@ -611,7 +774,7 @@ void addDeletedMessage(const DeletedMessage &message) {
 std::vector<DeletedMessage> getDeletedMessages(ID userId, ID dialogId, ID topicId, ID minId, ID maxId, int totalLimit, const std::string &searchQuery) {
 	return run<std::vector<DeletedMessage>>("load deleted messages", {}, [&] {
 		if (searchQuery.empty()) {
-			return storage.get_all<DeletedMessage>(
+			auto result = storage.get_all<DeletedMessage>(
 				where(
 					column<DeletedMessage>(&DeletedMessage::userId) == userId and
 					column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId and
@@ -622,33 +785,44 @@ std::vector<DeletedMessage> getDeletedMessages(ID userId, ID dialogId, ID topicI
 				order_by(column<DeletedMessage>(&DeletedMessage::messageId)).desc(),
 				limit(totalLimit)
 			);
+			for (auto &row : result) {
+				OpenRow("DeletedMessage", row);
+			}
+			return result;
 		}
 
-		std::string escaped;
-		escaped.reserve(searchQuery.size());
-		for (const auto c : searchQuery) {
-			if (c == '%' || c == '_' || c == '\\') {
-				escaped += '\\';
-			}
-			escaped += c;
+		// Text is sealed at rest, so SQL LIKE cannot see it: fetch by the
+		// indexed id filters and match the decrypted text in code with
+		// the same case-insensitive substring semantics.
+		if (totalLimit == 0) {
+			return std::vector<DeletedMessage>();
 		}
-		const auto pattern = "%" + escaped + "%";
 		const auto idQuery = AyuIdSearch::Parse(
 			QString::fromStdString(searchQuery).trimmed());
 		const auto senderId = idQuery.valid() ? ID(idQuery.id) : ID(-1);
-		return storage.get_all<DeletedMessage>(
+		const auto needle = QString::fromStdString(searchQuery);
+		auto candidates = storage.get_all<DeletedMessage>(
 			where(
 				column<DeletedMessage>(&DeletedMessage::userId) == userId and
 				column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId and
 				(column<DeletedMessage>(&DeletedMessage::topicId) == topicId or topicId == 0) and
 				(column<DeletedMessage>(&DeletedMessage::messageId) > minId or minId == 0) and
-				(column<DeletedMessage>(&DeletedMessage::messageId) < maxId or maxId == 0) and
-				(like(column<DeletedMessage>(&DeletedMessage::text), pattern, "\\") or
-				column<DeletedMessage>(&DeletedMessage::fromId) == senderId)
+				(column<DeletedMessage>(&DeletedMessage::messageId) < maxId or maxId == 0)
 			),
-			order_by(column<DeletedMessage>(&DeletedMessage::messageId)).desc(),
-			limit(totalLimit)
+			order_by(column<DeletedMessage>(&DeletedMessage::messageId)).desc()
 		);
+		auto result = std::vector<DeletedMessage>();
+		for (auto &row : candidates) {
+			OpenRow("DeletedMessage", row);
+			if (QString::fromStdString(row.text).contains(needle, Qt::CaseInsensitive)
+				|| row.fromId == senderId) {
+				result.push_back(row);
+				if (int(result.size()) >= totalLimit) {
+					break;
+				}
+			}
+		}
+		return result;
 	});
 }
 
