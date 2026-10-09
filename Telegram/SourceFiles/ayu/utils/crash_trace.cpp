@@ -103,7 +103,7 @@ void Install(const QString &directory) {
 	QDir().mkpath(directory);
 	const auto path = QFile::encodeName(directory + QStringLiteral("/crash_trace.txt"));
 	const auto flags = O_WRONLY | O_CREAT | O_TRUNC | O_APPEND;
-	TraceFd = ::open(path.constData(), flags, 0644);
+	TraceFd = ::open(path.constData(), flags, 0600);
 	if (TraceFd < 0) {
 		return;
 	}
