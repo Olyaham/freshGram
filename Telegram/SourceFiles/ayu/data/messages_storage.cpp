@@ -92,7 +92,9 @@ std::vector<std::unique_ptr<DocumentSaveTask>> DocumentSaveTasks;
 	return "ayu-media-v1:" + path.toStdString();
 }
 
-[[nodiscard]] bool WriteSealedOrPlain(const QString &path, const Bytes &plain) {
+[[nodiscard]] bool WriteSealedOrPlain(
+	const QString &path,
+	const AyuSecret::Bytes &plain) {
 	if (AyuSecret::Vault::Available()
 		&& AyuSecret::Vault::SealToFile(path, plain, MediaContext(path))) {
 		return true;
