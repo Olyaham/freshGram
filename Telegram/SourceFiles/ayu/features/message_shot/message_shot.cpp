@@ -36,6 +36,8 @@
 #include "ui/layers/box_content.h"
 #include "window/themes/window_theme.h"
 
+#include <algorithm>
+
 namespace AyuFeatures::MessageShot {
 
 ShotConfig *config = nullptr;
@@ -201,6 +203,42 @@ QColor makeDefaultBackgroundColor() {
 	}
 
 	return st::boxBg->c.darker(110);
+}
+
+// The snapshot must sit on the chat background, not on an approximation
+// derived from the boxes palette: lighter()/darker() on a tinted theme
+// breaks the hue (e.g. olive on dark-green) instead of matching the chat.
+void PaintShotBackground(
+		QPainter &painter,
+		not_null<Window::SessionController*> controller,
+		const QSize &deviceSize) {
+	const auto &background = controller->defaultChatTheme()->background();
+	const auto target = QRect(QPoint(), deviceSize);
+	if (background.colorForFill) {
+		painter.fillRect(target, *background.colorForFill);
+		return;
+	}
+	if (background.isPattern && !background.prepared.isNull()) {
+		painter.drawTiledPixmap(target, QPixmap::fromImage(background.prepared));
+		return;
+	}
+	if (!background.gradientForFill.isNull()) {
+		painter.drawImage(target, background.gradientForFill);
+		return;
+	}
+	if (!background.prepared.isNull()) {
+		const auto &wallpaper = background.prepared;
+		const auto scale = std::max(
+			target.width() / double(wallpaper.width()),
+			target.height() / double(wallpaper.height()));
+		const auto w = target.width() / scale;
+		const auto h = target.height() / scale;
+		const auto x = (wallpaper.width() - w) / 2.;
+		const auto y = (wallpaper.height() - h) / 2.;
+		painter.drawImage(target, wallpaper, QRectF(x, y, w, h));
+		return;
+	}
+	painter.fillRect(target, makeDefaultBackgroundColor());
 }
 
 void Make(not_null<QWidget*> box, const ShotConfig &config, const Fn<void(QImage&,bool)>& callback) {
@@ -398,7 +436,13 @@ void Make(not_null<QWidget*> box, const ShotConfig &config, const Fn<void(QImage
 
 		auto newResult = QImage(result.size(), QImage::Format_ARGB32_Premultiplied);
 		newResult.setDevicePixelRatio(style::DevicePixelRatio());
-		newResult.fill(makeDefaultBackgroundColor());
+		{
+			Painter backgroundPainter(&newResult);
+			PaintShotBackground(
+				backgroundPainter,
+				controller,
+				newResult.size());
+		}
 
 		Painter painter(&newResult);
 		painter.drawImage(0, 0, result);
