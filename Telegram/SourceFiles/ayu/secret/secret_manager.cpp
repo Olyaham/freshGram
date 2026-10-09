@@ -186,7 +186,7 @@ struct Chat {
 	int ttl = 0;
 	int64_t pfsExchange = 0;
 	Bytes pfsPending;
-	// Exchange initiated by us: id, our secret power, DH params in use.
+	// Exchange initiated by us: id, our secret power, prime in use.
 	// Kept in memory only: after a restart an uncompleted outgoing
 	// exchange is treated as aborted (the spec allows aborting any
 	// uncompleted instance by a party that sent neither AcceptKey nor
@@ -194,7 +194,6 @@ struct Chat {
 	int64_t pfsOurExchange = 0;
 	Bytes pfsOurSecret;
 	Bytes pfsOurP;
-	int pfsOurG = 0;
 	// Key usage accounting for rotation triggers.
 	int keyInstalledAt = 0;
 	int keyUsesOut = 0;
@@ -1533,7 +1532,6 @@ void Manager::Impl::clearOurExchange(Chat &chat) {
 	chat.pfsOurExchange = 0;
 	chat.pfsOurSecret.clear();
 	chat.pfsOurP.clear();
-	chat.pfsOurG = 0;
 }
 
 void Manager::Impl::resetKeyUsage(Chat &chat) {
@@ -1759,7 +1757,6 @@ void Manager::Impl::startRekey(Chat &chat) {
 		chat->pfsOurExchange = exchangeId;
 		chat->pfsOurSecret = FromBytesVector(first.randomPower);
 		chat->pfsOurP = config.p;
-		chat->pfsOurG = config.g;
 		sendService(
 			*chat,
 			BuildRequestKey(
