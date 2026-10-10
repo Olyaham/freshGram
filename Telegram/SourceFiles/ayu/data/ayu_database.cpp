@@ -434,78 +434,6 @@ constexpr auto kSealedTextPrefix = "ayu1:";
 	return std::vector<char>(plain.begin(), plain.end());
 }
 
-template<typename Message>
-[[nodiscard]] bool RowNeedsSeal(const Message &message) {
-	const auto textNeeds = [&](const std::string &field) {
-		return !field.empty() && field.rfind(kSealedTextPrefix, 0) != 0;
-	};
-	const auto blobNeeds = [&](const std::vector<char> &field) {
-		return !field.empty()
-			&& !AyuSecret::Vault::IsSealed(
-				AyuSecret::Bytes(field.begin(), field.end()));
-	};
-	return textNeeds(message.text)
-		|| blobNeeds(message.textEntities)
-		|| blobNeeds(message.documentSerialized)
-		|| blobNeeds(message.replySerialized)
-		|| blobNeeds(message.replyMarkupSerialized)
-		|| textNeeds(message.fwdName)
-		|| textNeeds(message.fwdPostAuthor)
-		|| textNeeds(message.postAuthor)
-		|| blobNeeds(message.thumbsSerialized)
-		|| blobNeeds(message.documentAttributesSerialized)
-		|| textNeeds(message.mediaPath)
-		|| textNeeds(message.mimeType)
-		|| textNeeds(message.hqThumbPath);
-}
-
-constexpr auto kBackfillBatch = 500;
-
-template<typename Message>
-void backfillTable(const char *table, const char *what) {
-	auto lastId = ID(0);
-	while (true) {
-		const auto batch = run<std::vector<Message>>(what, {}, [&] {
-			return storage.get_all<Message>(
-				where(column<Message>(&Message::fakeId) > lastId),
-				order_by(column<Message>(&Message::fakeId)),
-				limit(kBackfillBatch));
-		});
-		if (batch.empty()) {
-			break;
-		}
-		try {
-			inTransaction([&] {
-				for (const auto &row : batch) {
-					if (!RowNeedsSeal(row)) {
-						continue;
-					}
-					if (const auto sealed = SealRowCopy(table, row)) {
-						storage.update(*sealed);
-					}
-				}
-			});
-		} catch (...) {
-			LOG(("[AyuGram] Database: backfill batch failed, will retry."));
-			break;
-		}
-		lastId = batch.back().fakeId;
-		if (int(batch.size()) < kBackfillBatch) {
-			break;
-		}
-	}
-}
-
-// One-time (idempotent, resumable) migration of legacy plaintext rows.
-// Runs in the background after startup; rows sealed by newer versions
-// are skipped, so an interrupted run simply continues next time.
-void backfillSealedRows() {
-	if (!AyuSecret::Vault::Available()) {
-		return;
-	}
-	backfillTable<DeletedMessage>("DeletedMessage", "backfill deleted");
-	backfillTable<EditedMessage>("EditedMessage", "backfill edited");
-}
 
 template<typename Message>
 [[nodiscard]] std::optional<Message> SealRowCopy(
@@ -580,6 +508,79 @@ void OpenRow(const char *table, AyuMessageBase &message) {
 	message.mediaPath = OpenText(message.mediaPath, context("mediaPath"));
 	message.mimeType = OpenText(message.mimeType, context("mimeType"));
 	message.hqThumbPath = OpenText(message.hqThumbPath, context("hqThumbPath"));
+}
+
+template<typename Message>
+[[nodiscard]] bool RowNeedsSeal(const Message &message) {
+	const auto textNeeds = [&](const std::string &field) {
+		return !field.empty() && field.rfind(kSealedTextPrefix, 0) != 0;
+	};
+	const auto blobNeeds = [&](const std::vector<char> &field) {
+		return !field.empty()
+			&& !AyuSecret::Vault::IsSealed(
+				AyuSecret::Bytes(field.begin(), field.end()));
+	};
+	return textNeeds(message.text)
+		|| blobNeeds(message.textEntities)
+		|| blobNeeds(message.documentSerialized)
+		|| blobNeeds(message.replySerialized)
+		|| blobNeeds(message.replyMarkupSerialized)
+		|| textNeeds(message.fwdName)
+		|| textNeeds(message.fwdPostAuthor)
+		|| textNeeds(message.postAuthor)
+		|| blobNeeds(message.thumbsSerialized)
+		|| blobNeeds(message.documentAttributesSerialized)
+		|| textNeeds(message.mediaPath)
+		|| textNeeds(message.mimeType)
+		|| textNeeds(message.hqThumbPath);
+}
+
+constexpr auto kBackfillBatch = 500;
+
+template<typename Message>
+void backfillTable(const char *table, const char *what) {
+	auto lastId = ID(0);
+	while (true) {
+		const auto batch = run<std::vector<Message>>(what, {}, [&] {
+			return storage.get_all<Message>(
+				where(column<Message>(&Message::fakeId) > lastId),
+				order_by(column<Message>(&Message::fakeId)),
+				limit(kBackfillBatch));
+		});
+		if (batch.empty()) {
+			break;
+		}
+		try {
+			inTransaction([&] {
+				for (const auto &row : batch) {
+					if (!RowNeedsSeal(row)) {
+						continue;
+					}
+					if (const auto sealed = SealRowCopy(table, row)) {
+						storage.update(*sealed);
+					}
+				}
+			});
+		} catch (...) {
+			LOG(("[AyuGram] Database: backfill batch failed, will retry."));
+			break;
+		}
+		lastId = batch.back().fakeId;
+		if (int(batch.size()) < kBackfillBatch) {
+			break;
+		}
+	}
+}
+
+// One-time (idempotent, resumable) migration of legacy plaintext rows.
+// Runs in the background after startup; rows sealed by newer versions
+// are skipped, so an interrupted run simply continues next time.
+void backfillSealedRows() {
+	if (!AyuSecret::Vault::Available()) {
+		return;
+	}
+	backfillTable<DeletedMessage>("DeletedMessage", "backfill deleted");
+	backfillTable<EditedMessage>("EditedMessage", "backfill edited");
 }
 
 QString databasePath() {
@@ -927,7 +928,7 @@ std::vector<DeletedMessage> getDeletedMessages(ID userId, ID dialogId, ID topicI
 		const auto needle = QString::fromStdString(searchQuery);
 		constexpr auto kSearchPage = 200;
 		auto result = std::vector<DeletedMessage>();
-		auto maxId = maxId;
+		auto bound = maxId;
 		while (true) {
 			auto page = storage.get_all<DeletedMessage>(
 				where(
@@ -935,7 +936,7 @@ std::vector<DeletedMessage> getDeletedMessages(ID userId, ID dialogId, ID topicI
 					column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId and
 					(column<DeletedMessage>(&DeletedMessage::topicId) == topicId or topicId == 0) and
 					(column<DeletedMessage>(&DeletedMessage::messageId) > minId or minId == 0) and
-					(column<DeletedMessage>(&DeletedMessage::messageId) < maxId or maxId == 0)
+					(column<DeletedMessage>(&DeletedMessage::messageId) < bound or bound == 0)
 				),
 				order_by(column<DeletedMessage>(&DeletedMessage::messageId)).desc(),
 				limit(kSearchPage)
@@ -959,7 +960,7 @@ std::vector<DeletedMessage> getDeletedMessages(ID userId, ID dialogId, ID topicI
 			if (int(page.size()) < kSearchPage) {
 				break;
 			}
-			maxId = page.back().messageId;
+			bound = page.back().messageId;
 		}
 		return result;
 	});
