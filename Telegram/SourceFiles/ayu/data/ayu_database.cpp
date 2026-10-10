@@ -550,19 +550,29 @@ void backfillTable(const char *table, const char *what) {
 		if (batch.empty()) {
 			break;
 		}
-		try {
+		// Reads above run under DatabaseMutex via run(); the write
+		// transaction below must take it too: sqlite_orm storage is
+		// not thread-safe against concurrent readers/writers.
+		const auto written = run<bool>(what, false, [&] {
 			inTransaction([&] {
 				for (const auto &row : batch) {
 					if (!RowNeedsSeal(row)) {
 						continue;
 					}
 					if (const auto sealed = SealRowCopy(table, row)) {
-						storage.update(*sealed);
+						try {
+							storage.update(*sealed);
+						} catch (...) {
+							LOG(("[AyuGram] Database: backfill skipped a row."));
+						}
+					} else if (StrictMode()) {
+						LOG(("[AyuGram] Database: strict mode refused a legacy row."));
 					}
 				}
 			});
-		} catch (...) {
-			LOG(("[AyuGram] Database: backfill batch failed, will retry."));
+			return true;
+		});
+		if (!written) {
 			break;
 		}
 		lastId = batch.back().fakeId;

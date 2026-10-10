@@ -65,8 +65,9 @@ bool IsBound(const Bytes &data) {
 }
 
 Bytes Seal(const Bytes &plain, const std::string &context) {
+	constexpr auto kMaxInline = size_t(512) * 1024 * 1024;
 	auto key = std::array<uint8_t, 32>();
-	if (!DeriveKey(key)) {
+	if (plain.size() > kMaxInline || !DeriveKey(key)) {
 		return {};
 	}
 	auto result = Bytes(kHeaderSize + plain.size());
@@ -125,8 +126,9 @@ bool Open(
 	if (!IsSealed(sealed)) {
 		return false;
 	}
+	constexpr auto kMaxInline = size_t(512) * 1024 * 1024;
 	auto key = std::array<uint8_t, 32>();
-	if (!DeriveKey(key)) {
+	if (sealed.size() > kHeaderSize + kMaxInline || !DeriveKey(key)) {
 		return false;
 	}
 	const auto bound = IsBound(sealed);
@@ -190,6 +192,7 @@ bool SealToFile(
 		return false;
 	}
 	QDir().mkpath(QFileInfo(path).absolutePath());
+	AyuUtils::RestrictDir(QFileInfo(path).absolutePath());
 	auto file = QSaveFile(path);
 	if (!file.open(QIODevice::WriteOnly)) {
 		return false;
@@ -249,10 +252,14 @@ bool SealFileStreamed(
 	if (dst.write(
 			reinterpret_cast<const char*>(header.data()),
 			qint64(header.size())) != qint64(header.size())) {
+		dst.close();
+		QFile::remove(tempPath);
 		return false;
 	}
 	const auto cipher = EVP_CIPHER_CTX_new();
 	if (!cipher) {
+		dst.close();
+		QFile::remove(tempPath);
 		return false;
 	}
 	auto ok = EVP_EncryptInit_ex(
@@ -388,9 +395,16 @@ bool OpenFileStreamed(
 			reinterpret_cast<const uint8_t*>(context.data()),
 			int(context.size())) == 1;
 	}
-	auto dst = QFile(dstPath);
+	// Decrypt into a sibling temp first: a failure must never
+	// truncate a pre-existing good file at dstPath.
+	const auto tempPath = dstPath + QStringLiteral(".opening");
+	QFile::remove(tempPath);
+	auto dst = QFile(tempPath);
 	if (ok && !dst.open(QIODevice::WriteOnly)) {
 		ok = false;
+	}
+	if (ok) {
+		AyuUtils::RestrictFile(tempPath);
 	}
 	auto chunk = std::array<uint8_t, kChunk>();
 	auto out = std::array<uint8_t, kChunk + 16>();
@@ -425,7 +439,12 @@ bool OpenFileStreamed(
 	EVP_CIPHER_CTX_free(cipher);
 	dst.close();
 	if (!ok) {
-		QFile::remove(dstPath);
+		QFile::remove(tempPath);
+		return false;
+	}
+	QFile::remove(dstPath);
+	if (!QFile::rename(tempPath, dstPath)) {
+		QFile::remove(tempPath);
 		return false;
 	}
 	AyuUtils::RestrictFile(dstPath);
