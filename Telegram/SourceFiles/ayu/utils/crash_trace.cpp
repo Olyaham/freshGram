@@ -109,8 +109,13 @@ void Install(const QString &directory) {
 		return;
 	}
 	// open() does not change the mode of an already existing file, so
-	// traces left by older versions are tightened explicitly.
-	::fchmod(TraceFd, 0600);
+	// traces left by older versions are tightened explicitly. If even
+	// that fails, give up tracing rather than writing world-readable.
+	if (::fchmod(TraceFd, 0600) != 0) {
+		::close(TraceFd);
+		TraceFd = -1;
+		return;
+	}
 	const auto header = QByteArray("\n=== started, version ")
 		+ AppVersionStr
 		+ " ===\n";
