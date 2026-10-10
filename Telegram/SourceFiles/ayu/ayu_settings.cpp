@@ -806,6 +806,9 @@ void AyuSettings::setLocalPremium(bool val) {
 void AyuSettings::setFramelessWindow(bool val) {
 	if (_framelessWindow.current() == val) return;
 	_framelessWindow = val;
+	save();
+}
+
 void AyuSettings::setRequireEncryption(bool val) {
 	if (_requireEncryption.current() == val) return;
 	_requireEncryption = val;
