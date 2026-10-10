@@ -696,36 +696,26 @@ int MainWindow::computeMinHeight() const {
 }
 
 void MainWindow::refreshTitleWidget() {
+	// Sync the xdg-decoration hint with the title visibility, mirroring
+	// what the platform helper does on its own events. This keeps the
+	// state deterministic without hide/show round-trips (those race the
+	// compositor on Wayland and get undone by the helper anyway).
+	const auto syncHint = [&](bool titleShown) {
+		if (const auto handle = windowHandle()) {
+			handle->setFlag(Qt::FramelessWindowHint, titleShown);
+		}
+	};
 	if (AyuSettings::getInstance().framelessWindow()) {
-		// Dedicated tiling-WM mode: no native frame, no custom title,
-		// FramelessWindowHint enforced. Changing flags at runtime needs
-		// a hide/show round-trip.
+		// Dedicated tiling-WM mode: no native frame and no custom
+		// title; the hint stays on so no server decorations appear
+		// where the compositor would add them.
 		setNativeFrame(false);
 		_titleShadow.destroy();
 		if (const auto title = titleWidget()) {
 			title->hide();
 		}
-		if (!(windowFlags() & Qt::FramelessWindowHint)) {
-			const auto visible = isVisible();
-			if (visible) {
-				hide();
-			}
-			setWindowFlags(windowFlags() | Qt::FramelessWindowHint);
-			if (visible) {
-				show();
-			}
-		}
+		syncHint(true);
 		return;
-	}
-	if (windowFlags() & Qt::FramelessWindowHint) {
-		const auto visible = isVisible();
-		if (visible) {
-			hide();
-		}
-		setWindowFlags(windowFlags() & ~Qt::FramelessWindowHint);
-		if (visible) {
-			show();
-		}
 	}
 	if (Ui::Platform::NativeWindowFrameSupported()
 		&& Core::App().settings().nativeWindowFrame()) {
@@ -737,6 +727,9 @@ void MainWindow::refreshTitleWidget() {
 	} else {
 		setNativeFrame(false);
 		_titleShadow.destroy();
+	}
+	if (const auto title = titleWidget()) {
+		syncHint(!title->isHidden());
 	}
 }
 
