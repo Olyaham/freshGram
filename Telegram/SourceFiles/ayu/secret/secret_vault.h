@@ -27,5 +27,18 @@ namespace AyuSecret::Vault {
 	Bytes &plain,
 	const std::string &context,
 	bool *legacy = nullptr);
+// Chunked variant of sealing a file, for multi-hundred-MB inputs: same
+// FGV2 layout, O(chunk) memory. Writes to a temporary sibling and
+// renames over dst atomically.
+[[nodiscard]] bool SealFileStreamed(
+	const QString &srcPath,
+	const QString &dstPath,
+	const std::string &context);
+// Chunked counterpart: decrypts into dstPath with O(chunk) memory.
+// The GCM tag is verified; dstPath is removed on any failure.
+[[nodiscard]] bool OpenFileStreamed(
+	const QString &srcPath,
+	const QString &dstPath,
+	const std::string &context);
 
 } // namespace AyuSecret::Vault

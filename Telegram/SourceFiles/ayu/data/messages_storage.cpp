@@ -10,7 +10,9 @@
 
 #include "ayu/ayu_settings.h"
 #include "ayu/data/ayu_database.h"
+#include "ayu/secret/secret_vault.h"
 #include "ayu/utils/ayu_mapper.h"
+#include "ayu/utils/file_perms.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "base/timer.h"
 #include "base/unixtime.h"
@@ -84,6 +86,74 @@ std::vector<std::unique_ptr<DocumentSaveTask>> DocumentSaveTasks;
 	return path + QStringLiteral(".ttl");
 }
 
+// Envelope context for cached media. The relative path is stable across
+// restarts, binding each sealed blob to its own file.
+[[nodiscard]] std::string MediaContext(const QString &path) {
+	return "ayu-media-v1:" + path.toUtf8().toStdString();
+}
+
+[[nodiscard]] bool WriteSealedOrPlain(
+	const QString &path,
+	const AyuSecret::Bytes &plain) {
+	const auto strict = AyuSettings::getInstance().requireEncryption();
+	if (AyuSecret::Vault::Available()) {
+		if (AyuSecret::Vault::SealToFile(path, plain, MediaContext(path))) {
+			return true;
+		}
+		LOG(("Ayu: vault seal failed for cached media."));
+	} else {
+		LOG(("Ayu: vault unavailable for cached media."));
+	}
+	if (strict) {
+		LOG(("Ayu: strict mode refused a plaintext media file."));
+		return false;
+	}
+	AyuUtils::EnsurePrivateDir(QFileInfo(path).absolutePath());
+	auto file = QFile(path);
+	if (!file.open(QIODevice::WriteOnly)) {
+		return false;
+	}
+	const auto bytes = QByteArray(
+		reinterpret_cast<const char*>(plain.data()),
+		int(plain.size()));
+	file.write(bytes);
+	file.close();
+	AyuUtils::RestrictFile(path);
+	return true;
+}
+
+// Reads a media blob written by WriteSealedOrPlain (or a legacy plaintext
+// one, which is opportunistically sealed for next time). Genuinely
+// corrupt sealed blobs are returned as-is, like corrupt plaintext before.
+[[nodiscard]] bool ReadMediaBytes(const QString &path, QByteArray &out) {
+	auto plain = AyuSecret::Bytes();
+	if (AyuSecret::Vault::OpenFromFile(path, plain, MediaContext(path))) {
+		if (plain.empty()) {
+			return false;
+		}
+		out = QByteArray(
+			reinterpret_cast<const char*>(plain.data()),
+			int(plain.size()));
+		return true;
+	}
+	auto file = QFile(path);
+	if (!file.open(QIODevice::ReadOnly)) {
+		return false;
+	}
+	const auto raw = file.readAll();
+	file.close();
+	if (raw.isEmpty()) {
+		return false;
+	}
+	out = raw;
+	const auto rawBytes = AyuSecret::Bytes(raw.begin(), raw.end());
+	if (!AyuSecret::Vault::IsSealed(rawBytes)
+		&& AyuSecret::Vault::Available()) {
+		AyuSecret::Vault::SealToFile(path, rawBytes, MediaContext(path));
+	}
+	return true;
+}
+
 [[nodiscard]] QString SavedMediaPath(not_null<HistoryItem*> item) {
 	return SavedMediaPath(
 		storageUserId(item->history()->peer),
@@ -99,11 +169,9 @@ bool WritePhotoBytes(
 	}
 	const auto bytes = media->imageBytes(Data::PhotoSize::Large);
 	if (!bytes.isEmpty()) {
-		QDir().mkpath(QFileInfo(path).absolutePath());
-		auto file = QFile(path);
-		if (file.open(QIODevice::WriteOnly)) {
-			file.write(bytes);
-		}
+		WriteSealedOrPlain(
+			path,
+			AyuSecret::Bytes(bytes.begin(), bytes.end()));
 	}
 	return true;
 }
@@ -171,11 +239,9 @@ bool WriteDocumentBytes(
 	}
 	const auto bytes = DocumentBytes(media);
 	if (!bytes.isEmpty()) {
-		QDir().mkpath(QFileInfo(path).absolutePath());
-		auto file = QFile(path);
-		if (file.open(QIODevice::WriteOnly)) {
-			file.write(bytes);
-		}
+		WriteSealedOrPlain(
+			path,
+			AyuSecret::Bytes(bytes.begin(), bytes.end()));
 	}
 	return true;
 }
@@ -372,11 +438,10 @@ void cacheDeletedMedia(not_null<HistoryItem*> item) {
 void PutPhotoBytesIntoCache(
 		not_null<PhotoData*> photo,
 		const QString &path) {
-	auto file = QFile(path);
-	if (!file.open(QIODevice::ReadOnly)) {
+	auto bytes = QByteArray();
+	if (!ReadMediaBytes(path, bytes)) {
 		return;
 	}
-	const auto bytes = file.readAll();
 	const auto cacheKey = photo->location(
 		Data::PhotoSize::Large).file().cacheKey();
 	if (bytes.isEmpty() || !cacheKey) {
@@ -392,11 +457,10 @@ void PutPhotoBytesIntoCache(
 void PutDocumentBytesIntoCache(
 		not_null<DocumentData*> document,
 		const QString &path) {
-	auto file = QFile(path);
-	if (!file.open(QIODevice::ReadOnly)) {
+	auto bytes = QByteArray();
+	if (!ReadMediaBytes(path, bytes)) {
 		return;
 	}
-	const auto bytes = file.readAll();
 	if (bytes.isEmpty()) {
 		return;
 	}
@@ -442,10 +506,7 @@ void saveTtlMedia(not_null<HistoryItem*> item) {
 	if (QFile::exists(path)) {
 		return;
 	}
-	QDir().mkpath(QFileInfo(path).absolutePath());
-	auto file = QFile(path);
-	if (file.open(QIODevice::WriteOnly)) {
-		file.write(saved.data(), qint64(saved.size()));
+	if (WriteSealedOrPlain(path, AyuSecret::Bytes(saved.begin(), saved.end()))) {
 		LOG(("Ayu: saved self-destructing media of %1").arg(item->id.bare));
 	} else {
 		LOG(("Ayu: could not save self-destructing media of %1").arg(item->id.bare));
@@ -491,13 +552,9 @@ std::optional<MTPMessageMedia> savedTtlMedia(
 		storageUserId(history->peer),
 		getDialogIdFromPeer(history->peer),
 		id.bare));
-	auto file = QFile(path);
-	if (!file.open(QIODevice::ReadOnly)) {
+	auto bytes = QByteArray();
+	if (!ReadMediaBytes(path, bytes)) {
 		LOG(("Ayu: no saved self-destructing media for %1").arg(id.bare));
-		return std::nullopt;
-	}
-	const auto bytes = file.readAll();
-	if (bytes.isEmpty()) {
 		return std::nullopt;
 	}
 	const auto serialized = std::vector<char>(

@@ -6,6 +6,7 @@
 // Copyright @Radolyn, 2026
 #include "ayu/ayu_settings.h"
 
+#include "ayu/utils/file_perms.h"
 #include "lang_auto.h"
 #include "tray.h"
 #include "ayu/ayu_ui_settings.h"
@@ -458,6 +459,7 @@ void AyuSettings::save() {
 	file.open(getSettingsPath());
 	file << p.dump(4);
 	file.close();
+	AyuUtils::RestrictFile(QString::fromStdString(getSettingsPath().string()));
 }
 
 void AyuSettings::reset() {
@@ -804,6 +806,9 @@ void AyuSettings::setLocalPremium(bool val) {
 void AyuSettings::setFramelessWindow(bool val) {
 	if (_framelessWindow.current() == val) return;
 	_framelessWindow = val;
+void AyuSettings::setRequireEncryption(bool val) {
+	if (_requireEncryption.current() == val) return;
+	_requireEncryption = val;
 	save();
 }
 
@@ -1322,6 +1327,7 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"disableNotificationsDelay", s._disableNotificationsDelay.current()},
 		{"localPremium", s._localPremium.current()},
 		{"framelessWindow", s._framelessWindow.current()},
+		{"requireEncryption", s._requireEncryption.current()},
 		{"showChannelReactions", s._showChannelReactions.current()},
 		{"showGroupReactions", s._showGroupReactions.current()},
 		{"showPrivateChatReactions", s._showPrivateChatReactions.current()},
@@ -1451,6 +1457,7 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._disableNotificationsDelay = j.value("disableNotificationsDelay", defaults._disableNotificationsDelay.current());
 	s._localPremium = j.value("localPremium", defaults._localPremium.current());
 	s._framelessWindow = j.value("framelessWindow", defaults._framelessWindow.current());
+	s._requireEncryption = j.value("requireEncryption", defaults._requireEncryption.current());
 	s._showChannelReactions = j.value("showChannelReactions", defaults._showChannelReactions.current());
 	s._showGroupReactions = j.value("showGroupReactions", defaults._showGroupReactions.current());
 	s._showPrivateChatReactions = j.value("showPrivateChatReactions", defaults._showPrivateChatReactions.current());

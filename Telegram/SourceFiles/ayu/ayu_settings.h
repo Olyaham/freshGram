@@ -311,6 +311,7 @@ public:
 	[[nodiscard]] bool disableNotificationsDelay() const { return _disableNotificationsDelay.current(); }
 	[[nodiscard]] bool localPremium() const { return _localPremium.current(); }
 	[[nodiscard]] bool framelessWindow() const { return _framelessWindow.current(); }
+	[[nodiscard]] bool requireEncryption() const { return _requireEncryption.current(); }
 	[[nodiscard]] bool showChannelReactions() const { return _showChannelReactions.current(); }
 	[[nodiscard]] bool showGroupReactions() const { return _showGroupReactions.current(); }
 	[[nodiscard]] bool showPrivateChatReactions() const { return _showPrivateChatReactions.current(); }
@@ -435,6 +436,7 @@ public:
 	void setDisableNotificationsDelay(bool val);
 	void setLocalPremium(bool val);
 	void setFramelessWindow(bool val);
+	void setRequireEncryption(bool val);
 	void setShowChannelReactions(bool val);
 	void setShowGroupReactions(bool val);
 	void setShowPrivateChatReactions(bool val);
@@ -568,6 +570,8 @@ public:
 	[[nodiscard]] rpl::producer<bool> localPremiumChanges() const { return _localPremium.changes(); }
 	[[nodiscard]] rpl::producer<bool> framelessWindowValue() const { return _framelessWindow.value(); }
 	[[nodiscard]] rpl::producer<bool> framelessWindowChanges() const { return _framelessWindow.changes(); }
+	[[nodiscard]] rpl::producer<bool> requireEncryptionValue() const { return _requireEncryption.value(); }
+	[[nodiscard]] rpl::producer<bool> requireEncryptionChanges() const { return _requireEncryption.changes(); }
 	[[nodiscard]] rpl::producer<bool> showChannelReactionsValue() const { return _showChannelReactions.value(); }
 	[[nodiscard]] rpl::producer<bool> showChannelReactionsChanges() const { return _showChannelReactions.changes(); }
 	[[nodiscard]] rpl::producer<bool> showGroupReactionsValue() const { return _showGroupReactions.value(); }
@@ -743,6 +747,7 @@ private:
 	rpl::variable<bool> _disableNotificationsDelay = false;
 	rpl::variable<bool> _localPremium = false;
 	rpl::variable<bool> _framelessWindow = false;
+	rpl::variable<bool> _requireEncryption = false;
 	rpl::variable<bool> _showChannelReactions = true;
 	rpl::variable<bool> _showGroupReactions = true;
 	rpl::variable<bool> _showPrivateChatReactions = true;

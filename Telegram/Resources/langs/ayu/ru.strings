@@ -344,6 +344,7 @@
 "ayu_MessageShotTopBarText" = "Снимок";
 "ayu_MessageShotPreview" = "Предпросмотр";
 "ayu_FramelessWindow" = "Без рамки (тайловые WM)";
+"ayu_RequireEncryption" = "Требовать шифрование (строгий режим)";
 "ayu_PeekButton" = "Подсмотреть время визита";
 "ayu_PeekLabel" = "Был(а) в сети (подсмотрено)";
 "ayu_PeekChecking" = "Проверяем время последнего визита...";

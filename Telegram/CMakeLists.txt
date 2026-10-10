@@ -128,6 +128,7 @@ set(ayugram_files
         ayu/utils/mtp_retry_log.cpp
         ayu/utils/mtp_retry_log.h
         ayu/utils/crash_trace.h
+        ayu/utils/file_perms.h
         ayu/utils/id_search.cpp
         ayu/utils/id_search.h
         ayu/utils/ayu_mapper.h

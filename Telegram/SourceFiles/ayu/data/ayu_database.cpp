@@ -6,16 +6,23 @@
 // Copyright @Radolyn, 2026
 #include "ayu/data/ayu_database.h"
 
+#include "ayu/ayu_settings.h"
 #include "ayu/data/ayu_database_backup.h"
 #include "ayu/data/entities.h"
 #include "ayu/libs/sqlite/sqlite_orm.h"
+#include "ayu/secret/secret_vault.h"
+#include "ayu/utils/file_perms.h"
 #include "ayu/utils/id_search.h"
 #include "base/unixtime.h"
 #include "crl/crl_async.h"
 
+#include <QtCore/QByteArray>
+
 #include <atomic>
 #include <chrono>
 #include <mutex>
+#include <optional>
+#include <string>
 #include <system_error>
 #include <thread>
 
@@ -313,6 +320,269 @@ void inTransaction(Callback &&callback) {
 	}
 }
 
+// At-rest envelope for message content columns, using the existing Vault
+// (AES-256-GCM over localKey, no new crypto). TEXT columns carry
+// "ayu1:" + base64(sealed) so the schema is untouched; BLOB columns
+// carry the sealed bytes directly. Absent markers mean legacy plaintext,
+// which keeps working. A present-but-unopenable marker means corruption
+// or a key mismatch and decodes to empty (logged), never to raw bytes.
+constexpr auto kSealedTextPrefix = "ayu1:";
+
+[[nodiscard]] std::string RowContext(
+		const char *table,
+		const AyuMessageBase &message,
+		const char *field) {
+	auto result = std::string("ayu-row-v1:");
+	result += table;
+	result += ':';
+	result += std::to_string(message.userId);
+	result += ':';
+	result += std::to_string(message.dialogId);
+	result += ':';
+	result += std::to_string(message.messageId);
+	result += ':';
+	result += field;
+	return result;
+}
+
+// Strict mode (settings): Vault-unavailable or seal failure refuses the
+// write instead of silently falling back to plaintext. Refusals lose the
+// record by design; the default stays compatible (plaintext fallback).
+[[nodiscard]] bool StrictMode() {
+	return AyuSettings::getInstance().requireEncryption();
+}
+
+[[nodiscard]] std::optional<std::string> SealText(
+		const std::string &plain,
+		const std::string &context) {
+	if (plain.empty() || plain.rfind(kSealedTextPrefix, 0) == 0) {
+		return plain;
+	}
+	const auto sealed = AyuSecret::Vault::Available()
+		? AyuSecret::Vault::Seal(
+			AyuSecret::Bytes(plain.begin(), plain.end()),
+			context)
+		: AyuSecret::Bytes();
+	if (sealed.empty()) {
+		if (StrictMode()) {
+			LOG(("[AyuGram] Database: refusing plaintext text field."));
+			return std::nullopt;
+		}
+		return plain;
+	}
+	const auto base64 = QByteArray(
+		reinterpret_cast<const char*>(sealed.data()),
+		int(sealed.size())).toBase64().toStdString();
+	return kSealedTextPrefix + base64;
+}
+
+[[nodiscard]] std::string OpenText(
+		const std::string &stored,
+		const std::string &context) {
+	if (stored.rfind(kSealedTextPrefix, 0) != 0) {
+		return stored;
+	}
+	const auto raw = QByteArray::fromBase64(
+		QByteArray::fromStdString(stored.substr(5)));
+	const auto sealed = AyuSecret::Bytes(raw.begin(), raw.end());
+	auto plain = AyuSecret::Bytes();
+	if (!AyuSecret::Vault::IsSealed(sealed)
+		|| !AyuSecret::Vault::Open(sealed, plain, context)) {
+		LOG(("[AyuGram] Database: cannot open sealed text field (%1)."
+			).arg(QString::fromStdString(context)));
+		return std::string();
+	}
+	return std::string(plain.begin(), plain.end());
+}
+
+[[nodiscard]] std::optional<std::vector<char>> SealBlob(
+		const std::vector<char> &plain,
+		const std::string &context) {
+	if (plain.empty()) {
+		return plain;
+	}
+	const auto asBytes = AyuSecret::Bytes(plain.begin(), plain.end());
+	if (AyuSecret::Vault::IsSealed(asBytes)) {
+		return plain;
+	}
+	const auto sealed = AyuSecret::Vault::Available()
+		? AyuSecret::Vault::Seal(asBytes, context)
+		: AyuSecret::Bytes();
+	if (sealed.empty()) {
+		if (StrictMode()) {
+			LOG(("[AyuGram] Database: refusing plaintext blob field."));
+			return std::nullopt;
+		}
+		return plain;
+	}
+	return std::vector<char>(sealed.begin(), sealed.end());
+}
+
+[[nodiscard]] std::vector<char> OpenBlob(
+		const std::vector<char> &stored,
+		const std::string &context) {
+	const auto sealed = AyuSecret::Bytes(stored.begin(), stored.end());
+	if (!AyuSecret::Vault::IsSealed(sealed)) {
+		return stored;
+	}
+	auto plain = AyuSecret::Bytes();
+	if (!AyuSecret::Vault::Open(sealed, plain, context)) {
+		LOG(("[AyuGram] Database: cannot open sealed blob field (%1)."
+			).arg(QString::fromStdString(context)));
+		return std::vector<char>();
+	}
+	return std::vector<char>(plain.begin(), plain.end());
+}
+
+
+template<typename Message>
+[[nodiscard]] std::optional<Message> SealRowCopy(
+		const char *table,
+		const Message &message) {
+	auto result = message;
+	const auto context = [&](const char *field) {
+		return RowContext(table, message, field);
+	};
+	const auto sealText = [&](std::string &field, const char *name) {
+		auto sealed = SealText(field, context(name));
+		if (!sealed) {
+			return false;
+		}
+		field = std::move(*sealed);
+		return true;
+	};
+	const auto sealBlob = [&](std::vector<char> &field, const char *name) {
+		auto sealed = SealBlob(field, context(name));
+		if (!sealed) {
+			return false;
+		}
+		field = std::move(*sealed);
+		return true;
+	};
+	if (!sealText(result.text, "text")
+		|| !sealBlob(result.textEntities, "textEntities")
+		|| !sealBlob(result.documentSerialized, "documentSerialized")
+		|| !sealBlob(result.replySerialized, "replySerialized")
+		|| !sealBlob(result.replyMarkupSerialized, "replyMarkupSerialized")
+		|| !sealText(result.fwdName, "fwdName")
+		|| !sealText(result.fwdPostAuthor, "fwdPostAuthor")
+		|| !sealText(result.postAuthor, "postAuthor")
+		|| !sealBlob(result.thumbsSerialized, "thumbsSerialized")
+		|| !sealBlob(
+			result.documentAttributesSerialized,
+			"documentAttributesSerialized")
+		|| !sealText(result.mediaPath, "mediaPath")
+		|| !sealText(result.mimeType, "mimeType")
+		|| !sealText(result.hqThumbPath, "hqThumbPath")) {
+		return std::nullopt;
+	}
+	return result;
+}
+
+void OpenRow(const char *table, AyuMessageBase &message) {
+	const auto context = [&](const char *field) {
+		return RowContext(table, message, field);
+	};
+	message.text = OpenText(message.text, context("text"));
+	message.textEntities = OpenBlob(message.textEntities, context("textEntities"));
+	message.documentSerialized = OpenBlob(
+		message.documentSerialized,
+		context("documentSerialized"));
+	message.replySerialized = OpenBlob(
+		message.replySerialized,
+		context("replySerialized"));
+	message.replyMarkupSerialized = OpenBlob(
+		message.replyMarkupSerialized,
+		context("replyMarkupSerialized"));
+	message.fwdName = OpenText(message.fwdName, context("fwdName"));
+	message.fwdPostAuthor = OpenText(
+		message.fwdPostAuthor,
+		context("fwdPostAuthor"));
+	message.postAuthor = OpenText(message.postAuthor, context("postAuthor"));
+	message.thumbsSerialized = OpenBlob(
+		message.thumbsSerialized,
+		context("thumbsSerialized"));
+	message.documentAttributesSerialized = OpenBlob(
+		message.documentAttributesSerialized,
+		context("documentAttributesSerialized"));
+	message.mediaPath = OpenText(message.mediaPath, context("mediaPath"));
+	message.mimeType = OpenText(message.mimeType, context("mimeType"));
+	message.hqThumbPath = OpenText(message.hqThumbPath, context("hqThumbPath"));
+}
+
+template<typename Message>
+[[nodiscard]] bool RowNeedsSeal(const Message &message) {
+	const auto textNeeds = [&](const std::string &field) {
+		return !field.empty() && field.rfind(kSealedTextPrefix, 0) != 0;
+	};
+	const auto blobNeeds = [&](const std::vector<char> &field) {
+		return !field.empty()
+			&& !AyuSecret::Vault::IsSealed(
+				AyuSecret::Bytes(field.begin(), field.end()));
+	};
+	return textNeeds(message.text)
+		|| blobNeeds(message.textEntities)
+		|| blobNeeds(message.documentSerialized)
+		|| blobNeeds(message.replySerialized)
+		|| blobNeeds(message.replyMarkupSerialized)
+		|| textNeeds(message.fwdName)
+		|| textNeeds(message.fwdPostAuthor)
+		|| textNeeds(message.postAuthor)
+		|| blobNeeds(message.thumbsSerialized)
+		|| blobNeeds(message.documentAttributesSerialized)
+		|| textNeeds(message.mediaPath)
+		|| textNeeds(message.mimeType)
+		|| textNeeds(message.hqThumbPath);
+}
+
+constexpr auto kBackfillBatch = 500;
+
+template<typename Message>
+void backfillTable(const char *table, const char *what) {
+	auto lastId = ID(0);
+	while (true) {
+		const auto batch = run<std::vector<Message>>(what, {}, [&] {
+			return storage.get_all<Message>(
+				where(column<Message>(&Message::fakeId) > lastId),
+				order_by(column<Message>(&Message::fakeId)),
+				limit(kBackfillBatch));
+		});
+		if (batch.empty()) {
+			break;
+		}
+		try {
+			inTransaction([&] {
+				for (const auto &row : batch) {
+					if (!RowNeedsSeal(row)) {
+						continue;
+					}
+					if (const auto sealed = SealRowCopy(table, row)) {
+						storage.update(*sealed);
+					}
+				}
+			});
+		} catch (...) {
+			LOG(("[AyuGram] Database: backfill batch failed, will retry."));
+			break;
+		}
+		lastId = batch.back().fakeId;
+		if (int(batch.size()) < kBackfillBatch) {
+			break;
+		}
+	}
+}
+
+// One-time (idempotent, resumable) migration of legacy plaintext rows.
+// Runs in the background after startup; rows sealed by newer versions
+// are skipped, so an interrupted run simply continues next time.
+void backfillSealedRows() {
+	if (!AyuSecret::Vault::Available()) {
+		return;
+	}
+	backfillTable<DeletedMessage>("DeletedMessage", "backfill deleted");
+	backfillTable<EditedMessage>("EditedMessage", "backfill edited");
+}
+
 QString databasePath() {
 	return "./tdata/ayudata.db";
 }
@@ -321,7 +591,10 @@ void renameDatabaseFiles(const QString &suffix) {
 	for (const auto &extension : {QString(), QString("-shm"), QString("-wal")}) {
 		const auto from = databasePath() + extension;
 		if (QFile::exists(from)) {
-			QFile::rename(from, QString("./tdata/ayudata_%1.db%2").arg(suffix, extension));
+			const auto to = QString("./tdata/ayudata_%1.db%2").arg(suffix, extension);
+			if (QFile::rename(from, to)) {
+				AyuUtils::RestrictFile(to);
+			}
 		}
 	}
 }
@@ -330,7 +603,10 @@ void copyDatabaseFiles(const QString &suffix) {
 	for (const auto &extension : {QString(), QString("-shm"), QString("-wal")}) {
 		const auto from = databasePath() + extension;
 		if (QFile::exists(from)) {
-			QFile::copy(from, QString("./tdata/ayudata_%1.db%2").arg(suffix, extension));
+			const auto to = QString("./tdata/ayudata_%1.db%2").arg(suffix, extension);
+			if (QFile::copy(from, to)) {
+				AyuUtils::RestrictFile(to);
+			}
 		}
 	}
 }
@@ -473,11 +749,20 @@ void initialize() {
 	while (true) {
 		try {
 			prepareStorage();
+			for (const auto &extension : {QString(), QString("-shm"), QString("-wal")}) {
+				AyuUtils::RestrictFile(databasePath() + extension);
+			}
 			DatabaseReady = true;
 			AyuDatabaseBackup::startPeriodic();
 			if (const auto days = PurgeDays.load()) {
 				purgeOlderThan(days);
 			}
+			crl::async([] {
+				try {
+					backfillSealedRows();
+				} catch (...) {
+				}
+			});
 			return;
 		} catch (const std::system_error &ex) {
 			const auto code = ex.code().value() & 0xFF;
@@ -536,7 +821,11 @@ void addEditedMessage(const EditedMessage &message, int maxRevisions) {
 					column<EditedMessage>(&EditedMessage::messageId) == message.messageId
 				));
 			if (!maxRevisions || saved < maxRevisions) {
-				storage.insert(message);
+				if (const auto sealed = SealRowCopy("EditedMessage", message)) {
+					storage.insert(*sealed);
+				} else {
+					LOG(("[AyuGram] Database: strict mode refused an edited message."));
+				}
 			}
 		});
 	});
@@ -544,7 +833,7 @@ void addEditedMessage(const EditedMessage &message, int maxRevisions) {
 
 std::vector<EditedMessage> getEditedMessages(ID userId, ID dialogId, ID messageId, ID minId, ID maxId, int totalLimit) {
 	return run<std::vector<EditedMessage>>("load edited messages", {}, [&] {
-		return storage.get_all<EditedMessage>(
+		auto result = storage.get_all<EditedMessage>(
 			where(
 				column<EditedMessage>(&EditedMessage::userId) == userId and
 				column<EditedMessage>(&EditedMessage::dialogId) == dialogId and
@@ -555,6 +844,10 @@ std::vector<EditedMessage> getEditedMessages(ID userId, ID dialogId, ID messageI
 			order_by(column<EditedMessage>(&EditedMessage::fakeId)).desc(),
 			limit(totalLimit)
 		);
+		for (auto &row : result) {
+			OpenRow("EditedMessage", row);
+		}
+		return result;
 	});
 }
 
@@ -587,7 +880,11 @@ void addDeletedMessages(const std::vector<DeletedMessage> &messages) {
 					)
 				) > 0;
 				if (!exists) {
-					storage.insert(message);
+					if (const auto sealed = SealRowCopy("DeletedMessage", message)) {
+						storage.insert(*sealed);
+					} else {
+						LOG(("[AyuGram] Database: strict mode refused a deleted message."));
+					}
 				}
 			}
 		});
@@ -601,7 +898,7 @@ void addDeletedMessage(const DeletedMessage &message) {
 std::vector<DeletedMessage> getDeletedMessages(ID userId, ID dialogId, ID topicId, ID minId, ID maxId, int totalLimit, const std::string &searchQuery) {
 	return run<std::vector<DeletedMessage>>("load deleted messages", {}, [&] {
 		if (searchQuery.empty()) {
-			return storage.get_all<DeletedMessage>(
+			auto result = storage.get_all<DeletedMessage>(
 				where(
 					column<DeletedMessage>(&DeletedMessage::userId) == userId and
 					column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId and
@@ -612,33 +909,60 @@ std::vector<DeletedMessage> getDeletedMessages(ID userId, ID dialogId, ID topicI
 				order_by(column<DeletedMessage>(&DeletedMessage::messageId)).desc(),
 				limit(totalLimit)
 			);
+			for (auto &row : result) {
+				OpenRow("DeletedMessage", row);
+			}
+			return result;
 		}
 
-		std::string escaped;
-		escaped.reserve(searchQuery.size());
-		for (const auto c : searchQuery) {
-			if (c == '%' || c == '_' || c == '\\') {
-				escaped += '\\';
-			}
-			escaped += c;
+		// Text is sealed at rest, so SQL LIKE cannot see it: scan the
+		// indexed id range in pages, decrypt text only, and collect up
+		// to totalLimit matches with the same case-insensitive substring
+		// + sender-id semantics.
+		if (totalLimit == 0) {
+			return std::vector<DeletedMessage>();
 		}
-		const auto pattern = "%" + escaped + "%";
 		const auto idQuery = AyuIdSearch::Parse(
 			QString::fromStdString(searchQuery).trimmed());
 		const auto senderId = idQuery.valid() ? ID(idQuery.id) : ID(-1);
-		return storage.get_all<DeletedMessage>(
-			where(
-				column<DeletedMessage>(&DeletedMessage::userId) == userId and
-				column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId and
-				(column<DeletedMessage>(&DeletedMessage::topicId) == topicId or topicId == 0) and
-				(column<DeletedMessage>(&DeletedMessage::messageId) > minId or minId == 0) and
-				(column<DeletedMessage>(&DeletedMessage::messageId) < maxId or maxId == 0) and
-				(like(column<DeletedMessage>(&DeletedMessage::text), pattern, "\\") or
-				column<DeletedMessage>(&DeletedMessage::fromId) == senderId)
-			),
-			order_by(column<DeletedMessage>(&DeletedMessage::messageId)).desc(),
-			limit(totalLimit)
-		);
+		const auto needle = QString::fromStdString(searchQuery);
+		constexpr auto kSearchPage = 200;
+		auto result = std::vector<DeletedMessage>();
+		auto bound = maxId;
+		while (true) {
+			auto page = storage.get_all<DeletedMessage>(
+				where(
+					column<DeletedMessage>(&DeletedMessage::userId) == userId and
+					column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId and
+					(column<DeletedMessage>(&DeletedMessage::topicId) == topicId or topicId == 0) and
+					(column<DeletedMessage>(&DeletedMessage::messageId) > minId or minId == 0) and
+					(column<DeletedMessage>(&DeletedMessage::messageId) < bound or bound == 0)
+				),
+				order_by(column<DeletedMessage>(&DeletedMessage::messageId)).desc(),
+				limit(kSearchPage)
+			);
+			if (page.empty()) {
+				break;
+			}
+			for (auto &row : page) {
+				const auto text = OpenText(
+					row.text,
+					RowContext("DeletedMessage", row, "text"));
+				if (QString::fromStdString(text).contains(needle, Qt::CaseInsensitive)
+					|| row.fromId == senderId) {
+					OpenRow("DeletedMessage", row);
+					result.push_back(row);
+					if (int(result.size()) >= totalLimit) {
+						return result;
+					}
+				}
+			}
+			if (int(page.size()) < kSearchPage) {
+				break;
+			}
+			bound = page.back().messageId;
+		}
+		return result;
 	});
 }
 

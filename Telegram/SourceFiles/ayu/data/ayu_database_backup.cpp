@@ -2,6 +2,8 @@
 
 #include "ayu/ayu_settings.h"
 #include "ayu/libs/sqlite/sqlite3.h"
+#include "ayu/secret/secret_vault.h"
+#include "ayu/utils/file_perms.h"
 #include "base/timer.h"
 #include "logs.h"
 
@@ -9,6 +11,8 @@
 #include <QtCore/QDir>
 #include <QtCore/QFile>
 #include <QtCore/QFileInfo>
+#include <QtCore/QSaveFile>
+#include <QtCore/QTemporaryFile>
 
 #include <crl/crl_async.h>
 #include <crl/crl_on_main.h>
@@ -16,6 +20,7 @@
 #include <algorithm>
 #include <atomic>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace AyuDatabaseBackup {
@@ -43,6 +48,74 @@ struct Entry {
 [[nodiscard]] QString Directory() {
 	return "./tdata/ayu_backups";
 }
+
+// Envelope context for sealed backups. The file name (timestamp + row
+// count) is unique and stable, binding each blob to its own file.
+[[nodiscard]] std::string BackupContext(const QString &path) {
+	return "ayu-backup-v1:" + QFileInfo(path).fileName().toStdString();
+}
+
+[[nodiscard]] bool HasVaultMagic(const QString &path) {
+	auto file = QFile(path);
+	if (!file.open(QIODevice::ReadOnly)) {
+		return false;
+	}
+	const auto head = file.read(32);
+	const auto bytes = AyuSecret::Bytes(head.begin(), head.end());
+	return AyuSecret::Vault::IsSealed(bytes);
+}
+
+[[nodiscard]] bool UnsealTo(const QString &sealed, const QString &plain) {
+	if (!AyuSecret::Vault::OpenFileStreamed(
+			sealed,
+			plain,
+			BackupContext(sealed))) {
+		return false;
+	}
+	AyuUtils::RestrictFile(plain);
+	return true;
+}
+
+[[nodiscard]] bool SealFile(const QString &plain, const QString &sealed) {
+	return AyuSecret::Vault::SealFileStreamed(
+		plain,
+		sealed,
+		BackupContext(sealed));
+}
+
+// Unsealed scratch copy inside the backups directory (0600),
+// removed on destruction. Plaintext never touches the system temp dir.
+struct ScratchPlaintext {
+	QString path;
+
+	explicit ScratchPlaintext(const QString &sealed) {
+		auto temp = QTemporaryFile(Directory() + "/.scratchXXXXXX.db");
+		temp.setAutoRemove(false);
+		if (!temp.open()) {
+			return;
+		}
+		AyuUtils::RestrictFile(temp.fileName());
+		temp.close();
+		if (!AyuSecret::Vault::OpenFileStreamed(
+				sealed,
+				temp.fileName(),
+				BackupContext(sealed))) {
+			QFile::remove(temp.fileName());
+			return;
+		}
+		path = temp.fileName();
+	}
+
+	~ScratchPlaintext() {
+		if (!path.isEmpty()) {
+			QFile::remove(path);
+		}
+	}
+
+	[[nodiscard]] bool valid() const {
+		return !path.isEmpty();
+	}
+};
 
 struct Handle {
 	sqlite3 *db = nullptr;
@@ -107,7 +180,7 @@ struct Handle {
 			"WHERE type='table' AND name='%1'").arg(name)) == 1;
 }
 
-[[nodiscard]] bool Verify(const QString &path, qint64 *rows = nullptr) {
+[[nodiscard]] bool VerifyPlain(const QString &path, qint64 *rows = nullptr) {
 	QFile file(path);
 	if (!file.open(QIODevice::ReadOnly)) {
 		return false;
@@ -137,6 +210,17 @@ struct Handle {
 	return true;
 }
 
+[[nodiscard]] bool Verify(const QString &path, qint64 *rows = nullptr) {
+	if (!HasVaultMagic(path)) {
+		return VerifyPlain(path, rows);
+	}
+	const auto scratch = ScratchPlaintext(path);
+	if (!scratch.valid()) {
+		return false;
+	}
+	return VerifyPlain(scratch.path, rows);
+}
+
 [[nodiscard]] std::vector<Entry> List() {
 	auto names = QDir(Directory()).entryList(
 		QStringList() << "ayudata_*.db",
@@ -149,14 +233,14 @@ struct Handle {
 		entry.path = Directory() + '/' + name;
 		const auto parts = name.chopped(3).split('_');
 		if (parts.size() >= 4) {
-			entry.rows = parts.back().toLongLong();
+			entry.rows = parts[3].toLongLong();
 		}
 		result.push_back(std::move(entry));
 	}
 	return result;
 }
 
-void ScrubSecrets(const QString &path) {
+void ScrubSecretsPlain(const QString &path) {
 	auto handle = Handle();
 	if (!Open(handle, path, SQLITE_OPEN_READWRITE)) {
 		return;
@@ -181,6 +265,21 @@ void ScrubSecrets(const QString &path) {
 		}
 	}
 	static_cast<void>(Exec(handle.db, QString("VACUUM")));
+}
+
+void ScrubSecrets(const QString &path) {
+	if (!HasVaultMagic(path)) {
+		ScrubSecretsPlain(path);
+		return;
+	}
+	const auto scratch = ScratchPlaintext(path);
+	if (!scratch.valid()) {
+		return;
+	}
+	ScrubSecretsPlain(scratch.path);
+	if (!SealFile(scratch.path, path)) {
+		LOG(("[AyuGram] Database: failed to reseal a scrubbed backup."));
+	}
 }
 
 void Rotate() {
@@ -229,7 +328,7 @@ bool create() {
 		return false;
 	}
 	const auto guard = gsl::finally([] { Running = false; });
-	QDir().mkpath(Directory());
+	AyuUtils::EnsurePrivateDir(Directory());
 	const auto temporary = Directory() + "/.pending.db";
 	QFile::remove(temporary);
 	{
@@ -249,17 +348,30 @@ bool create() {
 		QFile::remove(temporary);
 		return false;
 	}
-	const auto name = QString("%1/ayudata_%2_%3.db")
+	AyuUtils::RestrictFile(temporary);
+	const auto stamp = QDateTime::currentDateTimeUtc().toString("yyyyMMdd_HHmmss");
+	auto name = QString("%1/ayudata_%2_%3.db")
 		.arg(Directory())
-		.arg(QDateTime::currentDateTimeUtc().toString("yyyyMMdd_HHmmss"))
+		.arg(stamp)
 		.arg(rows);
-	if (!QFile::rename(temporary, name)) {
+	for (auto dup = 1; QFile::exists(name); ++dup) {
+		name = QString("%1/ayudata_%2_%3_%4.db")
+			.arg(Directory())
+			.arg(stamp)
+			.arg(rows)
+			.arg(dup);
+	}
+	if (SealFile(temporary, name)) {
+		QFile::remove(temporary);
+	} else if (AyuSettings::getInstance().requireEncryption()) {
+		LOG(("[AyuGram] Database: strict mode refused a plaintext backup."));
+		QFile::remove(temporary);
+		return false;
+	} else if (!QFile::rename(temporary, name)) {
 		QFile::remove(temporary);
 		return false;
 	}
-	QFile::setPermissions(
-		name,
-		QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+	AyuUtils::RestrictFile(name);
 	Rotate();
 	return true;
 }
@@ -267,6 +379,24 @@ bool create() {
 bool restore(int &index) {
 	const auto list = List();
 	for (auto i = index; i < int(list.size()); ++i) {
+		if (HasVaultMagic(list[i].path)) {
+			const auto staging = MainPath() + ".restoring";
+			QFile::remove(staging);
+			if (UnsealTo(list[i].path, staging)
+				&& VerifyPlain(staging)) {
+				QFile::remove(MainPath());
+				QFile::remove(MainPath() + "-wal");
+				QFile::remove(MainPath() + "-shm");
+				if (QFile::rename(staging, MainPath())) {
+					AyuUtils::RestrictFile(MainPath());
+					index = i + 1;
+					LOG(("[AyuGram] Database restored from '%1'.").arg(list[i].path));
+					return true;
+				}
+			}
+			QFile::remove(staging);
+			continue;
+		}
 		if (!Verify(list[i].path)) {
 			continue;
 		}
