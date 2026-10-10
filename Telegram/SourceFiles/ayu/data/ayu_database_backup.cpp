@@ -66,21 +66,10 @@ struct Entry {
 }
 
 [[nodiscard]] bool UnsealTo(const QString &sealed, const QString &plain) {
-	auto bytes = AyuSecret::Bytes();
-	if (!AyuSecret::Vault::OpenFromFile(
+	if (!AyuSecret::Vault::OpenFileStreamed(
 			sealed,
-			bytes,
+			plain,
 			BackupContext(sealed))) {
-		return false;
-	}
-	auto file = QSaveFile(plain);
-	if (!file.open(QIODevice::WriteOnly)) {
-		return false;
-	}
-	const auto written = file.write(
-		reinterpret_cast<const char*>(bytes.data()),
-		qint64(bytes.size()));
-	if (written != qint64(bytes.size()) || !file.commit()) {
 		return false;
 	}
 	AyuUtils::RestrictFile(plain);
@@ -88,17 +77,45 @@ struct Entry {
 }
 
 [[nodiscard]] bool SealFile(const QString &plain, const QString &sealed) {
-	auto file = QFile(plain);
-	if (!file.open(QIODevice::ReadOnly)) {
-		return false;
-	}
-	const auto raw = file.readAll();
-	file.close();
-	return AyuSecret::Vault::SealToFile(
+	return AyuSecret::Vault::SealFileStreamed(
+		plain,
 		sealed,
-		AyuSecret::Bytes(raw.begin(), raw.end()),
 		BackupContext(sealed));
 }
+
+// Unsealed scratch copy inside the backups directory (0600),
+// removed on destruction. Plaintext never touches the system temp dir.
+struct ScratchPlaintext {
+	QString path;
+
+	explicit ScratchPlaintext(const QString &sealed) {
+		auto temp = QTemporaryFile(Directory() + "/.scratchXXXXXX.db");
+		temp.setAutoRemove(false);
+		if (!temp.open()) {
+			return;
+		}
+		AyuUtils::RestrictFile(temp.fileName());
+		temp.close();
+		if (!AyuSecret::Vault::OpenFileStreamed(
+				sealed,
+				temp.fileName(),
+				BackupContext(sealed))) {
+			QFile::remove(temp.fileName());
+			return;
+		}
+		path = temp.fileName();
+	}
+
+	~ScratchPlaintext() {
+		if (!path.isEmpty()) {
+			QFile::remove(path);
+		}
+	}
+
+	[[nodiscard]] bool valid() const {
+		return !path.isEmpty();
+	}
+};
 
 struct Handle {
 	sqlite3 *db = nullptr;
@@ -197,22 +214,11 @@ struct Handle {
 	if (!HasVaultMagic(path)) {
 		return VerifyPlain(path, rows);
 	}
-	auto plain = AyuSecret::Bytes();
-	if (!AyuSecret::Vault::OpenFromFile(
-			path,
-			plain,
-			BackupContext(path))) {
+	const auto scratch = ScratchPlaintext(path);
+	if (!scratch.valid()) {
 		return false;
 	}
-	auto temp = QTemporaryFile();
-	if (!temp.open()) {
-		return false;
-	}
-	temp.write(
-		reinterpret_cast<const char*>(plain.data()),
-		qint64(plain.size()));
-	temp.close();
-	return VerifyPlain(temp.fileName(), rows);
+	return VerifyPlain(scratch.path, rows);
 }
 
 [[nodiscard]] std::vector<Entry> List() {
@@ -227,7 +233,7 @@ struct Handle {
 		entry.path = Directory() + '/' + name;
 		const auto parts = name.chopped(3).split('_');
 		if (parts.size() >= 4) {
-			entry.rows = parts.back().toLongLong();
+			entry.rows = parts[3].toLongLong();
 		}
 		result.push_back(std::move(entry));
 	}
@@ -266,23 +272,14 @@ void ScrubSecrets(const QString &path) {
 		ScrubSecretsPlain(path);
 		return;
 	}
-	auto plain = AyuSecret::Bytes();
-	if (!AyuSecret::Vault::OpenFromFile(
-			path,
-			plain,
-			BackupContext(path))) {
+	const auto scratch = ScratchPlaintext(path);
+	if (!scratch.valid()) {
 		return;
 	}
-	auto temp = QTemporaryFile();
-	if (!temp.open()) {
-		return;
+	ScrubSecretsPlain(scratch.path);
+	if (!SealFile(scratch.path, path)) {
+		LOG(("[AyuGram] Database: failed to reseal a scrubbed backup."));
 	}
-	temp.write(
-		reinterpret_cast<const char*>(plain.data()),
-		qint64(plain.size()));
-	temp.close();
-	ScrubSecretsPlain(temp.fileName());
-	static_cast<void>(SealFile(temp.fileName(), path));
 }
 
 void Rotate() {
@@ -352,12 +349,24 @@ bool create() {
 		return false;
 	}
 	AyuUtils::RestrictFile(temporary);
-	const auto name = QString("%1/ayudata_%2_%3.db")
+	const auto stamp = QDateTime::currentDateTimeUtc().toString("yyyyMMdd_HHmmss");
+	auto name = QString("%1/ayudata_%2_%3.db")
 		.arg(Directory())
-		.arg(QDateTime::currentDateTimeUtc().toString("yyyyMMdd_HHmmss"))
+		.arg(stamp)
 		.arg(rows);
+	for (auto dup = 1; QFile::exists(name); ++dup) {
+		name = QString("%1/ayudata_%2_%3_%4.db")
+			.arg(Directory())
+			.arg(stamp)
+			.arg(rows)
+			.arg(dup);
+	}
 	if (SealFile(temporary, name)) {
 		QFile::remove(temporary);
+	} else if (AyuSettings::getInstance().requireEncryption()) {
+		LOG(("[AyuGram] Database: strict mode refused a plaintext backup."));
+		QFile::remove(temporary);
+		return false;
 	} else if (!QFile::rename(temporary, name)) {
 		QFile::remove(temporary);
 		return false;

@@ -89,15 +89,24 @@ std::vector<std::unique_ptr<DocumentSaveTask>> DocumentSaveTasks;
 // Envelope context for cached media. The relative path is stable across
 // restarts, binding each sealed blob to its own file.
 [[nodiscard]] std::string MediaContext(const QString &path) {
-	return "ayu-media-v1:" + path.toStdString();
+	return "ayu-media-v1:" + path.toUtf8().toStdString();
 }
 
 [[nodiscard]] bool WriteSealedOrPlain(
 	const QString &path,
 	const AyuSecret::Bytes &plain) {
-	if (AyuSecret::Vault::Available()
-		&& AyuSecret::Vault::SealToFile(path, plain, MediaContext(path))) {
-		return true;
+	const auto strict = AyuSettings::getInstance().requireEncryption();
+	if (AyuSecret::Vault::Available()) {
+		if (AyuSecret::Vault::SealToFile(path, plain, MediaContext(path))) {
+			return true;
+		}
+		LOG(("Ayu: vault seal failed for cached media."));
+	} else {
+		LOG(("Ayu: vault unavailable for cached media."));
+	}
+	if (strict) {
+		LOG(("Ayu: strict mode refused a plaintext media file."));
+		return false;
 	}
 	AyuUtils::EnsurePrivateDir(QFileInfo(path).absolutePath());
 	auto file = QFile(path);

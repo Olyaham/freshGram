@@ -8,6 +8,10 @@ namespace AyuUtils {
 // Best-effort owner-only restriction for at-rest files.
 // On Linux/macOS this is 0600; on Windows it maps to the closest
 // read-only flag handling Qt provides. Never fails the caller.
+//
+// Note the inherent umask window: files are created with default modes
+// and tightened right after. Callers handling highly sensitive content
+// should prefer atomic sealed writes (Vault) over plain files.
 inline void RestrictFile(const QString &path) {
 	QFile::setPermissions(
 		path,

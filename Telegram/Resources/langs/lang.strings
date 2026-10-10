@@ -9120,6 +9120,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_CustomizeFontTitle" = "Customize Font";
 "ayu_MessageShotTopBarText" = "Shot";
 "ayu_MessageShotPreview" = "Preview";
+"ayu_RequireEncryption" = "Require encryption (strict mode)";
 "ayu_PeekButton" = "Peek last seen";
 "ayu_PeekLabel" = "Last seen (peeked)";
 "ayu_PeekChecking" = "Checking the last seen...";

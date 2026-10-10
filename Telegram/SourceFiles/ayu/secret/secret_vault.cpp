@@ -222,4 +222,214 @@ bool OpenFromFile(
 	return Open(sealed, plain, context);
 }
 
+bool SealFileStreamed(
+		const QString &srcPath,
+		const QString &dstPath,
+		const std::string &context) {
+	constexpr auto kChunk = size_t(1024 * 1024);
+	auto key = std::array<uint8_t, 32>();
+	if (!DeriveKey(key)) {
+		return false;
+	}
+	auto src = QFile(srcPath);
+	if (!src.open(QIODevice::ReadOnly)) {
+		return false;
+	}
+	const auto tempPath = dstPath + QStringLiteral(".sealing");
+	QFile::remove(tempPath);
+	auto dst = QFile(tempPath);
+	if (!dst.open(QIODevice::WriteOnly)) {
+		return false;
+	}
+	AyuUtils::RestrictFile(tempPath);
+	auto header = std::array<uint8_t, kHeaderSize>();
+	std::memcpy(header.data(), kMagicBound, sizeof(kMagicBound));
+	RandomBytes(header.data() + 4, kNonceSize);
+	std::memset(header.data() + 4 + kNonceSize, 0, kTagSize);
+	if (dst.write(
+			reinterpret_cast<const char*>(header.data()),
+			qint64(header.size())) != qint64(header.size())) {
+		return false;
+	}
+	const auto cipher = EVP_CIPHER_CTX_new();
+	if (!cipher) {
+		return false;
+	}
+	auto ok = EVP_EncryptInit_ex(
+		cipher,
+		EVP_aes_256_gcm(),
+		nullptr,
+		key.data(),
+		header.data() + 4) == 1;
+	auto length = 0;
+	if (ok && !context.empty()) {
+		ok = EVP_EncryptUpdate(
+			cipher,
+			nullptr,
+			&length,
+			reinterpret_cast<const uint8_t*>(context.data()),
+			int(context.size())) == 1;
+	}
+	auto chunk = std::array<uint8_t, kChunk>();
+	auto out = std::array<uint8_t, kChunk + 16>();
+	while (ok) {
+		const auto read = src.read(
+			reinterpret_cast<char*>(chunk.data()),
+			qint64(chunk.size()));
+		if (read < 0) {
+			ok = false;
+			break;
+		}
+		if (read == 0) {
+			break;
+		}
+		ok = EVP_EncryptUpdate(
+			cipher,
+			out.data(),
+			&length,
+			chunk.data(),
+			int(read)) == 1;
+		if (ok && dst.write(
+				reinterpret_cast<const char*>(out.data()),
+				length) != length) {
+			ok = false;
+		}
+	}
+	auto finalLength = 0;
+	if (ok) {
+		auto tail = std::array<uint8_t, 16>();
+		ok = EVP_EncryptFinal_ex(cipher, tail.data(), &finalLength) == 1;
+	}
+	if (ok) {
+		ok = EVP_CIPHER_CTX_ctrl(
+			cipher,
+			EVP_CTRL_GCM_GET_TAG,
+			kTagSize,
+			header.data() + 4 + kNonceSize) == 1;
+	}
+	EVP_CIPHER_CTX_free(cipher);
+	if (!ok) {
+		dst.close();
+		QFile::remove(tempPath);
+		return false;
+	}
+	dst.close();
+	auto fix = QFile(tempPath);
+	if (!fix.open(QIODevice::ReadWrite)) {
+		QFile::remove(tempPath);
+		return false;
+	}
+	if (!fix.seek(qint64(4 + kNonceSize))
+		|| fix.write(
+			reinterpret_cast<const char*>(header.data() + 4 + kNonceSize),
+			kTagSize) != kTagSize) {
+		QFile::remove(tempPath);
+		return false;
+	}
+	fix.close();
+	QFile::remove(dstPath);
+	if (!QFile::rename(tempPath, dstPath)) {
+		QFile::remove(tempPath);
+		return false;
+	}
+	AyuUtils::RestrictFile(dstPath);
+	return true;
+}
+
+bool OpenFileStreamed(
+		const QString &srcPath,
+		const QString &dstPath,
+		const std::string &context) {
+	constexpr auto kChunk = size_t(1024 * 1024);
+	auto key = std::array<uint8_t, 32>();
+	if (!DeriveKey(key)) {
+		return false;
+	}
+	auto src = QFile(srcPath);
+	if (!src.open(QIODevice::ReadOnly)) {
+		return false;
+	}
+	auto header = std::array<uint8_t, kHeaderSize>();
+	if (src.read(
+			reinterpret_cast<char*>(header.data()),
+			qint64(header.size())) != qint64(header.size())) {
+		return false;
+	}
+	const auto probe = Bytes(header.begin(), header.end());
+	if (!IsSealed(probe)) {
+		return false;
+	}
+	const auto bound = IsBound(probe);
+	const auto cipher = EVP_CIPHER_CTX_new();
+	if (!cipher) {
+		return false;
+	}
+	auto ok = EVP_DecryptInit_ex(
+		cipher,
+		EVP_aes_256_gcm(),
+		nullptr,
+		key.data(),
+		header.data() + 4) == 1;
+	auto length = 0;
+	if (ok) {
+		auto tag = std::array<uint8_t, kTagSize>();
+		std::memcpy(tag.data(), header.data() + 4 + kNonceSize, kTagSize);
+		ok = EVP_CIPHER_CTX_ctrl(
+			cipher,
+			EVP_CTRL_GCM_SET_TAG,
+			kTagSize,
+			tag.data()) == 1;
+	}
+	if (ok && bound && !context.empty()) {
+		ok = EVP_DecryptUpdate(
+			cipher,
+			nullptr,
+			&length,
+			reinterpret_cast<const uint8_t*>(context.data()),
+			int(context.size())) == 1;
+	}
+	auto dst = QFile(dstPath);
+	if (ok && !dst.open(QIODevice::WriteOnly)) {
+		ok = false;
+	}
+	auto chunk = std::array<uint8_t, kChunk>();
+	auto out = std::array<uint8_t, kChunk + 16>();
+	while (ok) {
+		const auto read = src.read(
+			reinterpret_cast<char*>(chunk.data()),
+			qint64(chunk.size()));
+		if (read < 0) {
+			ok = false;
+			break;
+		}
+		if (read == 0) {
+			break;
+		}
+		ok = EVP_DecryptUpdate(
+			cipher,
+			out.data(),
+			&length,
+			chunk.data(),
+			int(read)) == 1;
+		if (ok && dst.write(
+				reinterpret_cast<const char*>(out.data()),
+				length) != length) {
+			ok = false;
+		}
+	}
+	if (ok) {
+		auto tail = std::array<uint8_t, 16>();
+		auto finalLength = 0;
+		ok = EVP_DecryptFinal_ex(cipher, tail.data(), &finalLength) == 1;
+	}
+	EVP_CIPHER_CTX_free(cipher);
+	dst.close();
+	if (!ok) {
+		QFile::remove(dstPath);
+		return false;
+	}
+	AyuUtils::RestrictFile(dstPath);
+	return true;
+}
+
 } // namespace AyuSecret::Vault

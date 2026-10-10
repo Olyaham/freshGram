@@ -815,6 +815,13 @@ void BuildStorage(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 			AyuSettings::getInstance().setBackupIntervalHours(value);
 		});
 
+	ayu.addSettingToggle({
+		.id = u"ayu/requireEncryption"_q,
+		.title = tr::ayu_RequireEncryption(),
+		.getter = &AyuSettings::requireEncryption,
+		.setter = &AyuSettings::setRequireEncryption,
+	});
+
 	builder.addSkip();
 	builder.addDividerText(tr::ayu_StorageDescription());
 }
