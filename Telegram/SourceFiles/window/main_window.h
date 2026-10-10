@@ -196,6 +196,7 @@ protected:
 
 private:
 	void refreshTitleWidget();
+	void reassertFramelessHint();
 	void setupCanaryTitleLabel();
 	[[nodiscard]] QString nativeTitleSuffix() const;
 	void updateMinimumSize();

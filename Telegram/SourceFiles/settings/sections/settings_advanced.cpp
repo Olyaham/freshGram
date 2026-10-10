@@ -411,6 +411,9 @@ void BuildWindowTitleSection(SectionBuilder &builder) {
 		}
 	}
 
+	// Frameless mode targets tiling compositors (Linux/Wayland); on
+	// macOS/Windows the flag has a different meaning there.
+#if !defined Q_OS_WIN && !defined Q_OS_MAC
 	{
 		const auto frameless = builder.addCheckbox({
 			.id = u"advanced/frameless_window"_q,
@@ -437,6 +440,7 @@ void BuildWindowTitleSection(SectionBuilder &builder) {
 			}, frameless->lifetime());
 		}
 	}
+#endif
 
 	builder.addSkip();
 }

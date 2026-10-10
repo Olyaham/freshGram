@@ -596,6 +596,7 @@ void MainWindow::init() {
 void MainWindow::handleStateChanged(Qt::WindowState state) {
 	stateChangedHook(state);
 	updateControlsGeometry();
+	reassertFramelessHint();
 	if (state == Qt::WindowMinimized) {
 		controller().updateIsActiveBlur();
 	} else {
@@ -622,6 +623,7 @@ void MainWindow::handleActiveChanged(bool active) {
 
 void MainWindow::handleVisibleChanged(bool visible) {
 	if (visible) {
+		reassertFramelessHint();
 		if (_maximizedBeforeHide) {
 			DEBUG_LOG(("Window Pos: Window was maximized before hidding, setting maximized."));
 			setWindowState(Qt::WindowMaximized);
@@ -701,10 +703,13 @@ void MainWindow::refreshTitleWidget() {
 	// state deterministic without hide/show round-trips (those race the
 	// compositor on Wayland and get undone by the helper anyway).
 	const auto syncHint = [&](bool titleShown) {
+#if !defined Q_OS_WIN && !defined Q_OS_MAC
 		if (const auto handle = windowHandle()) {
 			handle->setFlag(Qt::FramelessWindowHint, titleShown);
 		}
+#endif
 	};
+#if !defined Q_OS_WIN && !defined Q_OS_MAC
 	if (AyuSettings::getInstance().framelessWindow()) {
 		// Dedicated tiling-WM mode: no native frame and no custom
 		// title; the hint stays on so no server decorations appear
@@ -717,6 +722,7 @@ void MainWindow::refreshTitleWidget() {
 		syncHint(true);
 		return;
 	}
+#endif
 	if (Ui::Platform::NativeWindowFrameSupported()
 		&& Core::App().settings().nativeWindowFrame()) {
 		setNativeFrame(true);
@@ -731,6 +737,25 @@ void MainWindow::refreshTitleWidget() {
 	if (const auto title = titleWidget()) {
 		syncHint(!title->isHidden());
 	}
+}
+
+void MainWindow::reassertFramelessHint() {
+#if !defined Q_OS_WIN && !defined Q_OS_MAC
+	// The platform helper re-maps the hint from the title visibility on
+	// shown/state events; re-assert ours after it, queued, so ours wins.
+	// No-op everywhere except the frameless mode.
+	if (!AyuSettings::getInstance().framelessWindow()) {
+		return;
+	}
+	InvokeQueued(this, [=] {
+		if (!AyuSettings::getInstance().framelessWindow()) {
+			return;
+		}
+		if (const auto handle = windowHandle()) {
+			handle->setFlag(Qt::FramelessWindowHint, true);
+		}
+	});
+#endif
 }
 
 void MainWindow::setupCanaryTitleLabel() {
