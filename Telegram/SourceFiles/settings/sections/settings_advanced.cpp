@@ -11,6 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "api/api_global_privacy.h"
 #include "apiwrap.h"
+#include "ayu/ayu_settings.h"
 #include "base/call_delayed.h"
 #include "base/platform/base_platform_custom_app_icon.h"
 #include "base/platform/base_platform_info.h"
@@ -393,6 +394,23 @@ void BuildWindowTitleSection(SectionBuilder &builder) {
 				Core::App().settings().setNativeWindowFrame(checked);
 				Core::App().saveSettingsDelayed();
 			}, nativeFrame->lifetime());
+		}
+	}
+
+	{
+		const auto frameless = builder.addCheckbox({
+			.id = u"advanced/frameless_window"_q,
+			.title = tr::ayu_FramelessWindow(),
+			.checked = AyuSettings::getInstance().framelessWindow(),
+			.keywords = { u"frameless"_q, u"tiling"_q, u"window"_q, u"border"_q },
+		});
+		if (frameless) {
+			frameless->checkedChanges(
+			) | rpl::filter([](bool checked) {
+				return (checked != AyuSettings::getInstance().framelessWindow());
+			}) | rpl::on_next([=](bool checked) {
+				AyuSettings::getInstance().setFramelessWindow(checked);
+			}, frameless->lifetime());
 		}
 	}
 
