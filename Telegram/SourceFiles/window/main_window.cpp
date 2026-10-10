@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/main_window.h"
 
 #include "api/api_updates.h"
+#include "ayu/ayu_settings.h"
 #include "storage/localstorage.h"
 #include "platform/platform_specific.h"
 #include "ui/platform/ui_platform_window.h"
@@ -578,6 +579,11 @@ void MainWindow::init() {
 			recountGeometryConstraints();
 		}, lifetime());
 	}
+	AyuSettings::getInstance().framelessWindowChanges(
+	) | rpl::on_next([=](bool frameless) {
+		refreshTitleWidget();
+		recountGeometryConstraints();
+	}, lifetime());
 	refreshTitleWidget();
 	if constexpr (Core::BuildIsCanary) {
 		setupCanaryTitleLabel();
@@ -690,6 +696,37 @@ int MainWindow::computeMinHeight() const {
 }
 
 void MainWindow::refreshTitleWidget() {
+	if (AyuSettings::getInstance().framelessWindow()) {
+		// Dedicated tiling-WM mode: no native frame, no custom title,
+		// FramelessWindowHint enforced. Changing flags at runtime needs
+		// a hide/show round-trip.
+		setNativeFrame(false);
+		_titleShadow.destroy();
+		if (const auto title = titleWidget()) {
+			title->hide();
+		}
+		if (!(windowFlags() & Qt::FramelessWindowHint)) {
+			const auto visible = isVisible();
+			if (visible) {
+				hide();
+			}
+			setWindowFlags(windowFlags() | Qt::FramelessWindowHint);
+			if (visible) {
+				show();
+			}
+		}
+		return;
+	}
+	if (windowFlags() & Qt::FramelessWindowHint) {
+		const auto visible = isVisible();
+		if (visible) {
+			hide();
+		}
+		setWindowFlags(windowFlags() & ~Qt::FramelessWindowHint);
+		if (visible) {
+			show();
+		}
+	}
 	if (Ui::Platform::NativeWindowFrameSupported()
 		&& Core::App().settings().nativeWindowFrame()) {
 		setNativeFrame(true);

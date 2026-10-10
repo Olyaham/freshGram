@@ -345,6 +345,7 @@ public:
 	[[nodiscard]] int reactionBackgroundOpacity() const { return _reactionBackgroundOpacity.current(); }
 	[[nodiscard]] bool disableNotificationsDelay() const { return _disableNotificationsDelay.current(); }
 	[[nodiscard]] bool localPremium() const { return _localPremium.current(); }
+	[[nodiscard]] bool framelessWindow() const { return _framelessWindow.current(); }
 	[[nodiscard]] bool requireEncryption() const { return _requireEncryption.current(); }
 	[[nodiscard]] static bool RequireEncryptionForStorage();
 	[[nodiscard]] bool showChannelReactions() const { return _showChannelReactions.current(); }
@@ -493,6 +494,7 @@ public:
 	void setReactionBackgroundOpacity(int val);
 	void setDisableNotificationsDelay(bool val);
 	void setLocalPremium(bool val);
+	void setFramelessWindow(bool val);
 	void setRequireEncryption(bool val);
 	void setShowChannelReactions(bool val);
 	void setShowGroupReactions(bool val);
@@ -631,6 +633,8 @@ public:
 	[[nodiscard]] rpl::producer<bool> disableNotificationsDelayChanges() const { return _disableNotificationsDelay.changes(); }
 	[[nodiscard]] rpl::producer<bool> localPremiumValue() const { return _localPremium.value(); }
 	[[nodiscard]] rpl::producer<bool> localPremiumChanges() const { return _localPremium.changes(); }
+	[[nodiscard]] rpl::producer<bool> framelessWindowValue() const { return _framelessWindow.value(); }
+	[[nodiscard]] rpl::producer<bool> framelessWindowChanges() const { return _framelessWindow.changes(); }
 	[[nodiscard]] rpl::producer<bool> requireEncryptionValue() const { return _requireEncryption.value(); }
 	[[nodiscard]] rpl::producer<bool> showChannelReactionsValue() const { return _showChannelReactions.value(); }
 	[[nodiscard]] rpl::producer<bool> showChannelReactionsChanges() const { return _showChannelReactions.changes(); }
@@ -815,6 +819,7 @@ private:
 	rpl::variable<int> _reactionBackgroundOpacity = 16;
 	rpl::variable<bool> _disableNotificationsDelay = false;
 	rpl::variable<bool> _localPremium = false;
+	rpl::variable<bool> _framelessWindow = false;
 	rpl::variable<bool> _requireEncryption = false;
 	rpl::variable<bool> _showChannelReactions = true;
 	rpl::variable<bool> _showGroupReactions = true;
