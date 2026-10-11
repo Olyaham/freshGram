@@ -319,7 +319,7 @@ void Rotate() {
 
 } // namespace
 
-bool create() {
+bool create(bool strict) {
 	if (!QFile::exists(MainPath()) || UpToDate()) {
 		return false;
 	}
@@ -368,7 +368,7 @@ bool create() {
 	}
 	if (SealFile(temporary, name)) {
 		QFile::remove(temporary);
-	} else if (AyuSettings::getInstance().requireEncryption()) {
+	} else if (strict) {
 		LOG(("[AyuGram] Database: strict mode refused a plaintext backup."));
 		QFile::remove(temporary);
 		return false;
@@ -381,22 +381,26 @@ bool create() {
 	return true;
 }
 
-bool restore(int &index) {
-	// Crash recovery: a previous restore may have left a verified
-	// staging copy while Main was already gone.
+void recoverStaging() {
+	// Crash recovery runs at startup (not only on the corrupt path, so
+	// it cannot be skipped): a previous restore may have left a
+	// verified staging copy while Main was already gone.
 	const auto staging = MainPath() + ".restoring";
 	QFile::remove(staging + ".opening");
-	if (QFile::exists(staging)) {
-		if (!QFile::exists(MainPath())
-			&& VerifyPlain(staging)
-			&& QFile::rename(staging, MainPath())) {
-			AyuUtils::RestrictFile(MainPath());
-			LOG(("[AyuGram] Database restored from staging copy."));
-			return true;
-		} else if (QFile::exists(MainPath())) {
-			QFile::remove(staging);
-		}
+	if (!QFile::exists(staging)) {
+		return;
 	}
+	if (!QFile::exists(MainPath())
+		&& VerifyPlain(staging)
+		&& QFile::rename(staging, MainPath())) {
+		AyuUtils::RestrictFile(MainPath());
+		LOG(("[AyuGram] Database restored from staging copy."));
+	} else if (QFile::exists(MainPath())) {
+		QFile::remove(staging);
+	}
+}
+
+bool restore(int &index) {
 	const auto list = List();
 	const auto strict = AyuSettings::getInstance().requireEncryption();
 	for (auto i = index; i < int(list.size()); ++i) {
@@ -456,8 +460,11 @@ void startPeriodic() {
 				settings.backupKeepCount(),
 				settings.backupIntervalHours());
 		}
-		crl::async([] {
-			[[maybe_unused]] const auto created = create();
+		// Snapshot the strict flag on the timer (main) thread: the
+		// worker must not read the setting itself (data race).
+		const auto strict = AyuSettings::getInstance().requireEncryption();
+		crl::async([=] {
+			[[maybe_unused]] const auto created = create(strict);
 		});
 	});
 	PeriodicTimer->callEach(IntervalHours.load() * kHour);

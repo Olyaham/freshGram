@@ -20,6 +20,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstring>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -327,6 +328,7 @@ void inTransaction(Callback &&callback) {
 // which keeps working. A present-but-unopenable marker means corruption
 // or a key mismatch and decodes to empty (logged), never to raw bytes.
 constexpr auto kSealedTextPrefix = "ayu1:";
+constexpr auto kSealedTextWritePrefix = "ayu2:";
 
 [[nodiscard]] std::string RowContext(
 		const char *table,
@@ -352,19 +354,48 @@ constexpr auto kSealedTextPrefix = "ayu1:";
 	return AyuSettings::getInstance().requireEncryption();
 }
 
+[[nodiscard]] bool StripTextEnvelope(
+		const std::string &stored,
+		AyuSecret::Bytes &sealed) {
+	for (const auto *prefix : { kSealedTextPrefix, kSealedTextWritePrefix }) {
+		const auto length = std::strlen(prefix);
+		if (stored.rfind(prefix, 0) == 0) {
+			const auto raw = QByteArray::fromBase64(
+				QByteArray::fromStdString(stored.substr(length)));
+			sealed = AyuSecret::Bytes(raw.begin(), raw.end());
+			return true;
+		}
+	}
+	return false;
+}
+
 [[nodiscard]] std::optional<std::string> SealText(
 		const std::string &plain,
-		const std::string &context) {
-	if (plain.empty() || plain.rfind(kSealedTextPrefix, 0) == 0) {
+		const std::string &context,
+		bool strict) {
+	if (plain.empty()) {
 		return plain;
 	}
-	const auto sealed = AyuSecret::Vault::Available()
-		? AyuSecret::Vault::Seal(
-			AyuSecret::Bytes(plain.begin(), plain.end()),
-			context)
-		: AyuSecret::Bytes();
+	AyuSecret::Bytes stripped;
+	// Already sealed (either envelope generation): keep as-is. A bare
+	// prefix without magic is a legacy collision: seal it fresh below.
+	// Corrupt sealed blobs also stay untouched (read shows empty).
+	if (StripTextEnvelope(plain, stripped)
+		&& AyuSecret::Vault::IsSealed(stripped)) {
+		return plain;
+	}
+	if (!AyuSecret::Vault::Available()) {
+		if (strict) {
+			LOG(("[AyuGram] Database: refusing plaintext text field."));
+			return std::nullopt;
+		}
+		return plain;
+	}
+	const auto sealed = AyuSecret::Vault::Seal(
+		AyuSecret::Bytes(plain.begin(), plain.end()),
+		context);
 	if (sealed.empty()) {
-		if (StrictMode()) {
+		if (strict) {
 			LOG(("[AyuGram] Database: refusing plaintext text field."));
 			return std::nullopt;
 		}
@@ -373,18 +404,16 @@ constexpr auto kSealedTextPrefix = "ayu1:";
 	const auto base64 = QByteArray(
 		reinterpret_cast<const char*>(sealed.data()),
 		int(sealed.size())).toBase64().toStdString();
-	return kSealedTextPrefix + base64;
+	return kSealedTextWritePrefix + base64;
 }
 
 [[nodiscard]] std::string OpenText(
 		const std::string &stored,
 		const std::string &context) {
-	if (stored.rfind(kSealedTextPrefix, 0) != 0) {
+	AyuSecret::Bytes sealed;
+	if (!StripTextEnvelope(stored, sealed)) {
 		return stored;
 	}
-	const auto raw = QByteArray::fromBase64(
-		QByteArray::fromStdString(stored.substr(5)));
-	const auto sealed = AyuSecret::Bytes(raw.begin(), raw.end());
 	auto plain = AyuSecret::Bytes();
 	if (!AyuSecret::Vault::IsSealed(sealed)
 		|| !AyuSecret::Vault::Open(sealed, plain, context)) {
@@ -397,7 +426,8 @@ constexpr auto kSealedTextPrefix = "ayu1:";
 
 [[nodiscard]] std::optional<std::vector<char>> SealBlob(
 		const std::vector<char> &plain,
-		const std::string &context) {
+		const std::string &context,
+		bool strict) {
 	if (plain.empty()) {
 		return plain;
 	}
@@ -405,11 +435,16 @@ constexpr auto kSealedTextPrefix = "ayu1:";
 	if (AyuSecret::Vault::IsSealed(asBytes)) {
 		return plain;
 	}
-	const auto sealed = AyuSecret::Vault::Available()
-		? AyuSecret::Vault::Seal(asBytes, context)
-		: AyuSecret::Bytes();
+	if (!AyuSecret::Vault::Available()) {
+		if (strict) {
+			LOG(("[AyuGram] Database: refusing plaintext blob field."));
+			return std::nullopt;
+		}
+		return plain;
+	}
+	const auto sealed = AyuSecret::Vault::Seal(asBytes, context);
 	if (sealed.empty()) {
-		if (StrictMode()) {
+		if (strict) {
 			LOG(("[AyuGram] Database: refusing plaintext blob field."));
 			return std::nullopt;
 		}
@@ -438,13 +473,14 @@ constexpr auto kSealedTextPrefix = "ayu1:";
 template<typename Message>
 [[nodiscard]] std::optional<Message> SealRowCopy(
 		const char *table,
-		const Message &message) {
+		const Message &message,
+		bool strict) {
 	auto result = message;
 	const auto context = [&](const char *field) {
 		return RowContext(table, message, field);
 	};
 	const auto sealText = [&](std::string &field, const char *name) {
-		auto sealed = SealText(field, context(name));
+		auto sealed = SealText(field, context(name), strict);
 		if (!sealed) {
 			return false;
 		}
@@ -452,7 +488,7 @@ template<typename Message>
 		return true;
 	};
 	const auto sealBlob = [&](std::vector<char> &field, const char *name) {
-		auto sealed = SealBlob(field, context(name));
+		auto sealed = SealBlob(field, context(name), strict);
 		if (!sealed) {
 			return false;
 		}
@@ -512,8 +548,13 @@ void OpenRow(const char *table, AyuMessageBase &message) {
 
 template<typename Message>
 [[nodiscard]] bool RowNeedsSeal(const Message &message) {
+	// Cheap gate for the backfill scan: any field that is not sealed
+	// with the current envelope qualifies (legacy plaintext, including
+	// ayu1:-prefixed collisions, and previous-generation envelopes are
+	// all reprocessed; SealRowCopy itself verifies and skips).
 	const auto textNeeds = [&](const std::string &field) {
-		return !field.empty() && field.rfind(kSealedTextPrefix, 0) != 0;
+		return !field.empty()
+			&& field.rfind(kSealedTextWritePrefix, 0) != 0;
 	};
 	const auto blobNeeds = [&](const std::vector<char> &field) {
 		return !field.empty()
@@ -538,7 +579,7 @@ template<typename Message>
 constexpr auto kBackfillBatch = 500;
 
 template<typename Message>
-void backfillTable(const char *table, const char *what) {
+void backfillTable(const char *table, const char *what, bool strict) {
 	auto lastId = ID(0);
 	while (true) {
 		const auto batch = run<std::vector<Message>>(what, {}, [&] {
@@ -559,13 +600,13 @@ void backfillTable(const char *table, const char *what) {
 					if (!RowNeedsSeal(row)) {
 						continue;
 					}
-					if (const auto sealed = SealRowCopy(table, row)) {
+					if (const auto sealed = SealRowCopy(table, row, strict)) {
 						try {
 							storage.update(*sealed);
 						} catch (...) {
 							LOG(("[AyuGram] Database: backfill skipped a row."));
 						}
-					} else if (StrictMode()) {
+					} else if (strict) {
 						LOG(("[AyuGram] Database: strict mode refused a legacy row."));
 					}
 				}
@@ -585,12 +626,14 @@ void backfillTable(const char *table, const char *what) {
 // One-time (idempotent, resumable) migration of legacy plaintext rows.
 // Runs in the background after startup; rows sealed by newer versions
 // are skipped, so an interrupted run simply continues next time.
-void backfillSealedRows() {
+// The strict flag is snapshotted by the caller (main thread): reading
+// the setting from this worker would be a data race.
+void backfillSealedRows(bool strict) {
 	if (!AyuSecret::Vault::Available()) {
 		return;
 	}
-	backfillTable<DeletedMessage>("DeletedMessage", "backfill deleted");
-	backfillTable<EditedMessage>("EditedMessage", "backfill edited");
+	backfillTable<DeletedMessage>("DeletedMessage", "backfill deleted", strict);
+	backfillTable<EditedMessage>("EditedMessage", "backfill edited", strict);
 }
 
 QString databasePath() {
@@ -751,7 +794,9 @@ void initialize() {
 	std::lock_guard lock(DatabaseMutex);
 	DatabaseReady = false;
 
-	[[maybe_unused]] const auto backedUp = AyuDatabaseBackup::create();
+	AyuDatabaseBackup::recoverStaging();
+	[[maybe_unused]] const auto backedUp = AyuDatabaseBackup::create(
+		AyuSettings::getInstance().requireEncryption());
 
 	auto retriedBusy = false;
 	auto resetCorrupted = false;
@@ -767,9 +812,12 @@ void initialize() {
 			if (const auto days = PurgeDays.load()) {
 				purgeOlderThan(days);
 			}
-			crl::async([] {
+			// Snapshot the strict flag on this (main) thread: the worker
+			// must not read the setting itself (data race).
+			const auto strict = StrictMode();
+			crl::async([=] {
 				try {
-					backfillSealedRows();
+					backfillSealedRows(strict);
 				} catch (...) {
 				}
 			});
@@ -831,7 +879,10 @@ void addEditedMessage(const EditedMessage &message, int maxRevisions) {
 					column<EditedMessage>(&EditedMessage::messageId) == message.messageId
 				));
 			if (!maxRevisions || saved < maxRevisions) {
-				if (const auto sealed = SealRowCopy("EditedMessage", message)) {
+				if (const auto sealed = SealRowCopy(
+						"EditedMessage",
+						message,
+						StrictMode())) {
 					storage.insert(*sealed);
 				} else {
 					LOG(("[AyuGram] Database: strict mode refused an edited message."));
@@ -890,7 +941,10 @@ void addDeletedMessages(const std::vector<DeletedMessage> &messages) {
 					)
 				) > 0;
 				if (!exists) {
-					if (const auto sealed = SealRowCopy("DeletedMessage", message)) {
+					if (const auto sealed = SealRowCopy(
+							"DeletedMessage",
+							message,
+							StrictMode())) {
 						storage.insert(*sealed);
 					} else {
 						LOG(("[AyuGram] Database: strict mode refused a deleted message."));
