@@ -432,6 +432,7 @@
 "ayu_SecretChatNotReady" = "Dieser geheime Chat ist nicht aktiv.";
 "ayu_SecretNotSupported" = "Das wird in geheimen Chats nicht unterstützt.";
 "ayu_SecretKeyIntro" = "Vergleiche dieses Bild und den Hexadezimaltext mit denen auf dem Gerät deines Kontakts. Stimmen sie überein, ist der Chat zwischen euch beiden Ende-zu-Ende-verschlüsselt.";
+"ayu_SecretTranslateWarning" = "Der Text dieser Nachrichten wird zur Übersetzung an {provider} gesendet. Fortfahren?";
 "ayu_SecretChatsHeader" = "Geheime Chats";
 "ayu_SecretChatsSwitch" = "Geheime Chats aktivieren";
 "ayu_SecretChatsSwitchDescription" = "Schlüssel, Nachrichten und Anhänge geheimer Chats werden mit dem lokalen Schlüssel dieses Profils verschlüsselt. Ein lokaler Passcode ist optional; beim Ändern oder Entfernen bleiben die geheimen Chats erhalten.";

@@ -440,6 +440,7 @@
 "ayu_SecretChatNotReady" = "Questa chat segreta non è attiva.";
 "ayu_SecretNotSupported" = "Non è supportato nelle chat segrete.";
 "ayu_SecretKeyIntro" = "Confronta questa immagine e il testo esadecimale con quelli sul dispositivo del tuo contatto. Se corrispondono, la chat è crittografata end-to-end tra voi due.";
+"ayu_SecretTranslateWarning" = "Il testo di questi messaggi sarà inviato a {provider} per la traduzione. Continuare?";
 "ayu_SecretChatsHeader" = "Chat segrete";
 "ayu_SecretChatsSwitch" = "Attiva le chat segrete";
 "ayu_SecretChatsSwitchDescription" = "Chiavi, messaggi e allegati delle chat segrete sono crittografati con la chiave locale di questo profilo. Il codice di accesso locale è facoltativo; modificarlo o rimuoverlo conserva le chat segrete.";

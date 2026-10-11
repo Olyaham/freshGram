@@ -424,6 +424,7 @@
 "ayu_SecretChatNotReady" = "此私密聊天尚未生效。";
 "ayu_SecretNotSupported" = "私密聊天不支持此功能。";
 "ayu_SecretKeyIntro" = "请将此图片和十六进制文本与联系人设备上的进行比对。如果一致，说明你们之间的聊天已端到端加密。";
+"ayu_SecretTranslateWarning" = "这些消息的文本将被发送到{provider}进行翻译。继续吗？";
 "ayu_SecretChatsHeader" = "私密聊天";
 "ayu_SecretChatsSwitch" = "启用私密聊天";
 "ayu_SecretChatsSwitchDescription" = "私密聊天的密钥、消息和附件使用此配置的本地密钥加密。本地密码为可选项；更改或移除密码后，私密聊天仍会保留。";

@@ -440,6 +440,7 @@
 "ayu_SecretChatNotReady" = "Cette discussion secrète n'est pas active.";
 "ayu_SecretNotSupported" = "Ce n'est pas pris en charge dans les discussions secrètes.";
 "ayu_SecretKeyIntro" = "Comparez cette image et le texte hexadécimal avec ceux de l'appareil de votre contact. S'ils correspondent, la discussion est chiffrée de bout en bout entre vous deux.";
+"ayu_SecretTranslateWarning" = "Le texte de ces messages sera envoyé à {provider} pour traduction. Continuer ?";
 "ayu_SecretChatsHeader" = "Discussions secrètes";
 "ayu_SecretChatsSwitch" = "Activer les discussions secrètes";
 "ayu_SecretChatsSwitchDescription" = "Les clés, messages et pièces jointes des discussions secrètes sont chiffrés avec la clé locale de ce profil. Le code d'accès local est facultatif ; le modifier ou le supprimer conserve les discussions secrètes.";

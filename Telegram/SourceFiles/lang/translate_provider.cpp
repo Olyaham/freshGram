@@ -67,6 +67,27 @@ std::unique_ptr<TranslateProvider> CreateTranslateProvider(
 	return CreateMTProtoTranslateProvider(session);
 }
 
+QString TranslateProviderName(not_null<Main::Session*> session) {
+	const auto urlTemplate = OptionTranslateUrlTemplate.value();
+	if (!urlTemplate.isEmpty() && urlTemplate.contains(u"%q"_q)) {
+		return u"custom server"_q;
+	}
+	switch (ResolveTranslateProvider()) {
+	case TranslationProvider::Google:
+		return u"Google"_q;
+	case TranslationProvider::Yandex:
+		return u"Yandex"_q;
+	case TranslationProvider::Native:
+		if (!Platform::IsTranslateProviderAvailable()) {
+			return u"Telegram"_q;
+		}
+		return u"system translator"_q;
+	case TranslationProvider::Telegram:
+		return u"Telegram"_q;
+	}
+	return u"Telegram"_q;
+}
+
 TranslateProviderRequest PrepareTranslateProviderRequest(
 		not_null<TranslateProvider*> provider,
 		not_null<PeerData*> peer,
