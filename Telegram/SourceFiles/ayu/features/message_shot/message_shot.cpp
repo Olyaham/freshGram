@@ -208,25 +208,24 @@ QColor makeDefaultBackgroundColor() {
 // The snapshot must sit on the chat background, not on an approximation
 // derived from the boxes palette: lighter()/darker() on a tinted theme
 // breaks the hue (e.g. olive on dark-green) instead of matching the chat.
+//
+// Composite order mirrors the chat itself: solid/gradient base first,
+// then the pattern overlay. All geometry is in logical pixels (the
+// painter inherits the image DPR); gift symbols and gradient rotation
+// are intentionally left out.
 void PaintShotBackground(
 		QPainter &painter,
 		not_null<Window::SessionController*> controller,
-		const QSize &deviceSize) {
+		const QSize &logical) {
 	const auto &background = controller->defaultChatTheme()->background();
-	const auto target = QRect(QPoint(), deviceSize);
+	const auto target = QRect(QPoint(), logical);
+	// 1. Base: solid color, gradient, cover-fit wallpaper, legacy color.
 	if (background.colorForFill) {
 		painter.fillRect(target, *background.colorForFill);
-		return;
-	}
-	if (background.isPattern && !background.prepared.isNull()) {
-		painter.drawTiledPixmap(target, QPixmap::fromImage(background.prepared));
-		return;
-	}
-	if (!background.gradientForFill.isNull()) {
+	} else if (!background.gradientForFill.isNull()) {
 		painter.drawImage(target, background.gradientForFill);
-		return;
-	}
-	if (!background.prepared.isNull()) {
+	} else if (!background.prepared.isNull() && !background.isPattern) {
+		PainterHighQualityEnabler hq(painter);
 		const auto &wallpaper = background.prepared;
 		const auto scale = std::max(
 			target.width() / double(wallpaper.width()),
@@ -236,9 +235,24 @@ void PaintShotBackground(
 		const auto x = (wallpaper.width() - w) / 2.;
 		const auto y = (wallpaper.height() - h) / 2.;
 		painter.drawImage(target, wallpaper, QRectF(x, y, w, h));
-		return;
+	} else if (background.patternOpacity < 0.) {
+		painter.fillRect(target, Qt::black);
+	} else {
+		painter.fillRect(target, makeDefaultBackgroundColor());
 	}
-	painter.fillRect(target, makeDefaultBackgroundColor());
+	// 2. Pattern overlay, height-scaled like the chat fill.
+	const auto &tile = !background.preparedForTiled.isNull()
+		? background.preparedForTiled
+		: (background.isPattern ? background.prepared : QImage());
+	if (!tile.isNull() && target.height() > 0) {
+		const auto scaled = tile.scaledToHeight(
+			target.height(),
+			Qt::SmoothTransformation);
+		painter.save();
+		painter.setOpacity(std::clamp(background.patternOpacity, 0., 1.));
+		painter.drawTiledPixmap(target, QPixmap::fromImage(scaled));
+		painter.restore();
+	}
 }
 
 void Make(not_null<QWidget*> box, const ShotConfig &config, const Fn<void(QImage&,bool)>& callback) {
@@ -438,10 +452,12 @@ void Make(not_null<QWidget*> box, const ShotConfig &config, const Fn<void(QImage
 		newResult.setDevicePixelRatio(style::DevicePixelRatio());
 		{
 			Painter backgroundPainter(&newResult);
+			const auto ratio = double(newResult.devicePixelRatio());
+			const auto logical = (QSizeF(newResult.size()) / ratio).toSize();
 			PaintShotBackground(
 				backgroundPainter,
 				controller,
-				newResult.size());
+				logical);
 		}
 
 		Painter painter(&newResult);
