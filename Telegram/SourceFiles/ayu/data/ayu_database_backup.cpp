@@ -329,6 +329,11 @@ bool create() {
 	}
 	const auto guard = gsl::finally([] { Running = false; });
 	AyuUtils::EnsurePrivateDir(Directory());
+	for (const auto &stale : QDir(Directory()).entryList(
+			{ ".pending.db", ".sealing", ".scratch*.db", ".opening" },
+			QDir::Files)) {
+		QFile::remove(Directory() + '/' + stale);
+	}
 	const auto temporary = Directory() + "/.pending.db";
 	QFile::remove(temporary);
 	{
@@ -377,7 +382,23 @@ bool create() {
 }
 
 bool restore(int &index) {
+	// Crash recovery: a previous restore may have left a verified
+	// staging copy while Main was already gone.
+	const auto staging = MainPath() + ".restoring";
+	QFile::remove(staging + ".opening");
+	if (QFile::exists(staging)) {
+		if (!QFile::exists(MainPath())
+			&& VerifyPlain(staging)
+			&& QFile::rename(staging, MainPath())) {
+			AyuUtils::RestrictFile(MainPath());
+			LOG(("[AyuGram] Database restored from staging copy."));
+			return true;
+		} else if (QFile::exists(MainPath())) {
+			QFile::remove(staging);
+		}
+	}
 	const auto list = List();
+	const auto strict = AyuSettings::getInstance().requireEncryption();
 	for (auto i = index; i < int(list.size()); ++i) {
 		if (HasVaultMagic(list[i].path)) {
 			const auto staging = MainPath() + ".restoring";
@@ -400,14 +421,25 @@ bool restore(int &index) {
 		if (!Verify(list[i].path)) {
 			continue;
 		}
-		QFile::remove(MainPath());
+		if (strict && !HasVaultMagic(list[i].path)) {
+			LOG(("[AyuGram] Database: strict mode skips a plaintext backup."));
+			continue;
+		}
+		// Copy through staging: a failed copy must not leave Main deleted.
+		const auto staging = MainPath() + ".restoring";
+		QFile::remove(staging);
+		if (!QFile::copy(list[i].path, staging)
+			|| !VerifyPlain(staging)
+			|| !QFile::rename(staging, MainPath())) {
+			QFile::remove(staging);
+			continue;
+		}
+		AyuUtils::RestrictFile(MainPath());
 		QFile::remove(MainPath() + "-wal");
 		QFile::remove(MainPath() + "-shm");
-		if (QFile::copy(list[i].path, MainPath())) {
-			index = i + 1;
-			LOG(("[AyuGram] Database restored from '%1'.").arg(list[i].path));
-			return true;
-		}
+		index = i + 1;
+		LOG(("[AyuGram] Database restored from '%1'.").arg(list[i].path));
+		return true;
 	}
 	index = int(list.size());
 	return false;

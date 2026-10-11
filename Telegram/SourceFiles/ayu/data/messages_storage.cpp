@@ -97,6 +97,7 @@ std::vector<std::unique_ptr<DocumentSaveTask>> DocumentSaveTasks;
 	const AyuSecret::Bytes &plain) {
 	const auto strict = AyuSettings::getInstance().requireEncryption();
 	if (AyuSecret::Vault::Available()) {
+		AyuUtils::EnsurePrivateDir(QFileInfo(path).absolutePath());
 		if (AyuSecret::Vault::SealToFile(path, plain, MediaContext(path))) {
 			return true;
 		}
@@ -147,8 +148,15 @@ std::vector<std::unique_ptr<DocumentSaveTask>> DocumentSaveTasks;
 	}
 	out = raw;
 	const auto rawBytes = AyuSecret::Bytes(raw.begin(), raw.end());
-	if (!AyuSecret::Vault::IsSealed(rawBytes)
-		&& AyuSecret::Vault::Available()) {
+	if (AyuSecret::Vault::IsSealed(rawBytes)) {
+		// Sealed but unopenable (corrupt or wrong key): fail closed
+		// instead of feeding ciphertext to image parsers. Legacy
+		// plaintext below is opportunistically sealed for next time.
+		LOG(("Ayu: cached media failed to open, dropping."));
+		out = QByteArray();
+		return false;
+	}
+	if (AyuSecret::Vault::Available()) {
 		AyuSecret::Vault::SealToFile(path, rawBytes, MediaContext(path));
 	}
 	return true;
