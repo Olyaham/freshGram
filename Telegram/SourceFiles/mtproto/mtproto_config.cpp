@@ -195,7 +195,13 @@ std::unique_ptr<Config> Config::FromSerialized(const QByteArray &serialized) {
 	read(raw->_fields.callRingTimeoutMs);
 	read(raw->_fields.callConnectTimeoutMs);
 	read(raw->_fields.callPacketTimeoutMs);
-	read(raw->_fields.webFileDcId);
+	auto webFileDcId = raw->_fields.webFileDcId;
+	read(webFileDcId);
+	if (webFileDcId > 0 && webFileDcId < MTP::kDcShift) {
+		raw->_fields.webFileDcId = webFileDcId;
+	}
+	// Else keep the constructor default: refuse poisoned cached values
+	// just like server-provided ones.
 	read(raw->_fields.txtDomainString);
 	read(legacyPhoneCallsEnabled);
 	read(raw->_fields.blockedMode);

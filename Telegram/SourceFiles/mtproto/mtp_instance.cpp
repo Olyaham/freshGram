@@ -679,6 +679,9 @@ void Instance::Private::cancel(mtpRequestId requestId) {
 		}
 	}
 	unregisterRequest(requestId);
+	for (auto &[dcId, waiters] : _authWaiters) {
+		waiters.erase(ranges::remove(waiters, requestId), end(waiters));
+	}
 	if (shiftedDcId) {
 		const auto session = getSession(std::abs(*shiftedDcId));
 		session->cancel(requestId, msgId);
