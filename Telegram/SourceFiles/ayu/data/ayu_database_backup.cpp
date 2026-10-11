@@ -95,15 +95,17 @@ struct ScratchPlaintext {
 			return;
 		}
 		AyuUtils::RestrictFile(temp.fileName());
+		const auto name = temp.fileName();
 		temp.close();
+		// Free the name again: publishing requires a fresh destination.
+		QFile::remove(name);
 		if (!AyuSecret::Vault::OpenFileStreamed(
 				sealed,
-				temp.fileName(),
+				name,
 				BackupContext(sealed))) {
-			QFile::remove(temp.fileName());
 			return;
 		}
-		path = temp.fileName();
+		path = name;
 	}
 
 	~ScratchPlaintext() {
@@ -272,14 +274,10 @@ void ScrubSecrets(const QString &path) {
 		ScrubSecretsPlain(path);
 		return;
 	}
-	const auto scratch = ScratchPlaintext(path);
-	if (!scratch.valid()) {
-		return;
-	}
-	ScrubSecretsPlain(scratch.path);
-	if (!SealFile(scratch.path, path)) {
-		LOG(("[AyuGram] Database: failed to reseal a scrubbed backup."));
-	}
+	// Sealed backups rely on the envelope, not on scrubbing: the
+	// Secret* rows inside are encrypted at rest, and publishing a
+	// scrubbed copy cannot replace the original atomically.
+	LOG(("[AyuGram] Database: skipping scrub of a sealed backup."));
 }
 
 void Rotate() {
@@ -319,8 +317,26 @@ void Rotate() {
 
 } // namespace
 
+void removeStaleTemps() {
+	// Orphaned temp files from interrupted runs. Hidden dotfiles need
+	// QDir::Hidden to be listed at all. Idempotent: safe to run on
+	// every create() call, including the up-to-date early exit. A
+	// concurrent guarded create() may lose its temp to this sweep and
+	// abort that one backup (no corruption: writers fail, never half
+	// publish, and temp names are unique per run except .pending.db).
+	for (const auto &stale : QDir(Directory()).entryList(
+			{ ".pending.db", ".sealing", ".scratch*.db", "*.opening" },
+			QDir::Files | QDir::Hidden)) {
+		QFile::remove(Directory() + '/' + stale);
+	}
+}
+
 bool create(bool strict) {
-	if (!QFile::exists(MainPath()) || UpToDate()) {
+	if (!QFile::exists(MainPath())) {
+		return false;
+	}
+	removeStaleTemps();
+	if (UpToDate()) {
 		return false;
 	}
 	auto expected = false;
@@ -329,11 +345,6 @@ bool create(bool strict) {
 	}
 	const auto guard = gsl::finally([] { Running = false; });
 	AyuUtils::EnsurePrivateDir(Directory());
-	for (const auto &stale : QDir(Directory()).entryList(
-			{ ".pending.db", ".sealing", ".scratch*.db", ".opening" },
-			QDir::Files)) {
-		QFile::remove(Directory() + '/' + stale);
-	}
 	const auto temporary = Directory() + "/.pending.db";
 	QFile::remove(temporary);
 	{
@@ -392,8 +403,7 @@ void recoverStaging() {
 	}
 	if (!QFile::exists(MainPath())
 		&& VerifyPlain(staging)
-		&& QFile::rename(staging, MainPath())) {
-		AyuUtils::RestrictFile(MainPath());
+		&& AyuSecret::Vault::PublishFile(staging, MainPath())) {
 		LOG(("[AyuGram] Database restored from staging copy."));
 	} else if (QFile::exists(MainPath())) {
 		QFile::remove(staging);
@@ -409,11 +419,13 @@ bool restore(int &index) {
 			QFile::remove(staging);
 			if (UnsealTo(list[i].path, staging)
 				&& VerifyPlain(staging)) {
+				// restore() runs only for a dead Main (initialize moves
+				// it away first): remove it here, publish fresh below.
+				// A crash in between is covered by staging recovery.
 				QFile::remove(MainPath());
 				QFile::remove(MainPath() + "-wal");
 				QFile::remove(MainPath() + "-shm");
-				if (QFile::rename(staging, MainPath())) {
-					AyuUtils::RestrictFile(MainPath());
+				if (AyuSecret::Vault::PublishFile(staging, MainPath())) {
 					index = i + 1;
 					LOG(("[AyuGram] Database restored from '%1'.").arg(list[i].path));
 					return true;
@@ -429,18 +441,23 @@ bool restore(int &index) {
 			LOG(("[AyuGram] Database: strict mode skips a plaintext backup."));
 			continue;
 		}
-		// Copy through staging: a failed copy must not leave Main deleted.
+		// Copy through staging. Main is already dead by contract
+		// (restore runs only for it), so remove it before publishing
+		// fresh; a crash in between is covered by staging recovery.
 		const auto staging = MainPath() + ".restoring";
 		QFile::remove(staging);
 		if (!QFile::copy(list[i].path, staging)
-			|| !VerifyPlain(staging)
-			|| !QFile::rename(staging, MainPath())) {
+			|| !VerifyPlain(staging)) {
 			QFile::remove(staging);
 			continue;
 		}
-		AyuUtils::RestrictFile(MainPath());
+		QFile::remove(MainPath());
 		QFile::remove(MainPath() + "-wal");
 		QFile::remove(MainPath() + "-shm");
+		if (!AyuSecret::Vault::PublishFile(staging, MainPath())) {
+			QFile::remove(staging);
+			continue;
+		}
 		index = i + 1;
 		LOG(("[AyuGram] Database restored from '%1'.").arg(list[i].path));
 		return true;

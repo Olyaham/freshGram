@@ -16,6 +16,7 @@
 
 #include <array>
 #include <cstring>
+#include <vector>
 
 namespace AyuSecret::Vault {
 namespace {
@@ -277,8 +278,8 @@ bool SealFileStreamed(
 			reinterpret_cast<const uint8_t*>(context.data()),
 			int(context.size())) == 1;
 	}
-	auto chunk = std::array<uint8_t, kChunk>();
-	auto out = std::array<uint8_t, kChunk + 16>();
+	auto chunk = std::vector<uint8_t>(kChunk);
+	auto out = std::vector<uint8_t>(kChunk + 16);
 	while (ok) {
 		const auto read = src.read(
 			reinterpret_cast<char*>(chunk.data()),
@@ -334,7 +335,15 @@ bool SealFileStreamed(
 		return false;
 	}
 	fix.close();
-	QFile::remove(dstPath);
+	return PublishFile(tempPath, dstPath);
+}
+
+bool PublishFile(
+		const QString &tempPath,
+		const QString &dstPath) {
+	// QFile::rename cannot replace an existing destination: callers
+	// must pass a fresh dstPath (unique backup names, removed staging
+	// files). A failed publish drops only our temp copy, never dst.
 	if (!QFile::rename(tempPath, dstPath)) {
 		QFile::remove(tempPath);
 		return false;
@@ -406,8 +415,8 @@ bool OpenFileStreamed(
 	if (ok) {
 		AyuUtils::RestrictFile(tempPath);
 	}
-	auto chunk = std::array<uint8_t, kChunk>();
-	auto out = std::array<uint8_t, kChunk + 16>();
+	auto chunk = std::vector<uint8_t>(kChunk);
+	auto out = std::vector<uint8_t>(kChunk + 16);
 	while (ok) {
 		const auto read = src.read(
 			reinterpret_cast<char*>(chunk.data()),
@@ -442,13 +451,7 @@ bool OpenFileStreamed(
 		QFile::remove(tempPath);
 		return false;
 	}
-	QFile::remove(dstPath);
-	if (!QFile::rename(tempPath, dstPath)) {
-		QFile::remove(tempPath);
-		return false;
-	}
-	AyuUtils::RestrictFile(dstPath);
-	return true;
+	return PublishFile(tempPath, dstPath);
 }
 
 } // namespace AyuSecret::Vault

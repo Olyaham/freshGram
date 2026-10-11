@@ -40,5 +40,12 @@ namespace AyuSecret::Vault {
 	const QString &srcPath,
 	const QString &dstPath,
 	const std::string &context);
+// Atomically publishes tempPath as a fresh dstPath. Callers must pass
+// a destination that does not exist (unique names, removed staging):
+// QFile::rename cannot replace, and a failed publish must never
+// destroy a previous file — it drops only the temp copy.
+[[nodiscard]] bool PublishFile(
+	const QString &tempPath,
+	const QString &dstPath);
 
 } // namespace AyuSecret::Vault
