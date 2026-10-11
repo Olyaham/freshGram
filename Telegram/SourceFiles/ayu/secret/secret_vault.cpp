@@ -316,6 +316,11 @@ bool SealFileStreamed(
 			header.data() + 4 + kNonceSize) == 1;
 	}
 	EVP_CIPHER_CTX_free(cipher);
+	// Buffered writes can hide I/O errors: flush explicitly and check
+	// before publishing, or a short file (header only) passes as done.
+	if (ok && (!dst.flush() || dst.error() != QFileDevice::NoError)) {
+		ok = false;
+	}
 	if (!ok) {
 		dst.close();
 		QFile::remove(tempPath);
@@ -330,7 +335,9 @@ bool SealFileStreamed(
 	if (!fix.seek(qint64(4 + kNonceSize))
 		|| fix.write(
 			reinterpret_cast<const char*>(header.data() + 4 + kNonceSize),
-			kTagSize) != kTagSize) {
+			kTagSize) != kTagSize
+		|| !fix.flush()
+		|| fix.error() != QFileDevice::NoError) {
 		QFile::remove(tempPath);
 		return false;
 	}
@@ -446,6 +453,10 @@ bool OpenFileStreamed(
 		ok = EVP_DecryptFinal_ex(cipher, tail.data(), &finalLength) == 1;
 	}
 	EVP_CIPHER_CTX_free(cipher);
+	// Same flush check as on the seal path: Qt buffers writes.
+	if (ok && (!dst.flush() || dst.error() != QFileDevice::NoError)) {
+		ok = false;
+	}
 	dst.close();
 	if (!ok) {
 		QFile::remove(tempPath);

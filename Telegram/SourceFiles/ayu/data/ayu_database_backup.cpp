@@ -325,7 +325,7 @@ void removeStaleTemps() {
 	// abort that one backup (no corruption: writers fail, never half
 	// publish, and temp names are unique per run except .pending.db).
 	for (const auto &stale : QDir(Directory()).entryList(
-			{ ".pending.db", ".sealing", ".scratch*.db", "*.opening" },
+			{ ".pending.db", "*.sealing", ".scratch*.db", "*.opening" },
 			QDir::Files | QDir::Hidden)) {
 		QFile::remove(Directory() + '/' + stale);
 	}
