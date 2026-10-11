@@ -188,6 +188,9 @@ struct Chat {
 	int ttl = 0;
 	int64_t pfsExchange = 0;
 	Bytes pfsPending;
+	// Our last answer to the inbound exchange (g_b sent in AcceptKey),
+	// to retransmit it when the peer's RequestKey is duplicated.
+	Bytes pfsAnswerGB;
 	// Exchange initiated by us: id, our secret power, prime in use.
 	// Kept in memory only: after a restart an uncompleted outgoing
 	// exchange is treated as aborted (the spec allows aborting any
@@ -428,12 +431,18 @@ void DecodeExtras(Chat &chat) {
 	}
 	const auto key = reader.readBytes();
 	const auto other = reader.readBytes();
-	chat.ttl = reader.readInt();
-	chat.pfsExchange = reader.readLong();
+	const auto ttl = reader.readInt();
+	const auto exchange = reader.readLong();
 	const auto pending = reader.readBytes();
 	if (reader.failed()) {
+		// Truncated rows must never leave a half-set exchange behind:
+		// pfsExchange without pfsPending would block rotation forever.
+		chat.pfsExchange = 0;
+		chat.pfsPending.clear();
 		return;
 	}
+	chat.ttl = ttl;
+	chat.pfsExchange = exchange;
 	chat.key = Bytes(key.begin(), key.end());
 	chat.otherKey = Bytes(other.begin(), other.end());
 	chat.pfsPending = Bytes(pending.begin(), pending.end());
@@ -916,6 +925,7 @@ void Manager::Impl::onDiscarded(int chatId, bool historyDeleted) {
 	chat->otherKey.clear();
 	chat->pfsExchange = 0;
 	chat->pfsPending.clear();
+	chat->pfsAnswerGB.clear();
 	clearOurExchange(*chat);
 	if (historyDeleted) {
 		if (AyuSettings::getInstance().saveDeletedMessages()) {
@@ -1103,6 +1113,7 @@ void Manager::Impl::discard(int chatId) {
 	chat->otherKey.clear();
 	chat->pfsExchange = 0;
 	chat->pfsPending.clear();
+	chat->pfsAnswerGB.clear();
 	clearOurExchange(*chat);
 	chat->working = false;
 	saveChat(*chat);
@@ -1565,17 +1576,38 @@ void Manager::Impl::handleRequestKey(Chat &chat, const Inbound &inbound) {
 	}
 	if (chat.pfsExchange != 0) {
 		// Already answering another instance: keep the first one.
-		// A duplicate retransmit is ignored; a lost AcceptKey is
-		// recovered through the seqno resend machinery.
+		// A duplicate of the answered exchange gets our answer again,
+		// so a lost AcceptKey still completes without waiting for the
+		// seqno resend machinery.
+		if (chat.pfsExchange == exchangeId
+			&& !chat.pfsPending.empty()
+			&& !chat.pfsAnswerGB.empty()) {
+			sendService(
+				chat,
+				BuildAcceptKey(
+					RandomId(),
+					exchangeId,
+					chat.pfsAnswerGB,
+					KeyFingerprint(chat.pfsPending)));
+		}
 		return;
 	}
+	// Reserve the exchange synchronously: duplicates arriving while the
+	// DH config is in flight are answered or ignored above instead of
+	// spawning parallel exchanges.
+	chat.pfsExchange = exchangeId;
 	const auto gA = inbound.value;
 	requestDh([=](const DhConfig &config) {
 		const auto chat = find(chatId);
 		if (!chat) {
 			return;
 		}
-		if (chat->pfsExchange != 0) {
+		if (chat->row.state != int(ChatState::Ready)
+			|| chat->key.empty()
+			|| chat->pfsExchange != exchangeId) {
+			if (chat->pfsExchange == exchangeId) {
+				chat->pfsExchange = 0;
+			}
 			return;
 		}
 		if (chat->pfsOurExchange != 0) {
@@ -1585,8 +1617,10 @@ void Manager::Impl::handleRequestKey(Chat &chat, const Inbound &inbound) {
 				break;
 			case ConcurrentDecision::AbortBoth:
 				clearOurExchange(*chat);
+				chat->pfsExchange = 0;
 				return;
 			case ConcurrentDecision::IgnoreIncoming:
+				chat->pfsExchange = 0;
 				return;
 			}
 		}
@@ -1596,6 +1630,7 @@ void Manager::Impl::handleRequestKey(Chat &chat, const Inbound &inbound) {
 			|| !MTP::IsGoodModExpFirst(
 				openssl::BigNum(Span(gA)),
 				prime)) {
+			chat->pfsExchange = 0;
 			sendService(*chat, BuildAbortKey(RandomId(), exchangeId));
 			return;
 		}
@@ -1608,12 +1643,14 @@ void Manager::Impl::handleRequestKey(Chat &chat, const Inbound &inbound) {
 			first.randomPower,
 			Span(config.p));
 		if (raw.empty()) {
+			chat->pfsExchange = 0;
 			sendService(*chat, BuildAbortKey(RandomId(), exchangeId));
 			return;
 		}
 		const auto key = PadKey(FromBytesVector(raw));
 		chat->pfsExchange = exchangeId;
 		chat->pfsPending = key;
+		chat->pfsAnswerGB = FromBytesVector(first.modexp);
 		saveChat(*chat);
 		sendService(
 			*chat,
@@ -1627,7 +1664,9 @@ void Manager::Impl::handleRequestKey(Chat &chat, const Inbound &inbound) {
 }
 
 void Manager::Impl::handleCommitKey(Chat &chat, const Inbound &inbound) {
-	if (chat.pfsPending.empty()
+	if (chat.row.state != int(ChatState::Ready)
+		|| chat.key.empty()
+		|| chat.pfsPending.empty()
 		|| chat.pfsExchange != inbound.exchangeId
 		|| KeyFingerprint(chat.pfsPending) != inbound.fingerprint) {
 		return;
@@ -1637,6 +1676,7 @@ void Manager::Impl::handleCommitKey(Chat &chat, const Inbound &inbound) {
 	chat.row.fingerprint = KeyFingerprint(chat.key);
 	chat.pfsPending.clear();
 	chat.pfsExchange = 0;
+	chat.pfsAnswerGB.clear();
 	resetKeyUsage(chat);
 	saveChat(chat);
 	// Let the initiator discard its previous key: everything from now on
@@ -1696,7 +1736,7 @@ void Manager::Impl::handleAcceptKey(Chat &chat, const Inbound &inbound) {
 }
 
 void Manager::Impl::handleAbortKey(Chat &chat, const Inbound &inbound) {
-	if (chat.row.state != int(ChatState::Ready)) {
+	if (chat.row.state != int(ChatState::Ready) || chat.key.empty()) {
 		return;
 	}
 	const auto exchangeId = inbound.exchangeId;
@@ -1708,6 +1748,7 @@ void Manager::Impl::handleAbortKey(Chat &chat, const Inbound &inbound) {
 	} else if (chat.pfsExchange == exchangeId) {
 		chat.pfsExchange = 0;
 		chat.pfsPending.clear();
+		chat.pfsAnswerGB.clear();
 		saveChat(chat);
 	}
 }
@@ -2043,6 +2084,7 @@ void Manager::Impl::sendEncrypted(
 				chat->otherKey.clear();
 				chat->pfsExchange = 0;
 				chat->pfsPending.clear();
+				chat->pfsAnswerGB.clear();
 				clearOurExchange(*chat);
 				chat->row.keyData.clear();
 				saveChat(*chat);
