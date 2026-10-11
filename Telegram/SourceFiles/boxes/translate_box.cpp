@@ -40,9 +40,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/selecting_scroll.h"
 #include "ui/wrap/fade_wrap.h"
 #include "ui/wrap/slide_wrap.h"
+#include "window/window_session_controller.h"
 #include "ui/basic_click_handlers.h"
 #include "ui/boxes/confirm_box.h"
 #include "ui/integration.h"
+#include "ui/layers/box_content.h"
 #include "ui/power_saving.h"
 #include "ui/vertical_list.h"
 #include "window/window_session_controller.h"
@@ -497,26 +499,42 @@ void TranslateBox(
 		MsgId msgId,
 		TextWithEntities text,
 		bool hasCopyRestriction) {
+	TranslateBoxImpl(box, peer, msgId, std::move(text), hasCopyRestriction);
+}
+
+void ShowTranslateBox(
+		not_null<Window::SessionController*> controller,
+		not_null<PeerData*> peer,
+		MsgId msgId,
+		TextWithEntities text,
+		bool hasCopyRestriction) {
 	if (!AyuSecret::IsSecretPeerId(peer->id)) {
-		TranslateBoxImpl(box, peer, msgId, std::move(text), hasCopyRestriction);
+		controller->show(Box(
+			Ui::TranslateBox,
+			peer,
+			msgId,
+			std::move(text),
+			hasCopyRestriction));
 		return;
 	}
 	// Secret chats: translating sends the text to the provider's
-	// server, so ask explicitly instead of sending quietly.
+	// server, so ask before even opening the translate box.
 	const auto providerName = TranslateProviderName(&peer->session());
-	box->uiShow()->showBox(Ui::MakeConfirmBox({
+	controller->show(Ui::MakeConfirmBox({
 		.text = tr::ayu_SecretTranslateWarning(
 			tr::now,
 			lt_provider,
 			providerName),
-		.confirmed = crl::guard(box, [=, text = std::move(text)](
+		.confirmed = [=, text = std::move(text)](
 				Fn<void()> close) mutable {
 			close();
-			TranslateBoxImpl(box, peer, msgId, std::move(text), hasCopyRestriction);
-		}),
-		.cancelled = crl::guard(box, [=] {
-			box->closeBox();
-		}),
+			controller->show(Box(
+				Ui::TranslateBox,
+				peer,
+				msgId,
+				std::move(text),
+				hasCopyRestriction));
+		},
 		.confirmText = tr::lng_context_translate(tr::now),
 	}));
 }
