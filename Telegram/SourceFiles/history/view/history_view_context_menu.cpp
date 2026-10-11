@@ -1849,12 +1849,12 @@ void FillContextMenuItems(
 		const auto owner = &view->history()->owner();
 		result->addAction(tr::lng_context_translate_selected(tr::now), [=] {
 			if (const auto item = owner->message(itemId)) {
-				list->controller()->show(Box(
-					Ui::TranslateBox,
+				Ui::ShowTranslateBox(
+					list->controller(),
 					item->history()->peer,
 					MsgId(),
 					list->getSelectedText().rich,
-					list->hasCopyRestrictionForSelected()));
+					list->hasCopyRestrictionForSelected());
 			}
 		}, &st::menuIconTranslate);
 	}
@@ -1933,12 +1933,12 @@ void FillContextMenuItems(
 				&& !Ui::SkipTranslate(translate)) {
 				result->addAction(tr::lng_context_translate(tr::now), [=] {
 					if (const auto item = owner->message(itemId)) {
-						list->controller()->show(Box(
-							Ui::TranslateBox,
+						Ui::ShowTranslateBox(
+							list->controller(),
 							item->history()->peer,
 							byText ? MsgId() : item->fullId().msg,
 							translate,
-							list->hasCopyRestriction(view->data())));
+							list->hasCopyRestriction(view->data()));
 					}
 				}, &st::menuIconTranslate);
 			}
@@ -2393,12 +2393,12 @@ void AddPollActions(
 		}
 		if (!Ui::SkipTranslate(text)) {
 			menu->addAction(tr::lng_context_translate(tr::now), [=] {
-				controller->show(Box(
-					Ui::TranslateBox,
+				Ui::ShowTranslateBox(
+					controller,
 					item->history()->peer,
 					MsgId(),
 					std::move(text),
-					item->forbidsForward()));
+					item->forbidsForward());
 			}, &st::menuIconTranslate);
 		}
 	}
