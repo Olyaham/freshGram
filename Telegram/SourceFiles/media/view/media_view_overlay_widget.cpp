@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "media/view/media_view_overlay_widget.h"
 
 #include "apiwrap.h"
+#include "ayu/features/streamer_mode/streamer_mode.h"
 #include "api/api_attached_stickers.h"
 #include "api/api_peer_photo.h"
 #include "api/api_polls.h"
@@ -134,6 +135,15 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QScreen>
 
 #include <kurlmimedata.h>
+
+#include "ayu/ayu_settings.h"
+#include "ayu/features/recognition/recognition_models.h"
+#include "ayu/features/recognition/text_recognition.h"
+#include "ayu/ui/boxes/recognition_models_box.h"
+#include "ayu/ui/components/recognition_picker.h"
+#include "ayu/ayu_state.h"
+#include "ayu/features/streamer_mode/streamer_mode.h"
+
 
 namespace Media {
 namespace View {
@@ -368,7 +378,7 @@ void RefreshCaptionQuoteCaches(
 	};
 
 	const auto accent = st::mediaviewTextLinkFg->c;
-	blockquote.bg = withAlpha(accent, Ui::kDefaultBgOpacity);
+	blockquote.bg = withAlpha(accent, Ui::DefaultBgOpacity());
 	blockquote.outlines[0] = withAlpha(accent, Ui::kDefaultOutline1Opacity);
 	blockquote.outlines[1] = blockquote.outlines[2] = QColor(0, 0, 0, 0);
 	blockquote.icon = accent;
@@ -1389,7 +1399,7 @@ void OverlayWidget::markTimedMediaRead() {
 
 void OverlayWidget::checkSingleViewMediaBurn() {
 	const auto item = _message;
-	if (!item || item->out()) {
+	if (!item || item->out() || item->keepsUnburnt()) {
 		return;
 	}
 	const auto media = item->media();
@@ -1450,12 +1460,8 @@ bool OverlayWidget::hasCopyMediaRestriction(bool skipPremiumCheck) const {
 		if (story->call()) {
 			return true;
 		}
-		return skipPremiumCheck
-			? !story->canDownloadIfPremium()
-			: !story->canDownloadChecked();
 	}
-	return (_history && !_history->peer->allowsForwarding())
-		|| (_message && _message->forbidsSaving());
+	return false;
 }
 
 bool OverlayWidget::showCopyMediaRestriction(bool skipPRemiumCheck) {
@@ -1476,7 +1482,20 @@ bool OverlayWidget::showCopyMediaRestriction(bool skipPRemiumCheck) {
 bool OverlayWidget::videoShown() const {
 	return _streamed
 		&& _streamed->ready
-		&& !_streamed->instance.info().video.cover.isNull();
+		&& !_streamed->instance.info().video.cover.isNull()
+		&& !streamerHidden();
+}
+
+const void *OverlayWidget::streamerMediaKey() const {
+	return _photo
+		? static_cast<const void*>(_photo)
+		: static_cast<const void*>(_document);
+}
+
+bool OverlayWidget::streamerHidden() const {
+	return AyuFeatures::StreamerMode::spoilersActive()
+		&& streamerMediaKey()
+		&& _streamerRevealedFor != streamerMediaKey();
 }
 
 QSize OverlayWidget::videoSize() const {
@@ -1490,8 +1509,7 @@ QSize OverlayWidget::videoSize() const {
 
 bool OverlayWidget::streamingRequiresControls() const {
 	return !_stories
-		&& _document
-		&& (!_document->isAnimation() || _document->isVideoMessage());
+		&& _document;
 }
 
 QImage OverlayWidget::videoFrame() const {
@@ -1551,6 +1569,9 @@ void OverlayWidget::setStaticContent(QImage image) {
 	image.setDevicePixelRatio(style::DevicePixelRatio());
 	if (_flip) {
 		image = image.mirrored(_flip & Qt::Horizontal, _flip & Qt::Vertical);
+	}
+	if (!image.isNull() && streamerHidden()) {
+		AyuFeatures::StreamerMode::spoilerImage(image);
 	}
 	_staticContent = std::move(image);
 	_staticContentTransparent = IsSemitransparent(_staticContent);
@@ -1825,6 +1846,11 @@ void OverlayWidget::updateControls() {
 		return dNow;
 	}();
 	_dateText = d.isValid() ? Ui::FormatDateTime(d) : QString();
+	if (_photo) {
+		_dateText += QString(", DC%1").arg(_photo->getDC());
+	} else if (_document) {
+		_dateText += QString(", DC%1").arg(_document->getDC());
+	}
 	const auto destroyAt = _message ? _message->mediaDestroyAt() : TimeId();
 	if (destroyAt > 0) {
 		const auto left = std::max(
@@ -2305,6 +2331,19 @@ void OverlayWidget::fillContextMenuActions(
 				[=] { copyMedia(); },
 				&st::mediaMenuIconCopy);
 		}
+	}
+	if (!hasRecognitionSelection
+		&& !_stories
+		&& !streamerHidden()
+		&& AyuRecognition::TextRecognitionAvailable()
+		&& ((_photo && _photoMedia && _photoMedia->loaded())
+			|| (_document
+				&& _document->isImage()
+				&& !_staticContent.isNull()))) {
+		addAction(
+			tr::ayu_RecognizeText(tr::now),
+			[=] { startTextRecognition(); },
+			&st::mediaMenuIconFont);
 	}
 	if ((_photo && _photo->hasAttachedStickers())
 		|| (_document && _document->hasAttachedStickers())) {
@@ -4509,6 +4548,12 @@ void OverlayWidget::activate() {
 	setFocus();
 	QApplication::setActiveWindow(_window);
 	setFocus();
+
+	if (AyuSettings::getInstance().streamerMode()) {
+		AyuFeatures::StreamerMode::hideWidgetWindow(_window);
+	} else {
+		AyuFeatures::StreamerMode::showWidgetWindow(_window);
+	}
 }
 
 void OverlayWidget::show(OpenRequest request) {
@@ -4639,6 +4684,7 @@ void OverlayWidget::displayPhoto(
 	_rotation = _photo->owner().mediaRotation().get(_photo);
 	_radial.stop();
 	if (photoChanged) {
+		_recognitionPicker = nullptr;
 		_showRecognitionResults = false;
 		_recognitionResult = {};
 		_recognitionPendingSessionUniqueId = 0;
@@ -4735,6 +4781,7 @@ void OverlayWidget::displayDocument(
 	_themeCloudData = cloud;
 	_radial.stop();
 	if (documentChanged) {
+		_recognitionPicker = nullptr;
 		_showRecognitionResults = false;
 		_recognitionResult = {};
 		_recognitionPendingSessionUniqueId = 0;
@@ -6266,6 +6313,65 @@ void OverlayWidget::validatePhotoCurrentImage() {
 	}
 }
 
+void OverlayWidget::startTextRecognition() {
+	if (_stories || !_session || _recognitionPicker || streamerHidden()) {
+		return;
+	}
+	auto image = QImage();
+	if (_photo && _photoMedia) {
+		_photoMedia->wanted(Data::PhotoSize::Large, fileOrigin());
+		if (const auto large = _photoMedia->image(Data::PhotoSize::Large)) {
+			image = large->original();
+		} else if (const auto small = _photoMedia->image(
+				Data::PhotoSize::Small)) {
+			image = small->original();
+		}
+		if (!image.isNull() && _flip) {
+			image = image.mirrored(
+				_flip & Qt::Horizontal,
+				_flip & Qt::Vertical);
+		}
+	} else if (_document && _document->isImage()) {
+		image = _staticContent;
+	}
+	if (image.isNull()) {
+		Ui::Toast::Show(_body, tr::ayu_RecognizeNotLoaded(tr::now));
+		return;
+	}
+	image.setDevicePixelRatio(1.);
+	const auto languages = AyuRecognition::EnabledOcrLanguages();
+	if (languages.isEmpty()) {
+		Ui::Toast::Show(_body, tr::ayu_RecognizeNoLanguages(tr::now));
+		uiShow()->showBox(Box<AyuUi::RecognitionModelsBox>(
+			_session,
+			AyuRecognition::ModelKind::Tesseract));
+		return;
+	}
+	if (_rotation) {
+		image = image.transformed(
+			QTransform().rotate(_rotation),
+			Qt::SmoothTransformation);
+	}
+	_recognitionPicker = base::make_unique_q<AyuUi::RecognitionPicker>(
+		_body,
+		std::move(image),
+		[=] {
+			const auto rect = finalContentRect();
+			return QRect(
+				_widget->mapTo(_body, rect.topLeft()),
+				rect.size());
+		},
+		languages,
+		[=] {
+			if (_recognitionPicker) {
+				_recognitionPicker->hide();
+			}
+			crl::on_main(base::make_weak(_widget), [=] {
+				_recognitionPicker = nullptr;
+			});
+		});
+}
+
 void OverlayWidget::tryStartTextRecognition() {
 	if (_stories
 		|| !_session
@@ -7305,6 +7411,12 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
 	const auto key = LayoutIndependentKey(e);
 	const auto modifiers = e->modifiers();
 	const auto ctrl = modifiers.testFlag(Qt::ControlModifier);
+	if (_recognitionPicker) {
+		if (key == Qt::Key_Escape) {
+			_recognitionPicker->cancelOrClose();
+		}
+		return;
+	}
 	if (_stories) {
 		if (key == Qt::Key_Space && _down != Over::Video) {
 			_stories->togglePaused(!_stories->paused());
@@ -8431,6 +8543,16 @@ void OverlayWidget::handleMouseRelease(
 		Qt::MouseButton button) {
 	updateOver(position);
 
+	if (button == Qt::LeftButton
+		&& streamerHidden()
+		&& (contentShown()
+			? contentGeometry().rect.contains(QPointF(position))
+			: _docRect.contains(position))) {
+		_streamerRevealedFor = streamerMediaKey();
+		redisplayContent();
+		return;
+	}
+
 	if (const auto activated = ClickHandler::unpressed()) {
 		if (activated->url() == u"internal:show_saved_message"_q) {
 			showSaveMsgFile();
@@ -8837,6 +8959,8 @@ Window::SessionController *OverlayWidget::findWindow(bool switchTo) const {
 
 // #TODO unite and check
 void OverlayWidget::clearBeforeHide() {
+	_recognitionPicker = nullptr;
+	AyuState::disableGhostModeOnStoryClose(_storiesSession);
 	checkSingleViewMediaBurn();
 	_message = nullptr;
 	_sharedMedia = nullptr;
@@ -8881,6 +9005,7 @@ void OverlayWidget::clearBeforeHide() {
 }
 
 void OverlayWidget::clearAfterHide() {
+	_recognitionPicker = nullptr;
 	_recognitionResult = {};
 	_recognitionPendingSessionUniqueId = 0;
 	_recognitionPendingPhotoId = 0;
@@ -9035,6 +9160,46 @@ void OverlayWidget::updateHeader() {
 			_headerText = tr::lng_mediaview_group_photo(tr::now);
 		} else {
 			_headerText = tr::lng_mediaview_single_photo(tr::now);
+		}
+	}
+	if (_photo) {
+		if (auto lockedPhotoMedia = _photo->_media.lock()) {
+			const auto bytes = lockedPhotoMedia->imageBytes(Data::PhotoSize::Large);
+			QString platform;
+			static const auto photoHeaders = std::vector<std::pair<QByteArray, QString>>{
+			   { QByteArray::fromHex("FFD8FFE000104A46494600010100000100010000FFDB004300090607"), "iOS" },
+			   { QByteArray::fromHex("FFD8FFE000104A46494600010101004800480000FFE201D84943435F50524F46494C45"), "Android" },
+			   { QByteArray::fromHex("FFD8FFE000104A464946000101010078"), "Desktop Windows" },
+			   { QByteArray::fromHex("FFD8FFE000104A464946000101010060"), "Desktop Windows, 2" },
+			   { QByteArray::fromHex("FFD8FFE000104A46494600010101004800480000FFE201DB"), "Desktop Windows, 3" },
+			   { QByteArray::fromHex("FFD8FFE000104A46494600010101004800480000FFDB00"), "Desktop Linux, Unigram, Generic" },
+			   { QByteArray::fromHex("FFD8FFE000104A46494600010101004800480000FFE202284943435F50524F46494C450001010000021800000000"), "Android, old" },
+			   { QByteArray::fromHex("FFD8FFE000104A4649460001010101"), "Desktop macOS" },
+			   { QByteArray::fromHex("FFD8FFE000104A46494600010101009000900000FFE201DB"), "Desktop macOS, 2" },
+			   { QByteArray::fromHex("FFD8FFE000104A46494600010100000100010000FFDB004300090606"), "macOS" },
+			   { QByteArray::fromHex("FFD8FFE000104A46494600010100000100010000FFDB004300080606"), "macOS, 2" },
+			   { QByteArray::fromHex("FFD8FFE000104A46494600010101009000900000FFDB004300"), "macOS, 3" },
+			   { QByteArray::fromHex("FFD8FFE000104A46494600010101004800480000FFE201F04943435F50524F46494C45"), "Desktop Linux" },
+			   { QByteArray::fromHex("FFD8FFE000104A46494600010101004800480000FFE202284943435F50524F46494C45000101000002186170706C"), "iOS, Share menu" },
+			   { QByteArray::fromHex("FFD8FFE000104A46494600010101004800480000FFE202184943435F50524F46494C45"), "Android, 2" },
+			   { QByteArray::fromHex("FFD8FFE000104A46494600010101004800480000FFE202404943435F50524F46494C45"), "Android, 3" },
+			   { QByteArray::fromHex("FFD8FFE000104A46494600010100004800480000FFC000110801"), "iOS, 2" }
+			};
+			for (const auto &header : photoHeaders) {
+				if (bytes.startsWith(header.first)) {
+					platform = header.second;
+					break;
+				}
+			}
+			const auto isPfp = !_message && !_document;
+			if (isPfp && _photo->hasVideo()) {
+				platform = QString();
+			} else if (isPfp && platform == u"Desktop Linux, Unigram, Generic"_q) {
+				platform = "iOS, Generic";
+			}
+			if (!platform.isEmpty()) {
+				_headerText += " (" + platform + ")";
+			}
 		}
 	}
 	_headerHasLink = computeOverviewType() != std::nullopt;

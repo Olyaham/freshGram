@@ -97,6 +97,7 @@ private:
 	int drawPremiumEmojiStatus(Painter &p, const Descriptor &descriptor);
 	int drawPremiumStar(Painter &p, const Descriptor &descriptor);
 
+
 	std::unique_ptr<EmojiStatus> _emojiStatus;
 	mutable std::unique_ptr<BotVerifiedData> _botVerifiedData;
 

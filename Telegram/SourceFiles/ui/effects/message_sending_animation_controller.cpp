@@ -341,7 +341,9 @@ void Content::createBubble() {
 	}
 	const auto innerGeometry = currentView->innerGeometry();
 
-	const auto tailWidth = st::historyBubbleTailOutLeft.width();
+	const auto tailWidth = Ui::MaterialBubbles()
+		? 0
+		: st::historyBubbleTailOutLeft.width();
 	_bubble.offsetFromContent = QPoint(
 		(currentView->hasOutLayout()
 			&& (currentView->delegate()->elementChatMode()

@@ -1,45 +1,83 @@
-# [Telegram Desktop][telegram_desktop] – Official Messenger
+# freshGram
 
-This is the complete source code and the build instructions for the official [Telegram][telegram] messenger desktop client, based on the [Telegram API][telegram_api] and the [MTProto][telegram_proto] secure protocol.
+[ English | [Русский](README-RU.md) ]
 
-[![Version](https://badge.fury.io/gh/telegramdesktop%2Ftdesktop.svg)](https://github.com/telegramdesktop/tdesktop/releases)
-[![Build Status](https://github.com/telegramdesktop/tdesktop/workflows/Windows./badge.svg)](https://github.com/telegramdesktop/tdesktop/actions)
-[![Build Status](https://github.com/telegramdesktop/tdesktop/workflows/MacOS./badge.svg)](https://github.com/telegramdesktop/tdesktop/actions)
-[![Build Status](https://github.com/telegramdesktop/tdesktop/workflows/Linux./badge.svg)](https://github.com/telegramdesktop/tdesktop/actions)
-[![Built with Depot](https://img.shields.io/badge/Built%20with-Depot.dev-46A75A)](https://depot.dev)
-
-[![Preview of Telegram Desktop][preview_image]][preview_image_url]
+freshGram is a [Telegram Desktop](https://github.com/telegramdesktop/tdesktop) fork that combines
+the Material Design look and customization of [materialgram](https://github.com/kukuruzka165/materialgram)
+with all the features of [AyuGram Desktop](https://github.com/AyuGram/AyuGramDesktop).
+It is based on the [Telegram API][telegram_api] and the [MTProto][telegram_proto] secure protocol.
 
 The source code is published under GPLv3 with OpenSSL exception, the license is available [here][license].
 
-## Supported systems
+## Features
 
-The latest version is available for
+### From AyuGram Desktop
 
-* [Windows 7 and above (64 bit)](https://telegram.org/dl/desktop/win64) ([portable](https://telegram.org/dl/desktop/win64_portable))
-* [Windows 7 and above (32 bit)](https://telegram.org/dl/desktop/win) ([portable](https://telegram.org/dl/desktop/win_portable))
-* [macOS 10.13 and above](https://telegram.org/dl/desktop/mac)
-* [Linux static build for 64 bit](https://telegram.org/dl/desktop/linux)
-* [Snap](https://snapcraft.io/telegram-desktop)
-* [Flatpak](https://flathub.org/apps/details/org.telegram.desktop)
+- Full ghost mode (flexible)
+- Messages history: the edits of other people and your own and the deleted messages are kept in a local database, which is backed up automatically (the newest valid backup is restored if the database gets corrupted)
+- Storage settings (Settings - freshGram - Storage): how many edits are kept per message, how many deleted messages are loaded when a chat opens, how many messages are saved when you leave a chat, the size limit of saved deleted media, how long deleted messages and edits are kept, and how many database backups are made and how often
+- Anti-recall
+- Message type filter in the search inside a chat (photos, videos, files, music, voice, video messages, links, GIFs), also together with the "From" user
+- "Hide birthday notifications" setting: hides the birthday banners over the chats list, the profile confetti, the cake and the forced gift button
+- "Peek last seen" in a user profile (without Telegram Premium): briefly adds the user to the "Last seen & online" exceptions, reads their exact status and restores your privacy settings; the result is shown as a separate profile line and next to the status in the chat top bar and the profile header, for example "last seen recently (peeked: last seen yesterday at 11:27 PM)"
+- Secret chats live in the main chat list (opt-in: Settings - freshGram - Enable secret chats, requires a local passcode): text with formatting, replies, photos, files, static stickers and GIFs, voice messages and video notes recorded with the native composer, self-destruct timers, typing and read marks, forwarding, message shots, native media viewer, encryption key picture and hex for comparison. Ended chats stay in the list, real notifications show only "Secret chat" and "New secret message", requests that arrived while freshGram was closed are picked up after a restart. Keys, messages and attachments are encrypted with a key derived from the local passcode key, together with chat metadata and bound to their chat and message; removing the passcode or logging out deletes secret chats, and database backups keep secret data only in the newest snapshots, links are never previewed through Telegram servers
+- Service messages (for example, "user joined") are kept when deleted, the same way as normal ones
+- Deleted topics of groups with topics can stay in the topics list marked as deleted, with their loaded messages (off by default, a separate setting)
+- Chats and channels deleted by the other side, that you were removed from or that you deleted yourself stay in the chats list together with the saved messages, including groups with topics (their topics and the messages loaded in the app are saved too, can be turned off separately); deleting the chat once more removes it for real
+- Font customization
+- Streamer mode: hides photos, videos, avatars, usernames, IDs, phone numbers and registration dates behind spoilers on every platform, and on Windows and macOS can also hide the whole window from screen capture (both parts are configurable there)
+- Local Telegram Premium
+- Translator
+- Media preview and quick reaction on force click (macOS)
+- Enhanced appearance
+- App icon picker
 
-## Old system versions
+See the [AyuGram documentation](https://docs.ayugram.one/desktop/) for the full description of these features.
 
-Version **4.9.9** was the last that supports older systems
+### From materialgram
 
-* [macOS 10.12](https://updates.tdesktop.com/tmac/tsetup.4.9.9.dmg)
-* [Linux with glibc < 2.28 static build](https://updates.tdesktop.com/tlinux/tsetup.4.9.9.tar.xz)
+- Own Material You themes (Google Day and Google Dark, applied on the first launch)
+- **Google Sans** font everywhere (except for Arabic characters, they use the **Vazirmatn** font)
+- Material icons instead of default ones (can be turned off in the freshGram appearance settings, restart required)
+- Rounded photos and videos and no message bubble tails, plus reverted old paddings (the "Message Rounding and Tail" setting in the freshGram chat settings turns the rounding and tails back to the classic look)
+- Colored reply background with an adjustable opacity
+- Removed "large emoji" outline
+- Reduced use of uppercase in the interface
+- Ability to seek round videos
+- Ability to delete more than 100 messages at once
+- Ability to copy the sticker set author's id and increment
+- Ability to mention multiple users at once with right click
+- Added admin menu and chat log buttons above the members list
+- Copy usernames as @example if possible
+- Use photos from @gamee in profile photo list (optional)
+- Removed delay when recording voice messages
+- Webview platform is reported as "android" (enabled by default, can be turned off in the freshGram settings)
+- Replaced all sounds
+- Reduced jpeg compression (94-95% on photos, 100% on wallpapers)
+- Reduced minimum window size and minimum brush thickness in the photo editor
+- Reduced some timeouts (like when opening a chat preview)
+- Increased upload speed
+- Improved spoiler animation
+- Improved sticker pack menu
+- Improved chat export (10000 messages in one html document and faster file downloads)
+- Improved voice messages bitrate
+- Hide your phone number in profile and settings
+- Show more recent stickers (unlimited by default)
+- Show the approximate date of account creation and the datacenter in profile (optional)
+- Show photo/file datacenter and original date
+- Show photo platform in media viewer
+- Show more info for unique gifts
 
-Version **2.4.4** was the last that supports older systems
+## Default values
 
-* [OS X 10.10 and 10.11](https://updates.tdesktop.com/tosx/tsetup-osx.2.4.4.dmg)
-* [Linux static build for 32 bit](https://updates.tdesktop.com/tlinux32/tsetup32.2.4.4.tar.xz)
+Where AyuGram and materialgram solve the same task, freshGram keeps the AyuGram implementation
+and uses the materialgram look as the default value of the corresponding AyuGram setting
+(for example, message tails are removed and unlimited recent stickers are enabled by default).
 
-Version **1.8.15** was the last that supports older systems
+## Links
 
-* [Windows XP and Vista](https://updates.tdesktop.com/tsetup/tsetup.1.8.15.exe) ([portable](https://updates.tdesktop.com/tsetup/tportable.1.8.15.zip))
-* [OS X 10.8 and 10.9](https://updates.tdesktop.com/tmac/tsetup.1.8.15.dmg)
-* [OS X 10.6 and 10.7](https://updates.tdesktop.com/tmac32/tsetup32.1.8.15.dmg)
+- Telegram channel: [freshGramDesktop](https://t.me/freshGramDesktop)
+- Source code: [Olyaham/freshGram](https://github.com/Olyaham/freshGram)
 
 ## Third-party
 
@@ -71,31 +109,49 @@ Version **1.8.15** was the last that supports older systems
 
 ## Build instructions
 
-* [Windows (32-bit and 64-bit)][win]
-* [macOS][mac]
-* [GNU/Linux using Docker][linux]
+* [Windows 64-bit](docs/building-win-x64.md)
+* [macOS](docs/building-mac.md)
+* [GNU/Linux using Docker](docs/building-linux.md)
+
+freshGram needs your own Telegram `api_id` and `api_hash`, see [API credentials](docs/api_credentials.md).
+Autoupdate is disabled by default because freshGram has no update server.
+
+### GitHub Actions
+
+1. Add the repository secrets `API_ID` and `API_HASH`.
+2. Run the `Build environment` workflow once, it builds the library image and pushes it to GitHub Packages.
+3. The `Build` workflow builds Linux x86_64 on every push and pull request and produces `freshGram-linux-x86_64.tar.gz`, `freshGram.pacman` (an Arch Linux package, install it with `pacman -U`) and `freshGram.flatpak` (install it with `flatpak install --user freshGram.flatpak`).
+4. The `Build Windows` and `Build macOS` workflows run on every push and manually, and produce `freshGram.exe` (with `freshGram-windows-portable.zip`, which also holds the `TelegramForcePortable` folder that keeps all data next to the exe) and `freshGram.dmg` (ad-hoc signed, open it with right click - Open).
+   The first run builds all libraries, which can take more than one run: the finished part is cached, so run the workflow again until it passes.
+   Run any of the three manually with `release_tag` (for example `v7.2.10`) or push a `v*` tag to publish a release with all the files attached.
+
+See [docs/upstream-merge.md](docs/upstream-merge.md) for the upstream merge procedure.
+
+## Credits
+
+### Telegram clients
+
+- [Telegram Desktop](https://github.com/telegramdesktop/tdesktop)
+- [AyuGram Desktop](https://github.com/AyuGram/AyuGramDesktop)
+- [materialgram](https://github.com/kukuruzka165/materialgram)
+- [Kotatogram](https://github.com/kotatogram/kotatogram-desktop)
+- [64Gram](https://github.com/TDesktop-x64/tdesktop)
+- [Forkgram](https://github.com/forkgram/tdesktop)
+
+### Libraries used
+
+- [JSON for Modern C++](https://github.com/nlohmann/json)
+- [SQLite](https://github.com/sqlite/sqlite)
+- [sqlite_orm](https://github.com/fnc12/sqlite_orm)
+- [androidx sources](https://github.com/androidx/androidx)
+- **Qt 6**, **OpenSSL**, **WebRTC**, **FFmpeg**, **Opus**, **OpenAL Soft** and the other libraries listed in the Telegram Desktop repository
+- **Vazirmatn font** ([SIL Open Font License 1.1](https://github.com/rastikerdar/vazirmatn/blob/master/OFL.txt))
+
+### Icons
+
+- [Solar Icon Set](https://www.figma.com/community/file/1166831539721848736)
 
 [//]: # (LINKS)
-[telegram]: https://telegram.org
-[telegram_desktop]: https://desktop.telegram.org
 [telegram_api]: https://core.telegram.org
 [telegram_proto]: https://core.telegram.org/mtproto
 [license]: LICENSE
-[win]: docs/building-win.md
-[mac]: docs/building-mac.md
-[linux]: docs/building-linux.md
-[preview_image]: https://github.com/telegramdesktop/tdesktop/blob/dev/docs/assets/preview.png "Preview of Telegram Desktop"
-[preview_image_url]: https://raw.githubusercontent.com/telegramdesktop/tdesktop/dev/docs/assets/preview.png
-
-## Thanks to
-
-<a href="https://depot.dev">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://depot.dev/assets/brand/1693758816/depot-logo-horizontal-on-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="https://depot.dev/assets/brand/1693758816/depot-logo-horizontal-on-light.svg">
-    <img alt="Depot" src="https://depot.dev/assets/brand/1693758816/depot-logo-horizontal-on-light.svg" width="150">
-  </picture>
-</a>
-
-CI infrastructure sponsored by [Depot](https://depot.dev) — fast GitHub Actions runners.
-

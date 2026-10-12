@@ -6,6 +6,8 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "dialogs/dialogs_widget.h"
+#include "storage/storage_shared_media.h"
+#include "data/data_search_controller.h"
 
 #include "base/call_delayed.h"
 #include "base/qt/qt_key_modifiers.h"
@@ -108,10 +110,19 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtWidgets/QScrollBar>
 #include <QtWidgets/QTextEdit>
 
+#include "ayu/ayu_settings.h"
+#include "ayu/utils/id_search.h"
+#include "ayu/data/messages_storage.h"
+#include "ayu/utils/telegram_helpers.h"
+#include "base/platform/base_platform_haptic.h"
+
+
 namespace Dialogs {
 namespace {
 
 constexpr auto kSearchPerPage = 50;
+constexpr auto kSearchClientEmptyPages = 200;
+constexpr auto kSearchDeletedTypedLimit = 500;
 constexpr auto kStoriesExpandDuration = crl::time(200);
 constexpr auto kSearchRequestDelay = crl::time(900);
 
@@ -390,6 +401,88 @@ void Widget::BottomButton::paintEvent(QPaintEvent *e) {
 	}
 }
 
+[[nodiscard]] static MTPMessagesFilter MediaFilter(SearchMediaFilter media) {
+	using Type = Storage::SharedMediaType;
+	switch (media) {
+	case SearchMediaFilter::Photos:
+		return Api::PrepareSearchFilter(Type::Photo);
+	case SearchMediaFilter::Videos:
+		return Api::PrepareSearchFilter(Type::Video);
+	case SearchMediaFilter::Files:
+		return Api::PrepareSearchFilter(Type::File);
+	case SearchMediaFilter::Music:
+		return Api::PrepareSearchFilter(Type::MusicFile);
+	case SearchMediaFilter::Voice:
+		return Api::PrepareSearchFilter(Type::VoiceFile);
+	case SearchMediaFilter::RoundVideo:
+		return Api::PrepareSearchFilter(Type::RoundFile);
+	case SearchMediaFilter::Links:
+		return Api::PrepareSearchFilter(Type::Link);
+	case SearchMediaFilter::Gifs:
+		return Api::PrepareSearchFilter(Type::GIF);
+	case SearchMediaFilter::All:
+		break;
+	}
+	return MTP_inputMessagesFilterEmpty();
+}
+
+// The server rejects some type filters together with an author, such a type
+// is remembered and checked on the client instead.
+[[nodiscard]] static bool CheckTypeOnClient(
+		SearchMediaFilter media,
+		PeerData *from,
+		const base::flat_set<SearchMediaFilter> &rejected) {
+	return from && rejected.contains(media);
+}
+
+[[nodiscard]] static MTPMessagesFilter ServerMediaFilter(
+		SearchMediaFilter media,
+		PeerData *from,
+		const base::flat_set<SearchMediaFilter> &rejected) {
+	return CheckTypeOnClient(media, from, rejected)
+		? MTPMessagesFilter(MTP_inputMessagesFilterEmpty())
+		: MediaFilter(media);
+}
+
+[[nodiscard]] static std::optional<Storage::SharedMediaType> ClientMediaType(
+		SearchMediaFilter media,
+		PeerData *from,
+		const base::flat_set<SearchMediaFilter> &rejected) {
+	using Type = Storage::SharedMediaType;
+	if (!CheckTypeOnClient(media, from, rejected)) {
+		return std::nullopt;
+	}
+	switch (media) {
+	case SearchMediaFilter::Photos: return Type::Photo;
+	case SearchMediaFilter::Videos: return Type::Video;
+	case SearchMediaFilter::Files: return Type::File;
+	case SearchMediaFilter::Music: return Type::MusicFile;
+	case SearchMediaFilter::Voice: return Type::VoiceFile;
+	case SearchMediaFilter::RoundVideo: return Type::RoundFile;
+	case SearchMediaFilter::Links: return Type::Link;
+	case SearchMediaFilter::Gifs: return Type::GIF;
+	case SearchMediaFilter::All: break;
+	}
+	return std::nullopt;
+}
+
+[[nodiscard]] static std::optional<Storage::SharedMediaType> DeletedMediaType(
+		SearchMediaFilter media) {
+	using Type = Storage::SharedMediaType;
+	switch (media) {
+	case SearchMediaFilter::Photos: return Type::Photo;
+	case SearchMediaFilter::Videos: return Type::Video;
+	case SearchMediaFilter::Files: return Type::File;
+	case SearchMediaFilter::Music: return Type::MusicFile;
+	case SearchMediaFilter::Voice: return Type::VoiceFile;
+	case SearchMediaFilter::RoundVideo: return Type::RoundFile;
+	case SearchMediaFilter::Links: return Type::Link;
+	case SearchMediaFilter::Gifs: return Type::GIF;
+	case SearchMediaFilter::All: break;
+	}
+	return std::nullopt;
+}
+
 Widget::Widget(
 	QWidget *parent,
 	not_null<Window::SessionController*> controller,
@@ -535,6 +628,14 @@ Widget::Widget(
 	}) | rpl::on_next([=](ChatSearchTab tab) {
 		auto copy = _searchState;
 		copy.tab = tab;
+		applySearchState(std::move(copy));
+	}, lifetime());
+	_inner->changeSearchMediaRequests(
+	) | rpl::filter([=](SearchMediaFilter media) {
+		return _searchState.media != media;
+	}) | rpl::on_next([=](SearchMediaFilter media) {
+		auto copy = _searchState;
+		copy.media = media;
 		applySearchState(std::move(copy));
 	}, lifetime());
 	_inner->changeSearchFilterRequests(
@@ -978,7 +1079,15 @@ void Widget::setupSwipeBack() {
 
 }
 
-void Widget::chosenRow(const ChosenRow &row) {
+void Widget::chosenRow(const ChosenRow &chosen) {
+	auto row = chosen;
+	if (const auto restored = row.key.history()
+		? session().data().message(row.message.fullId)
+		: nullptr; restored && restored->isAyuRestored()) {
+		if (const auto original = restored->history()->ayuOriginalId(restored)) {
+			row.message.fullId = FullMsgId(row.message.fullId.peer, original);
+		}
+	}
 	storiesToggleExplicitExpand(false);
 
 	if (!row.sponsoredRandomId.isEmpty()) {
@@ -1058,7 +1167,8 @@ void Widget::chosenRow(const ChosenRow &row) {
 		&& row.userpicClick
 		&& (row.message.fullId.msg == ShowAtUnreadMsgId)
 		&& history->peer->hasActiveStories()
-		&& !history->peer->isSelf()) {
+		&& !history->peer->isSelf()
+		&& !AyuSettings::getInstance().disableStories()) {
 		controller()->openPeerStories(history->peer->id);
 		return;
 	} else if (userpicCommunity) {
@@ -1694,38 +1804,31 @@ void Widget::setupMainMenuToggle() {
 	Window::OtherAccountsUnreadState(
 		&controller()->session().account()
 	) | rpl::on_next([=](const Window::OthersUnreadState &state) {
-		const auto icon = !state.count
+		auto icon = !state.count
 			? nullptr
 			: !state.allMuted
 			? &st::dialogsMenuToggleUnread
 			: &st::dialogsMenuToggleUnreadMuted;
+
+		const auto &settings = AyuSettings::getInstance();
+		if (settings.hideNotificationCounters()) {
+			icon = nullptr;
+		}
+
 		_mainMenu.toggle->setIconOverride(icon, icon);
 	}, _mainMenu.toggle->lifetime());
 }
 
 void Widget::setupStories() {
+	const auto &settings = AyuSettings::getInstance();
+	if (settings.disableStories()) {
+		return;
+	}
+
 	_stories->verticalScrollEvents(
 	) | rpl::on_next([=](not_null<QWheelEvent*> e) {
 		_scroll->viewportEvent(e);
 	}, _stories->lifetime());
-
-	if (!Core::App().settings().storiesClickTooltipHidden()) {
-		// Don't create tooltip
-		// until storiesClickTooltipHidden can be returned to false.
-		const auto hideTooltip = [=] {
-			Core::App().settings().setStoriesClickTooltipHidden(true);
-			Core::App().saveSettingsDelayed();
-		};
-		InvokeQueued(_stories.get(), [=] {
-			_stories->setShowTooltip(
-				controller()->content(),
-				rpl::combine(
-					Core::App().settings().storiesClickTooltipHiddenValue(),
-					shownValue(),
-					!rpl::mappers::_1 && rpl::mappers::_2),
-				hideTooltip);
-		});
-	}
 
 	_storiesContents.fire(Stories::ContentForSession(
 		&controller()->session(),
@@ -1811,6 +1914,7 @@ void Widget::setupStories() {
 			storiesToggleExplicitExpand(true);
 			_scroll->setOverscrollDefaults(0, 0);
 		} else {
+			base::Platform::Haptic();
 			_scroll->setOverscrollDefaults(
 				-st::dialogsStoriesFull.height,
 				0);
@@ -2636,7 +2740,7 @@ void Widget::checkUpdateStatus() {
 		}
 		_updateTelegram.create(
 			this,
-			tr::lng_update_telegram(tr::now),
+			tr::ayu_UpdateAyuGram(tr::now),
 			st::dialogsUpdateButton,
 			st::dialogsInstallUpdate,
 			st::dialogsInstallUpdateOver,
@@ -2845,6 +2949,13 @@ void Widget::updateStoriesVisibility() {
 	if (!_stories) {
 		return;
 	}
+
+	const auto &settings = AyuSettings::getInstance();
+	if (settings.disableStories()) {
+		_stories->setVisible(false);
+		return;
+	}
+
 	const auto widthAnimation = !_widthAnimationCache.isNull();
 	const auto suggestionsAnimation = widthAnimation
 		&& !_openedFolder
@@ -3110,13 +3221,19 @@ bool Widget::search(bool inCache, SearchRequestDelay delay) {
 	});
 
 	auto result = false;
-	const auto query = _searchState.query.trimmed();
-	const auto trimmed = (query.isEmpty() || query[0] != '#')
-		? query
-		: query.mid(1).trimmed();
 	const auto inPeer = searchInPeer();
 	const auto fromPeer = searchFromPeer();
 	const auto &inTags = searchInTags();
+	const auto spaces = inPeer
+		&& !fromPeer
+		&& inTags.empty()
+		&& _searchState.activeMedia() == SearchMediaFilter::All
+		&& !_searchState.query.isEmpty()
+		&& _searchState.query.trimmed().isEmpty();
+	const auto query = spaces ? u" "_q : _searchState.query.trimmed();
+	const auto trimmed = (query.isEmpty() || query[0] != '#')
+		? query
+		: query.mid(1).trimmed();
 	const auto tab = _searchState.tab;
 	const auto community = _searchState.community
 		? _searchState.community
@@ -3124,12 +3241,17 @@ bool Widget::search(bool inCache, SearchRequestDelay delay) {
 		? _openedCommunity->channel().get()
 		: nullptr;
 	const auto filter = _searchState.filter;
+	const auto media = _searchState.activeMedia();
 	const auto fromArchive = _searchState.fromArchive;
 	const auto fromStartType = SearchRequestType{
 		.start = true,
 		.peer = (inPeer != nullptr),
 	};
-	if (trimmed.isEmpty() && !fromPeer && inTags.empty()) {
+	if (trimmed.isEmpty()
+		&& !spaces
+		&& !fromPeer
+		&& inTags.empty()
+		&& media == SearchMediaFilter::All) {
 		cancelSearchRequest();
 
 		// Otherwise inside first searchApplyEmpty we call searchMode(),
@@ -3169,6 +3291,7 @@ bool Widget::search(bool inCache, SearchRequestDelay delay) {
 			_searchQueryTab = tab;
 			_searchQueryCommunity = community;
 			_searchQueryFilter = filter;
+			_searchQueryMedia = media;
 			_searchQueryFromArchive = fromArchive;
 			process->nextRate = 0;
 			process->full = false;
@@ -3183,6 +3306,7 @@ bool Widget::search(bool inCache, SearchRequestDelay delay) {
 		|| _searchQueryTab != tab
 		|| _searchQueryCommunity != community
 		|| _searchQueryFilter != filter
+		|| _searchQueryMedia != media
 		|| _searchQueryFromArchive != fromArchive) {
 		const auto process = currentSearchProcess();
 		_searchQuery = query;
@@ -3191,6 +3315,7 @@ bool Widget::search(bool inCache, SearchRequestDelay delay) {
 		_searchQueryTab = tab;
 		_searchQueryCommunity = community;
 		_searchQueryFilter = filter;
+		_searchQueryMedia = media;
 		_searchQueryFromArchive = fromArchive;
 		process->nextRate = 0;
 		process->full = false;
@@ -3232,7 +3357,7 @@ bool Widget::search(bool inCache, SearchRequestDelay delay) {
 								Data::ReactionToMTP
 							)),
 						MTP_int(topic ? topic->rootId() : 0),
-						MTP_inputMessagesFilterEmpty(),
+						ServerMediaFilter(media, fromPeer, _typeRejectedWithAuthor),
 						MTP_int(0), // min_date
 						MTP_int(0), // max_date
 						MTP_int(0), // offset_id
@@ -3289,6 +3414,56 @@ bool Widget::search(bool inCache, SearchRequestDelay delay) {
 		_topicSearchQuery = peerQuery;
 		_topicSearchFull = true;
 	}
+
+	const auto isGlobalSearch = !inPeer;
+	const auto idQuery = AyuIdSearch::Parse(query);
+	const auto shouldIdSearch = isGlobalSearch && idQuery.valid();
+
+	if (!isGlobalSearch || _idSearchQuery != query) {
+		if (!_idSearchResults.empty() || !_idSearchQuery.isEmpty()) {
+			_idSearchResults.clear();
+			_idSearchQuery.clear();
+			_inner->idSearchReceived({});
+		}
+	}
+
+	if (shouldIdSearch && !inCache && _idSearchQuery != query) {
+		const auto weak = base::make_weak(this);
+		const auto currentQuery = query;
+		const auto id = idQuery.id;
+		const auto searchType = idQuery.type;
+
+		_idSearchQuery = currentQuery;
+
+		if (idQuery.canBeUser()) {
+			searchUserById(id, &session(), [=](const QString &, PeerData *peer) {
+				crl::on_main(weak, [=] {
+					if (_idSearchQuery != currentQuery) {
+						return;
+					}
+					if (peer && !ranges::contains(_idSearchResults, not_null{ peer })) {
+						_idSearchResults.push_back(peer);
+						_inner->idSearchReceived(_idSearchResults);
+					}
+				});
+			});
+		}
+
+		if (idQuery.canBeChat()) {
+			searchChatById(id, &session(), [=](const QString &, PeerData *peer) {
+				crl::on_main(weak, [=] {
+					if (_idSearchQuery != currentQuery) {
+						return;
+					}
+					if (peer && !ranges::contains(_idSearchResults, not_null{ peer })) {
+						_idSearchResults.push_back(peer);
+						_inner->idSearchReceived(_idSearchResults);
+					}
+				});
+			});
+		}
+	}
+
 	return result;
 }
 
@@ -3446,7 +3621,10 @@ void Widget::searchMore() {
 								Data::ReactionToMTP
 							)),
 						MTP_int(topic ? topic->rootId() : 0),
-						MTP_inputMessagesFilterEmpty(),
+						ServerMediaFilter(
+							_searchQueryMedia,
+							fromPeer,
+							_typeRejectedWithAuthor),
 						MTP_int(0), // min_date
 						MTP_int(0), // max_date
 						MTP_int(process->lastId),
@@ -3500,7 +3678,10 @@ void Widget::searchMore() {
 					MTPInputPeer(), // saved_peer_id
 					MTPVector<MTPReaction>(), // saved_reaction
 					MTPint(), // top_msg_id
-					MTP_inputMessagesFilterEmpty(),
+					ServerMediaFilter(
+					_searchQueryMedia,
+					_searchQueryFrom,
+					_typeRejectedWithAuthor),
 					MTP_int(0), // min_date
 					MTP_int(0), // max_date
 					MTP_int(_migratedProcess.lastId),
@@ -3648,9 +3829,21 @@ void Widget::searchReceived(
 	if (type.start) {
 		process->lastPeer = nullptr;
 		process->lastId = 0;
+		if (!type.migrated) {
+			_searchClientCount = 0;
+			_searchClientEmptyPages = 0;
+		}
 	}
+	const auto clientMedia = (type.peer || type.migrated)
+		? ClientMediaType(
+			_searchQueryMedia,
+			_searchQueryFrom,
+			_typeRejectedWithAuthor)
+		: std::nullopt;
+	auto received = 0;
 	const auto processList = [&](const MTPVector<MTPMessage> &messages) {
 		auto result = std::vector<not_null<HistoryItem*>>();
+		received = int(messages.v.size());
 		for (const auto &message : messages.v) {
 			const auto msgId = IdFromMessage(message);
 			const auto peerId = PeerFromMessage(message);
@@ -3661,7 +3854,10 @@ void Widget::searchReceived(
 						message,
 						MessageFlags(),
 						NewMessageType::Existing);
-					result.push_back(item);
+					if (!clientMedia
+						|| item->sharedMediaTypes().test(*clientMedia)) {
+						result.push_back(item);
+					}
 				}
 				process->lastPeer = peer;
 			} else {
@@ -3700,7 +3896,7 @@ void Widget::searchReceived(
 		const auto rateUpdated = nextRate
 			&& (nextRate->v != process->nextRate);
 		const auto finished = (type.peer || type.migrated || type.posts)
-			? list.empty()
+			? !received
 			: !rateUpdated;
 		if (rateUpdated) {
 			process->nextRate = nextRate->v;
@@ -3731,7 +3927,7 @@ void Widget::searchReceived(
 			}
 		}
 		auto list = processList(data.vmessages());
-		if (list.empty()) {
+		if (!received) {
 			process->full = true;
 		}
 		fullCount = data.vcount().v;
@@ -3742,11 +3938,117 @@ void Widget::searchReceived(
 		process->full = true;
 		return std::vector<not_null<HistoryItem*>>();
 	});
+	if (_searchQueryMedia != SearchMediaFilter::All
+		&& (type.peer || type.migrated)) {
+		LOG(("Search: type %1, author %2, received %3, shown %4, full %5"
+			).arg(int(_searchQueryMedia)
+			).arg(_searchQueryFrom ? 1 : 0
+			).arg(received
+			).arg(int(messages.size())
+			).arg(process->full ? 1 : 0));
+	}
+	if (clientMedia) {
+		if (type.migrated) {
+			fullCount = int(messages.size());
+		} else {
+			_searchClientCount += int(messages.size());
+			fullCount = _searchClientCount;
+		}
+	}
 	_inner->searchReceived(messages, inject, type, fullCount);
 
 	process->requestId = 0;
 	listScrollUpdated();
 	update();
+
+	if (type.start && !type.migrated && !type.posts) {
+		searchDeleted();
+	}
+
+	if (clientMedia && !process->full) {
+		if (!messages.empty()) {
+			_searchClientEmptyPages = 0;
+		} else if (++_searchClientEmptyPages <= kSearchClientEmptyPages) {
+			crl::on_main(this, [=] { searchMore(); });
+		}
+	}
+}
+
+void Widget::searchDeleted() {
+	const auto token = ++_deletedSearchToken;
+	const auto tab = _searchState.tab;
+	const auto inChat = (tab == ChatSearchTab::ThisPeer)
+		|| (tab == ChatSearchTab::ThisTopic);
+	if (!AyuSettings::getInstance().saveDeletedMessages()
+		|| (!inChat && tab != ChatSearchTab::MyMessages)
+		|| _searchState.inChat.sublist()
+		|| !_searchQueryTags.empty()) {
+		return;
+	}
+	const auto query = _searchQuery.trimmed();
+	const auto typed = DeletedMediaType(_searchQueryMedia);
+	if (query.isEmpty() && !_searchQueryFrom && !typed) {
+		return;
+	}
+	const auto withMedia = typed && (*typed != Storage::SharedMediaType::Link);
+	const auto limit = typed ? kSearchDeletedTypedLimit : kSearchPerPage;
+	const auto peer = inChat ? searchInPeer() : nullptr;
+	if (inChat && !peer) {
+		return;
+	}
+	const auto topic = searchInTopic();
+	const auto from = _searchQueryFrom;
+	const auto userId = AyuMessages::storageUserId(session().user());
+	const auto dialogId = peer ? getDialogIdFromPeer(peer) : ID(0);
+	const auto topicId = topic ? ID(topic->rootId().bare) : ID(0);
+	const auto fromId = from ? getBareID(from) : ID(0);
+	const auto text = query.toStdString();
+	AyuMessages::flushPending();
+	crl::async([=] {
+		auto rows = AyuMessages::searchDeletedMessages(
+			userId,
+			dialogId,
+			topicId,
+			fromId,
+			text,
+			limit,
+			withMedia);
+		crl::on_main(this, [=, rows = std::move(rows)] {
+			if (token != _deletedSearchToken || _searchQuery.trimmed() != query) {
+				return;
+			}
+			auto items = std::vector<not_null<HistoryItem*>>();
+			items.reserve(rows.size());
+			for (const auto &row : rows) {
+				if (int(items.size()) >= kSearchPerPage) {
+					break;
+				}
+				const auto target = peer
+					? peer
+					: (row.dialogId > 0)
+					? session().data().peerLoaded(
+						peerFromUser(UserId(uint64(row.dialogId))))
+					: [&]() -> PeerData* {
+						const auto bare = uint64(-row.dialogId);
+						if (const auto channel = session().data().peerLoaded(
+								peerFromChannel(ChannelId(bare)))) {
+							return channel;
+						}
+						return session().data().peerLoaded(
+							peerFromChat(ChatId(bare)));
+					}();
+				if (!target) {
+					continue;
+				}
+				const auto history = session().data().history(target);
+				if (const auto item = history->ayuDeletedItem(row);
+					item && (!typed || item->sharedMediaTypes().test(*typed))) {
+					items.push_back(item);
+				}
+			}
+			_inner->addDeletedSearchResults(std::move(items));
+		});
+	});
 }
 
 void Widget::peerSearchReceived(Api::PeerSearchResult result) {
@@ -3773,8 +4075,24 @@ void Widget::searchFailed(
 		SearchRequestType type,
 		const MTP::Error &error,
 		not_null<SearchProcessState*> process) {
+	if (_searchQueryMedia != SearchMediaFilter::All) {
+		LOG(("Search: type %1, author %2 failed with %3"
+			).arg(int(_searchQueryMedia)
+			).arg(_searchQueryFrom ? 1 : 0
+			).arg(error.type()));
+	}
 	if (error.type() == u"SEARCH_QUERY_EMPTY"_q) {
 		searchApplyEmpty(type, process);
+	} else if (error.type() == u"INPUT_FILTER_INVALID"_q
+		&& _searchQueryFrom
+		&& _searchQueryMedia != SearchMediaFilter::All
+		&& !_typeRejectedWithAuthor.contains(_searchQueryMedia)) {
+		_typeRejectedWithAuthor.emplace(_searchQueryMedia);
+		process->requestId = 0;
+		_searchQueryMedia = SearchMediaFilter::All;
+		crl::on_main(this, [=] {
+			searchRequested(SearchRequestDelay::Instant);
+		});
 	} else {
 		process->requestId = 0;
 		process->full = true;
@@ -4099,6 +4417,14 @@ bool Widget::applySearchState(SearchState state) {
 		}
 		hideChildList();
 	}
+	if (state.inChat || _searchState.inChat != state.inChat) {
+		if (!_idSearchResults.empty() || !_idSearchQuery.isEmpty()) {
+			_idSearchResults.clear();
+			_idSearchQuery.clear();
+			_inner->idSearchReceived({});
+		}
+	}
+
 	if (state.inChat
 		&& _layout == Layout::Main
 		&& state.inChat.folder() != _openedFolder) {
@@ -4171,6 +4497,10 @@ bool Widget::applySearchState(SearchState state) {
 	const auto tagsChanged = (_searchState.tags != state.tags);
 	const auto queryChanged = (_searchState.query != state.query);
 	const auto tabChanged = (_searchState.tab != state.tab);
+	if (!state.inChat) {
+		state.media = SearchMediaFilter::All;
+	}
+	const auto mediaChanged = (_searchState.media != state.media);
 	const auto queryEmptyChanged = queryChanged
 		? (_searchState.query.isEmpty() != state.query.isEmpty())
 		: false;
@@ -4264,8 +4594,10 @@ bool Widget::applySearchState(SearchState state) {
 
 	const auto searchCleared = state.query.isEmpty()
 		&& !state.fromPeer
-		&& state.tags.empty();
+		&& state.tags.empty()
+		&& state.activeMedia() == SearchMediaFilter::All;
 	if (searchCleared
+		|| mediaChanged
 		|| inChatChanged
 		|| communityChanged
 		|| fromPeerChanged
@@ -5020,6 +5352,11 @@ bool Widget::cancelSearch(CancelSearchOptions options) {
 		}
 	}
 	cancelSearchRequest();
+
+	_idSearchQuery.clear();
+	_idSearchResults.clear();
+	_inner->idSearchReceived({});
+
 	auto updatedState = _searchState;
 	const auto clearingQuery = clearingSuggestionsQuery
 		|| !updatedState.query.isEmpty();

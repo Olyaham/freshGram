@@ -5,7 +5,10 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/ayu_settings.h"
 #include "info/profile/info_profile_top_bar.h"
+
+#include "ayu/features/streamer_mode/streamer_mode.h"
 
 #include "api/api_peer_colors.h"
 #include "api/api_peer_photo.h"
@@ -109,6 +112,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <QtGui/QClipboard>
 #include <QtGui/QGuiApplication>
+
+#include "ayu/ui/ayu_userpic.h"
+#include "ayu/ui/status_marquee.h"
+#include "ayu/utils/telegram_helpers.h"
+
 
 namespace Info::Profile {
 namespace {
@@ -405,6 +413,11 @@ TopBar::TopBar(
 	: nullptr)
 , _status(this, QString(), statusStyle())
 , _statusLabel(std::make_unique<StatusLabel>(_status.data(), _peer))
+, _statusScrollTimer([=] {
+	if (_statusScroll) {
+		_statusScroll->update();
+	}
+})
 , _customStatus(std::move(descriptor.customStatus))
 , _showLastSeen(
 	this,
@@ -607,7 +620,9 @@ TopBar::TopBar(
 
 void TopBar::setupBirthdayEffect() {
 	const auto user = _peer->asUser();
-	if (!user || !Data::IsBirthdayToday(user->birthday())) {
+	if (!user
+		|| AyuSettings::getInstance().hideBirthdayNotifications()
+		|| !Data::IsBirthdayToday(user->birthday())) {
 		return;
 	} else if (_wrap.current() == Wrap::Side) {
 		return;
@@ -1044,8 +1059,8 @@ void TopBar::setupActions(not_null<Window::SessionController*> controller) {
 		notifications->convertToToggle(
 			st::infoProfileTopBarActionUnmute,
 			st::infoProfileTopBarActionMute,
-			u"profile_muting"_q,
-			u"profile_unmuting"_q);
+			QString(),
+			QString());
 
 		const auto topicRootId = topic ? topic->rootId() : MsgId();
 		const auto makeThread = [=] {
@@ -2061,6 +2076,8 @@ void TopBar::updateStatusPosition(float64 progressCurrent) {
 		_forumButton->setVisible(!tabSwapActive());
 
 		_status->hide();
+		_statusScrollTimer.cancel();
+		_statusScroll = nullptr;
 		// _starsRating->hide();
 		_showLastSeen->hide(anim::type::instant);
 		return;
@@ -2082,25 +2099,101 @@ void TopBar::updateStatusPosition(float64 progressCurrent) {
 	const auto totalElementsWidth = _status->width()
 		+ (_starsRating ? _starsRating->width() : 0)
 		+ (_showLastSeen->toggled() ? _showLastSeen->width() : 0);
-	const auto statusLeft = anim::interpolate(
+	auto statusLeft = anim::interpolate(
 		statusMostLeft(),
 		(width() - totalElementsWidth) / 2,
 		progressCurrent);
+	const auto statusShift = _statusShift.current()
+		* std::clamp((progressCurrent) / 0.15, 0., 1.);
+
+	const auto leftEdge = anim::interpolate(
+		statusMostLeft(),
+		st::boxRowPadding.left(),
+		progressCurrent);
+	const auto rightEdge = anim::interpolate(
+		calculateRightButtonsWidth(),
+		st::boxRowPadding.right(),
+		progressCurrent);
+	const auto lastSeenWidth = _showLastSeen->toggled()
+		? (_showLastSeen->width() + st::infoProfileTopBarLastSeenSkip.x())
+		: 0;
+	const auto viewport = width()
+		- leftEdge
+		- rightEdge
+		- int(statusShift)
+		- lastSeenWidth;
+	const auto fullWidth = _status->width();
+	const auto scrolling = (viewport > 0) && (fullWidth > viewport);
+	auto shownWidth = _status->textMaxWidth();
+	if (scrolling) {
+		statusLeft = leftEdge;
+		shownWidth = viewport;
+		if (!_statusScroll) {
+			_statusScroll = base::make_unique_q<Ui::RpWidget>(this);
+			_statusScroll->setAttribute(Qt::WA_TransparentForMouseEvents);
+			_statusScroll->paintRequest() | rpl::on_next([=] {
+				auto p = QPainter(_statusScroll.get());
+				const auto tape = _statusTape.size()
+					/ _statusTape.devicePixelRatio();
+				if (!_statusMarquee.step(
+						crl::now(),
+						tape.width(),
+						_statusScroll->width())) {
+					p.drawImage(0, 0, _statusTape);
+					return;
+				}
+				p.drawImage(0, 0, _statusMarquee.frame(
+					_statusScroll->size(),
+					tape.width(),
+					[=](Painter &q, int x) {
+						q.drawImage(x, 0, _statusTape);
+					}));
+			}, _statusScroll->lifetime());
+		}
+		const auto ratio = style::DevicePixelRatio();
+		_statusTape = QImage(
+			_status->size() * ratio,
+			QImage::Format_ARGB32_Premultiplied);
+		_statusTape.setDevicePixelRatio(ratio);
+		_statusTape.fill(Qt::transparent);
+		{
+			auto q = QPainter(&_statusTape);
+			_status->render(
+				&q,
+				QPoint(),
+				QRegion(),
+				QWidget::DrawChildren);
+		}
+		_statusScroll->setGeometry(
+			int(statusLeft + statusShift),
+			statusTop,
+			viewport,
+			_status->height());
+		_statusScroll->setVisible(swapProgress < 1.);
+		_statusScroll->raise();
+		if (!_statusScrollTimer.isActive()) {
+			_statusScrollTimer.callEach(33);
+		}
+	} else {
+		_statusMarquee.reset();
+		_statusScrollTimer.cancel();
+		_statusScroll = nullptr;
+	}
 
 	if (const auto rating = _starsRating.get()) {
 		rating->moveTo(statusLeft, statusTop - st::lineWidth);
 		rating->setOpacity(progressCurrent);
 	}
-	const auto statusShift = _statusShift.current()
-		* std::clamp((progressCurrent) / 0.15, 0., 1.);
 
-	_status->moveToLeft(statusLeft + statusShift, statusTop);
+	_status->moveToLeft(
+		scrolling ? -(fullWidth + st::boxRowPadding.left()) : statusLeft + statusShift,
+		statusTop);
 
 	if (_showLastSeen->toggled()) {
 		_showLastSeen->moveToLeft(
 			statusLeft
 				+ statusShift
-				+ _status->textMaxWidth()
+				+ shownWidth
 				+ st::infoProfileTopBarLastSeenSkip.x(),
 			statusTop + st::infoProfileTopBarLastSeenSkip.y());
 		_showLastSeen->setOpacity(progressCurrent);
@@ -2779,7 +2872,9 @@ void TopBar::paintUserpic(QPainter &p, const QRect &geometry) {
 		p.drawImage(geometry, _cachedUserpic);
 		return;
 	}
-	if (_videoUserpicPlayer && _videoUserpicPlayer->ready()) {
+	if (_videoUserpicPlayer
+		&& _videoUserpicPlayer->ready()
+		&& !AyuFeatures::StreamerMode::spoilersActive()) {
 		const auto size = st::infoProfileTopBarPhotoSize;
 		const auto paused = _gifPausedChecker();
 		const auto frame = _videoUserpicPlayer->frame(
@@ -2796,38 +2891,55 @@ void TopBar::paintUserpic(QPainter &p, const QRect &geometry) {
 		}
 	}
 	const auto key = _peer->userpicUniqueKey(_userpicView);
+	const auto ayuState = AyuUserpic::PackedState();
 	const auto overlayActive = _uploadOverlay && _uploadOverlay->shown();
 	const auto awaitingCloud = _waitingUserpicCloudLoad
 		&& !_peer->userpicCloudImage(_userpicView);
-	if (!overlayActive && !awaitingCloud && _userpicUniqueKey != key) {
+	if (!overlayActive
+		&& !awaitingCloud
+		&& (_userpicUniqueKey != key || _userpicAyuState != ayuState)) {
 		_waitingUserpicCloudLoad = false;
 		_userpicUniqueKey = key;
+		_userpicAyuState = ayuState;
 		const auto fullSize = st::infoProfileTopBarPhotoSize;
 		const auto scaled = fullSize * style::DevicePixelRatio();
 		auto image = QImage();
 		if (const auto broadcast = _peer->monoforumBroadcast()) {
+			const auto ayuOverride = AyuUserpic::ShouldOverrideShape(
+				Ui::PeerUserpicShape::Monoforum);
 			image = PeerData::GenerateUserpicImage(
 				broadcast,
 				_userpicView,
 				scaled,
-				0);
-			if (_monoforumMask.isNull()) {
-				_monoforumMask = Ui::MonoforumShapeMask(Size(scaled));
+				ayuOverride
+					? std::optional<int>(
+						AyuUserpic::ComputeRadius(scaled))
+					: std::optional<int>(0));
+			if (!ayuOverride) {
+				if (_monoforumMask.isNull()) {
+					_monoforumMask = Ui::MonoforumShapeMask(Size(scaled));
+				}
+				constexpr auto kFormat = QImage::Format_ARGB32_Premultiplied;
+				if (image.format() != kFormat) {
+					image = std::move(image).convertToFormat(kFormat);
+				}
+				auto q = QPainter(&image);
+				q.setCompositionMode(
+					QPainter::CompositionMode_DestinationIn);
+				q.drawImage(
+					Rect(image.size() / image.devicePixelRatio()),
+					_monoforumMask);
+				q.end();
 			}
-			constexpr auto kFormat = QImage::Format_ARGB32_Premultiplied;
-			if (image.format() != kFormat) {
-				image = std::move(image).convertToFormat(kFormat);
-			}
-			auto q = QPainter(&image);
-			q.setCompositionMode(QPainter::CompositionMode_DestinationIn);
-			q.drawImage(
-				Rect(image.size() / image.devicePixelRatio()),
-				_monoforumMask);
-			q.end();
 		} else {
 			const auto radius = (_source == Source::Community)
 				? std::optional<int>(
-					int(scaled * Ui::ForumUserpicRadiusMultiplier()))
+					AyuUserpic::ShouldOverrideShape(
+						Ui::PeerUserpicShape::Forum)
+						? AyuUserpic::ComputeRadius(scaled)
+						: int(
+							scaled
+							* Ui::ForumUserpicRadiusMultiplier()))
 				: std::nullopt;
 			image = PeerData::GenerateUserpicImage(
 				_peer,

@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_bridge.h"
 #include "window/notifications_manager_default.h"
 
 #include "platform/platform_notifications_manager.h"
@@ -47,20 +48,35 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QGuiApplication>
 #include <QtGui/QScreen>
 
+#include "ayu/ayu_settings.h"
+#include "ayu/features/streamer_mode/streamer_mode.h"
+#include "ayu/utils/telegram_helpers.h"
+
+
 namespace Window {
 namespace Notifications {
 namespace Default {
 namespace {
+
+[[nodiscard]] int notifyWidth() {
+	const auto corner = Core::App().settings().notificationsCorner();
+	return Core::Settings::IsTopCenterCorner(corner) ? st::notifyWidth * 1.5 : st::notifyWidth;
+}
 
 [[nodiscard]] QPoint notificationStartPosition() {
 	const auto corner = Core::App().settings().notificationsCorner();
 	const auto r = NotificationDisplayRect(Core::App().activePrimaryWindow());
 	const auto isLeft = Core::Settings::IsLeftCorner(corner);
 	const auto isTop = Core::Settings::IsTopCorner(corner);
-	const auto x = (isLeft == rtl())
-		? (r.x() + r.width() - st::notifyWidth - st::notifyDeltaX)
+	auto x = (isLeft == rtl())
+		? (r.x() + r.width() - notifyWidth() - st::notifyDeltaX)
 		: (r.x() + st::notifyDeltaX);
 	const auto y = isTop ? r.y() : (r.y() + r.height());
+
+	if (Core::Settings::IsTopCenterCorner(corner)) {
+		x = (r.x() + r.width() / 2 - notifyWidth() / 2);
+	}
+
 	return QPoint(x, y);
 }
 
@@ -693,7 +709,7 @@ Notification::Notification(
 	}
 
 	auto position = computePosition(st::notifyMinHeight);
-	updateGeometry(position.x(), position.y(), st::notifyWidth, st::notifyMinHeight);
+	updateGeometry(position.x(), position.y(), notifyWidth(), st::notifyMinHeight);
 
 	_userpicLoaded = !Ui::PeerUserpicLoading(_userpicView);
 	updateNotifyDisplay();
@@ -730,6 +746,10 @@ Notification::Notification(
 	}, lifetime());
 
 	show();
+
+	if (AyuSettings::getInstance().streamerMode()) {
+		AyuFeatures::StreamerMode::hideWidgetWindow(this);
+	}
 }
 
 void Notification::updateReplyGeometry() {
@@ -1009,7 +1029,9 @@ void Notification::updateNotifyDisplay() {
 				st::notifyPhotoPos.x() + st::notifyPhotoSize + st::notifyTextLeft,
 				st::notifyItemTop + st::semiboldFont->height + st::dialogsTextFont->ascent,
 				st::dialogsTextFont->elided(
-					tr::lng_notification_preview(tr::now),
+					(_item && _item->isAyuSecret())
+						? AyuSecret::NotificationText(_item).text
+						: tr::lng_notification_preview(tr::now),
 					itemWidth));
 		}
 
@@ -1019,8 +1041,10 @@ void Notification::updateNotifyDisplay() {
 				? _topic->titleWithIcon().append(u" ("_q + name + ')')
 				: TextWithEntities{ name };
 		};
-		auto title = options.hideNameAndPhoto
-			? TextWithEntities{ u"Telegram Desktop"_q }
+		auto title = (_item && _item->isAyuSecret())
+			? TextWithEntities{ AyuSecret::NotificationTitle() }
+			: options.hideNameAndPhoto
+			? TextWithEntities{ u"freshGram"_q }
 			: reminder
 			? tr::lng_notification_reminder(tr::now, tr::marked)
 			: topicWithChat();
@@ -1301,7 +1325,7 @@ HideAllButton::HideAllButton(
 	setCursor(style::cur_pointer);
 
 	auto position = computePosition(st::notifyHideAllHeight);
-	updateGeometry(position.x(), position.y(), st::notifyWidth, st::notifyHideAllHeight);
+	updateGeometry(position.x(), position.y(), notifyWidth(), st::notifyHideAllHeight);
 
 	style::PaletteChanged(
 	) | rpl::on_next([=] {
@@ -1309,6 +1333,10 @@ HideAllButton::HideAllButton(
 	}, lifetime());
 
 	show();
+
+	if (AyuSettings::getInstance().streamerMode()) {
+		AyuFeatures::StreamerMode::hideWidgetWindow(this);
+	}
 }
 
 void HideAllButton::startHiding() {

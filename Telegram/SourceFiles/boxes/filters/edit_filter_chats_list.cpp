@@ -25,6 +25,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_window.h"
 #include "styles/style_boxes.h"
 
+#include "ayu/ui/ayu_userpic.h"
+
+
 namespace {
 
 using Flag = Data::ChatFilter::Flag;
@@ -371,7 +374,7 @@ void PaintFilterChatsTypeIcon(
 	bg.setStops({ { 0., color1->c }, { 1., color2->c } });
 	p.setBrush(bg);
 	p.setPen(Qt::NoPen);
-	p.drawEllipse(rect);
+	AyuUserpic::PaintShape(p, rect);
 	icon.paintInCenter(p, rect);
 }
 

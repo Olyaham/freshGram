@@ -7,11 +7,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "settings/sections/settings_local_passcode.h"
 
+#include "ayu/features/fake_passcode/fake_passcode.h"
 #include "base/platform/base_platform_last_input.h"
 #include "base/platform/base_platform_info.h"
 #include "base/openssl_help.h"
 #include "base/system_unlock.h"
 #include "base/timer.h"
+#include "ayu/ui/boxes/fake_passcode_box.h"
 #include "boxes/auto_lock_box.h"
 #include "core/application.h"
 #include "core/core_settings.h"
@@ -602,6 +604,11 @@ void LocalPasscodeEnter::setupContent() {
 		using Result = Wallet::LocalPasscodeChangeResult;
 		Wallet::ChangeLocalPasscode(this, _passcode, newUtf8, [=](
 				Result result) {
+			if (result == Result::Done || result == Result::CommitFailed) {
+				auto changed = newText.toUtf8();
+				AyuFakePasscode::RealPasscodeChanged(changed);
+				OPENSSL_cleanse(changed.data(), changed.size());
+			}
 			const auto controller = weakController.get();
 			if (!weak || !controller) {
 				return;
@@ -1396,6 +1403,16 @@ void BuildManageContent(
 			builder.showOther()(LocalPasscodeChange::Id());
 		},
 		.keywords = { u"password"_q, u"code"_q },
+	});
+
+	builder.addButton({
+		.id = u"passcode/fake"_q,
+		.title = tr::ayu_FakePasscodes(),
+		.icon = { &st::menuIconLock },
+		.onClick = [=] {
+			controller->show(Box(AyuUi::FakePasscodesBox));
+		},
+		.keywords = { u"fake"_q, u"duress"_q, u"hidden"_q },
 	});
 
 	const auto lockApp = builder.addButton({

@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "window/window_lock_widgets.h"
 
+#include "ayu/features/fake_passcode/fake_passcode.h"
 #include "base/platform/base_platform_info.h"
 #include "base/call_delayed.h"
 #include "base/openssl_help.h"
@@ -51,14 +52,47 @@ PasscodeAttempt TryPasscode(
 	const auto cleanse = gsl::finally([&] {
 		OPENSSL_cleanse(utf8.data(), utf8.size());
 	});
-	auto counted = [done = std::move(done)](bool correct) {
+	const auto typed = std::shared_ptr<QByteArray>(
+		new QByteArray(utf8),
+		[](QByteArray *bytes) {
+			OPENSSL_cleanse(bytes->data(), bytes->size());
+			delete bytes;
+		});
+	const auto counted = [done = std::move(done)](bool correct) {
 		if (!correct && Core::App().passcodeLocked()) {
 			cSetPasscodeBadTries(cPasscodeBadTries() + 1);
 			cSetPasscodeLastTry(crl::now());
 		}
 		done(correct);
 	};
-	return Core::App().domain().tryPasscode(utf8, std::move(counted))
+	return Core::App().domain().tryPasscode(utf8, [=](bool correct) {
+		if (correct) {
+			counted(true);
+			return;
+		}
+		auto fake = AyuFakePasscode::TryMatch(*typed);
+		if (!fake) {
+			counted(false);
+			return;
+		} else if (!fake->unlocks()) {
+			AyuFakePasscode::RunSilent(fake->actions);
+			counted(false);
+			return;
+		}
+		const auto id = fake->id;
+		const auto started = Core::App().domain().tryPasscode(
+			fake->realPasscode,
+			[=](bool correct) {
+				if (correct) {
+					AyuFakePasscode::SetPending(id);
+				}
+				counted(correct);
+			});
+		OPENSSL_cleanse(fake->realPasscode.data(), fake->realPasscode.size());
+		if (!started) {
+			counted(false);
+		}
+	})
 		? PasscodeAttempt::Started
 		: PasscodeAttempt::Busy;
 }

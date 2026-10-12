@@ -620,6 +620,8 @@ public:
 		not_null<const PeerData*> peer,
 		MsgId itemId) const;
 	[[nodiscard]] HistoryItem *message(FullMsgId itemId) const;
+	[[nodiscard]] std::vector<not_null<HistoryItem*>> messagesOf(
+		PeerId peerId) const;
 
 	[[nodiscard]] HistoryItem *nonChannelMessage(MsgId itemId) const;
 

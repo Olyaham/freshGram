@@ -5,6 +5,8 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_manager.h"
+#include "ayu/secret/secret_peer.h"
 #include "api/api_send_progress.h"
 
 #include "main/main_session.h"
@@ -14,6 +16,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/unixtime.h"
 #include "data/data_peer_values.h"
 #include "apiwrap.h"
+
+#include "ayu/ayu_settings.h"
+
 
 namespace Api {
 namespace {
@@ -65,6 +70,13 @@ void SendProgressManager::update(
 		SendProgressType type,
 		int progress) {
 	const auto peer = history->peer;
+	if (AyuSecret::IsSecretPeer(peer)) {
+		if (type == SendProgressType::Typing) {
+			AyuSecret::Get(&peer->session()).setTyping(
+				AyuSecret::ChatIdOfPeer(peer));
+		}
+		return;
+	}
 	if (peer->isSelf()
 		|| (peer->isChannel()
 			&& !peer->isMegagroup()
@@ -112,6 +124,14 @@ void SendProgressManager::send(const Key &key, int progress) {
 	if (skipRequest(key)) {
 		return;
 	}
+
+	const auto &ghost = AyuSettings::ghost(_session);
+	if (!ghost.sendUploadProgress())
+	{
+		DEBUG_LOG(("[AyuGram] Don't send upload progress"));
+		return;
+	}
+
 	using Type = SendProgressType;
 	const auto action = [&]() -> MTPsendMessageAction {
 		const auto p = MTP_int(progress);
@@ -152,6 +172,7 @@ void SendProgressManager::send(const Key &key, int progress) {
 }
 
 bool SendProgressManager::skipRequest(const Key &key) const {
+	if (Main::Session::debugActions) return true;
 	const auto user = key.history->peer->asUser();
 	if (!user) {
 		return false;

@@ -43,6 +43,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/toast/toast.h"
 #include "styles/style_chat.h"
 
+#include "ayu/ayu_settings.h"
+
+
 namespace HistoryView {
 namespace {
 
@@ -161,7 +164,7 @@ constexpr auto kLogEntryPreviewLines = 2;
 
 [[nodiscard]] TextWithEntities PageToPhrase(not_null<WebPageData*> page) {
 	const auto type = page->type;
-	const auto text = tr::upper(page->iv
+	const auto text = page->iv
 		? tr::lng_view_button_iv(tr::now)
 		: page->uniqueGift
 		? tr::lng_view_button_collectible(tr::now)
@@ -220,7 +223,7 @@ constexpr auto kLogEntryPreviewLines = 2;
 				> base::unixtime::now()))
 			? tr::lng_auction_bar_view(tr::now)
 			: tr::lng_auction_preview_join(tr::now))
-		: QString());
+		: QString();
 	if (page->iv) {
 		return Ui::Text::IconEmoji(&st::historyIvIcon).append(text);
 	}
@@ -1042,7 +1045,8 @@ void WebPage::draw(Painter &p, const PaintContext &context) const {
 			useColorIndex ? (colorIndex + 1) : 0)];
 	Ui::Text::ValidateQuotePaintCache(*cache, _st);
 	Ui::Text::FillQuotePaint(p, outer, *cache, _st);
-	if (backgroundEmojiData) {
+	const auto &settings = AyuSettings::getInstance();
+	if (!settings.simpleQuotesAndReplies() && backgroundEmojiData) {
 		ValidateBackgroundEmoji(
 			backgroundEmojiId,
 			colorCollectible,
@@ -1073,7 +1077,7 @@ void WebPage::draw(Painter &p, const PaintContext &context) const {
 	}
 
 	if (_ripple) {
-		_ripple->paint(p, outer.x(), outer.y(), width(), &cache->bg);
+		_ripple->paint(p, outer.x(), outer.y(), width(), &cache->bg2);
 		if (_ripple->empty()) {
 			_ripple = nullptr;
 		}

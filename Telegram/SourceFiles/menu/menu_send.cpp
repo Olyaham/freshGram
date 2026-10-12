@@ -62,6 +62,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <QtWidgets/QApplication>
 
+#include "ayu/ayu_settings.h"
+
+
 namespace SendMenu {
 namespace {
 
@@ -745,10 +748,14 @@ FillMenuResult FillSendMenu(
 		: st::defaultComposeIcons;
 
 	if (sending && type != Type::Reminder) {
+		const auto &ghost = maybeShow
+			? AyuSettings::ghost(&maybeShow->session())
+			: AyuSettings::ghost();
+		const auto sendWithoutSound = ghost.shouldSendWithoutSound();
 		menu->addAction(
-			tr::lng_send_silent_message(tr::now),
+			sendWithoutSound ? tr::ayu_SendWithSound(tr::now) : tr::lng_send_silent_message(tr::now),
 			[=] { action({ Api::SendOptions{ .silent = true } }, details); },
-			&icons.menuMute);
+			sendWithoutSound ? &icons.menuUnmute : &icons.menuMute);
 	}
 	if (sending && type != Type::SilentOnly) {
 		menu->addAction(
@@ -765,6 +772,12 @@ FillMenuResult FillSendMenu(
 				{ Api::DefaultSendWhenOnlineOptions() },
 				details); },
 			&icons.menuWhenOnline);
+	}
+	if (sending && details.aiComposeAllowed) {
+		menu->addAction(
+			tr::lng_ai_compose_title(tr::now),
+			[=] { action({ .type = ActionType::AiCompose }, details); },
+			&st::menuIconTranslate);
 	}
 
 	if ((type != Type::Disabled)

@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/data/kept_dialogs.h"
 #include "data/data_replies_list.h"
 
 #include "history/history.h"
@@ -22,6 +23,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/application.h"
 #include "lang/lang_keys.h"
 #include "apiwrap.h"
+
+#include "ayu/ayu_settings.h"
+
 
 namespace Data {
 namespace {
@@ -205,6 +209,12 @@ rpl::producer<MessagesSlice> RepliesList::source(
 		_listChanges.events(
 		) | rpl::on_next(pushDelayed, lifetime);
 
+		if (_history->peer->isForum()) {
+			_history->checkLocalMessages();
+		} else {
+			_history->ayuRestoreThread(_rootId);
+		}
+
 		_instantChanges.events(
 		) | rpl::on_next(pushInstant, lifetime);
 
@@ -352,7 +362,8 @@ void RepliesList::injectRootDivider(
 
 bool RepliesList::buildFromData(not_null<Viewer*> viewer) {
 	if (_creating
-		|| (_list.empty() && _skippedBefore == 0 && _skippedAfter == 0)) {
+		|| (_list.empty() && _skippedBefore == 0 && _skippedAfter == 0)
+		|| (_list.empty() && AyuKept::serverUnavailable(_history))) {
 		viewer->slice.ids.clear();
 		viewer->slice.nearestToAround = FullMsgId();
 		viewer->slice.fullCount
@@ -1004,6 +1015,11 @@ void RepliesList::sendReadTillRequest() {
 	}
 	const auto api = &_history->session().api();
 	api->request(base::take(_readRequestId)).cancel();
+
+	const auto &ghost = AyuSettings::ghost(&_history->session());
+	if (!ghost.sendReadMessages()) {
+		return;
+	}
 
 	_readRequestId = api->request(MTPmessages_ReadDiscussion(
 		_history->peer->input(),

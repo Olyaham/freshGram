@@ -89,6 +89,7 @@ MessagesSearch::~MessagesSearch() {
 void MessagesSearch::searchMessages(Request request) {
 	_request = std::move(request);
 	_offsetId = {};
+	_listAllFallback = false;
 	searchRequest();
 }
 
@@ -114,44 +115,84 @@ void MessagesSearch::searchRequest() {
 		const auto from = _request.from;
 		const auto fromPeer = _history->peer->isUser() ? nullptr : from;
 		const auto savedPeer = _history->peer->isSelf() ? from : nullptr;
-		_requestId = _history->session().api().request(MTPmessages_Search(
-			MTP_flags((fromPeer ? Flag::f_from_id : Flag())
-				| (savedPeer ? Flag::f_saved_peer_id : Flag())
-				| (_request.topMsgId ? Flag::f_top_msg_id : Flag())
-				| (_request.tags.empty() ? Flag() : Flag::f_saved_reaction)),
-			_history->peer->input(),
-			MTP_string(_request.query),
-			(fromPeer ? fromPeer->input() : MTP_inputPeerEmpty()),
-			(savedPeer ? savedPeer->input() : MTP_inputPeerEmpty()),
-			MTP_vector_from_range(_request.tags | ranges::views::transform(
-				Data::ReactionToMTP
-			)),
-			MTP_int(_request.topMsgId), // top_msg_id
-			PrepareFilter(_request.filter),
-			MTP_int(0), // min_date
-			MTP_int(0), // max_date
-			MTP_int(_offsetId), // offset_id
-			MTP_int(0), // add_offset
-			MTP_int(kSearchPerPage),
-			MTP_int(0), // max_id
-			MTP_int(0), // min_id
-			MTP_long(0) // hash
-		)).done([=](const TLMessages &result, mtpRequestId id) {
+		const auto done = [=](const TLMessages &result, mtpRequestId id) {
 			_searchInHistoryRequest = 0;
 			searchReceived(result, id, nextToken);
 			finish();
-		}).fail([=](const MTP::Error &error, mtpRequestId id) {
+		};
+		const auto fail = [=](const MTP::Error &error, mtpRequestId id) {
 			_searchInHistoryRequest = 0;
 
 			if (_requestId == id) {
 				_requestId = 0;
 			}
-			if (error.type() == u"SEARCH_QUERY_EMPTY"_q) {
+			const auto retry = (error.type() == u"SEARCH_QUERY_EMPTY"_q)
+				&& _request.query.trimmed().isEmpty()
+				&& !_listAllFallback;
+			if (retry) {
+				_listAllFallback = true;
+			} else if (error.type() == u"SEARCH_QUERY_EMPTY"_q) {
 				_messagesFounds.fire({ 0, MessageIdsList(), nextToken });
 			}
 
 			finish();
-		}).send();
+			if (retry) {
+				searchRequest();
+			}
+		};
+		const auto listAll = _listAllFallback
+			&& _request.query.trimmed().isEmpty()
+			&& !from
+			&& _request.tags.empty()
+			&& (_request.filter == SearchFilter::NoFilter);
+		if (listAll && _request.topMsgId) {
+			_requestId = _history->session().api().request(MTPmessages_GetReplies(
+				_history->peer->input(),
+				MTP_int(_request.topMsgId),
+				MTP_int(_offsetId), // offset_id
+				MTP_int(0), // offset_date
+				MTP_int(0), // add_offset
+				MTP_int(kSearchPerPage),
+				MTP_int(0), // max_id
+				MTP_int(0), // min_id
+				MTP_long(0) // hash
+			)).done(done).fail(fail).send();
+		} else if (listAll) {
+			_requestId = _history->session().api().request(MTPmessages_GetHistory(
+				_history->peer->input(),
+				MTP_int(_offsetId), // offset_id
+				MTP_int(0), // offset_date
+				MTP_int(0), // add_offset
+				MTP_int(kSearchPerPage),
+				MTP_int(0), // max_id
+				MTP_int(0), // min_id
+				MTP_long(0) // hash
+			)).done(done).fail(fail).send();
+		} else {
+			_requestId = _history->session().api().request(MTPmessages_Search(
+				MTP_flags((fromPeer ? Flag::f_from_id : Flag())
+					| (savedPeer ? Flag::f_saved_peer_id : Flag())
+					| (_request.topMsgId ? Flag::f_top_msg_id : Flag())
+					| (_request.tags.empty() ? Flag() : Flag::f_saved_reaction)),
+				_history->peer->input(),
+				MTP_string(_request.query),
+				(fromPeer ? fromPeer->input() : MTP_inputPeerEmpty()),
+				(savedPeer ? savedPeer->input() : MTP_inputPeerEmpty()),
+				MTP_vector_from_range(_request.tags | ranges::views::transform(
+					Data::ReactionToMTP
+				)),
+				MTP_int(_request.topMsgId), // top_msg_id
+				PrepareFilter(_request.filter),
+				MTP_int(0), // min_date
+				MTP_int(0), // max_date
+				MTP_int(_offsetId), // offset_id
+				MTP_int(0), // add_offset
+				MTP_int(kSearchPerPage),
+				MTP_int(0), // max_id
+				MTP_int(0), // min_id
+				MTP_long(0) // hash
+			)).done(done).fail(fail).send();
+		}
 		return _requestId;
 	};
 	_searchInHistoryRequest = _history->owner().histories().sendRequest(

@@ -15,12 +15,7 @@ introCoverMaxWidth: 880px;
 introCoverIconsMinSkip: 120px;
 introCoverLeft: icon {{ "intro_left", introCoverIconsFg }};
 introCoverRight: icon {{ "intro_right", introCoverIconsFg }};
-introCoverIcon: icon {
-	{ "intro_plane_trace", introCoverPlaneTrace },
-	{ "intro_plane_inner", introCoverPlaneInner },
-	{ "intro_plane_outer", introCoverPlaneOuter },
-	{ "intro_plane_top", introCoverPlaneTop },
-};
+introCoverIcon: icon {{ "intro_plane_top", introCoverPlaneTop }};
 introCoverIconLeft: 50px;
 introCoverIconTop: 46px;
 
@@ -59,6 +54,14 @@ introDescription: FlatLabel(defaultFlatLabel) {
 		lineHeight: 20px;
 	}
 }
+introFooter: FlatLabel(defaultFlatLabel) {
+    align: align(center);
+	textFg: introDescriptionFg;
+	style: TextStyle(defaultTextStyle) {
+		font: font(11px);
+		lineHeight: 24px;
+	}
+}
 introDescriptionTop: 34px;
 
 introLink: defaultLinkButton;
@@ -79,7 +82,7 @@ introCoverDuration: 200;
 introNextButton: RoundButton(defaultActiveButton) {
 	width: 300px;
 	height: 42px;
-	radius: 6px;
+	radius: 10px;
 	textTop: 11px;
 	style: TextStyle(semiboldTextStyle) {
 		font: font(boxFontSize semibold);
@@ -172,7 +175,7 @@ introQrPixel: 50px; // large enough
 introQrMaxSize: 180px;
 introQrBackgroundSkip: 12px;
 introQrBackgroundRadius: 8px;
-introQrLabelsWidth: 292px;
+introQrLabelsWidth: 300px;
 introQrTitleWidth: 320px;
 introQrTitle: FlatLabel(defaultFlatLabel) {
 	textFg: introTitleFg;

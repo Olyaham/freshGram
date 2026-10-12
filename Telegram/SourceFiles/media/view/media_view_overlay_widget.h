@@ -42,6 +42,10 @@ class DocumentMedia;
 struct StoriesContext;
 } // namespace Data
 
+namespace AyuUi {
+class RecognitionPicker;
+} // namespace AyuUi
+
 namespace Ui {
 class DropdownMenu;
 class PopupMenu;
@@ -585,6 +589,7 @@ private:
 	void validatePhotoImage(Image *image, bool blurred);
 	void validatePhotoCurrentImage();
 	void tryStartTextRecognition();
+	void startTextRecognition();
 
 	[[nodiscard]] bool hasCopyMediaRestriction(
 		bool skipPremiumCheck = false) const;
@@ -595,6 +600,8 @@ private:
 
 	void applyVideoSize();
 	[[nodiscard]] bool videoShown() const;
+	[[nodiscard]] const void *streamerMediaKey() const;
+	[[nodiscard]] bool streamerHidden() const;
 	[[nodiscard]] QSize videoSize() const;
 	[[nodiscard]] bool streamingRequiresControls() const;
 	[[nodiscard]] QImage videoFrame() const; // ARGB (changes prepare format)
@@ -723,6 +730,7 @@ private:
 	int32 _dragging = 0;
 	QImage _staticContent;
 	bool _staticContentTransparent = false;
+	const void *_streamerRevealedFor = nullptr;
 	bool _blurred = true;
 	bool _reShow = false;
 
@@ -817,6 +825,7 @@ private:
 	bool _mousePressed = false;
 
 	base::unique_qptr<Ui::PopupMenu> _menu;
+	base::unique_qptr<AyuUi::RecognitionPicker> _recognitionPicker;
 	object_ptr<Ui::DropdownMenu> _dropdown;
 	base::Timer _dropdownShowTimer;
 

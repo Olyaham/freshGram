@@ -5,6 +5,9 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/features/streamer_mode/streamer_mode.h"
+#include "ayu/secret/secret_bridge.h"
+#include "ayu/secret/secret_peer.h"
 #include "data/data_peer.h"
 
 #include "api/api_sensitive_content.h"
@@ -54,6 +57,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "storage/storage_account.h"
 #include "storage/storage_facade.h"
 #include "storage/storage_shared_media.h"
+
+#include "ayu/ui/ayu_userpic.h"
+
 
 namespace {
 
@@ -116,49 +122,19 @@ UnavailableReason UnavailableReason::Sensitive() {
 QString UnavailableReason::Compute(
 		not_null<Main::Session*> session,
 		const std::vector<UnavailableReason> &list) {
-	const auto &skip = IgnoredReasons(session);
-	auto &&filtered = ranges::views::all(
-		list
-	) | ranges::views::filter([&](const Data::UnavailableReason &reason) {
-		return !reason.sensitive()
-			&& !ranges::contains(skip, reason.reason);
-	});
-	const auto first = filtered.begin();
-	return (first != filtered.end()) ? first->text : QString();
+	return {};
 }
 
 bool UnavailableReason::IgnoreSensitiveMark(
 		not_null<Main::Session*> session) {
-	return ranges::contains(
-			IgnoredReasons(session),
-			UnavailableReason::Sensitive().reason);
+	return true;
 }
 
 // We should get a full restriction in "{full}: {reason}" format and we
 // need to find an "-all" tag in {full}, otherwise ignore this restriction.
 std::vector<UnavailableReason> UnavailableReason::Extract(
 		const MTPvector<MTPRestrictionReason> *list) {
-	if (!list) {
-		return {};
-	}
-	return ranges::views::all(
-		list->v
-	) | ranges::views::filter([](const MTPRestrictionReason &restriction) {
-		return restriction.match([&](const MTPDrestrictionReason &data) {
-			const auto platform = data.vplatform().v;
-			return false
-#ifdef OS_MAC_STORE
-				|| (platform == "ios"_q)
-#elif defined OS_WIN_STORE // OS_MAC_STORE
-				|| (platform == "ms"_q)
-#endif // OS_MAC_STORE || OS_WIN_STORE
-				|| (platform == "all"_q);
-		});
-	}) | ranges::views::transform([](const MTPRestrictionReason &restriction) {
-		return restriction.match([&](const MTPDrestrictionReason &data) {
-			return UnavailableReason{ qs(data.vreason()), qs(data.vtext()) };
-		});
-	}) | ranges::to_vector;
+	return {};
 }
 
 bool ApplyBotMenuButton(
@@ -441,9 +417,9 @@ QImage *PeerData::userpicCloudImage(Ui::PeerUserpicView &view) const {
 		_userpicEmpty = nullptr;
 		return image;
 	} else if (isNotificationsUser()) {
-		static auto result = Window::LogoNoMargin().scaledToWidth(
+		static auto result = Window::LogoTelegramDefault().scaledToWidth(
 			kUserpicSize,
-			Qt::SmoothTransformation);
+			Qt::SmoothTransformation).convertToFormat(QImage::Format_RGB32);
 		return &result;
 	}
 	return nullptr;
@@ -458,6 +434,9 @@ void PeerData::paintUserpic(
 			context.shape = Ui::PeerUserpicShape::Monoforum;
 		}
 		broadcast->paintUserpic(p, view, context);
+		return;
+	} else if (const auto real = AyuSecret::RealUser(this)) {
+		real->paintUserpic(p, view, context);
 		return;
 	}
 	const auto size = context.size;
@@ -503,6 +482,8 @@ bool PeerData::useEmptyUserpic(Ui::PeerUserpicView &view) const {
 InMemoryKey PeerData::userpicUniqueKey(Ui::PeerUserpicView &view) const {
 	if (const auto broadcast = monoforumBroadcast()) {
 		return broadcast->userpicUniqueKey(view);
+	} else if (const auto real = AyuSecret::RealUser(this)) {
+		return real->userpicUniqueKey(view);
 	}
 	return useEmptyUserpic(view)
 		? ensureEmptyUserpic()->uniqueKey()
@@ -514,6 +495,26 @@ QImage PeerData::GenerateUserpicImage(
 		Ui::PeerUserpicView &view,
 		int size,
 		std::optional<int> radius) {
+	auto result = GenerateUserpicImageRaw(peer, view, size, radius);
+	if (AyuFeatures::StreamerMode::spoilersActive()) {
+		AyuFeatures::StreamerMode::spoilerImage(result);
+	}
+	return result;
+}
+
+QImage PeerData::GenerateUserpicImageRaw(
+		not_null<PeerData*> peer,
+		Ui::PeerUserpicView &view,
+		int size,
+		std::optional<int> radius) {
+	if (!radius) {
+		const auto shape = peer->isForum()
+			? Ui::PeerUserpicShape::Forum
+			: Ui::PeerUserpicShape::Circle;
+		if (AyuUserpic::ShouldOverrideShape(shape)) {
+			radius = AyuUserpic::ComputeRadius(size);
+		}
+	}
 	if (const auto userpic = peer->userpicCloudImage(view)) {
 		auto image = userpic->scaled(
 			{ size, size },
@@ -1137,6 +1138,9 @@ void PeerData::fillNames() {
 PeerData::~PeerData() = default;
 
 void PeerData::updateFull() {
+	if (AyuSecret::IsSecretPeer(this)) {
+		return;
+	}
 	if (!_lastFullUpdate
 		|| crl::now() > _lastFullUpdate + kUpdateFullPeerTimeout) {
 		updateFullForced();
@@ -1144,6 +1148,9 @@ void PeerData::updateFull() {
 }
 
 void PeerData::updateFullForced() {
+	if (AyuSecret::IsSecretPeer(this)) {
+		return;
+	}
 	session().api().requestFullPeer(this);
 	if (const auto channel = asChannel()) {
 		if (!channel->amCreator() && !channel->inviter) {
@@ -1286,6 +1293,8 @@ not_null<const PeerData*> PeerData::migrateToOrMe() const {
 not_null<PeerData*> PeerData::userpicPaintingPeer() {
 	if (const auto broadcast = monoforumBroadcast()) {
 		return broadcast;
+	} else if (const auto real = AyuSecret::RealUser(this)) {
+		return real;
 	}
 	return this;
 }
@@ -1318,10 +1327,6 @@ ChannelData *PeerData::broadcastMonoforum() const {
 const QString &PeerData::topBarNameText() const {
 	if (const auto to = migrateTo()) {
 		return to->topBarNameText();
-	} else if (const auto user = asUser()) {
-		if (!user->nameOrPhone.isEmpty()) {
-			return user->nameOrPhone;
-		}
 	}
 	return _name;
 }
@@ -1734,6 +1739,17 @@ void PeerData::processTopics(const MTPVector<MTPForumTopic> &topics) {
 	if (const auto forum = this->forum()) {
 		forum->applyReceivedTopics(topics);
 	}
+}
+
+bool PeerData::isAyuNoForwards() const {
+	if (const auto user = asUser()) {
+		return user->isAyuNoForwards();
+	} else if (const auto channel = asChannel()) {
+		return channel->isAyuNoForwards();
+	} else if (const auto chat = asChat()) {
+		return chat->isAyuNoForwards();
+	}
+	return true;
 }
 
 bool PeerData::allowsForwarding() const {

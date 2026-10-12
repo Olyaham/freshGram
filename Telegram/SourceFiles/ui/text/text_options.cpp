@@ -69,6 +69,13 @@ TextParseOptions HistoryBotNoMonoOptions = {
 };
 
 TextParseOptions TextNameOptions = {
+	TextParseHideName, // flags
+	4096, // maxw
+	1, // maxh
+	Qt::LayoutDirectionAuto, // lang-dependent
+};
+
+TextParseOptions TextPlainNameOptions = {
 	0, // flags
 	4096, // maxw
 	1, // maxh
@@ -144,6 +151,10 @@ const TextParseOptions &WebpageTextDescriptionOptions() {
 
 const TextParseOptions &NameTextOptions() {
 	return TextNameOptions;
+}
+
+const TextParseOptions &PlainNameTextOptions() {
+	return TextPlainNameOptions;
 }
 
 const TextParseOptions &DialogTextOptions() {

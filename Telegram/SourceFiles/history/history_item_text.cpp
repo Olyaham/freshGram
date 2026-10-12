@@ -27,6 +27,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/text/text_options.h"
 #include "ui/text/text_utilities.h"
 
+#include "api/api_transcribes.h"
+
+
 namespace {
 
 constexpr auto kSelectedCopyReplyPreviewLimit = 64;
@@ -78,6 +81,13 @@ TextForMimeData AppendExtraCopyText(
 		result.append(u"\n\n"_q).append(std::move(factcheckResult));
 	}
 	return result;
+}
+
+TextForMimeData ShownSummaryText(not_null<HistoryItem*> item) {
+	const auto &summary = item->summaryEntry();
+	return (!summary.result.empty() && summary.shown)
+		? TextForMimeData::WithExpandedLinks(summary.result)
+		: TextForMimeData();
 }
 
 TextForMimeData HistoryItemMainText(not_null<HistoryItem*> item) {
@@ -443,6 +453,10 @@ std::vector<not_null<Data::ForumTopic*>> TopicsForSelectedCopy(
 } // namespace
 
 TextForMimeData HistoryItemText(not_null<HistoryItem*> item) {
+	auto summary = ShownSummaryText(item);
+	if (!summary.empty()) {
+		return summary;
+	}
 	return AppendExtraCopyText(item, HistoryItemMainText(item));
 }
 
@@ -501,6 +515,10 @@ TextForMimeData HistoryGroupText(not_null<const Data::Group*> group) {
 namespace {
 
 TextForMimeData HistoryItemTextForSelectedCopy(not_null<HistoryItem*> item) {
+	auto summary = ShownSummaryText(item);
+	if (!summary.empty()) {
+		return summary;
+	}
 	const auto media = item->media();
 	if (!media) {
 		return HistoryItemText(item);

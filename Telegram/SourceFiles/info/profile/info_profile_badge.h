@@ -35,7 +35,7 @@ namespace Info::Profile {
 
 class EmojiStatusPanel;
 
-enum class BadgeType : uchar {
+enum class BadgeType : ushort {
 	None = 0x00,
 	Verified = 0x01,
 	BotVerified = 0x02,
@@ -76,10 +76,10 @@ public:
 
 	[[nodiscard]] Data::CustomEmojiSizeTag sizeTag() const;
 
-private:
 	void setContent(Content content);
 	[[nodiscard]] const style::InfoPeerBadge &st() const;
 
+private:
 	const not_null<QWidget*> _parent;
 	const style::InfoPeerBadge &_st;
 	const style::InfoPeerBadge *_overrideSt = nullptr;

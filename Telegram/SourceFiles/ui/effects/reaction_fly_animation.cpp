@@ -17,6 +17,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/random.h"
 #include "styles/style_chat.h"
 
+#include "base/platform/base_platform_haptic.h"
+
+
 namespace Ui {
 namespace {
 
@@ -39,6 +42,7 @@ ReactionFlyAnimationArgs ReactionFlyAnimationArgs::translated(QPoint point) cons
 		.flyUp = flyUp,
 		.centerSizeMultiplier = centerSizeMultiplier,
 		.flyKeepSize = flyKeepSize,
+		.haptic = haptic,
 	};
 }
 
@@ -75,7 +79,8 @@ ReactionFlyAnimation::ReactionFlyAnimation(
 , _scaleOutDuration(args.scaleOutDuration)
 , _scaleOutTarget(args.scaleOutTarget)
 , _flyKeepSize(args.flyKeepSize)
-, _forceFirstFrame(args.forceFirstFrame) {
+, _forceFirstFrame(args.forceFirstFrame)
+, _haptic(args.haptic) {
 	const auto &list = owner->list(::Data::Reactions::Type::All);
 	auto centerIcon = (DocumentData*)nullptr;
 	auto aroundAnimation = (DocumentData*)nullptr;
@@ -399,6 +404,10 @@ int ReactionFlyAnimation::computeParabolicTop(
 }
 
 void ReactionFlyAnimation::startAnimations() {
+	if (_haptic && !_hapticExecuted) {
+		base::Platform::Haptic();
+		_hapticExecuted = true;
+	}
 	if (const auto center = _center.get()) {
 		center->animate(callback());
 	}

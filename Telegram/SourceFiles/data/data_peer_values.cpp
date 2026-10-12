@@ -20,6 +20,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/image/image_prepare.h"
 #include "base/unixtime.h"
 
+#include "ayu/ayu_settings.h"
+#include "ayu/utils/telegram_helpers.h"
+
+
 namespace Data {
 namespace {
 
@@ -379,13 +383,8 @@ rpl::producer<bool> CanPinMessagesValue(not_null<PeerData*> peer) {
 }
 
 rpl::producer<bool> AllowsForwardingValue(not_null<PeerData*> peer) {
-	if (const auto user = peer->asUser()) {
-		return rpl::combine(
-			PeerFlagValue(user, UserDataFlag::NoForwardsMyEnabled),
-			PeerFlagValue(user, UserDataFlag::NoForwardsPeerEnabled)
-		) | rpl::map([](bool my, bool peer) {
-			return !my && !peer;
-		});
+	if (peer->asUser()) {
+		return rpl::single(true);
 	} else if (const auto chat = peer->asChat()) {
 		return PeerFlagValue(
 			chat,
@@ -430,6 +429,11 @@ rpl::producer<bool> PeerPremiumValue(not_null<PeerData*> peer) {
 }
 
 rpl::producer<bool> AmPremiumValue(not_null<Main::Session*> session) {
+	const auto &settings = AyuSettings::getInstance();
+	if (settings.localPremium()) {
+		return rpl::single(true);
+	}
+
 	return PeerPremiumValue(session->user());
 }
 
@@ -531,22 +535,28 @@ QString OnlineText(not_null<UserData*> user, TimeId now) {
 QString OnlineTextFull(not_null<UserData*> user, TimeId now) {
 	if (const auto special = OnlineTextSpecial(user)) {
 		return *special;
-	} else if (const auto common = OnlineTextCommon(user->lastseen(), now)) {
+	}
+	return OnlineTextFull(user->lastseen(), now);
+}
+
+QString OnlineTextFull(Data::LastseenStatus status, TimeId now) {
+	if (const auto common = OnlineTextCommon(status, now)) {
 		return *common;
 	}
-	const auto till = user->lastseen().onlineTill();
+	const auto &settings = AyuSettings::getInstance();
+	const auto till = status.onlineTill();
 	const auto onlineFull = base::unixtime::parse(till);
 	const auto nowFull = base::unixtime::parse(now);
 	const auto locale = QLocale();
 	if (onlineFull.date() == nowFull.date()) {
-		const auto onlineTime = locale.toString(onlineFull.time(), QLocale::ShortFormat);
+		const auto onlineTime = (settings.showMessageSeconds() ? formatLongTime(locale, onlineFull.time()) : locale.toString(onlineFull.time(), QLocale::ShortFormat));
 		return tr::lng_status_lastseen_today(tr::now, lt_time, onlineTime);
 	} else if (onlineFull.date().addDays(1) == nowFull.date()) {
-		const auto onlineTime = locale.toString(onlineFull.time(), QLocale::ShortFormat);
+		const auto onlineTime = (settings.showMessageSeconds() ? formatLongTime(locale, onlineFull.time()) : locale.toString(onlineFull.time(), QLocale::ShortFormat));
 		return tr::lng_status_lastseen_yesterday(tr::now, lt_time, onlineTime);
 	}
 	const auto date = locale.toString(onlineFull.date(), QLocale::ShortFormat);
-	const auto time = locale.toString(onlineFull.time(), QLocale::ShortFormat);
+	const auto time = (settings.showMessageSeconds() ? formatLongTime(locale, onlineFull.time()) : locale.toString(onlineFull.time(), QLocale::ShortFormat));
 	return tr::lng_status_lastseen_date_time(tr::now, lt_date, date, lt_time, time);
 }
 

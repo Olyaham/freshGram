@@ -219,6 +219,8 @@ public:
 	void setRealShortcutId(BusinessShortcutId id);
 	void setCustomServiceLink(ClickHandlerPtr link);
 
+	[[nodiscard]] bool isAyuNoForwards() const;
+
 	void addLogEntryOriginal(
 		WebPageId localId,
 		const QString &label,
@@ -269,6 +271,8 @@ public:
 	[[nodiscard]] bool unread(not_null<Data::Thread*> thread) const;
 	[[nodiscard]] bool showNotification() const;
 	void markClientSideAsRead();
+	[[nodiscard]] bool isAyuSecret() const;
+	void setAyuSecretRead();
 	[[nodiscard]] bool mentionsMe() const;
 	[[nodiscard]] bool isUnreadMention() const;
 	[[nodiscard]] bool hasUnreadReaction() const;
@@ -279,6 +283,7 @@ public:
 	bool markEmojiInteractionWatched();
 	[[nodiscard]] bool isUnreadMedia() const;
 	[[nodiscard]] bool isIncomingUnreadMedia() const;
+	[[nodiscard]] bool keepsUnburnt() const;
 	[[nodiscard]] bool hasUnreadMediaFlag() const;
 	[[nodiscard]] bool isTtlCoveredMedia() const;
 	[[nodiscard]] TimeId mediaDestroyAt() const;
@@ -343,8 +348,13 @@ public:
 	[[nodiscard]] bool hasFailed() const {
 		return _flags & MessageFlag::SendingFailed;
 	}
-	[[nodiscard]] bool hideEditedBadge() const {
-		return (_flags & MessageFlag::HideEdited);
+	[[nodiscard]] bool hideEditedBadge() const;
+	void ayuShowEditedBadge();
+	[[nodiscard]] TimeId ayuDeletedAt() const {
+		return _ayuDeletedAt;
+	}
+	void ayuSetDeletedAt(TimeId date) {
+		_ayuDeletedAt = date;
 	}
 	[[nodiscard]] bool hideDisplayDate() const {
 		return isEmpty() || (_flags & MessageFlag::HideDisplayDate);
@@ -360,6 +370,9 @@ public:
 	}
 	[[nodiscard]] bool isLegacyMessage() const {
 		return _flags & MessageFlag::Legacy;
+	}
+	[[nodiscard]] bool isAyuRestored() const {
+		return _deleted && isLocal() && !isService();
 	}
 	[[nodiscard]] bool canBeSelected() const;
 	[[nodiscard]] bool isFakeAboutView() const {
@@ -474,6 +487,13 @@ public:
 		MsgId replyToTop,
 		bool isForumPost);
 	void setPostAuthor(const QString &author);
+	void setDeleted();
+	[[nodiscard]] bool isDeleted() const;
+	[[nodiscard]] bool isBurnt() const;
+	[[nodiscard]] bool wasDeletedAnimated() const;
+	void markDeletedAnimated();
+	void applyTTL(TimeId destroyAt);
+	void setAyuHint(const QString &hint);
 	void setRealId(MsgId newId);
 	void markEphemeralSent();
 	void markTextAppearingStarted();
@@ -679,6 +699,14 @@ public:
 		return _ttlDestroyAt;
 	}
 
+	[[nodiscard]] int unsupportedTTL() const {
+		return _unsupportedTTL;
+	}
+	[[nodiscard]] const std::vector<char> &ayuSavedMedia() const {
+		return _ayuSavedMedia;
+	}
+	void removeTranslationBit();
+
 	[[nodiscard]] int boostsApplied() const {
 		return _boostsApplied;
 	}
@@ -783,8 +811,6 @@ private:
 	void applyTTL(const MTPDmessage &data);
 	void applyTTL(const MTPDmessageService &data);
 
-	void applyTTL(TimeId destroyAt);
-
 	// For an invoice button we replace the button text with a "Receipt" key.
 	// It should show the receipt for the payed invoice. Still let mobile apps do that.
 	void replaceBuyWithReceiptInMarkup();
@@ -828,6 +854,15 @@ private:
 	std::unique_ptr<Data::Media> _media;
 	std::unique_ptr<Data::MessageReactions> _reactions;
 	crl::time _reactionsLastRefreshed = 0;
+
+	bool _deleted = false;
+	bool _deletedAnimated = false;
+	int _unsupportedTTL = 0;
+	bool _ayuExpired = false;
+	mutable signed char _ayuEditedBadge = -1;
+	TimeId _ayuDeletedAt = 0;
+	std::vector<char> _ayuSavedMedia;
+	bool _ayuSecretRead = false;
 
 	TimeId _date = 0;
 	TimeId _ttlDestroyAt = 0;

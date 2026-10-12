@@ -136,12 +136,21 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtCore/QCoreApplication>
 #include <QtCore/QMimeData>
 
+#include "ayu/ayu_settings.h"
+#include "ayu/features/filters/filters_cache_controller.h"
+#include "ayu/ui/context_menu/context_menu.h"
+#include "ayu/ui/settings/filters/edit_filter.h"
+#include "ayu/utils/telegram_helpers.h"
+#include "data/data_document_media.h"
+
+
 namespace {
 
-constexpr auto kScrollDateHideTimeout = 1000;
+constexpr auto kScrollDateHideTimeout = 800;
 constexpr auto kScrollDateHideOnDayCrossingTimeout = crl::time(3000);
 constexpr auto kUnloadHeavyPartsPages = 2;
 constexpr auto kClearUserpicsAfter = 50;
+constexpr auto kMaxSelectedItemsBig = 10000;
 
 // Helper binary search for an item in a list that is not completely
 // above the given top of the visible area or below the given bottom of the visible area
@@ -547,6 +556,51 @@ HistoryInner::HistoryInner(
 		_scroll->scrollToY(_scroll->scrollTop() + d);
 	}, _scroll->lifetime());
 
+	_controller->window().widget()->globalForceClicks() |
+		rpl::on_next(
+			[=](QPoint globalPosition)
+			{
+				auto mousePos = mapFromGlobal(globalPosition);
+				auto point = _widget->clampMousePosition(mousePos);
+
+				if (!inSelectionMode().inSelectionMode && !_emptyPainter && rect().contains(mousePos)) {
+					if (const auto view = Element::Moused()) {
+						mouseActionCancel();
+
+						const auto m = mapPointToItem(point, view);
+						const auto inside = view->pointState(m) != PointState::Outside;
+						const auto media = view->data()->media();
+						if (inside && media) {
+							if (const auto preview = media->document()) {
+								if (!preview->sticker()) {
+									if (const auto mediaView = preview->activeMediaView()) {
+										const auto previewState = Data::VideoPreviewState(mediaView.get());
+										if (!previewState.loaded()) {
+											preview->loadVideoThumbnail(view->data()->fullId());
+											preview->loadThumbnail(view->data()->fullId());
+											return;
+										}
+									}
+								}
+
+								_wasForceClickPreview = _controller->uiShow()->showMediaPreview(
+									preview->sticker() ? preview->stickerSetOrigin() : view->data()->fullId(), preview);
+							} else if (const auto previewPhoto = media->photo()) {
+								_wasForceClickPreview =
+									_controller->uiShow()->showMediaPreview(Data::FileOrigin(), previewPhoto);
+							}
+
+							if (!_wasForceClickPreview) {
+								toggleFavoriteReaction(view);
+							}
+						} else {
+							toggleFavoriteReaction(view);
+						}
+					}
+				}
+			},
+			lifetime());
+
 	setupSharingDisallowed();
 	setupSwipeReplyAndBack();
 }
@@ -583,6 +637,7 @@ void HistoryInner::reactionChosen(const ChosenReaction &reaction) {
 				.id = reaction.id,
 				.flyIcon = reaction.icon,
 				.flyFrom = geometry.translated(0, -top),
+				.haptic = true,
 			});
 		}
 	}
@@ -689,6 +744,7 @@ void HistoryInner::setupSwipeReplyAndBack() {
 			if ((position.y() < itemtop)
 				|| (position.y() > itembottom)
 				|| (!view->data()->isRegular()
+					&& !view->data()->isAyuSecret()
 					&& (!view->data()->isEphemeral()
 						|| view->data()->out()))
 				|| view->data()->isService()) {
@@ -743,6 +799,7 @@ void HistoryInner::setupSwipeReplyAndBack() {
 			if ((data.cursorPosition.y() < itemtop)
 				|| (data.cursorPosition.y() > itembottom)
 				|| (!view->data()->isRegular()
+					&& !view->data()->isAyuSecret()
 					&& (!view->data()->isEphemeral()
 						|| view->data()->out()))
 				|| view->data()->showSimilarChannels()
@@ -755,7 +812,7 @@ void HistoryInner::setupSwipeReplyAndBack() {
 				data.cursorPosition,
 				view);
 			const auto canSendReply = CanSendReply(item);
-			const auto canReply = (canSendReply || item->allowsForward());
+			const auto canReply = canSendReply || item->allowsForward();
 			if (!canReply) {
 				return true;
 			}
@@ -1533,7 +1590,16 @@ void HistoryInner::paintEvent(QPaintEvent *e) {
 				readTill = item;
 			}
 			if (markingAsViewed && item->hasUnwatchedEffect()) {
-				startEffects.emplace(view);
+				const auto peer = item->history()->peer;
+				const auto &settings = AyuSettings::getInstance();
+				const auto hide = (!settings.showChannelReactions() && peer->isChannel() && !peer->isMegagroup()) ||
+					(!settings.showGroupReactions() && peer->isMegagroup()) ||
+					(!settings.showPrivateChatReactions() && peer->isUser());
+				if (!hide) {
+					startEffects.emplace(view);
+				} else {
+					item->markEffectWatched();
+				}
 			}
 			if (markingAsViewed
 				&& !item->out()
@@ -2384,7 +2450,7 @@ std::unique_ptr<QMimeData> HistoryInner::prepareDrag() {
 		}
 		if (uponSelected && !_controller->adaptive().isOneColumn()) {
 			auto selectedState = getSelectionState();
-			if (selectedState.count > 0 && selectedState.count == selectedState.canForwardCount) {
+			if (selectedState.count > 0 && selectedState.count <= 100 && selectedState.count == selectedState.canForwardCount) {
 				session().data().setMimeForwardIds(getSelectedForwardItems());
 				mimeData->setData(u"application/x-td-forward"_q, "1");
 			}
@@ -2685,6 +2751,11 @@ void HistoryInner::mouseReleaseEvent(QMouseEvent *e) {
 		e->accept();
 		return;
 	}
+	if (_wasForceClickPreview) {
+		_wasForceClickPreview = false;
+		return;
+	}
+
 	registerReadMetricsActivity();
 	mouseActionFinish(e->globalPos(), e->button());
 	if (!rect().contains(e->pos())) {
@@ -2755,7 +2826,7 @@ void HistoryInner::toggleFavoriteReaction(not_null<Element*> view) const {
 		return;
 	} else if (!ranges::contains(item->chosenReactions(), favorite)) {
 		if (const auto top = itemTop(view); top >= 0) {
-			view->animateReaction({ .id = favorite });
+			view->animateReaction({ .id = favorite, .haptic = true });
 		}
 	}
 	item->toggleReaction(favorite, HistoryReactionSource::Quick);
@@ -3068,6 +3139,12 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 				std::move(callback),
 				&st::menuIconStats);
 		}
+
+		AyuUi::AddHistoryAction(_menu, item);
+		AyuUi::AddHideMessageAction(_menu, item);
+		AyuUi::AddUserMessagesAction(_menu, item);
+		AyuUi::AddRepeatMessageAction(_menu, item, HistoryView::Context::History);
+		AyuUi::AddMessageDetailsAction(_menu, item);
 	};
 	const auto addPhotoActions = [&](not_null<PhotoData*> photo, HistoryItem *item) {
 		const auto media = photo->activeMediaView();
@@ -3286,6 +3363,9 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 					&st::menuIconSelect);
 			}();
 		}
+
+		AyuUi::AddReadUntilAction(_menu, item);
+		AyuUi::AddBurnAction(_menu, item);
 	};
 
 	const auto addReplyAction = [&](HistoryItem *item) {
@@ -3423,7 +3503,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			}, &st::menuIconLink);
 		}
 		if (isUponSelected > 1) {
-			if (selectedState.count > 0 && selectedState.canForwardCount == selectedState.count) {
+			if (selectedState.count > 0 && selectedState.count <= 100 && selectedState.canForwardCount == selectedState.count) {
 				_menu->addAction(tr::lng_context_forward_selected(tr::now), [=] {
 					_widget->forwardSelected();
 				}, &st::menuIconForward);
@@ -3513,6 +3593,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 				? Element::Hovered()->data().get()
 				: Element::HoveredLink()
 				? Element::HoveredLink()->data().get()
+				: Element::Moused()
+				? Element::Moused()->data().get()
 				: nullptr;
 			return result ? groupLeaderOrSelf(result) : nullptr;
 		}();
@@ -3566,6 +3648,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 						hasCopyRestrictionForSelected()));
 				}, &st::menuIconTranslate);
 			}
+			AyuUi::AddCreateFilterAction(_menu, _controller, item, selectedText.rich.text);
 			const auto editItem = [&]() -> HistoryItem* {
 				const auto view = (item && item->groupId())
 					? viewByItem(item)
@@ -3664,6 +3747,9 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 						&& (view->hasVisibleText() || mediaHasTextForCopy)) {
 						const auto peer = item->history()->peer;
 						const auto itemId = item->id;
+						// A deleted message does not exist on the server.
+						const auto byText = mediaHasTextForCopy
+							|| item->isDeleted();
 						const auto translate = mediaHasTextForCopy
 							? (HistoryView::TransribedText(item)
 								.append('\n')
@@ -3675,7 +3761,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 								_controller->show(Box(
 									Ui::TranslateBox,
 									peer,
-									mediaHasTextForCopy ? MsgId() : itemId,
+									byText ? MsgId() : itemId,
 									translate,
 									hasRestriction));
 							}, &st::menuIconTranslate);
@@ -3726,7 +3812,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			}
 		}
 		if (isUponSelected > 1) {
-			if (selectedState.count > 0 && selectedState.count == selectedState.canForwardCount) {
+			if (selectedState.count > 0 && selectedState.count <= 100 && selectedState.count == selectedState.canForwardCount) {
 				_menu->addAction(tr::lng_context_forward_selected(tr::now), [=] {
 					_widget->forwardSelected();
 				}, &st::menuIconForward);
@@ -3887,6 +3973,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 	const auto desiredPosition = e->globalPos();
 	const auto reactItem = Element::Hovered()
 		? Element::Hovered()->data().get()
+		: Element::Moused()
+		? Element::Moused()->data().get()
 		: nullptr;
 	const auto attached = reactItem
 		? AttachSelectorToMenu(
@@ -5299,7 +5387,10 @@ MessageIdsList HistoryInner::getSelectedItems() const {
 		_selected.begin(),
 		_selected.end()
 	) | views::filter([](const auto &item) {
-		return !item->isService() && item->isRegular();
+		return !item->isService()
+			&& (item->isRegular()
+				|| item->isAyuSecret()
+				|| item->isAyuRestored());
 	}) | views::transform([](const auto &item) {
 		return item->fullId();
 	}) | to_vector;
@@ -5320,7 +5411,9 @@ MessageIdsList HistoryInner::getSelectedForwardItems() const {
 	items.reserve(_selected.size());
 	for (const auto &item : _selected) {
 		if (!item->isService()
-			&& (item->isRegular() || item->isEphemeral())) {
+			&& (item->isRegular()
+				|| item->isEphemeral()
+				|| item->isAyuSecret())) {
 			items.push_back(item);
 		}
 	}
@@ -5648,7 +5741,7 @@ void HistoryInner::mouseActionUpdate() {
 		|| dragState.cursor == CursorState::Forwarded
 		|| dragState.cursor == CursorState::FromPhoto
 		|| dragState.customTooltip) {
-		Ui::Tooltip::Show(1000, this);
+		Ui::Tooltip::Show(150, this);
 	}
 
 	Qt::CursorShape cur = style::cur_default;
@@ -5998,6 +6091,10 @@ bool HistoryInner::goodForSelection(
 		not_null<SelectedItems*> toItems,
 		not_null<HistoryItem*> item,
 		int &totalCount) const {
+	if (isMessageHidden(item)) {
+		return false;
+	}
+
 	if (!item->canBeSelected()) {
 		return false;
 	} else if (toItems->find(item) == toItems->end()) {
@@ -6031,7 +6128,7 @@ void HistoryInner::changeSelection(
 	const auto add = (action == SelectAction::Select);
 	if (add
 		&& goodForSelection(toItems, item, total)
-		&& total <= MaxSelectedItems) {
+		&& total <= kMaxSelectedItemsBig) {
 		addToSelection(toItems, item);
 	} else {
 		removeFromSelection(toItems, item);
@@ -6058,7 +6155,7 @@ void HistoryInner::changeSelectionAsGroup(
 				return false;
 			}
 		}
-		return (total <= MaxSelectedItems);
+		return (total <= kMaxSelectedItemsBig);
 	}();
 	if (action == SelectAction::Select && canSelect) {
 		for (const auto &other : group->items) {
@@ -6326,7 +6423,7 @@ void HistoryInner::addSelectionRange(
 				auto item = block->messages[fromitem]->data();
 				changeSelectionAsGroup(toItems, item, SelectAction::Select);
 			}
-			if (toItems->size() >= MaxSelectedItems) break;
+			if (toItems->size() >= kMaxSelectedItemsBig) break;
 			fromitem = 0;
 		}
 	}

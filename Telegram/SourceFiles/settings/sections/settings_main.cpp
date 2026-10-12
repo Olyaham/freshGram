@@ -8,6 +8,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "settings/sections/settings_main.h"
 
 #include "settings/settings_common_session.h"
+#include "ayu/features/streamer_mode/streamer_mode.h"
+#include "ui/text/text_utilities.h"
 
 #include "api/api_cloud_password.h"
 #include "api/api_credits.h"
@@ -92,6 +94,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QGuiApplication>
 #include <QtGui/QWindow>
 
+#include "ayu/ui/settings/settings_main.h"
+#include "ayu/ui/utils/ayu_profile_values.h"
+#include "ayu/utils/telegram_helpers.h"
+
+
 namespace Settings {
 namespace {
 
@@ -114,9 +121,9 @@ public:
 private:
 	void setupChildGeometry();
 	void initViewers();
-	void updatePhoneText();
+	void updateIdText();
 	void refreshNameGeometry(int newWidth);
-	void refreshPhoneGeometry(int newWidth);
+	void refreshIdGeometry(int newWidth);
 	void refreshUsernameGeometry(int newWidth);
 	void refreshQrButtonGeometry(int newWidth);
 
@@ -127,8 +134,8 @@ private:
 
 	object_ptr<Ui::UserpicButton> _userpic;
 	object_ptr<Ui::FlatLabel> _name = { nullptr };
-	object_ptr<Ui::FlatLabel> _phone = { nullptr };
-	QString _phoneText;
+	object_ptr<Ui::FlatLabel> _id = { nullptr };
+	QString _idText;
 	object_ptr<Ui::FlatLabel> _username = { nullptr };
 	object_ptr<Ui::IconButton> _qrButton = { nullptr };
 
@@ -165,31 +172,30 @@ Cover::Cover(
 	Ui::UserpicButton::Source::PeerPhoto,
 	st::infoProfileCover.photo)
 , _name(this, st::infoProfileCover.name)
-, _phone(this, st::defaultFlatLabel, st::popupMenuWithIcons)
+, _id(this, st::defaultFlatLabel, st::popupMenuWithIcons)
 , _username(this, st::infoProfileMegagroupCover.status) {
 	_user->updateFull();
 
 	_name->setSelectable(true);
 	_name->setContextCopyText(tr::lng_profile_copy_fullname(tr::now));
 
-	_phone->setSelectable(true);
-	_phone->setContextCopyText(tr::lng_profile_copy_phone(tr::now));
+	_id->setSelectable(true);
+	_id->setContextCopyText(tr::ayu_ContextCopyID(tr::now));
 	const auto hook = [=](Ui::FlatLabel::ContextMenuRequest request) {
 		if (request.selection.empty()) {
 			const auto callback = [=] {
-				Info::Profile::CopyPhoneToClipboard(
-					Info::Profile::PhoneValue(_user));
+				auto id = IDString(_user);
+				TextUtilities::SetClipboardText({ id });
 			};
 			request.menu->addAction(
-				tr::lng_profile_copy_phone(tr::now),
+				tr::ayu_ContextCopyID(tr::now),
 				callback,
 				&st::menuIconCopy);
 		} else {
-			_phone->fillContextMenu(request);
+			_id->fillContextMenu(request);
 		}
-		Info::Profile::AddPhoneSpoilerMenu(request.menu, _user);
 	};
-	_phone->setContextMenuHook(hook);
+	_id->setContextMenuHook(hook);
 
 	initViewers();
 	setupChildGeometry();
@@ -219,7 +225,8 @@ Cover::Cover(
 			_badge.widget(),
 			_badge.sizeTag());
 	});
-	_badge.updated() | rpl::on_next([=] {
+	_badge.updated(
+	) | rpl::on_next([=] {
 		refreshNameGeometry(width());
 	}, _name->lifetime());
 
@@ -248,7 +255,7 @@ void Cover::setupChildGeometry() {
 			st::settingsPhotoTop,
 			newWidth);
 		refreshNameGeometry(newWidth);
-		refreshPhoneGeometry(newWidth);
+		refreshIdGeometry(newWidth);
 		refreshUsernameGeometry(newWidth);
 		refreshQrButtonGeometry(newWidth);
 	}, lifetime());
@@ -262,24 +269,24 @@ void Cover::initViewers() {
 		refreshNameGeometry(width());
 	}, lifetime());
 
-	Info::Profile::PhoneValue(
-		_user
+	rpl::single(
+		tr::marked(IDString(_user))
 	) | rpl::on_next([=](const TextWithEntities &value) {
-		_phoneText = value.text;
-		updatePhoneText();
-	}, lifetime());
-
-	_user->session().settings().phoneNumberHiddenValue(
-	) | rpl::on_next([=] {
-		updatePhoneText();
+		_idText = value.text;
+		updateIdText();
 	}, lifetime());
 
 	Info::Profile::UsernameValue(
 		_user
 	) | rpl::on_next([=](const TextWithEntities &value) {
-		_username->setMarkedText(tr::link(value.text.isEmpty()
+		auto text = tr::link(value.text.isEmpty()
 			? tr::lng_settings_username_add(tr::now)
-			: value.text));
+			: value.text);
+		_username->setMarkedText(
+			(AyuFeatures::StreamerMode::spoilersActive()
+				&& !value.text.isEmpty())
+			? Ui::Text::Wrapped(std::move(text), EntityType::Spoiler)
+			: std::move(text));
 		refreshUsernameGeometry(width());
 	}, lifetime());
 
@@ -323,24 +330,25 @@ void Cover::refreshNameGeometry(int newWidth) {
 	_badge.move(badgeLeft, badgeTop, badgeBottom);
 }
 
-void Cover::updatePhoneText() {
-	if (_user->session().settings().phoneNumberHidden()) {
-		_phone->setMarkedText(
-			Ui::Text::Wrapped({ _phoneText }, EntityType::Spoiler));
+void Cover::updateIdText() {
+	if (AyuFeatures::StreamerMode::spoilersActive() && !_idText.isEmpty()) {
+		_id->setMarkedText(Ui::Text::Wrapped(
+			TextWithEntities{ _idText },
+			EntityType::Spoiler));
 	} else {
-		_phone->setText(_phoneText);
+		_id->setText(_idText);
 	}
-	refreshPhoneGeometry(width());
+	refreshIdGeometry(width());
 }
 
-void Cover::refreshPhoneGeometry(int newWidth) {
-	const auto phoneLeft = st::settingsPhoneLeft;
-	const auto phoneTop = st::settingsPhoneTop;
-	const auto phoneWidth = newWidth
-		- phoneLeft
+void Cover::refreshIdGeometry(int newWidth) {
+	const auto idLeft = st::settingsPhoneLeft;
+	const auto idTop = st::settingsPhoneTop;
+	const auto idWidth = newWidth
+		- idLeft
 		- st::infoProfileCover.rightSkip;
-	_phone->resizeToWidth(phoneWidth);
-	_phone->moveToLeft(phoneLeft, phoneTop, newWidth);
+	_id->resizeToWidth(idWidth);
+	_id->moveToLeft(idLeft, idTop, newWidth);
 }
 
 void Cover::refreshUsernameGeometry(int newWidth) {
@@ -366,6 +374,16 @@ void BuildSectionButtons(SectionBuilder &builder) {
 	const auto session = builder.session();
 	const auto controller = builder.controller();
 	const auto showOther = builder.showOther();
+
+	builder.addSectionButton({
+		.title = tr::ayu_AyuPreferences(),
+		.targetSection = AyuMain::Id(),
+		.icon = { &st::menuIconPremium },
+		.keywords = { u"ayu"_q },
+	});
+	builder.addSkip();
+	builder.addDivider();
+	builder.addSkip();
 
 	if (!session->supportMode()) {
 		builder.addButton({
@@ -589,6 +607,16 @@ void BuildHelpSection(SectionBuilder &builder) {
 		.icon = { &st::menuIconFaq },
 		.onClick = [=] { OpenFaq(controller); },
 		.keywords = { u"help"_q, u"support"_q, u"questions"_q },
+	});
+
+	builder.addButton({
+		.id = u"freshgram-github"_q,
+		.title = tr::lng_freshgram_settings_github(),
+		.icon = { &st::menuIconGitHub },
+		.onClick = [=] {
+			UrlClickHandler::Open("https://github.com/Snowy-Fluffy/freshGram");
+		},
+		.keywords = { u"freshgram"_q, u"github"_q, u"source"_q },
 	});
 
 	builder.addButton({

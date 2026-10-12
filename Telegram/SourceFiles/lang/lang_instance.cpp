@@ -12,6 +12,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "storage/localstorage.h"
 #include "ui/boxes/confirm_box.h"
 #include "lang/lang_file_parser.h"
+#include "ayu/utils/builtin_lang.h"
 #include "lang/lang_tag.h" // kTextCommandLangTag.
 #include "base/platform/base_platform_info.h"
 #include "base/qthelp_regex.h"
@@ -72,6 +73,27 @@ private:
 	QString _result;
 	OrderedSet<ushort> _tagsUsed;
 
+};
+
+QMap <QString, QString> registrationStrings = {
+	{"uk", "Дата реєстрації"},
+	{"ru", "Дата регистрации"},
+	{"de", "Datum der registrierung"},
+	{"be", "Дата рэгістрацыі"},
+	{"ca", "Data de registre"},
+	{"hr", "Datum registracije"},
+	{"nl", "Registratie datum"},
+	{"fr", "Date d'inscription"},
+	{"id", "Tanggal pendaftaran"},
+	{"it", "Data di registrazione"},
+	{"kk", "Тіркеу күні"},
+	{"ko", "등록 날짜"},
+	{"ms", "Tarikh pendaftaran"},
+	{"pl", "Data rejestracji"},
+	{"pt-br", "Data de registro"},
+	{"sr", "Датум регистрације"},
+	{"es", "Fecha de registro"},
+	{"tr", "Kayıt tarihi"}
 };
 
 ValueParser::ValueParser(
@@ -258,6 +280,9 @@ void Instance::switchToId(const Language &data) {
 		}
 	}
 	updatePluralRules();
+	if (applyBuiltin() && !_derived) {
+		_updated.fire({});
+	}
 }
 
 void Instance::setBaseId(const QString &baseId, const QString &pluralId) {
@@ -544,6 +569,7 @@ void Instance::fillFromSerialized(
 	for (auto i = 0, count = nonDefaultValuesCount * 2; i != count; i += 2) {
 		applyValue(nonDefaultStrings[i], nonDefaultStrings[i + 1]);
 	}
+	applyBuiltin();
 	updatePluralRules();
 	updateChoosingStickerReplacement();
 
@@ -694,6 +720,11 @@ void Instance::applyDifferenceToMe(
 			resetValue(key);
 		});
 	}
+	auto language = qs(difference.vlang_code()).trimmed().remove("-raw");
+	if (registrationStrings.contains(language)) {
+		applyValue("lng_freshgram_info_registration", registrationStrings.value(language).toUtf8());
+	}
+	applyBuiltin();
 	if (!_derived) {
 		_updated.fire({});
 	} else {
@@ -757,6 +788,27 @@ void Instance::updatePluralRules() {
 			: LanguageIdOrDefault(_id);
 	}
 	UpdatePluralRules(_pluralId);
+}
+
+bool Instance::applyBuiltin() {
+	if (_derived || isCustom()) {
+		return false;
+	}
+	auto strings = &AyuLang::BuiltinStrings(_id);
+	if (strings->empty()) {
+		strings = &AyuLang::BuiltinStrings(baseId());
+	}
+	auto applied = false;
+	for (const auto &[key, value] : *strings) {
+		ParseKeyValue(key, value, [&](ushort index, QString &&parsed) {
+			if (!_nonDefaultSet[index]) {
+				_nonDefaultSet[index] = 1;
+				_values[index] = std::move(parsed);
+				applied = true;
+			}
+		});
+	}
+	return applied;
 }
 
 void Instance::resetValue(const QByteArray &key) {

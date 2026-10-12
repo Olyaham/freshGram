@@ -58,6 +58,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <QtCore/QMimeData>
 
+#include "ayu/features/message_shot/message_shot.h"
+
+
 namespace HistoryView {
 namespace {
 
@@ -151,6 +154,10 @@ PinnedWidget::PinnedWidget(
 	_topBar->deleteSelectionRequest(
 	) | rpl::on_next([=] {
 		confirmDeleteSelected();
+	}, _topBar->lifetime());
+	_topBar->messageShotSelectionRequest(
+	) | rpl::on_next([=] {
+		AyuFeatures::MessageShot::Wrapper(_inner, [=] { clearSelected(); });
 	}, _topBar->lifetime());
 	_topBar->forwardSelectionRequest(
 	) | rpl::on_next([=] {
@@ -509,8 +516,8 @@ void PinnedWidget::refreshClearButtonText() {
 		? tr::lng_pinned_unpin_all(
 			tr::now,
 			lt_count,
-			std::max(_messagesCount, 1)).toUpper()
-		: tr::lng_pinned_hide_all(tr::now).toUpper());
+			std::max(_messagesCount, 1))
+		: tr::lng_pinned_hide_all(tr::now));
 }
 
 void PinnedWidget::updateControlsGeometry() {

@@ -92,6 +92,14 @@ PeerData *Key::peer() const {
 		&& QStringView(query).trimmed().isEmpty();
 }
 
+SearchMediaFilter SearchState::activeMedia() const {
+	const auto inThisChat = inChat
+		&& !inChat.sublist()
+		&& ((tab == ChatSearchTab::ThisPeer)
+			|| (tab == ChatSearchTab::ThisTopic));
+	return inThisChat ? media : SearchMediaFilter::All;
+}
+
 ChatSearchTab SearchState::defaultTabForMe() const {
 	const auto history = inChat.history();
 	const auto channel = history ? history->peer->asChannel() : nullptr;

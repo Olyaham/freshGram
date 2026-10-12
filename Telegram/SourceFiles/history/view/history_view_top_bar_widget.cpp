@@ -5,6 +5,11 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/data/kept_dialogs.h"
+#include "ayu/features/peek/peek_online.h"
+#include "ayu/secret/secret_bridge.h"
+#include "ayu/secret/secret_peer.h"
+#include "ayu/ui/status_marquee.h"
 #include "history/view/history_view_top_bar_widget.h"
 
 #include "history/history.h"
@@ -72,6 +77,15 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <QtGui/QWindow>
 
+#include "ayu/ayu_settings.h"
+#include "ui/layers/generic_box.h"
+#include "boxes/peers/edit_participants_box.h"
+#include "data/data_chat_filters.h"
+#include "history/admin_log/history_admin_log_section.h"
+#include "styles/style_ayu_styles.h"
+#include "styles/style_ayu_icons.h"
+
+
 namespace HistoryView {
 namespace {
 
@@ -121,6 +135,7 @@ TopBarWidget::TopBarWidget(
 , _forward(this, tr::lng_selected_forward(), st::defaultActiveButton)
 , _sendNow(this, tr::lng_selected_send_now(), st::defaultActiveButton)
 , _delete(this, tr::lng_selected_delete(), st::defaultActiveButton)
+, _messageShot(this, tr::ayu_MessageShotTopBarText(), st::defaultActiveButton)
 , _back(this, st::historyTopBarBack)
 , _cancelChoose(this, st::topBarCloseChoose)
 , _call(this, st::topBarCall)
@@ -128,14 +143,30 @@ TopBarWidget::TopBarWidget(
 , _search(this, st::topBarSearch)
 , _infoToggle(this, st::topBarInfo)
 , _menuToggle(this, st::topBarMenuToggle)
+, _recentActions(this, st::topBarRecentActions)
+, _admins(this, st::topBarAdmins)
+, _peek(this, st::topBarPeek)
 , _titlePeerText(st::windowMinWidth / 3)
-, _onlineUpdater([=] { updateOnlineDisplay(); }) {
+, _onlineUpdater([=] { updateOnlineDisplay(); })
+, _statusScrollTimer([=] {
+	if (isVisible()) {
+		update(_statusScrollRect);
+	} else {
+		_statusScrollTimer.cancel();
+	}
+}) {
 	setAttribute(Qt::WA_OpaquePaintEvent);
 
 	_clear->setTextTransform(Ui::RoundButtonTextTransform::ToUpper);
 	_forward->setTextTransform(Ui::RoundButtonTextTransform::ToUpper);
 	_sendNow->setTextTransform(Ui::RoundButtonTextTransform::ToUpper);
 	_delete->setTextTransform(Ui::RoundButtonTextTransform::ToUpper);
+	_messageShot->setTextTransform(Ui::RoundButtonTextTransform::ToUpper);
+
+	_clear->setFullRadius(true);
+	_forward->setFullRadius(true);
+	_sendNow->setFullRadius(true);
+	_delete->setFullRadius(true);
 
 	Lang::Updated(
 	) | rpl::on_next([=] {
@@ -148,6 +179,8 @@ TopBarWidget::TopBarWidget(
 	_sendNow->setWidthChangedCallback([=] { updateControlsGeometry(); });
 	_delete->setClickedCallback([=] { _deleteSelection.fire({}); });
 	_delete->setWidthChangedCallback([=] { updateControlsGeometry(); });
+	_messageShot->setClickedCallback([=] { _messageShotSelection.fire({}); });
+	_messageShot->setWidthChangedCallback([=] { updateControlsGeometry(); });
 	_clear->setClickedCallback([=] { _clearSelection.fire({}); });
 	_call->setClickedCallback([=] { call({}); });
 	_call->setAcceptBoth(true, true);
@@ -160,6 +193,34 @@ TopBarWidget::TopBarWidget(
 	_menuToggle->addClickHandler([=](auto) { showPeerMenu(); });
 	_menuToggle->setAcceptBoth(true, true);
 	_infoToggle->setClickedCallback([=] { toggleInfoSection(); });
+
+	_recentActions->setClickedCallback([=]
+	{
+		const auto channel = _activeChat.key.peer()->asChannel();
+		_controller->showSection(std::make_shared<AdminLog::SectionMemento>(channel));
+	});
+	_admins->setClickedCallback([=]
+	{
+		ParticipantsBoxController::Start(
+			controller,
+			_activeChat.key.peer(),
+			ParticipantsBoxController::Role::Admins
+		);
+	});
+	_peek->setAccessibleName(tr::ayu_PeekButton(tr::now));
+	_peek->setClickedCallback([=] {
+		if (const auto peer = _activeChat.key.peer()) {
+			if (const auto user = peer->asUser()) {
+				AyuPeek::start(user);
+			}
+		}
+	});
+
+	AyuSettings::getInstance().quickAdminShortcutsChanges(
+	) | rpl::on_next([=](bool) {
+		updateControlsVisibility();
+	}, lifetime());
+
 	_back->setAcceptBoth();
 	_back->addClickHandler([=](Qt::MouseButton) {
 		InvokeQueued(_back.data(), [=] { backClicked(); });
@@ -227,6 +288,10 @@ TopBarWidget::TopBarWidget(
 			}
 		} else if ((update.flags & UpdateFlag::Rights)
 			&& (_activeChat.key.peer() == update.peer)) {
+			updateControlsVisibility();
+		}
+		if ((update.flags & UpdateFlag::OnlineStatus)
+			&& (update.peer == _activeChat.key.peer())) {
 			updateControlsVisibility();
 		}
 		if ((update.flags & UpdateFlag::OnlineStatus)
@@ -465,6 +530,9 @@ void TopBarWidget::showCallMenu() {
 }
 
 void TopBarWidget::toggleInfoSection() {
+	if (AyuSecret::IsSecretPeer(_activeChat.key.peer())) {
+		return;
+	}
 	const auto isThreeColumn = _controller->adaptive().isThreeColumn();
 	if (isThreeColumn
 		&& (Core::App().settings().thirdSectionInfoEnabled()
@@ -682,6 +750,18 @@ void TopBarWidget::paintTopBar(Painter &p) {
 			nameleft += skip + st::dialogsChatTypeSkip;
 			namewidth -= skip + st::dialogsChatTypeSkip;
 		}
+		if (AyuSecret::IsSecretPeer(namePeer)) {
+			const auto &lock = st::ayuSecretChatIcon.icon;
+			lock.paint(p, nameleft, nametop, width());
+			nameleft += lock.width() + st::dialogsChatTypeSkip;
+			namewidth -= lock.width() + st::dialogsChatTypeSkip;
+		}
+		if (AyuKept::showsDeleted(namePeer)) {
+			const auto &trash = st::ayuDeletedChatIcon.icon;
+			trash.paint(p, nameleft, nametop, width());
+			nameleft += trash.width() + st::dialogsChatTypeSkip;
+			namewidth -= trash.width() + st::dialogsChatTypeSkip;
+		}
 		const auto badgeWidth = _titleBadge.drawGetWidth(p, {
 			.peer = namePeer,
 			.rectForName = QRect(
@@ -811,6 +891,30 @@ void TopBarWidget::paintStatus(
 		p.setPen(_titlePeerTextOnline
 			? st::historyStatusFgActive
 			: st::historyStatusFg);
+		const auto full = _titlePeerText.maxWidth();
+		if (_statusScrollFull != full) {
+			_statusScrollFull = full;
+			_statusMarquee.reset();
+		}
+		if (!rtl() && _statusMarquee.step(crl::now(), full, availableWidth)) {
+			const auto height = st::dialogsTextFont->height;
+			_statusScrollRect = QRect(left, top, availableWidth, height);
+			const auto &pen = _titlePeerTextOnline
+				? st::historyStatusFgActive
+				: st::historyStatusFg;
+			p.drawImage(left, top, _statusMarquee.frame(
+				QSize(availableWidth, height),
+				full,
+				[&](Painter &q, int x) {
+					q.setPen(pen);
+					_titlePeerText.drawLeft(q, x, 0, full, full);
+				}));
+			if (!_statusScrollTimer.isActive()) {
+				_statusScrollTimer.callEach(33);
+			}
+			return;
+		}
+		_statusScrollTimer.cancel();
 		_titlePeerText.drawLeftElided(
 			p,
 			left,
@@ -852,6 +956,9 @@ void TopBarWidget::infoClicked() {
 	const auto key = _activeChat.key;
 	if (!key) {
 		return;
+	} else if (const auto real = AyuSecret::RealUser(key.peer())) {
+		_controller->showPeerInfo(real);
+		return;
 	} else if (const auto topic = key.topic()) {
 		_controller->showSection(std::make_shared<Info::Memento>(topic));
 	} else if (const auto sublist = key.sublist()) {
@@ -869,7 +976,14 @@ void TopBarWidget::infoClicked() {
 
 void TopBarWidget::backClicked() {
 	if (_activeChat.key.folder()) {
-		_controller->closeFolder();
+		const auto &settings = AyuSettings::getInstance();
+		if (settings.hideAllChatsFolder()) {
+			const auto filters = &_controller->session().data().chatsFilters();
+			const auto lookupId = filters->lookupId(_controller->session().premium() ? 0 : 1);
+			_controller->setActiveChatsFilter(lookupId);
+		} else {
+			_controller->closeFolder();
+		}
 	} else if (_activeChat.section == Section::ChatsList
 		&& _activeChat.key.history()
 		&& _activeChat.key.history()->isForum()) {
@@ -1117,7 +1231,9 @@ void TopBarWidget::updateSearchVisibility() {
 			&& !pinnedInSavedMessages)
 		|| (_activeChat.section == Section::SavedSublist
 			&& _activeChat.key.sublist());
-	_search->setVisible(searchAllowedMode && !_chooseForReportReason);
+	_search->setVisible(searchAllowedMode
+		&& !_chooseForReportReason
+		&& !AyuSecret::IsSecretPeer(_activeChat.key.peer()));
 }
 
 void TopBarWidget::updateInfoButtonVisibility() {
@@ -1154,6 +1270,7 @@ void TopBarWidget::updateControlsGeometry() {
 	auto buttonsWidth = (_forward->isHidden() ? 0 : _forward->contentWidth())
 		+ (_sendNow->isHidden() ? 0 : _sendNow->contentWidth())
 		+ (_delete->isHidden() ? 0 : _delete->contentWidth())
+		+ (_messageShot->isHidden() ? 0 : _messageShot->contentWidth())
 		+ _clear->width();
 	buttonsWidth += buttonsLeft + st::topBarActionSkip * 3;
 
@@ -1164,6 +1281,7 @@ void TopBarWidget::updateControlsGeometry() {
 	_forward->setFullWidth(buttonFullWidth);
 	_sendNow->setFullWidth(buttonFullWidth);
 	_delete->setFullWidth(buttonFullWidth);
+	_messageShot->setFullWidth(buttonFullWidth);
 
 	selectedButtonsTop += (height() - _forward->height()) / 2;
 
@@ -1178,6 +1296,11 @@ void TopBarWidget::updateControlsGeometry() {
 	}
 
 	_delete->moveToLeft(buttonsLeft, selectedButtonsTop);
+	if (!_delete->isHidden()) {
+		buttonsLeft += _delete->width() + st::topBarActionSkip;
+	}
+
+	_messageShot->moveToLeft(buttonsLeft, selectedButtonsTop);
 	{
 		const auto large = st::topBarActionButtonLargeRadius;
 		const auto &buttonSt = st::defaultActiveButton;
@@ -1188,6 +1311,7 @@ void TopBarWidget::updateControlsGeometry() {
 			_forward.data(),
 			_sendNow.data(),
 			_delete.data(),
+			_messageShot.data(),
 		};
 		auto first = (Ui::RoundButton*)(nullptr);
 		auto last = (Ui::RoundButton*)(nullptr);
@@ -1298,6 +1422,33 @@ void TopBarWidget::updateControlsGeometry() {
 		_groupCall->moveToRight(_rightTaken, otherButtonsTop);
 		_rightTaken += _call->width();
 	}
+
+	_recentActions->moveToRight(_rightTaken, otherButtonsTop);
+	if (!_recentActions->isHidden()) {
+		_rightTaken += _recentActions->width();
+	}
+	_admins->moveToRight(_rightTaken, otherButtonsTop);
+	if (!_admins->isHidden()) {
+		_rightTaken += _admins->width();
+	}
+
+	const auto searchTaken = _search->isHidden()
+		? 0
+		: (_search->width() + st::topBarCallSkip);
+	const auto peekRoom = width()
+		- _leftTaken
+		- _rightTaken
+		- searchTaken
+		- _peek->width()
+		- st::topBarNameRightPadding;
+	const auto peekShown = _peekWanted
+		&& (peekRoom >= st::topBarPeekMinNameWidth);
+	_peek->setVisible(peekShown);
+	_peek->moveToRight(_rightTaken, otherButtonsTop);
+	if (peekShown) {
+		_rightTaken += _peek->width();
+	}
+
 	_search->moveToRight(_rightTaken, otherButtonsTop);
 	if (!_search->isHidden()) {
 		_rightTaken += _search->width() + st::topBarCallSkip;
@@ -1329,9 +1480,13 @@ void TopBarWidget::updateControlsVisibility() {
 		hideChildren();
 		return;
 	}
+
+	const auto &settings = AyuSettings::getInstance();
+
 	const auto visible = showSelectedState() || _selectedShown.animating();
 	_clear->setVisible(visible);
 	_delete->setVisible(_canDelete && visible);
+	_messageShot->setVisible(settings.showMessageShot() && visible);
 	_forward->setVisible(_canForward && visible);
 	_sendNow->setVisible(_canSendNow && visible);
 
@@ -1391,6 +1546,7 @@ void TopBarWidget::updateControlsVisibility() {
 				_activeChat.key.peer()->asChannel()))
 		: false;
 	const auto hasInfo = !_activeChat.key.folder()
+		&& !AyuSecret::IsSecretPeer(_activeChat.key.peer())
 		&& (section == Section::History
 			? true
 			: (section == Section::Replies)
@@ -1412,13 +1568,59 @@ void TopBarWidget::updateControlsVisibility() {
 		&& !isOneColumn
 		&& _controller->canShowThirdSection()
 		&& !_chooseForReportReason);
+
+	const auto showRecentActions = [&]
+	{
+		const auto &settings = AyuSettings::getInstance();
+		if (!settings.quickAdminShortcuts()) {
+			return false;
+		}
+		if (_activeChat.section == Section::ChatsList) {
+			return false;
+		}
+		if (const auto peer = _activeChat.key.peer()) {
+			if (peer->isMegagroup() || peer->isChannel()) {
+				const auto channel = peer->asChannel();
+				return channel->hasAdminRights() || channel->amCreator();
+			}
+		}
+		return false;
+	}();
+	_recentActions->setVisible(showRecentActions);
+	const auto showAdmins = [&]
+	{
+		const auto &settings = AyuSettings::getInstance();
+		if (!settings.quickAdminShortcuts()) {
+			return false;
+		}
+		if (_activeChat.section == Section::ChatsList) {
+			return false;
+		}
+		if (const auto peer = _activeChat.key.peer()) {
+			if (peer->isMegagroup()) {
+				return true;
+			}
+			if (peer->isChannel()) {
+				const auto channel = peer->asChannel();
+				return channel->hasAdminRights() || channel->amCreator();
+			}
+		}
+		return false;
+	}();
+	_admins->setVisible(showAdmins);
+	_peekWanted = historyMode
+		&& !_chooseForReportReason
+		&& !_activeChat.key.topic()
+		&& AyuPeek::shouldOffer(_activeChat.key.peer());
+
 	const auto callsEnabled = [&] {
 		if (const auto peer = _activeChat.key.peer()) {
 			if (const auto user = peer->asUser()) {
 				return !user->isSelf()
 					&& !user->isBot()
 					&& !user->isInaccessible()
-					&& !peer->isServiceUser();
+					&& !peer->isServiceUser()
+					&& !AyuSecret::IsSecretPeer(peer);
 			}
 		}
 		return false;
@@ -1459,9 +1661,7 @@ void TopBarWidget::updateMembersShowArea() {
 			return chat->amIn();
 		} else if (const auto megagroup = peer->asMegagroup()) {
 			return !megagroup->isMonoforum()
-				&& megagroup->canViewMembers()
-				&& (megagroup->membersCount()
-					< megagroup->session().serverConfig().chatSizeMax);
+				&& megagroup->canViewMembers();
 		}
 		return false;
 	}();
@@ -1480,15 +1680,19 @@ void TopBarWidget::updateMembersShowArea() {
 }
 
 bool TopBarWidget::showSelectedState() const {
+	const auto &settings = AyuSettings::getInstance();
+
 	return (_selectedCount > 0)
-		&& (_canDelete || _canForward || _canSendNow);
+		&& (_canDelete || _canForward || _canSendNow || settings.showMessageShot());
 }
 
 void TopBarWidget::showSelected(SelectedState state) {
+	const auto &settings = AyuSettings::getInstance();
+
 	auto canDelete = (state.count > 0 && state.count == state.canDeleteCount);
-	auto canForward = (state.count > 0 && state.count == state.canForwardCount);
+	auto canForward = (state.count > 0 && state.count <= 100 && state.count == state.canForwardCount);
 	auto canSendNow = (state.count > 0 && state.count == state.canSendNowCount);
-	auto count = (!canDelete && !canForward && !canSendNow) ? 0 : state.count;
+	auto count = (!canDelete && !canForward && !canSendNow && !settings.showMessageShot()) ? 0 : state.count;
 	if (_selectedCount == count
 		&& _canDelete == canDelete
 		&& _canForward == canForward
@@ -1515,10 +1719,12 @@ void TopBarWidget::showSelected(SelectedState state) {
 		_forward->setNumbersText(_selectedCount);
 		_sendNow->setNumbersText(_selectedCount);
 		_delete->setNumbersText(_selectedCount);
+		_messageShot->setNumbersText(_selectedCount);
 		if (!wasSelectedState) {
 			_forward->finishNumbersAnimation();
 			_sendNow->finishNumbersAnimation();
 			_delete->finishNumbersAnimation();
+			_messageShot->finishNumbersAnimation();
 		}
 	}
 	if (visibilityChanged
@@ -1927,7 +2133,10 @@ void TopBarWidget::updateOnlineDisplay() {
 			text = QString::fromUtf8("\xe2\x9a\xa0\xef\xb8\x8f check info");
 			titlePeerTextOnline = false;
 		} else {
-			text = Data::OnlineText(user, now);
+			text = AyuPeek::augment(
+				user,
+				Data::OnlineText(user, now),
+				now);
 			titlePeerTextOnline = Data::OnlineTextActive(user, now);
 		}
 	} else if (const auto chat = peer->asChat()) {
@@ -1972,9 +2181,7 @@ void TopBarWidget::updateOnlineDisplay() {
 	} else if (const auto channel = peer->asChannel()) {
 		if (channel->isMegagroup()
 			&& channel->canViewMembers()
-			&& (channel->membersCount() > 0)
-			&& (channel->membersCount()
-				<= channel->session().serverConfig().chatSizeMax)) {
+			&& channel->membersCount() > 0) {
 			if (channel->lastParticipantsRequestNeeded()) {
 				session().api().chatParticipants().requestLast(channel);
 			}

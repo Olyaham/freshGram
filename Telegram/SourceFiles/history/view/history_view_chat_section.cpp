@@ -98,6 +98,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_msg_id.h"
 #include "data/data_saved_messages.h"
 #include "data/data_saved_sublist.h"
+#include "data/data_ai_compose_tones.h"
 #include "data/data_session.h"
 #include "data/data_user.h"
 #include "data/data_chat.h"
@@ -112,6 +113,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_shared_media.h"
 #include "data/data_send_action.h"
 #include "data/data_premium_limits.h"
+#include "main/main_app_config.h"
 #include "data/notify/data_notify_settings.h"
 #include "storage/storage_folder_archive.h"
 #include "storage/storage_media_prepare.h"
@@ -134,6 +136,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <limits>
 #include <QtCore/QMimeData>
+
+#include "ayu/ayu_settings.h"
+#include "ayu/features/message_shot/message_shot.h"
+#include "base/unixtime.h"
+
 
 namespace HistoryView {
 
@@ -534,6 +541,10 @@ ChatWidget::ChatWidget(
 	) | rpl::on_next([=] {
 		confirmDeleteSelected();
 	}, _topBar->lifetime());
+	_topBar->messageShotSelectionRequest(
+	) | rpl::on_next([=] {
+		AyuFeatures::MessageShot::Wrapper(_inner, [=] { clearSelected(); });
+	}, _topBar->lifetime());
 	_topBar->forwardSelectionRequest(
 	) | rpl::on_next([=] {
 		confirmForwardSelected();
@@ -797,12 +808,14 @@ ChatWidget::ChatWidget(
 				}
 			}
 			if (action.options.scheduled) {
-				if (_topic) {
+				const auto &ghost = AyuSettings::ghost(&session());
+				const auto show = !ghost.isUseScheduledMessages();
+				if (show && _topic) {
 					crl::on_main(this, [=, t = _topic] {
 						controller->showSection(
 							std::make_shared<HistoryView::ScheduledMemento>(t));
 					});
-				} else if (mode() == Mode::History) {
+				} else if (show && mode() == Mode::History) {
 					crl::on_main(this, [=, history = action.history] {
 						controller->showSection(
 							std::make_shared<HistoryView::ScheduledMemento>(
@@ -963,7 +976,7 @@ ChatWidget::ChatWidget(
 
 	session().data().historyAccessLost(
 	) | rpl::filter([=](not_null<History*> history) {
-		return (history == _history);
+		return (history == _history) && !history->ayuKept();
 	}) | rpl::on_next([=] {
 		const auto was = _peer;
 		const auto account = not_null(&was->account());
@@ -2078,7 +2091,8 @@ bool ChatWidget::confirmSendingFiles(
 		_composeControls->getTextWithAppliedMarkdown(),
 		_peer,
 		Api::SendType::Normal,
-		sendMenuDetails());
+		sendMenuDetails(),
+		[=](const TextWithTags &text) { _composeControls->setText(text); });
 	box->setReplyTo(_composeControls->replyingToMessage());
 	_sendFilesBox = box.data();
 
@@ -3296,6 +3310,9 @@ SendMenu::Details ChatWidget::sendMenuDetails() const {
 		: HistoryView::CanScheduleUntilOnline(_peer)
 		? Type::ScheduledToUser
 		: Type::Scheduled;
+	const auto aiComposeAllowed =
+		!_composeControls->getTextWithAppliedMarkdown().text.isEmpty()
+		&& !session().data().aiComposeTones().list().empty();
 	return SendMenu::Details{
 		.type = type,
 		.barePeerId = (_sublist
@@ -3303,6 +3320,7 @@ SendMenu::Details ChatWidget::sendMenuDetails() const {
 			: _history)->peer->id.value,
 		.bareTopicRootId = _topic ? _topic->rootId().bare : 0,
 		.effectAllowed = _peer->isUser(),
+		.aiComposeAllowed = aiComposeAllowed,
 	};
 }
 

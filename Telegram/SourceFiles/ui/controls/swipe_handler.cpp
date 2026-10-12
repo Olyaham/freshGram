@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "ui/controls/swipe_handler.h"
 
+#include "ayu/ayu_settings.h"
 #include "base/platform/base_platform_haptic.h"
 #include "base/platform/base_platform_info.h"
 #include "base/qt/qt_common_adapters.h"
@@ -383,12 +384,18 @@ void SetupSwipeHandler(SwipeHandlerArgs &&args) {
 			if (cancel) {
 				processEnd();
 			} else {
+				const auto follow
+					= AyuSettings::getInstance().invertSwipeGestures();
+				const auto fingers = Ui::ScrollDeltaF(w)
+					* (w->inverted() ? -1. : 1.);
 				updateWith({
 					.globalCursor = w->globalPosition().toPoint(),
 					.position = QPointF(),
-					.delta = state->delta - Ui::ScrollDeltaF(w) * kSwipeSlow,
+					.delta = follow
+						? (state->delta - Ui::ScrollDeltaF(w) * kSwipeSlow)
+						: (state->delta + fingers * kSwipeSlow),
 					.touch = false,
-					.inverted = w->inverted(),
+					.inverted = follow ? w->inverted() : true,
 				});
 			}
 		} break;

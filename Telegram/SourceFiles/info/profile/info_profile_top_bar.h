@@ -7,7 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
 
+#include "ayu/ui/status_marquee.h"
 #include "base/object_ptr.h"
+#include "base/unique_qptr.h"
 #include "info/info_controller.h" // Key
 #include "info/profile/info_profile_badge.h"
 #include "info/profile/tabs/info_profile_tab_top_bar_bindings.h"
@@ -305,6 +307,10 @@ private:
 	object_ptr<Ui::FlatLabel> _status;
 	std::unique_ptr<StatusLabel> _statusLabel;
 	rpl::variable<int> _statusShift = 0;
+	base::Timer _statusScrollTimer;
+	AyuUi::StatusMarquee _statusMarquee;
+	base::unique_qptr<Ui::RpWidget> _statusScroll;
+	QImage _statusTape;
 	rpl::producer<TextWithEntities> _customStatus;
 	object_ptr<Ui::FadeWrap<Ui::RoundButton>> _showLastSeen = { nullptr };
 	object_ptr<Ui::RoundButton> _forumButton = { nullptr };
@@ -332,6 +338,7 @@ private:
 
 	Ui::PeerUserpicView _userpicView;
 	InMemoryKey _userpicUniqueKey;
+	uint8 _userpicAyuState = 0xFF;
 	QImage _cachedUserpic;
 	Ui::CommunityUserpicEffect _communityUserpicEffect;
 	bool _communityEffect = false;

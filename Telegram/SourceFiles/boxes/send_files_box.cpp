@@ -84,12 +84,22 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <QtCore/QMimeData>
 
+#include "ayu/ayu_settings.h"
+#include "base/unixtime.h"
+#include "ayu/utils/telegram_helpers.h"
+#include <QApplication>
+#include <QBuffer>
+#include <QDrag>
+
+
 namespace {
 
 constexpr auto kMaxMessageLength = 4096;
 constexpr auto kMaxDisplayNameLength = 64;
 constexpr auto kStashFilesLimit = 100;
 constexpr auto kStashFilesMemoryLimit = int64(256) * 1024 * 1024;
+
+constexpr auto kDragMime = "application/x-tg-sendfile-index";
 
 using Ui::SendFilesWay;
 
@@ -673,7 +683,8 @@ SendFilesBox::SendFilesBox(
 	const TextWithTags &caption,
 	not_null<PeerData*> toPeer,
 	Api::SendType sendType,
-	SendMenu::Details sendMenuDetails)
+	SendMenu::Details sendMenuDetails,
+	Fn<void(const TextWithTags &text)> cancelled2)
 : SendFilesBox(nullptr, {
 	.show = controller->uiShow(),
 	.list = std::move(list),
@@ -683,6 +694,7 @@ SendFilesBox::SendFilesBox(
 	.check = DefaultCheckForPeer(controller, toPeer),
 	.sendType = sendType,
 	.sendMenuDetails = [=] { return sendMenuDetails; },
+	.cancelled2 = cancelled2,
 }) {
 }
 
@@ -701,6 +713,7 @@ SendFilesBox::SendFilesBox(QWidget*, SendFilesBoxDescriptor &&descriptor)
 , _check(std::move(descriptor.check))
 , _confirmedCallback(std::move(descriptor.confirmed))
 , _cancelledCallback(std::move(descriptor.cancelled))
+, _cancelled2Callback(std::move(descriptor.cancelled2))
 , _caption(
 	this,
 	_st.files.caption,
@@ -895,6 +908,10 @@ void SendFilesBox::prepare() {
 			&& !_textTaken
 			&& _cancelledCallback) {
 			_cancelledCallback();
+		}
+		auto text = _caption->getTextWithAppliedMarkdown();
+		if (!_confirmed && _cancelled2Callback && !text.empty()) {
+			_cancelled2Callback(std::move(text));
 		}
 	}, lifetime());
 
@@ -1285,6 +1302,35 @@ void SendFilesBox::addMenuButton() {
 			_menu = nullptr;
 			return true;
 		}
+		using ImageInfo = Ui::PreparedFileInformation::Image;
+		if (_list.files.size() == 1 && std::get_if<ImageInfo>(&_list.files[0].information->media)) {
+			_menu->addAction(
+				tr::ayu_SendAsSticker(tr::now),
+				[=]() mutable
+				{
+					const auto file = std::move(_list.files[0]);
+					_list.files.clear();
+
+					const auto sourceImage = std::get_if<ImageInfo>(&file.information->media);
+
+					QByteArray targetArray;
+					QBuffer buffer(&targetArray);
+					buffer.open(QIODevice::WriteOnly);
+					sourceImage->data.save(&buffer, "WEBP");
+
+					QImage targetImage;
+					targetImage.loadFromData(targetArray, "WEBP");
+
+					addFiles(Storage::PrepareMediaFromImage(std::move(targetImage),
+															std::move(targetArray),
+															st::sendMediaPreviewSize));
+					_list.overrideSendImagesAsPhotos = false;
+					initSendWay();
+
+					send({}, false);
+				},
+				&st::menuIconStickers);
+		}
 		_menu->popupPrepared();
 		return true;
 	});
@@ -1419,6 +1465,11 @@ void SendFilesBox::pushBlock(int from, int till) {
 	const auto widget = _inner->add(
 		block.takeWidget(),
 		QMargins(0, _inner->count() ? st::sendMediaRowSkip : 0, 0, 0));
+
+	if ((till - from) == 1 && isFileBlock(from)) {
+		setupDragForBlock(widget, from);
+	}
+
 	struct State {
 		base::unique_qptr<Ui::PopupMenu> menu;
 	};
@@ -2596,6 +2647,11 @@ bool SendFilesBox::validateLength(const QString &text) const {
 void SendFilesBox::send(
 		Api::SendOptions options,
 		bool ctrlShiftEnter) {
+	const auto sumSize = ranges::accumulate(
+		_list.files, int64(0),
+		[](int64 sum, const auto &file) { return sum + file.size; });
+	applyGhostScheduling(&_show->session(), options, getScheduleTime(sumSize));
+
 	if (options.scheduled
 		&& ranges::any_of(_list.files, &Ui::PreparedFile::ttlSeconds)) {
 		showToast(tr::lng_ttl_no_schedule(tr::now));
@@ -2747,3 +2803,92 @@ Fn<void(Api::SendOptions)> SendFilesBox::sendCallback() {
 }
 
 SendFilesBox::~SendFilesBox() = default;
+
+
+bool SendFilesBox::isFileBlock(int i) const {
+	using Type = Ui::PreparedFile::Type;
+	const auto &f = _list.files[i];
+	return (f.type == Type::File)
+		|| (f.type == Type::Music)
+		|| (f.type == Type::None)
+		|| (f.type == Type::Photo && !_sendWay.current().sendImagesAsPhotos());
+}
+
+void SendFilesBox::moveFile(int from, int to) {
+	if (from < 0 || to < 0
+		|| from >= _list.files.size()
+		|| to >= _list.files.size())
+		return;
+
+	if (from == to) return;
+
+	refreshAllAfterChanges(std::min(from, to), [=] { std::swap(_list.files[from], _list.files[to]); });
+}
+
+void SendFilesBox::setupDragForBlock(not_null<Ui::RpWidget*> w, int index) {
+	w->setAcceptDrops(true);
+
+	const auto pressed = w->lifetime().make_state<rpl::variable<bool>>(false);
+	const auto pressPos = w->lifetime().make_state<rpl::variable<QPoint>>();
+
+	w->events(
+	) | rpl::on_next(
+			[=](not_null<QEvent *> e)
+			{
+				switch (e->type()) {
+					case QEvent::MouseButtonPress: {
+						const auto ev = static_cast<QMouseEvent *>(e.get());
+						if (ev->button() == Qt::LeftButton) {
+							pressed->force_assign(true);
+							pressPos->force_assign(ev->pos());
+						}
+						break;
+					}
+					case QEvent::MouseMove: {
+						if (pressed->current()) {
+							const auto ev = static_cast<QMouseEvent *>(e.get());
+							if ((ev->pos() - pressPos->current()).manhattanLength() >=
+								QApplication::startDragDistance()) {
+								pressed->force_assign(false);
+
+								const auto drag = new QDrag(w);
+								auto mime = std::make_unique<QMimeData>();
+								mime->setData(kDragMime, QByteArray::number(index));
+								drag->setMimeData(mime.release());
+								drag->setPixmap(w->grab());
+								drag->setHotSpot(ev->pos());
+								drag->exec(Qt::MoveAction);
+							}
+						}
+						break;
+					}
+					case QEvent::MouseButtonRelease: pressed->force_assign(false); break;
+
+					case QEvent::DragEnter:
+					case QEvent::DragMove: {
+						const auto ev = static_cast<QDragMoveEvent *>(e.get());
+						if (ev->mimeData()->hasFormat(kDragMime)) {
+							const auto from = ev->mimeData()->data(kDragMime).toInt();
+							if (isFileBlock(from) && isFileBlock(index)) {
+								ev->acceptProposedAction();
+							}
+						}
+						break;
+					}
+					case QEvent::Drop: {
+						const auto ev = static_cast<QDropEvent *>(e.get());
+						if (ev->mimeData()->hasFormat(kDragMime)) {
+							const auto from = ev->mimeData()->data(kDragMime).toInt();
+							if (isFileBlock(from) && isFileBlock(index)) {
+								crl::on_main(this, [=] { moveFile(from, index); });
+								ev->acceptProposedAction();
+							}
+						}
+						break;
+					}
+					default: break;
+				}
+				return base::EventFilterResult::Continue;
+			},
+			w->lifetime());
+}

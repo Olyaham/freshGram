@@ -20,6 +20,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "main/main_session_settings.h"
 
+#include "ayu/ayu_settings.h"
+
+
 namespace Data {
 namespace {
 
@@ -129,6 +132,12 @@ void PromoSuggestions::refreshTopPromotion() {
 			for (const auto &suggestion : data.vdismissed_suggestions().v) {
 				changedDismissedSuggestions
 					|= _dismissedSuggestions.emplace(qs(suggestion)).second;
+			}
+
+			const auto &settings = AyuSettings::getInstance();
+			if (settings.disableAds()) {
+				setTopPromoted(nullptr, QString(), QString());
+				return;
 			}
 
 			if (const auto peer = data.vpeer()) {

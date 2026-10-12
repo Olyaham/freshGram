@@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "settings/sections/settings_information.h"
 
+#include "ayu/features/streamer_mode/streamer_mode.h"
+#include "ui/text/text_utilities.h"
+
 #include "settings/sections/settings_main.h"
 #include "settings/settings_builder.h"
 #include "settings/settings_common_session.h"
@@ -75,6 +78,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QGuiApplication>
 #include <QtCore/QBuffer>
 
+#include "ayu/ui/ayu_userpic.h"
+#include "ayu/utils/telegram_helpers.h"
+#include "styles/style_info.h"
+
+
 namespace Settings {
 namespace {
 
@@ -95,7 +103,7 @@ struct InformationHighlightTargets {
 };
 
 constexpr auto kSaveBioTimeout = 1000;
-constexpr auto kPlayStatusLimit = 2;
+constexpr auto kPlayStatusLimit = 12;
 
 class ComposedBadge final : public Ui::RpWidget {
 public:
@@ -268,6 +276,7 @@ void SetupPhoto(
 		not_null<Window::SessionController*> controller,
 		not_null<UserData*> self,
 		InformationHighlightTargets *targets) {
+	Ui::AddSkip(container); // fix avatar cutting on top
 	const auto wrap = container->add(object_ptr<Ui::FixedHeightWidget>(
 		container,
 		st::settingsInfoPhotoHeight));
@@ -585,10 +594,9 @@ void SetupRows(
 		targets->name = nameButton;
 	}
 
-	const auto showChangePhone = [=] {
-		controller->show(
-			Ui::MakeInformBox(tr::lng_change_phone_error()));
-		controller->window().activate();
+	const auto copyPhone = [=] {
+		QGuiApplication::clipboard()->setText(self->phone());
+		controller->showToast(tr::lng_text_copied(tr::now), 500);
 	};
 	const auto phoneButton = AddRow(
 		container,
@@ -597,7 +605,7 @@ void SetupRows(
 			self,
 			Info::Profile::PhoneValue(self)),
 		tr::lng_profile_copy_phone(tr::now),
-		showChangePhone,
+		copyPhone,
 		{ &st::menuIconPhone },
 		true,
 		[=](not_null<Ui::PopupMenu*> menu) {
@@ -625,7 +633,9 @@ void SetupRows(
 		tr::lng_settings_username_add()
 	) | rpl::map([](const TextWithEntities &username, const QString &add) {
 		if (!username.text.isEmpty()) {
-			return username;
+			return AyuFeatures::StreamerMode::spoilersActive()
+				? Ui::Text::Wrapped(username, EntityType::Spoiler)
+				: username;
 		}
 		auto result = TextWithEntities{ add };
 		result.entities.push_back({
@@ -877,7 +887,7 @@ void SetupAccountsWrap(
 			pen.setWidthF(line);
 			p.setPen(pen);
 			p.setBrush(Qt::NoBrush);
-			p.drawEllipse(rect);
+			AyuUserpic::PaintShape(p, rect);
 		}
 	}, state->userpic.lifetime());
 
@@ -1019,7 +1029,7 @@ not_null<Ui::SlideWrap<Ui::SettingsButton>*> AccountsList::setupAdd() {
 				{
 					&st::settingsIconAdd,
 					IconType::Round,
-					&st::windowBgActive
+					&st::sideBarBg
 				})))->setDuration(0);
 	const auto button = result->entity();
 
@@ -1460,7 +1470,7 @@ AccountsEvents SetupAccounts(
 void UpdatePhotoLocally(not_null<UserData*> user, const QImage &image) {
 	auto bytes = QByteArray();
 	auto buffer = QBuffer(&bytes);
-	image.save(&buffer, "JPG", 87);
+	image.save(&buffer, "JPG", 94);
 	user->setUserpic(
 		base::RandomValue<PhotoId>(),
 		ImageLocation(

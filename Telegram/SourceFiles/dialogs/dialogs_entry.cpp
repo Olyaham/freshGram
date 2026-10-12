@@ -330,8 +330,10 @@ void Entry::notifyUnreadStateChange(const UnreadState &wasState) {
 
 const Ui::Text::String &Entry::chatListNameText() const {
 	const auto version = chatListNameVersion();
-	if (_chatListNameVersion < version) {
+	if (_chatListNameVersion < version
+		|| _chatListNameSpoilered != Ui::Text::NamesSpoilered()) {
 		_chatListNameVersion = version;
+		_chatListNameSpoilered = Ui::Text::NamesSpoilered();
 		_chatListNameText.setText(
 			st::semiboldTextStyle,
 			chatListName(),

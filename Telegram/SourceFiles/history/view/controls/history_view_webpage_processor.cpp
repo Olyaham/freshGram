@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/controls/history_view_webpage_processor.h"
 
+#include "ayu/secret/secret_peer.h"
 #include "base/unixtime.h"
 #include "data/data_chat_participant_status.h"
 #include "data/data_file_origin.h"
@@ -15,6 +16,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history.h"
 #include "lang/lang_keys.h"
 #include "main/main_session.h"
+
+#include "ayu/utils/telegram_helpers.h"
+
 
 namespace HistoryView::Controls {
 
@@ -157,7 +161,7 @@ void WebpageResolver::request(const QString &link, bool force) {
 	_requestId = _api.request(
 		MTPmessages_GetWebPagePreview(
 			MTP_flags(0),
-			MTP_string(link),
+			MTP_string(getBetterLinkPreview(link)),
 			MTPVector<MTPMessageEntity>()
 	)).done([=](
 			const MTPmessages_WebPagePreview &result,
@@ -231,6 +235,7 @@ WebpageProcessor::WebpageProcessor(
 		if (_data) {
 			_draft.id = _data->id;
 			_draft.url = _data->url;
+			_draft.previewChanged = (getBetterLinkPreview(link) != link);
 			updateFromData();
 		} else {
 			_links = QStringList();
@@ -353,7 +358,8 @@ void WebpageProcessor::checkNow(bool force) {
 
 void WebpageProcessor::checkPreview() {
 	const auto previewRestricted = _history->peer
-		&& _history->peer->amRestricted(ChatRestriction::EmbedLinks);
+		&& (AyuSecret::IsSecretPeer(_history->peer)
+			|| _history->peer->amRestricted(ChatRestriction::EmbedLinks));
 	if (_parsedLinks.empty()) {
 		_draft.removed = false;
 	}
@@ -394,6 +400,7 @@ void WebpageProcessor::checkPreview() {
 		_data = page;
 		_draft.id = _data->id;
 		_draft.url = _data->url;
+		_draft.previewChanged = (getBetterLinkPreview(chosen) != chosen);
 	} else {
 		_data = nullptr;
 		_draft = {};

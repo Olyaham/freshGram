@@ -50,6 +50,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <QtGui/QtEvents>
 
+#include "ayu/ayu_settings.h"
+
+
 namespace Window {
 namespace {
 
@@ -234,11 +237,17 @@ void FiltersMenu::setupMainMenuIcon() {
 	OtherAccountsUnreadState(
 		&_session->session().account()
 	) | rpl::on_next([=](const OthersUnreadState &state) {
-		const auto icon = !state.count
+		auto icon = !state.count
 			? nullptr
 			: !state.allMuted
 			? &st::windowFiltersMainMenuUnread
 			: &st::windowFiltersMainMenuUnreadMuted;
+
+		const auto &settings = AyuSettings::getInstance();
+		if (settings.hideNotificationCounters()) {
+			icon = nullptr;
+		}
+
 		_menu.setIconOverride(icon, icon);
 	}, _outer.lifetime());
 }
@@ -346,6 +355,8 @@ bool FiltersMenu::listFocused() const {
 }
 
 void FiltersMenu::refresh() {
+	const auto &settings = AyuSettings::getInstance();
+
 	const auto filters = &_session->session().data().chatsFilters();
 	if (!filters->has() || _ignoreRefresh) {
 		return;
@@ -361,7 +372,7 @@ void FiltersMenu::refresh() {
 	const auto maxLimit = (reorderAll ? 1 : 0)
 		+ Data::PremiumLimits(&_session->session()).dialogFiltersCurrent();
 	const auto premiumFrom = (reorderAll ? 0 : 1) + maxLimit;
-	if (!reorderAll) {
+	if (!reorderAll && !settings.hideAllChatsFolder()) {
 		_reorder->addPinnedInterval(0, 1);
 	}
 	_reorder->addPinnedInterval(
@@ -425,6 +436,11 @@ void FiltersMenu::refresh() {
 	// After the filters are refreshed, the scroll is reset,
 	// so we have to restore it.
 	_scroll.scrollToY(oldTop);
+
+	if (settings.hideAllChatsFolder()
+		&& _session->widget()->sessionContent()) {
+		_session->setActiveChatsFilter(filters->lookupId(0));
+	}
 
 	if (refocus) {
 		refocus->setFocus();
@@ -606,15 +622,23 @@ base::unique_qptr<Ui::SideBarButton> FiltersMenu::prepareButton(
 		}
 		rpl::combine(
 			Data::UnreadStateValue(&_session->session(), id),
-			Data::IncludeMutedCounterFoldersValue()
+			Data::IncludeMutedCounterFoldersValue(),
+			AyuSettings::getInstance().hideNotificationCountersValue()
 		) | rpl::on_next([=](
 				const Dialogs::UnreadState &state,
-				bool includeMuted) {
+				bool includeMuted,
+				bool hideCounters) {
 			const auto chats = state.chats;
 			const auto chatsMuted = state.chatsMuted;
-			const auto muted = (chatsMuted + state.marksMuted);
-			const auto count = (chats + state.marks)
+			auto muted = (chatsMuted + state.marksMuted);
+			auto count = (chats + state.marks)
 				- (includeMuted ? 0 : muted);
+
+			if (hideCounters) {
+				count = 0;
+				muted = 0;
+			}
+
 			const auto string = !count
 				? QString()
 				: (count > 999)
@@ -806,9 +830,11 @@ void FiltersMenu::applyReorder(
 		return;
 	}
 
+	const auto &settings = AyuSettings::getInstance();
+
 	const auto filters = &_session->session().data().chatsFilters();
 	const auto &list = filters->list();
-	if (!premium()) {
+	if (!settings.hideAllChatsFolder() && !premium()) {
 		if (list[0].id() != FilterId()) {
 			filters->moveAllToFront();
 		}

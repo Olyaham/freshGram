@@ -102,12 +102,23 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/cached_webview_availability.h"
 #include "test/test_agent.h"
 
+#include <QtCore/QFile>
 #include <QtCore/QStandardPaths>
 #include <QtCore/QMimeDatabase>
 #include <QtGui/QGuiApplication>
 #include <QtGui/QScreen>
 
 #include <ksandbox.h>
+
+#include "ayu/ayu_infra.h"
+#include "ayu/ayu_settings.h"
+#include "ayu/data/ayu_database.h"
+#include "ayu/features/fake_passcode/fake_passcode.h"
+#include "ayu/secret/secret_policy.h"
+#include "ayu/utils/crash_trace.h"
+#include "ayu/utils/debug_logging.h"
+#include "ayu/features/streamer_mode/streamer_mode.h"
+
 
 namespace Core {
 namespace {
@@ -283,6 +294,7 @@ Application::~Application() {
 
 	_private->proxyRotation = nullptr;
 	_domain->finish();
+	AyuDatabase::finish();
 	MTP::WebProxy::Transport::Shutdown();
 
 	Local::finish();
@@ -312,6 +324,14 @@ void Application::run() {
 
 	startLocalStorage();
 
+	const auto traceDirectory = cWorkingDir() + u"tdata"_q;
+	if (AyuDebugLogging::Enabled()) {
+		AyuCrashTrace::Install(traceDirectory);
+	} else {
+		Logs::removeFiles();
+		AyuCrashTrace::Remove(traceDirectory);
+	}
+
 	style::SetCustomFont(settings().customFontFamily());
 	style::internal::StartFonts();
 
@@ -339,6 +359,7 @@ void Application::run() {
 	_translator = std::make_unique<Lang::Translator>();
 	QCoreApplication::instance()->installTranslator(_translator.get());
 
+	AyuInfra::init();
 	style::StartManager(cScale());
 	Ui::Accessible::Init();
 	Ui::InitTextOptions();
@@ -599,6 +620,10 @@ void Application::processCreatedWindow(
 	}
 	window->openInMediaViewRequests(
 	) | rpl::start_to_stream(_openInMediaViewRequests, window->lifetime());
+
+	if (AyuSettings::getInstance().streamerMode()) {
+		AyuFeatures::StreamerMode::hideWidgetWindow(window->widget());
+	}
 }
 
 void Application::startMediaView() {
@@ -1298,7 +1323,7 @@ bool Application::openInternalUrl(const QString &url, QVariant context) {
 }
 
 QString Application::changelogLink() const {
-	return u"https://telegramdesktop.github.io/tdesktop/changelog/"_q;
+	return u"https://github.com/Snowy-Fluffy/freshGram/releases"_q;
 }
 
 bool Application::openCustomUrl(
@@ -1348,6 +1373,7 @@ void Application::updateWindowTitles() {
 }
 
 void Application::lockByPasscode() {
+	AyuFakePasscode::OnLock();
 	_passcodeLock = true;
 	enumerateWindows([&](not_null<Window::Controller*> w) {
 		w->setupPasscodeLock();
@@ -1369,6 +1395,7 @@ void Application::unlockPasscode() {
 	enumerateWindows([&](not_null<Window::Controller*> w) {
 		w->clearPasscodeLock();
 	});
+	AyuFakePasscode::RunPending();
 }
 
 void Application::clearPasscodeLock() {
@@ -1467,6 +1494,7 @@ void Application::checkAutoLockIn(crl::time time) {
 }
 
 void Application::localPasscodeChanged() {
+	AyuSecret::HandlePasscodeChange();
 	_shouldLockAt = 0;
 	_autoLockTimer.cancel();
 	checkAutoLock(crl::now());
@@ -1479,6 +1507,8 @@ bool Application::savingPositionFor(
 
 bool Application::hasActiveWindow(not_null<Main::Session*> session) const {
 	if (Quitting() || !_lastActiveWindow) {
+		return false;
+	} else if (Main::Session::debugFocus) {
 		return false;
 	} else if (_calls->hasActivePanel(session)) {
 		return true;
@@ -2079,7 +2109,7 @@ void Application::RegisterUrlScheme() {
 		.arguments = arguments,
 		.protocol = u"tg"_q,
 		.protocolName = u"Telegram Link"_q,
-		.shortAppName = u"tdesktop"_q,
+		.shortAppName = u"freshGram"_q,
 		.longAppName = QCoreApplication::applicationName(),
 		.displayAppName = AppName.utf16(),
 		.displayAppDescription = AppName.utf16(),

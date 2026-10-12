@@ -14,6 +14,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_chat.h"
 #include "styles/style_chat_style.h"
 
+#include "ayu/ayu_settings.h"
+
+
+
 namespace Ui {
 namespace {
 
@@ -71,7 +75,7 @@ template <
 	typename FillBg, // fillBg(QRect rect)
 	typename FillSh, // fillSh(QRect rect)
 	typename FillCorner, // fillCorner(int x, int y, int index, Corner size)
-	typename PaintTail> // paintTail(QPoint bottomPosition) -> tailWidth
+	typename PaintTail>
 void PaintBubbleGeneric(
 		const SimpleBubble &args,
 		FillBg &&fillBg,
@@ -80,21 +84,32 @@ void PaintBubbleGeneric(
 		PaintTail &&paintTail) {
 	using namespace Images;
 
+	const auto material = MaterialBubbles();
 	const auto topLeft = args.rounding.topLeft;
 	const auto topRight = args.rounding.topRight;
-	const auto bottomWithTailLeft = args.rounding.bottomLeft;
-	const auto bottomWithTailRight = args.rounding.bottomRight;
-	if (topLeft == Corner::None
+	auto bottomWithTailLeft = args.rounding.bottomLeft;
+	auto bottomWithTailRight = args.rounding.bottomRight;
+	if (!material
+		&& topLeft == Corner::None
 		&& topRight == Corner::None
 		&& bottomWithTailLeft == Corner::None
 		&& bottomWithTailRight == Corner::None) {
 		fillBg(args.geometry);
 		return;
 	}
-	const auto bottomLeft = (bottomWithTailLeft == Corner::Tail)
+	if (material) {
+		if (bottomWithTailLeft == Corner::Tail) {
+			bottomWithTailLeft = Corner::Large;
+		}
+		if (bottomWithTailRight == Corner::Tail) {
+			bottomWithTailRight = Corner::Large;
+		}
+	}
+
+	const auto bottomLeft = (!material && bottomWithTailLeft == Corner::Tail)
 		? Corner::None
 		: bottomWithTailLeft;
-	const auto bottomRight = (bottomWithTailRight == Corner::Tail)
+	const auto bottomRight = (!material && bottomWithTailRight == Corner::Tail)
 		? Corner::None
 		: bottomWithTailRight;
 	const auto rect = args.geometry;
@@ -103,7 +118,7 @@ void PaintBubbleGeneric(
 	const auto cornerSize = [&](Corner corner) {
 		return (corner == Corner::Large)
 			? large
-			: (corner == Corner::Small)
+			: (corner == (material ? Corner::None : Corner::Small))
 			? small
 			: 0;
 	};
@@ -343,6 +358,10 @@ void FinishBubblePatternOnMain(not_null<BubblePattern*> pattern) {
 	pattern->tailCache = QImage(
 		pattern->tailLeft.size(),
 		QImage::Format_ARGB32_Premultiplied);
+}
+
+bool MaterialBubbles() {
+	return AyuSettings::getInstance().materialBubbles();
 }
 
 void PaintBubble(QPainter &p, const SimpleBubble &args) {

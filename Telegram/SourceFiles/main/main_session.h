@@ -145,6 +145,9 @@ public:
 		return _user;
 	}
 	bool validateSelf(UserId id);
+	static inline bool debugActions = false;
+	static inline bool debugFocus = false;
+	static inline bool screenshotAction = false;
 
 	[[nodiscard]] Data::Changes &changes() const {
 		return *_changes;

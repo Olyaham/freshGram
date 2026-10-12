@@ -68,6 +68,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "chat_helpers/spellchecker_common.h"
 #endif // TDESKTOP_DISABLE_SPELLCHECK
 
+#include "ayu/ayu_settings.h"
+#include "api/api_blocked_peers.h"
+
+
 namespace Main {
 namespace {
 
@@ -94,6 +98,43 @@ constexpr auto kTmpPasswordReserveTime = TimeId(10);
 	return MTP::ConfigFields(
 		session->mtp().environment()
 	).internalLinksDomain;
+}
+
+void InitializeBlockedPeers(not_null<Main::Session*> session) {
+	const auto offset = std::make_shared<int>(0);
+	const auto allLoaded = std::make_shared<bool>(false);
+	const auto applySlice = [=](
+			const Api::BlockedPeers::Slice &slice,
+			auto self) -> void {
+		if (slice.list.empty()) {
+			*allLoaded = true;
+		}
+
+		*offset += slice.list.size();
+		for (const auto &item : slice.list) {
+			if (const auto peer = session->data().peerLoaded(item.id)) {
+				peer->setIsBlocked(true);
+			}
+		}
+		if (*offset >= slice.total) {
+			*allLoaded = true;
+		}
+
+		if (!*allLoaded) {
+			session->api().blockedPeers().request(
+				*offset,
+				[=](const Api::BlockedPeers::Slice &slice) {
+					self(slice, self);
+				});
+		}
+	};
+
+	session->api().blockedPeers().slice(
+	) | rpl::take(
+		1
+	) | rpl::on_next([=](const Api::BlockedPeers::Slice &result) {
+		applySlice(result, applySlice);
+	}, session->lifetime());
 }
 
 } // namespace
@@ -276,6 +317,8 @@ Session::Session(
 	) | rpl::on_next([=] {
 		appConfigRefreshed();
 	}, _lifetime);
+
+	InitializeBlockedPeers(this);
 }
 
 void Session::appConfigRefreshed() {
@@ -355,10 +398,20 @@ rpl::producer<> Session::downloaderTaskFinished() const {
 }
 
 bool Session::premium() const {
+	const auto &settings = AyuSettings::getInstance();
+	if (settings.localPremium()) {
+		return true;
+	}
+
 	return _user->isPremium();
 }
 
 bool Session::premiumPossible() const {
+	const auto &settings = AyuSettings::getInstance();
+	if (settings.localPremium()) {
+		return true;
+	}
+
 	return premium() || premiumCanBuy();
 }
 
@@ -369,12 +422,19 @@ bool Session::premiumBadgesShown() const {
 rpl::producer<bool> Session::premiumPossibleValue() const {
 	using namespace rpl::mappers;
 
-	auto premium = _user->flagsValue(
+	// fix issue with GCC
+	rpl::producer<bool> premium = _user->flagsValue(
 	) | rpl::filter([=](UserData::Flags::Change change) {
 		return (change.diff & UserDataFlag::Premium);
 	}) | rpl::map([=] {
 		return _user->isPremium();
 	});
+
+	const auto &settings = AyuSettings::getInstance();
+	if (settings.localPremium()) {
+		premium = rpl::single(true);
+	}
+
 	return rpl::combine(
 		std::move(premium),
 		_premiumPossible.value(),

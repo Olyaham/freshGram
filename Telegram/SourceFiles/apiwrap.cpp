@@ -5,6 +5,9 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/data/local_pins.h"
+#include "ayu/secret/secret_send.h"
+#include "ayu/secret/secret_peer.h"
 #include "apiwrap.h"
 
 #include "api/api_authorizations.h"
@@ -108,6 +111,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "storage/file_upload.h"
 #include "storage/storage_account.h"
 
+#include "ayu/ayu_settings.h"
+#include "ayu/ayu_worker.h"
+#include "ayu/data/kept_dialogs.h"
+#include "ayu/utils/telegram_helpers.h"
+#include "ayu/features/forward/ayu_forward.h"
+
+
 namespace {
 
 // Save draft to the cloud with 1 sec extra delay.
@@ -133,6 +143,9 @@ using UpdatedFileReferences = Data::UpdatedFileReferences;
 	const auto history = thread->owningHistory();
 	const auto topicRootId = thread->topicRootId();
 	const auto monoforumPeerId = thread->monoforumPeerId();
+	if (AyuSecret::IsSecretPeer(history->peer)) {
+		return true;
+	}
 	const auto cloudDraft = history->cloudDraft(topicRootId, monoforumPeerId);
 	return (Iv::Editor::IsComposeBoxOpen(
 			session,
@@ -421,10 +434,11 @@ void ApiWrap::savePinnedOrder(Data::Folder *folder) {
 	};
 	auto peers = QVector<MTPInputDialogPeer>();
 	peers.reserve(order.size());
-	ranges::transform(
-		order,
-		ranges::back_inserter(peers),
-		input);
+	for (const auto &key : order) {
+		if (!AyuLocalPins::isLocal(key)) {
+			peers.push_back(input(key));
+		}
+	}
 	request(MTPmessages_ReorderPinnedDialogs(
 		MTP_flags(MTPmessages_ReorderPinnedDialogs::Flag::f_force),
 		MTP_int(folder ? folder->id() : 0),
@@ -498,7 +512,18 @@ void ApiWrap::toggleHistoryArchived(
 		if (archived) {
 			history->setFolder(_session->data().folder(archiveId));
 		} else {
-			history->clearFolder();
+			const auto &settings = AyuSettings::getInstance();
+			if (settings.hideAllChatsFolder()) {
+				if (const auto window = Core::App().activeWindow()) {
+					if (const auto controller = window->sessionController()) {
+						const auto filters = &_session->data().chatsFilters();
+						const auto lookup_id = filters->lookupId(controller->session().premium() ? 0 : 1);
+						controller->setActiveChatsFilter(lookup_id);
+					}
+				}
+			} else {
+				history->clearFolder();
+			}
 		}
 		if (const auto data = _historyArchivedRequests.take(history)) {
 			data->second();
@@ -1204,6 +1229,15 @@ void ApiWrap::requestWallPaper(
 }
 
 void ApiWrap::requestFullPeer(not_null<PeerData*> peer) {
+	if (AyuSecret::IsSecretPeer(peer)) {
+		return;
+	}
+	if (const auto chat = peer->asChat(); chat && chat->isForbidden()) {
+		return;
+	} else if (const auto channel = peer->asChannel();
+		channel && (channel->flags() & ChannelDataFlag::Forbidden)) {
+		return;
+	}
 	if (_fullPeerRequests.contains(peer)) {
 		return;
 	} else if (!peer->isUser() && !peer->barSettings().has_value()) {
@@ -1325,6 +1359,10 @@ void ApiWrap::gotUserFull(
 }
 
 void ApiWrap::requestPeerSettings(not_null<PeerData*> peer) {
+	if (AyuSecret::IsSecretPeer(peer)) {
+		peer->setBarSettings(PeerBarSettings());
+		return;
+	}
 	if (!_requestedPeerSettings.emplace(peer).second) {
 		return;
 	} else if (peer->isMonoforum()) {
@@ -1436,15 +1474,27 @@ void ApiWrap::migrateFail(not_null<PeerData*> peer, const QString &error) {
 
 void ApiWrap::markContentsRead(
 		const base::flat_set<not_null<HistoryItem*>> &items) {
+	const auto &ghost = AyuSettings::ghost(&session());
+
 	auto markedIds = QVector<MTPint>();
 	auto channelMarkedIds = base::flat_map<
 		not_null<ChannelData*>,
 		QVector<MTPint>>();
 	markedIds.reserve(items.size());
 	for (const auto &item : items) {
+		if (item->isUnreadMedia() && item->keepsUnburnt()) {
+			continue;
+		}
+		const auto passthrough = (item->isUnreadMention() || item->hasUnreadReaction()) && !item->isUnreadMedia();
+
 		if (!item->markContentsRead(true) || !item->isRegular()) {
 			continue;
 		}
+
+		if (!ghost.sendReadMessages() && !passthrough) {
+			continue;
+		}
+
 		if (const auto channel = item->history()->peer->asChannel()) {
 			channelMarkedIds[channel].push_back(MTP_int(item->id));
 		} else {
@@ -1467,9 +1517,20 @@ void ApiWrap::markContentsRead(
 }
 
 void ApiWrap::markContentsRead(not_null<HistoryItem*> item) {
+	if (item->isUnreadMedia() && item->keepsUnburnt()) {
+		return;
+	}
+	const auto passthrough = (item->isUnreadMention() || item->hasUnreadReaction()) && !item->isUnreadMedia();
+
 	if (!item->markContentsRead(true) || !item->isRegular()) {
 		return;
 	}
+
+	const auto &ghost = AyuSettings::ghost(&session());
+	if (!ghost.sendReadMessages() && !passthrough) {
+		return;
+	}
+
 	const auto ids = MTP_vector<MTPint>(1, MTP_int(item->id));
 	if (const auto channel = item->history()->peer->asChannel()) {
 		request(MTPchannels_ReadMessageContents(
@@ -1499,7 +1560,16 @@ void ApiWrap::deleteAllFromParticipant(
 			items.push_back(item);
 		}
 	}
-	_session->data().destroyMessagesWithCacheCleanup(items);
+	// Saved messages stay as deleted ones instead of being destroyed.
+	auto toDestroy = std::vector<not_null<HistoryItem*>>();
+	for (const auto &item : items) {
+		if (isMessageSavable(item)) {
+			processMessageDelete(item);
+		} else {
+			toDestroy.push_back(item);
+		}
+	}
+	_session->data().destroyMessagesWithCacheCleanup(toDestroy);
 
 	_session->data().sendHistoryChangeNotifications();
 
@@ -1944,7 +2014,11 @@ void ApiWrap::joinChannel(not_null<ChannelData*> channel) {
 
 		using Flag = ChannelDataFlag;
 		chatParticipants().loadSimilarPeers(channel);
-		channel->setFlags(channel->flags() | Flag::SimilarExpanded);
+
+		const auto &settings = AyuSettings::getInstance();
+		if (!settings.collapseSimilarChannels()) {
+			channel->setFlags(channel->flags() | Flag::SimilarExpanded);
+		}
 	}
 }
 
@@ -1954,6 +2028,7 @@ void ApiWrap::leaveChannel(not_null<ChannelData*> channel) {
 			channel,
 			Data::PeerUpdate::Flag::ChannelAmIn);
 	} else if (!_channelAmInRequests.contains(channel)) {
+		AyuKept::userLeaving(channel);
 		auto requestId = request(MTPchannels_LeaveChannel(
 			channel->inputChannel()
 		)).done([=](const MTPUpdates &result) {
@@ -2082,6 +2157,9 @@ void ApiWrap::updateNotifySettingsDelayed(
 }
 
 void ApiWrap::updateNotifySettingsDelayed(not_null<const PeerData*> peer) {
+	if (AyuSecret::IsSecretPeer(peer)) {
+		return;
+	}
 	if (_updateNotifyPeers.emplace(peer).second) {
 		_updateNotifyTimer.callOnce(kNotifySettingSaveTimeout);
 	}
@@ -2193,6 +2271,7 @@ void ApiWrap::clearHistory(not_null<PeerData*> peer, bool revoke) {
 
 void ApiWrap::deleteConversation(not_null<PeerData*> peer, bool revoke) {
 	if (const auto chat = peer->asChat()) {
+		AyuKept::userLeaving(chat);
 		request(MTPmessages_DeleteChatUser(
 			MTP_flags(0),
 			chat->inputChat(),
@@ -2355,6 +2434,9 @@ mtpRequestId ApiWrap::saveDraftToCloud(
 		const Data::Draft &draft,
 		Fn<void()> done,
 		Fn<void(const MTP::Error &)> fail) {
+	if (AyuSecret::IsSecretPeer(thread->peer())) {
+		return 0;
+	}
 	const auto weak = base::make_weak(thread);
 	const auto requestId = savePreparedDraftToCloud(
 		thread,
@@ -2375,6 +2457,13 @@ mtpRequestId ApiWrap::savePreparedDraftToCloud(
 		bool clearOnFail,
 		Fn<void()> done,
 		Fn<void(const MTP::Error &)> fail) {
+	if (AyuSecret::IsSecretPeer(thread->peer())) {
+		return 0;
+	}
+	if (AyuSettings::getInstance().keepDraftsLocal()
+		&& !Data::DraftIsNull(&draft)) {
+		return 0;
+	}
 	const auto weak = base::make_weak(thread);
 	const auto history = thread->owningHistory();
 	const auto topicRootId = thread->topicRootId();
@@ -3897,6 +3986,35 @@ void ApiWrap::forwardMessages(
 		FnMut<void()> &&successCallback) {
 	Expects(!draft.items.empty());
 
+	{
+		auto threads = std::vector<not_null<Data::Thread*>>{ action.history };
+		auto items = std::vector<not_null<HistoryItem*>>(
+			draft.items.begin(),
+			draft.items.end());
+		if (AyuSecret::Forward(items, threads, action.options)) {
+			if (successCallback) {
+				successCallback();
+			}
+			return;
+		}
+	}
+
+	const auto fullAyuForward = AyuForward::isFullAyuForwardNeeded(draft.items.front());
+	if (fullAyuForward) {
+		crl::async([=] {
+			AyuForward::forwardMessages(_session, action, false, draft);
+		});
+		return;
+	}
+
+	const auto ayuIntelligentForwardNeeded = AyuForward::isAyuForwardNeeded(draft.items);
+	if (ayuIntelligentForwardNeeded) {
+		crl::async([=] {
+			AyuForward::intelligentForward(_session, action, draft);
+		});
+		return;
+	}
+
 	auto &histories = _session->data().histories();
 
 	for (auto i = begin(draft.items); i != end(draft.items);) {
@@ -4082,6 +4200,7 @@ void ApiWrap::forwardMessages(
 				if (shared && !--shared->requestsLeft) {
 					shared->callback();
 				}
+
 				if (peer->isSelf() && _session->premium()) {
 					ProcessRecentSelfForwards(
 						_session,
@@ -4162,6 +4281,12 @@ void ApiWrap::shareContact(
 		const QString &lastName,
 		const SendAction &action,
 		Fn<void(bool)> done) {
+	if (AyuSecret::Reject(action.history->peer)) {
+		if (done) {
+			done(false);
+		}
+		return;
+	}
 	const auto userId = UserId(0);
 	sendSharedContact(
 		phone,
@@ -4258,8 +4383,13 @@ void ApiWrap::sendVoiceMessage(
 		crl::time duration,
 		bool video,
 		const SendAction &action) {
+	if (AyuSecret::SendVoice(result, waveform, duration, video, action)) {
+		return;
+	}
+	auto scheduledAction = action;
+	applyGhostScheduling(_session, scheduledAction.options, 20);
 	const auto caption = TextWithTags();
-	const auto to = FileLoadTaskOptions(action);
+	const auto to = FileLoadTaskOptions(scheduledAction);
 	_fileLoader->addTask(
 		std::make_unique<FileLoadTask>(FileLoadTask::VoiceArgs{
 			.session = &session(),
@@ -4335,6 +4465,9 @@ void ApiWrap::sendFiles(
 		SendMediaType type,
 		std::shared_ptr<SendingAlbum> album,
 		SendAction action) {
+	if (AyuSecret::SendFiles(list, action)) {
+		return;
+	}
 	const auto &ephemeral = _session->ephemeralMessages();
 	if (album && !ephemeral.isEphemeralBotReply(action.replyTo.messageId)) {
 		const auto peer = action.history->peer;
@@ -4422,6 +4555,9 @@ void ApiWrap::sendFile(
 		const QByteArray &fileContent,
 		SendMediaType type,
 		const SendAction &action) {
+	if (AyuSecret::SendBytes(fileContent, action)) {
+		return;
+	}
 	const auto to = FileLoadTaskOptions(action);
 	auto caption = TextWithTags();
 	const auto spoiler = false;
@@ -4463,6 +4599,7 @@ void ApiWrap::sendUploadedDocument(
 		if (!item->media() || !item->media()->document()) {
 			return;
 		}
+
 		const auto media = Api::PrepareUploadedDocument(
 			item,
 			std::move(info));
@@ -4486,6 +4623,7 @@ void ApiWrap::cancelLocalItem(not_null<HistoryItem*> item) {
 void ApiWrap::sendShortcutMessages(
 		not_null<PeerData*> peer,
 		BusinessShortcutId id) {
+	markReadAfterAction(peer->owner().history(peer));
 	auto ids = QVector<MTPint>();
 	auto randomIds = QVector<MTPlong>();
 	request(MTPmessages_SendQuickReplyMessages(
@@ -4758,6 +4896,12 @@ void ApiWrap::sendRichMessage(
 void ApiWrap::sendMessage(
 		MessageToSend &&message,
 		std::optional<MsgId> localMessageId) {
+	if (AyuSecret::SendText(message)) {
+		return;
+	}
+	applyGhostScheduling(_session, message.action.options);
+	const auto clearReplyTo = prependPseudoReply(message);
+
 	const auto history = message.action.history;
 	const auto peer = history->peer;
 	const auto &textWithTags = message.textWithTags;
@@ -4778,9 +4922,23 @@ void ApiWrap::sendMessage(
 		? replyTo->topicRootId()
 		: Data::ForumTopic::kGeneralId;
 	const auto topic = peer->forumTopicFor(topicRootId);
+	const auto canSendTexts = topic
+		? Data::CanSendTexts(topic)
+		: Data::CanSendTexts(peer);
+
+	if (clearReplyTo) {
+		message.action.replyTo.messageId = FullMsgId(
+			message.action.replyTo.messageId.peer,
+			message.action.replyTo.topicRootId);
+		action.replyTo.messageId = FullMsgId(
+			action.replyTo.messageId.peer,
+			action.replyTo.topicRootId);
+	}
+
 	const auto ephemeral = _session->ephemeralMessages().wouldSend(message);
 	if (!ephemeral
-		&& !(topic ? Data::CanSendTexts(topic) : Data::CanSendTexts(peer))) {
+		&& !canSendTexts
+		&& !AyuForward::isForwarding(peer->id)) {
 		return;
 	} else if (_session->ephemeralMessages().trySend(message)) {
 		if (clearCloudDraft) {
@@ -4882,9 +5040,10 @@ void ApiWrap::sendMessage(
 			sendFlags |= MTPmessages_SendMessage::Flag::f_silent;
 			mediaFlags |= MTPmessages_SendMedia::Flag::f_silent;
 		}
+		const auto sendingNormalized = reverseLocalPremiumEmoji(sending, history);
 		const auto sentEntities = Api::EntitiesToMTP(
 			_session,
-			sending.entities,
+			sendingNormalized.entities,
 			Api::ConvertOption::SkipLocal);
 		if (!sentEntities.v.isEmpty()) {
 			sendFlags |= MTPmessages_SendMessage::Flag::f_entities;
@@ -5014,7 +5173,7 @@ void ApiWrap::sendMessage(
 			action.options.shortcutId);
 		if (exactWebPage
 			&& !ignoreWebPage
-			&& (manualWebPage || sending.empty())) {
+			&& (manualWebPage || sending.empty() || message.webPage.previewChanged)) {
 			histories.sendPreparedMessage(
 				history,
 				action.replyTo,
@@ -5088,6 +5247,7 @@ void ApiWrap::sendBotStart(
 		if (chat) {
 			message.textWithTags.text += '@' + bot->username();
 		}
+
 		sendMessage(std::move(message));
 		return;
 	}
@@ -5102,6 +5262,8 @@ void ApiWrap::sendBotStart(
 		MTP_string(token)
 	)).done([=](const MTPUpdates &result) {
 		applyUpdates(result);
+
+		AyuWorker::markAsOnline(_session);
 	}).fail([=](const MTP::Error &error) {
 		if (chat) {
 			const auto type = error.type();
@@ -5116,6 +5278,19 @@ void ApiWrap::sendInlineResult(
 		SendAction action,
 		std::optional<MsgId> localMessageId,
 		Fn<void(bool)> done) {
+	if (const auto document = data->document()
+		; document && AyuSecret::SendDocument(MessageToSend(action), document)) {
+		if (done) {
+			done(true);
+		}
+		return;
+	}
+	if (AyuSecret::Reject(action.history->peer)) {
+		if (done) {
+			done(false);
+		}
+		return;
+	}
 	StripEphemeralReply(_session, action.replyTo);
 	sendAction(action);
 
@@ -5345,6 +5520,8 @@ void ApiWrap::sendMediaWithRandomId(
 		Api::SendOptions options,
 		uint64 randomId,
 		Fn<void(bool)> done) {
+	applyGhostScheduling(_session, options);
+
 	if (options.welcomeTemplate) {
 		const auto owned = _session->welcomeMessages().owns(item);
 		if (owned) {
@@ -5369,9 +5546,10 @@ void ApiWrap::sendMediaWithRandomId(
 
 	auto caption = item->originalText();
 	TextUtilities::Trim(caption);
+	const auto captionNormalized = reverseLocalPremiumEmoji(caption, history);
 	auto sentEntities = Api::EntitiesToMTP(
 		_session,
-		caption.entities,
+		captionNormalized.entities,
 		Api::ConvertOption::SkipLocal);
 
 	const auto updateRecentStickers = Api::HasAttachedStickers(media);
@@ -5460,9 +5638,10 @@ void ApiWrap::sendMultiPaidMedia(
 
 	auto caption = item->originalText();
 	TextUtilities::Trim(caption);
+	const auto captionNormalized = reverseLocalPremiumEmoji(caption, history);
 	auto sentEntities = Api::EntitiesToMTP(
 		_session,
-		caption.entities,
+		captionNormalized.entities,
 		Api::ConvertOption::SkipLocal);
 	const auto starsPaid = std::min(
 		peer->starsPerMessageChecked(),
@@ -5628,6 +5807,9 @@ void ApiWrap::sendAlbumIfReady(not_null<SendingAlbum*> album) {
 		_sendingAlbums.remove(groupId);
 		return;
 	}
+
+	applyGhostScheduling(_session, album->options);
+
 	const auto history = sample->history();
 	const auto sendAs = album->options.sendAs;
 	const auto starsPaid = std::min(

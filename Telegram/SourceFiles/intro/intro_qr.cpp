@@ -33,6 +33,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "platform/platform_webauthn.h"
 #include "styles/style_intro.h"
 
+#include "main/main_domain.h"
+
+
 namespace Intro {
 namespace details {
 namespace {
@@ -58,7 +61,7 @@ namespace {
 }
 
 [[nodiscard]] QColor QrActiveColor() {
-	return QColor(0x40, 0xA7, 0xE3); // Default windowBgActive.
+	return QColor(87, 101, 26);
 }
 
 [[nodiscard]] not_null<Ui::RpWidget*> PrepareQrWidget(
@@ -287,6 +290,10 @@ void QrWidget::submit() {
 
 rpl::producer<QString> QrWidget::nextButtonText() const {
 	return rpl::single(QString());
+}
+
+bool QrWidget::hasBack() const {
+	return Core::App().domain().maybeLastOrSomeAuthedAccount();
 }
 
 void QrWidget::setupControls() {

@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #pragma once
 
 #include "base/qt/qt_compare.h"
+#include "dialogs/dialogs_search_media.h"
 #include "data/data_message_reaction_id.h"
 
 class History;
@@ -147,12 +148,14 @@ struct SearchState {
 	std::vector<Data::ReactionId> tags;
 	ChatSearchTab tab = {};
 	ChatTypeFilter filter = ChatTypeFilter::All;
+	SearchMediaFilter media = SearchMediaFilter::All;
 	bool fromArchive = true;
 	QString query;
 
 	[[nodiscard]] bool empty() const;
 	[[nodiscard]] ChatSearchTab defaultTabForMe() const;
 	[[nodiscard]] bool filterChatsList() const;
+	[[nodiscard]] SearchMediaFilter activeMedia() const;
 
 	explicit operator bool() const {
 		return !empty();

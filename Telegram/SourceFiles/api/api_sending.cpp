@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_send.h"
 #include "api/api_sending.h"
 
 #include "api/api_text_entities.h"
@@ -36,6 +37,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "storage/file_upload.h"
 #include "mainwidget.h"
 #include "apiwrap.h"
+
+#include "ayu/utils/telegram_helpers.h"
+
 
 namespace Api {
 namespace {
@@ -185,6 +189,8 @@ void SendExistingMedia(
 		Fn<MTPInputMedia()> inputMedia,
 		Data::FileOrigin origin,
 		std::optional<MsgId> localMessageId) {
+	applyGhostScheduling(&message.action.history->session(), message.action.options);
+
 	const auto history = message.action.history;
 	const auto peer = history->peer;
 	const auto session = &history->session();
@@ -244,9 +250,10 @@ void SendExistingMedia(
 		TextUtilities::ConvertTextTagsToEntities(message.textWithTags.tags)
 	};
 	TextUtilities::Trim(caption);
+	const auto captionNormalized = reverseLocalPremiumEmoji(caption, history);
 	auto sentEntities = EntitiesToMTP(
 		session,
-		caption.entities,
+		captionNormalized.entities,
 		ConvertOption::SkipLocal);
 	if (!sentEntities.v.isEmpty()) {
 		sendFlags |= MTPmessages_SendMedia::Flag::f_entities;
@@ -702,6 +709,28 @@ void SendExistingDocument(
 		MessageToSend &&message,
 		not_null<DocumentData*> document,
 		std::optional<MsgId> localMessageId) {
+	if (AyuSecret::SendDocument(message, document)) {
+		return;
+	}
+	if (!document->sticker()
+		&& !document->isVideoMessage()
+		&& !document->isVoiceMessage()) {
+		const auto clearReplyTo = prependPseudoReply(message);
+		if (clearReplyTo) {
+			message.action.replyTo.messageId = FullMsgId(
+				message.action.replyTo.messageId.peer,
+				message.action.replyTo.topicRootId);
+		}
+	} else if (message.action.replyTo && message.action.history) {
+		if (const auto item = message.action.history->session().data().message(message.action.replyTo.messageId)) {
+			if (item->isDeleted()) {
+				message.action.replyTo.messageId = FullMsgId(
+					message.action.replyTo.messageId.peer,
+					message.action.replyTo.topicRootId);
+			}
+		}
+	}
+
 	const auto inputMedia = [=] {
 		return MTP_inputMediaDocument(
 			MTP_flags(message.action.options.mediaSpoiler
@@ -784,6 +813,16 @@ void SendExistingPhoto(
 		MessageToSend &&message,
 		not_null<PhotoData*> photo,
 		std::optional<MsgId> localMessageId) {
+	if (AyuSecret::Reject(message.action.history->peer)) {
+		return;
+	}
+	const auto clearReplyTo = prependPseudoReply(message);
+	if (clearReplyTo) {
+		message.action.replyTo.messageId = FullMsgId(
+			message.action.replyTo.messageId.peer,
+			message.action.replyTo.topicRootId);
+	}
+
 	const auto inputMedia = [=] {
 		return MTP_inputMediaPhoto(
 			MTP_flags(0),
@@ -948,6 +987,9 @@ bool SendDice(MessageToSend &message) {
 }
 
 void SendLocation(SendAction action, float64 lat, float64 lon) {
+	if (AyuSecret::Reject(action.history->peer)) {
+		return;
+	}
 	SendSimpleMedia(
 		action,
 		MTP_inputMediaGeoPoint(
@@ -959,6 +1001,9 @@ void SendLocation(SendAction action, float64 lat, float64 lon) {
 }
 
 void SendVenue(SendAction action, Data::InputVenue venue) {
+	if (AyuSecret::Reject(action.history->peer)) {
+		return;
+	}
 	SendSimpleMedia(
 		action,
 		MTP_inputMediaVenue(
@@ -1160,6 +1205,26 @@ struct ConfirmedLocalFile {
 		: nullptr;
 	const auto history = session->data().history(file->to.peer);
 	const auto peer = history->peer;
+
+	if (!isEditing
+		&& file->type != SendMediaType::Audio
+		&& file->type != SendMediaType::Round) {
+		const auto clearReplyTo = prependPseudoReply(
+			session, history, file->caption, file->to.replyTo);
+		if (clearReplyTo) {
+			file->to.replyTo.messageId = FullMsgId(
+				file->to.replyTo.messageId.peer,
+				file->to.replyTo.topicRootId);
+		}
+	} else if (!isEditing && file->to.replyTo) {
+		if (const auto item = session->data().message(file->to.replyTo.messageId)) {
+			if (item->isDeleted()) {
+				file->to.replyTo.messageId = FullMsgId(
+					file->to.replyTo.messageId.peer,
+					file->to.replyTo.topicRootId);
+			}
+		}
+	}
 
 	if (!isEditing) {
 		auto &histories = session->data().histories();

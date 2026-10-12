@@ -107,6 +107,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtWidgets/QApplication>
 #include <QtCore/QMimeData>
 
+#include "ayu/features/filters/filters_cache_controller.h"
+#include "ayu/utils/telegram_helpers.h"
+
+
 namespace HistoryView {
 namespace {
 
@@ -657,6 +661,23 @@ ListWidget::ListWidget(
 		if (const auto view = viewForItem(item)) {
 			view->itemDataChanged();
 		}
+	}, lifetime());
+
+	rpl::merge(
+		_session->changes().peerUpdates(
+			Data::PeerUpdate::Flag::IsBlocked
+		) | rpl::to_empty,
+		FiltersCacheController::updates()
+	) | rpl::on_next([=] {
+		crl::on_main(this, [=] {
+			if (_viewsCapacity.empty()) {
+				for (const auto &view : _items) {
+					view->setPendingResize();
+				}
+				const auto old = _slice;
+				refreshRows(old);
+			}
+		});
 	}, lifetime());
 
 	_session->downloaderTaskFinished(
@@ -1794,6 +1815,10 @@ bool ListWidget::isGoodForSelection(
 bool ListWidget::addToSelection(
 		SelectedMap &applyTo,
 		not_null<HistoryItem*> item) const {
+	if (isMessageHidden(item)) {
+		return false;
+	}
+
 	const auto itemId = item->fullId();
 	auto [iterator, ok] = applyTo.try_emplace(
 		itemId,
@@ -3958,7 +3983,7 @@ void ListWidget::toggleFavoriteReaction(not_null<Element*> view) const {
 		return;
 	} else if (!ranges::contains(item->chosenReactions(), favorite)) {
 		if (const auto top = itemTop(view); top >= 0) {
-			view->animateReaction({ .id = favorite });
+			view->animateReaction({ .id = favorite, .haptic = true });
 		}
 	}
 	item->toggleReaction(favorite, HistoryReactionSource::Quick);
@@ -4173,8 +4198,7 @@ void ListWidget::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 
 	using namespace HistoryView::Reactions;
 	const auto desiredPosition = e->globalPos();
-	const auto reactItem = (_overElement
-		&& _overState.pointState != PointState::Outside)
+	const auto reactItem = _overElement
 		? _overElement->data().get()
 		: nullptr;
 	const auto attached = reactItem
@@ -4228,6 +4252,7 @@ void ListWidget::reactionChosen(ChosenReaction reaction) {
 				.id = reaction.id,
 				.flyIcon = reaction.icon,
 				.flyFrom = geometry.translated(0, -top),
+				.haptic = true,
 			});
 		}
 	}
@@ -5294,7 +5319,7 @@ void ListWidget::mouseActionUpdate() {
 		|| dragState.cursor == CursorState::Forwarded
 		|| dragState.cursor == CursorState::FromPhoto
 		|| dragState.customTooltip) {
-		Ui::Tooltip::Show(1000, this);
+		Ui::Tooltip::Show(350, this);
 	}
 
 	if (_mouseAction == MouseAction::None) {

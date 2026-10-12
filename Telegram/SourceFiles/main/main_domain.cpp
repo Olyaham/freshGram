@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "main/main_domain.h"
 
+#include "ayu/data/ayu_database.h"
 #include "core/application.h"
 #include "core/core_settings.h"
 #include "core/shortcuts.h"
@@ -185,6 +186,8 @@ bool Domain::finishPasscodeClearAfterReset() {
 
 void Domain::activateAfterStarting() {
 	Expects(started());
+
+	AyuDatabase::initialize();
 
 	auto toActivate = _accounts.front().account.get();
 	for (const auto &[index, account] : _accounts) {

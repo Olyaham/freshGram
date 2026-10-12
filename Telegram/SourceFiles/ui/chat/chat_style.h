@@ -48,7 +48,8 @@ inline constexpr auto kColorPatternsCount = Text::kMaxQuoteOutlines;
 inline constexpr auto kColorIndexCount = uint8(1 << 6);
 inline constexpr auto kSimpleColorIndexCount = uint8(7);
 
-inline constexpr auto kDefaultBgOpacity = 0.12;
+[[nodiscard]] double DefaultBgOpacity();
+
 inline constexpr auto kDefaultOutline1Opacity = 0.9;
 inline constexpr auto kDefaultOutline2Opacity = 0.3;
 inline constexpr auto kDefaultOutline3Opacity = 0.6;
@@ -74,6 +75,7 @@ struct MessageStyle {
 	style::TextPalette semiboldPalette;
 	style::TextPalette fwdTextPalette;
 	style::TextPalette replyTextPalette;
+	style::icon channelBadgeIcon = { Qt::Uninitialized };
 	style::Markdown richPageStyle;
 	style::icon tailLeft = { Qt::Uninitialized };
 	style::icon tailRight = { Qt::Uninitialized };
@@ -99,6 +101,7 @@ struct MessageStyle {
 	style::icon historyFilePause = { Qt::Uninitialized };
 	style::icon historyFileImage = { Qt::Uninitialized };
 	style::icon historyFileDocument = { Qt::Uninitialized };
+	style::icon historyFilePlugin = { Qt::Uninitialized };
 	style::icon historyAudioDownload = { Qt::Uninitialized };
 	style::icon historyAudioCancel = { Qt::Uninitialized };
 	style::icon historyQuizTimer = { Qt::Uninitialized };

@@ -28,6 +28,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <QtGui/QFontDatabase>
 
+#include "ayu/ayu_settings.h"
+#include "ui/chat/chat_style_radius.h"
+
+
 namespace Ui {
 namespace {
 
@@ -40,7 +44,6 @@ struct PreviewRequest {
 	QColor replyBar;
 	QColor replyNameFg;
 	QColor textFg;
-	QImage bubbleTail;
 };
 
 class PreviewPainter {
@@ -575,7 +578,6 @@ std::vector<Selector::Entry> Selector::FullList(const QString &now) {
 		.replyBar = st::msgInReplyBarColor->c,
 		.replyNameFg = st::msgInServiceFg->c,
 		.textFg = st::historyTextInFg->c,
-		.bubbleTail = st::historyBubbleTailInLeft.instance(st::msgInBg->c),
 	};
 }
 
@@ -617,15 +619,6 @@ void PreviewPainter::paintBubble(Painter &p) {
 		bubble.height() + st::msgShadow - cornerShadow.height(),
 		_bubbleShadowBottomRight);
 	Ui::FillRoundRect(p, bubble, _msgBg.color(), _bubbleCorners);
-	const auto &bubbleTail = _request.bubbleTail;
-	const auto tail = bubbleTail.size() / bubbleTail.devicePixelRatio();
-	p.drawImage(-tail.width(), bubble.height() - tail.height(), bubbleTail);
-	p.fillRect(
-		-tail.width(),
-		bubble.height(),
-		tail.width() + bubble.width() - cornerShadow.width(),
-		st::msgShadow,
-		_request.msgShadow);
 	p.translate(_content.topLeft());
 	const auto local = _content.translated(-_content.topLeft());
 	p.setClipRect(local);
@@ -636,9 +629,8 @@ void PreviewPainter::validateBubbleCache() {
 	if (!_bubbleCorners.p[0].isNull()) {
 		return;
 	}
-	const auto radius = st::bubbleRadiusLarge;
+	const auto radius = Ui::BubbleRadiusLarge();
 	_bubbleCorners = Ui::PrepareCornerPixmaps(radius, _msgBg.color());
-	_bubbleCorners.p[2] = {};
 	_bubbleShadowBottomRight
 		= Ui::PrepareCornerPixmaps(radius, _msgShadow.color()).p[3];
 }
@@ -667,13 +659,15 @@ void PreviewPainter::paintReply(Painter &p) {
 			outline,
 			_replyRect.height());
 		p.drawRoundedRect(_replyRect, radius, radius);
-		p.setOpacity(Ui::kDefaultBgOpacity);
-		p.setClipRect(
-			_replyRect.x() + outline,
-			_replyRect.y(),
-			_replyRect.width() - outline,
-			_replyRect.height());
-		p.drawRoundedRect(_replyRect, radius, radius);
+		if (!AyuSettings::getInstance().simpleQuotesAndReplies()) {
+			p.setOpacity(Ui::DefaultBgOpacity());
+			p.setClipRect(
+				_replyRect.x() + outline,
+				_replyRect.y(),
+				_replyRect.width() - outline,
+				_replyRect.height());
+			p.drawRoundedRect(_replyRect, radius, radius);
+		}
 	}
 	p.setOpacity(1.);
 	p.setClipping(false);

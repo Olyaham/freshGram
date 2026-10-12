@@ -5,6 +5,8 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_bridge.h"
+#include "ayu/secret/secret_peer.h"
 #include "data/data_histories.h"
 
 #include "api/api_text_entities.h"
@@ -33,6 +35,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/view/history_view_element.h"
 #include "core/application.h"
 #include "apiwrap.h"
+
+#include "ayu/ayu_settings.h"
+#include "ayu/ayu_worker.h"
+#include "ayu/data/messages_storage.h"
+#include "ayu/utils/telegram_helpers.h"
+
 
 namespace Data {
 namespace {
@@ -77,15 +85,16 @@ MTPInputReplyTo ReplyToForMTP(
 		const auto external = replyTo.messageId
 			&& (replyTo.messageId.peer != history->peer->id
 				|| replyingToTopicId != replyToTopicId);
+		const auto textNormalized = reverseLocalPremiumEmoji(replyTo.quote, history, true);
 		const auto quoteEntities = Api::EntitiesToMTP(
 			&history->session(),
-			replyTo.quote.entities,
+			textNormalized.entities,
 			Api::ConvertOption::SkipLocal);
 		using Flag = MTPDinputReplyToMessage::Flag;
 		return MTP_inputReplyToMessage(
 			MTP_flags((replyTo.topicRootId ? Flag::f_top_msg_id : Flag())
 				| (external ? Flag::f_reply_to_peer_id : Flag())
-				| (replyTo.quote.text.isEmpty()
+				| (textNormalized.text.isEmpty()
 					? Flag()
 					: (Flag::f_quote_text | Flag::f_quote_offset))
 				| (replyToMonoforumPeerId
@@ -103,7 +112,7 @@ MTPInputReplyTo ReplyToForMTP(
 			(external
 				? owner->peer(replyTo.messageId.peer)->input()
 				: MTPInputPeer()),
-			MTP_string(replyTo.quote.text),
+			MTP_string(textNormalized.text),
 			quoteEntities,
 			MTP_int(replyTo.quoteOffset),
 			(replyToMonoforumPeerId
@@ -125,11 +134,12 @@ MTPInputMedia WebPageForMTP(
 		const Data::WebPageDraft &draft,
 		bool required) {
 	using Flag = MTPDinputMediaWebPage::Flag;
+	const auto url = getBetterLinkPreview(draft.url);
 	return MTP_inputMediaWebPage(
-		MTP_flags(((false && required) ? Flag() : Flag::f_optional)
+		MTP_flags((draft.previewChanged ? Flag() : Flag::f_optional)
 			| (draft.forceLargeMedia ? Flag::f_force_large_media : Flag())
 			| (draft.forceSmallMedia ? Flag::f_force_small_media : Flag())),
-		MTP_string(draft.url));
+		MTP_string(url));
 }
 
 Histories::Histories(not_null<Session*> owner)
@@ -173,6 +183,15 @@ void Histories::clearAll() {
 }
 
 void Histories::readInbox(not_null<History*> history) {
+	if (AyuSecret::IsSecretPeer(history->peer)) {
+		for (const auto &block : history->blocks) {
+			for (const auto &view : block->messages) {
+				readClientSideMessage(view->data());
+			}
+		}
+		AyuSecret::BridgeFor(&session()).messagesRead(history);
+		return;
+	}
 	DEBUG_LOG(("Reading: readInbox called."));
 	if (history->lastServerMessageKnown()) {
 		const auto last = history->lastServerMessage();
@@ -206,6 +225,24 @@ void Histories::readInbox(not_null<History*> history) {
 void Histories::readInboxTill(not_null<HistoryItem*> item) {
 	const auto shown = item;
 	const auto history = item->history();
+	if (item->isAyuSecret()) {
+		auto reached = false;
+		for (const auto &block : history->blocks) {
+			for (const auto &view : block->messages) {
+				const auto other = view->data();
+				readClientSideMessage(other);
+				if (other == item) {
+					reached = true;
+					break;
+				}
+			}
+			if (reached) {
+				break;
+			}
+		}
+		AyuSecret::BridgeFor(&session()).messagesRead(history);
+		return;
+	}
 	if (!item->isRegular()) {
 		readClientSideMessage(item);
 		auto view = item->mainView();
@@ -234,8 +271,6 @@ void Histories::readInboxTill(not_null<HistoryItem*> item) {
 			}
 		}
 		if (!item->isRegular()) {
-			LOG(("App Error: "
-				"Can't read history till unknown local message."));
 			return;
 		}
 	}
@@ -402,6 +437,18 @@ void Histories::requestDialogEntry(not_null<Data::Folder*> folder) {
 void Histories::requestDialogEntry(
 		not_null<History*> history,
 		Fn<void()> callback) {
+	if (AyuSecret::IsSecretPeer(history->peer)
+		|| (history->ayuKept()
+			&& (history->peer->isChat() || history->peer->isChannel())
+			&& (history->peer->asChat()
+				? history->peer->asChat()->isForbidden()
+				: (history->peer->asChannel()->flags()
+					& ChannelDataFlag::Forbidden)))) {
+		if (callback) {
+			callback();
+		}
+		return;
+	}
 	if (const auto channel = history->peer->asChannel()) {
 		if (channel->isCommunity()) {
 			return;
@@ -709,6 +756,24 @@ void Histories::reportPendingDeliveries() {
 
 void Histories::sendReadRequests() {
 	DEBUG_LOG(("Reading: send requests with count %1.").arg(_states.size()));
+
+	const auto &ghost = AyuSettings::ghost(&_owner->session());
+	if (!ghost.sendReadMessages()) {
+		DEBUG_LOG(("[AyuGram] Don't read messages"));
+		_readRequestsTimer.cancel();
+		auto histories = std::vector<not_null<History*>>();
+		histories.reserve(_states.size());
+		for (auto &[history, state] : _states) {
+			state.willReadTill = 0;
+			state.willReadWhen = 0;
+			histories.push_back(history);
+		}
+		for (const auto history : histories) {
+			checkEmptyState(history);
+		}
+		return;
+	}
+
 	if (_states.empty()) {
 		return;
 	}
@@ -811,28 +876,39 @@ bool Histories::postponeEntryRequest(const State &state) const {
 }
 
 void Histories::deleteMessages(
-		not_null<History*> history,
-		const QVector<MTPint> &ids,
-		bool revoke) {
-	sendRequest(history, RequestType::Delete, [=](Fn<void()> finish) {
-		const auto done = [=](const MTPmessages_AffectedMessages &result) {
-			session().api().applyAffectedMessages(history->peer, result);
-			finish();
-			history->requestChatListMessage();
-		};
-		if (const auto channel = history->peer->asChannel()) {
-			return session().api().request(MTPchannels_DeleteMessages(
-				channel->inputChannel(),
-				MTP_vector<MTPint>(ids)
-			)).done(done).fail(finish).send();
-		} else {
-			using Flag = MTPmessages_DeleteMessages::Flag;
-			return session().api().request(MTPmessages_DeleteMessages(
-				MTP_flags(revoke ? Flag::f_revoke : Flag(0)),
-				MTP_vector<MTPint>(ids)
-			)).done(done).fail(finish).send();
-		}
-	});
+	not_null<History*> history,
+	const QVector<MTPint> &ids,
+	bool revoke) {
+	const auto totalIds = ids.count();
+	const auto numBatches = (totalIds + MaxSelectedItems - 1) / MaxSelectedItems;
+	auto processBatch = [&](auto batchIndex, Fn<void()> finish) {
+		auto startIndex = batchIndex * MaxSelectedItems;
+		auto endIndex = qMin((batchIndex + 1) * MaxSelectedItems, totalIds);
+		QVector<MTPint> batchIds(ids.begin() + startIndex, ids.begin() + endIndex);
+		sendRequest(history, RequestType::Delete, [=](Fn<void()> finishBatch) {
+			const auto done = [=](const MTPmessages_AffectedMessages& result) {
+				session().api().applyAffectedMessages(history->peer, result);
+				finishBatch();
+				history->requestChatListMessage();
+			};
+			if (const auto channel = history->peer->asChannel()) {
+				return session().api().request(MTPchannels_DeleteMessages(
+					channel->inputChannel(),
+																		  MTP_vector<MTPint>(batchIds)
+				)).done(done).fail(finishBatch).send();
+			} else {
+				using Flag = MTPmessages_DeleteMessages::Flag;
+				return session().api().request(MTPmessages_DeleteMessages(
+					MTP_flags(revoke ? Flag::f_revoke : Flag(0)),
+																		  MTP_vector<MTPint>(batchIds)
+				)).done(done).fail(finishBatch).send();
+			}
+		});
+	};
+
+	for (int batchIndex = 0; batchIndex < numBatches; ++batchIndex) {
+		processBatch(batchIndex, nullptr);
+	}
 }
 
 void Histories::deleteAllMessages(
@@ -963,14 +1039,20 @@ void Histories::deleteMessagesByDates(
 
 void Histories::deleteMessages(const MessageIdsList &ids, bool revoke) {
 	auto remove = std::vector<not_null<HistoryItem*>>();
+	auto keep = std::vector<not_null<HistoryItem*>>();
 	remove.reserve(ids.size());
 	base::flat_map<not_null<History*>, QVector<MTPint>> idsByPeer;
 	base::flat_map<not_null<PeerData*>, QVector<MTPint>> scheduledIdsByPeer;
 	base::flat_map<BusinessShortcutId, QVector<MTPint>> quickIdsByShortcut;
 	base::flat_set<not_null<DocumentData*>> savedMusic;
+	auto secretItems = std::vector<not_null<HistoryItem*>>();
 	for (const auto &itemId : ids) {
 		if (const auto item = _owner->message(itemId)) {
 			const auto history = item->history();
+			if (item->isAyuSecret()) {
+				secretItems.push_back(item);
+				continue;
+			}
 			if (item->isSavedMusicItem()) {
 				savedMusic.emplace(item->media()->document());
 				continue;
@@ -1007,13 +1089,28 @@ void Histories::deleteMessages(const MessageIdsList &ids, bool revoke) {
 				_owner->session().ephemeralMessages().deleteMessage(item);
 				continue;
 			}
-			remove.push_back(item);
-			if (item->isRegular()) {
+			if (item->isDeleted()) {
+				remove.push_back(item);
+				AyuMessages::removeDeletedMessage(item);
+			} else if (item->isRegular()) {
 				idsByPeer[history].push_back(MTP_int(itemId.msg));
+				if (isMessageSavable(item)) {
+					keep.push_back(item);
+				} else {
+					remove.push_back(item);
+				}
+			} else {
+				remove.push_back(item);
 			}
 		}
 	}
 
+	if (!secretItems.empty()) {
+		for (const auto &gone : AyuSecret::BridgeFor(
+				&session()).itemsDeletedByUser(secretItems)) {
+			remove.push_back(gone);
+		}
+	}
 	for (const auto &[history, ids] : idsByPeer) {
 		history->owner().histories().deleteMessages(history, ids, revoke);
 	}
@@ -1036,6 +1133,9 @@ void Histories::deleteMessages(const MessageIdsList &ids, bool revoke) {
 	}
 	for (const auto &document : savedMusic) {
 		document->owner().savedMusic().remove(document);
+	}
+	for (const auto &item : keep) {
+		processMessageDelete(item);
 	}
 
 	if (!remove.empty()) {
@@ -1142,6 +1242,7 @@ int Histories::sendPreparedMessage(
 		Fn<PreparedMessage(not_null<History*>, FullReplyTo)> message,
 		Fn<void(const MTPUpdates&, const MTP::Response&)> done,
 		Fn<void(const MTP::Error&, const MTP::Response&)> fail) {
+	markReadAfterAction(history);
 	if (isCreatingTopic(history, replyTo.topicRootId)) {
 		const auto id = ++_requestAutoincrement;
 		const auto creatingId = FullMsgId(
@@ -1180,6 +1281,7 @@ int Histories::sendPreparedMessage(
 					const MTPUpdates &result,
 					const MTP::Response &response) {
 				api->applyUpdates(result, randomId);
+				AyuWorker::markAsOnline(&history->owner().session());
 				done(result, response);
 				finish();
 			}).fail([=](

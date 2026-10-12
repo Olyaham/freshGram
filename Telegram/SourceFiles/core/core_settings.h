@@ -103,6 +103,7 @@ public:
 		TopRight = 1,
 		BottomRight = 2,
 		BottomLeft = 3,
+		TopCenter = 4,
 	};
 	enum class NotifyView {
 		ShowPreview = 0,
@@ -135,11 +136,16 @@ public:
 
 	[[nodiscard]] static bool IsLeftCorner(ScreenCorner corner) {
 		return (corner == ScreenCorner::TopLeft)
-			|| (corner == ScreenCorner::BottomLeft);
+			|| (corner == ScreenCorner::BottomLeft)
+			|| (corner == ScreenCorner::TopCenter);
 	}
 	[[nodiscard]] static bool IsTopCorner(ScreenCorner corner) {
 		return (corner == ScreenCorner::TopLeft)
-			|| (corner == ScreenCorner::TopRight);
+			|| (corner == ScreenCorner::TopRight)
+			|| (corner == ScreenCorner::TopCenter);
+	}
+	[[nodiscard]] static bool IsTopCenterCorner(ScreenCorner corner) {
+		return corner == ScreenCorner::TopCenter;
 	}
 
 	[[nodiscard]] QByteArray serialize() const;
@@ -828,7 +834,24 @@ public:
 	[[nodiscard]] rpl::producer<bool> trayIconMonochromeChanges() const {
 		return _trayIconMonochrome.changes();
 	}
-
+	void setBirthDateEnabled(bool value) {
+		_birthDateEnabled = value;
+	}
+	[[nodiscard]] bool birthDateEnabled() const {
+		return _birthDateEnabled.current();
+	}
+	[[nodiscard]] rpl::producer<bool> birthDateEnabledChanges() const {
+		return _birthDateEnabled.changes();
+	}
+	void setDatacenterEnabled(bool value) {
+		_datacenterEnabled = value;
+	}
+	[[nodiscard]] bool datacenterEnabled() const {
+		return _datacenterEnabled.current();
+	}
+	[[nodiscard]] rpl::producer<bool> datacenterEnabledChanges() const {
+		return _datacenterEnabled.changes();
+	}
 	void setCustomDeviceModel(const QString &model) {
 		_customDeviceModel = model;
 	}
@@ -993,6 +1016,13 @@ public:
 	}
 	void setTonsiteStorageToken(const QByteArray &value) {
 		_tonsiteStorageToken = value;
+	}
+
+	[[nodiscard]] bool gameeEnabled() const {
+		return _gameeEnabled.current();
+	}
+	void setGameeEnabled(bool value) {
+		_gameeEnabled = value;
 	}
 
 	[[nodiscard]] int ivZoom() const;
@@ -1171,6 +1201,9 @@ private:
 	base::flags<Calls::Group::StickedTooltip> _hiddenGroupCallTooltips;
 	CloseBehavior _closeBehavior = CloseBehavior::Quit;
 	rpl::variable<bool> _trayIconMonochrome = true;
+	rpl::variable<bool> _birthDateEnabled = false;
+	rpl::variable<bool> _datacenterEnabled = false;
+	rpl::variable<bool> _gameeEnabled = false;
 	rpl::variable<QString> _customDeviceModel;
 	rpl::variable<Media::RepeatMode> _playerRepeatMode;
 	rpl::variable<Media::OrderMode> _playerOrderMode;

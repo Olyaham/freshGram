@@ -124,6 +124,7 @@ struct SendFilesBoxDescriptor {
 	SendFilesConfirmed confirmed;
 	Fn<void()> cancelled;
 	FullReplyTo replyTo;
+	Fn<void(const TextWithTags &text)> cancelled2;
 };
 
 class SendFilesBox : public Ui::BoxContent {
@@ -139,7 +140,8 @@ public:
 		const TextWithTags &caption,
 		not_null<PeerData*> toPeer,
 		Api::SendType sendType,
-		SendMenu::Details sendMenuDetails);
+		SendMenu::Details sendMenuDetails,
+		Fn<void(const TextWithTags &text)> cancelled2 = nullptr);
 	SendFilesBox(QWidget*, SendFilesBoxDescriptor &&descriptor);
 
 	void setConfirmedCallback(SendFilesConfirmed callback) {
@@ -324,6 +326,7 @@ private:
 	Fn<void()> _cancelledCallback;
 	Fn<bool()> _stashCheck;
 	SendFilesStash _stashCallback;
+	Fn<void(const TextWithTags &text)> _cancelled2Callback;
 	rpl::variable<uint64> _price = 0;
 	std::unique_ptr<Ui::RpWidget> _priceTag;
 	QImage _priceTagBg;
@@ -367,5 +370,10 @@ private:
 	QPointer<Ui::RoundButton> _addFile;
 
 	rpl::event_stream<TextWithTags> _textWithTagsRequests;
+
+
+	[[nodiscard]] bool isFileBlock(int i) const;
+	void moveFile(int from, int to);
+	void setupDragForBlock(not_null<Ui::RpWidget*> w, int index);
 
 };

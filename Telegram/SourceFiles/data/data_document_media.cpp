@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_bridge.h"
 #include "data/data_document_media.h"
 
 #include "data/data_document.h"
@@ -36,7 +37,7 @@ namespace {
 
 constexpr auto kReadAreaLimit = 12'032 * 9'024;
 constexpr auto kWallPaperThumbnailLimit = 960;
-constexpr auto kGoodThumbQuality = 87;
+constexpr auto kGoodThumbQuality = 95;
 
 enum class FileType {
 	Video,
@@ -50,12 +51,13 @@ enum class FileType {
 };
 
 [[nodiscard]] bool MayHaveGoodThumbnail(not_null<DocumentData*> owner) {
-	return owner->isVideoFile()
-		|| owner->isAnimation()
-		|| owner->isWallPaper()
-		|| owner->isTheme()
-		|| owner->isSvgImage()
-		|| (owner->sticker() && owner->sticker()->isAnimated());
+	return !AyuSecret::IsSecretDocument(owner)
+		&& (owner->isVideoFile()
+			|| owner->isAnimation()
+			|| owner->isWallPaper()
+			|| owner->isTheme()
+			|| owner->isSvgImage()
+			|| (owner->sticker() && owner->sticker()->isAnimated()));
 }
 
 [[nodiscard]] QImage PrepareGoodThumbnail(
@@ -175,6 +177,7 @@ bool VideoPreviewState::loaded() const {
 
 DocumentMedia::DocumentMedia(not_null<DocumentData*> owner)
 : _owner(owner) {
+	setBytes(AyuSecret::DocumentBytes(owner));
 }
 
 // NB! Right now DocumentMedia can outlive Main::Session!

@@ -18,6 +18,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 class History;
 class HistoryBlock;
+class AyuMessageBase;
 class HistoryTranslation;
 class HistoryItem;
 struct HistoryItemCommonFields;
@@ -25,6 +26,10 @@ struct HistoryMessageMarkupData;
 class HistoryMainElementDelegateMixin;
 class HistoryStreamedDrafts;
 struct LanguageId;
+
+namespace AyuRestore {
+class State;
+} // namespace AyuRestore
 
 namespace Data {
 struct Draft;
@@ -105,6 +110,17 @@ public:
 
 	[[nodiscard]] HistoryItem *joinedMessageInstance() const;
 	void checkLocalMessages();
+	[[nodiscard]] bool ayuKept() const;
+	void setAyuKept(bool kept);
+	void restoreAyuKept();
+	void ayuRestoreMarkStale();
+	void ayuRestoreThread(MsgId rootId);
+	[[nodiscard]] HistoryItem *ayuDeletedItem(const AyuMessageBase &message);
+	[[nodiscard]] HistoryItem *ayuRestoredByOriginalId(MsgId id);
+	[[nodiscard]] MsgId ayuOriginalId(not_null<const HistoryItem*> item) const;
+	[[nodiscard]] HistoryItem *ayuRestored(
+		MsgId id,
+		not_null<HistoryItem*> holder);
 	void removeJoinedMessage();
 	void removeNewPeerMessages();
 
@@ -684,6 +700,7 @@ private:
 	HistoryItem *_newPeerPhotoChange = nullptr;
 	bool _loadedAtTop = false;
 	bool _loadedAtBottom = true;
+	bool _ayuKept = false;
 
 	std::optional<Data::Folder*> _folder;
 	Data::CommunityInfo *_communityInfo = nullptr;
@@ -696,6 +713,7 @@ private:
 	std::optional<HistoryItem*> _lastMessage;
 	std::optional<HistoryItem*> _lastServerMessage;
 	base::flat_set<not_null<HistoryItem*>> _clientSideMessages;
+	std::unique_ptr<AyuRestore::State> _ayuRestore;
 	std::unordered_set<std::unique_ptr<HistoryItem>> _items;
 
 	std::unique_ptr<Data::HistoryMessages> _messages;

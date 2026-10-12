@@ -21,6 +21,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_info.h"
 #include "styles/style_dialogs.h"
 
+#include "ayu/ayu_settings.h"
+#include "ayu/ui/components/saved_music.h"
+#include "ayu/utils/telegram_helpers.h"
+#include "ui/toast/toast.h"
+#include "ui/wrap/slide_wrap.h"
+
+
 namespace Info::Profile {
 
 QMargins LargeCustomEmojiMargins() {

@@ -1,9 +1,9 @@
-#define MyAppShortName "Telegram"
-#define MyAppName "Telegram Desktop"
-#define MyAppPublisher "Telegram FZ-LLC"
-#define MyAppURL "https://desktop.telegram.org"
-#define MyAppExeName "Telegram.exe"
-#define MyAppId "53F49750-6209-4FBF-9CA8-7A333C87D1ED"
+#define MyAppShortName "freshGram"
+#define MyAppName "freshGram"
+#define MyAppPublisher "Snowy-Fluffy"
+#define MyAppURL "https://github.com/Snowy-Fluffy/freshGram"
+#define MyAppExeName "freshGram.exe"
+#define MyAppId "47D5E7E7-A00E-4B1F-8EBF-63147E019F2E"
 #define CurrentYear GetDateTimeString('yyyy','','')
 
 [Setup]
@@ -38,11 +38,11 @@ SignTool=sha256
 
 #ifndef MyOutputBaseFilename
   #if MyBuildTarget == "winarm"
-    #define MyOutputBaseFilename "tsetup-arm64." + MyAppVersionFull
+    #define MyOutputBaseFilename "freshgramsetup-arm64." + MyAppVersionFull
   #elif MyBuildTarget == "win64"
-    #define MyOutputBaseFilename "tsetup-x64." + MyAppVersionFull
+    #define MyOutputBaseFilename "freshgramsetup-x64." + MyAppVersionFull
   #else
-    #define MyOutputBaseFilename "tsetup." + MyAppVersionFull
+    #define MyOutputBaseFilename "freshgramsetup." + MyAppVersionFull
   #endif
 #endif
 OutputBaseFilename={#MyOutputBaseFilename}

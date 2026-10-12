@@ -58,7 +58,9 @@ public:
 
 	void save(
 		Key key,
-		const UserPrivacy::Rule &rule);
+		const UserPrivacy::Rule &rule,
+		Fn<void()> done = nullptr,
+		Fn<void()> fail = nullptr);
 	void apply(
 		mtpTypeId type,
 		const MTPVector<MTPPrivacyRule> &rules,

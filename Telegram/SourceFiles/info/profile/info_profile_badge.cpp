@@ -23,6 +23,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "styles/style_info.h"
 
+
 namespace Info::Profile {
 namespace {
 
@@ -88,6 +89,7 @@ void Badge::setContent(Content content) {
 			return tr::lng_sr_verified_badge(tr::now);
 		case BadgeType::BotVerified:
 			return tr::lng_sr_bot_verified_badge(tr::now);
+		default:
 		case BadgeType::Premium:
 			if (_content.emojiStatusId) {
 				return tr::lng_profile_bot_emoji_status_access(tr::now);

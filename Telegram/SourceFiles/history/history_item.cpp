@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_peer.h"
 #include "history/history_item.h"
 
 #include "api/api_premium.h"
@@ -91,6 +92,15 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_chat.h"
 #include "styles/style_credits.h"
 #include "styles/style_dialogs.h"
+
+#include "ayu/ayu_settings.h"
+#include "ayu/data/messages_storage.h"
+#include "ayu/utils/ayu_mapper.h"
+#include "ayu/features/filters/filters_controller.h"
+#include "ayu/features/message_shot/message_shot.h"
+#include "ayu/utils/telegram_helpers.h"
+#include "ui/emoji_config.h"
+
 
 namespace {
 
@@ -569,13 +579,32 @@ HistoryItem::HistoryItem(
 		setServiceText({
 			tr::lng_message_empty(tr::now, tr::marked)
 		});
-	} else if ((checked == MediaCheckResult::HasExpiredMediaTimeToLive)
-			|| (checked == MediaCheckResult::Good
-				&& media
-				&& ShowTtlMediaAsExpired(this, *media))) {
-		createServiceFromMtp(data);
-		setReactions(data.vreactions());
-		applyTTL(data);
+	} else if (checked == MediaCheckResult::HasExpiredMediaTimeToLive) {
+		if (const auto saved = AyuMessages::savedTtlMedia(history, id)) {
+			createComponents(data);
+			setMedia(*saved);
+			AyuMessages::restoreTtlBytes(this);
+			setText(TextWithEntities{
+				qs(data.vmessage()),
+				Api::EntitiesFromMTP(
+					&history->session(),
+					data.ventities().value_or_empty())
+			});
+			setReactions(data.vreactions());
+			applyTTL(data);
+			_deleted = true;
+			_deletedAnimated = true;
+			_ayuExpired = true;
+		} else {
+			createServiceFromMtp(data);
+			setReactions(data.vreactions());
+			applyTTL(data);
+			if (AyuSettings::getInstance().saveDeletedMessages()) {
+				_deleted = true;
+				_deletedAnimated = true;
+				setAyuHint(AyuSettings::getInstance().deletedMark());
+			}
+		}
 	} else if (checked == MediaCheckResult::HasStoryMention) {
 		setMedia(*data.vmedia());
 		createServiceFromMtp(data);
@@ -583,7 +612,7 @@ HistoryItem::HistoryItem(
 		applyTTL(data);
 	} else {
 		createComponents(data);
-		if (const auto media = data.vmedia()) {
+		if (media) {
 			setMedia(*media);
 		}
 		if (const auto media = _media.get()) {
@@ -1879,6 +1908,15 @@ bool HistoryItem::isIncomingUnreadMedia() const {
 	return !out() && isUnreadMedia();
 }
 
+bool HistoryItem::keepsUnburnt() const {
+	const auto media = _media.get();
+	return AyuSettings::getInstance().saveDeletedMessages()
+		&& !out()
+		&& isRegular()
+		&& media
+		&& (media->ttlSeconds() > 0);
+}
+
 bool HistoryItem::isTtlCoveredMedia() const {
 	const auto media = _media.get();
 	if (!media || !media->ttlSeconds()) {
@@ -1928,6 +1966,10 @@ void HistoryItem::markMediaAndMentionRead() {
 			}
 		}
 	}
+
+	if (isBurnt()) {
+		_history->owner().notifyItemDataChange(this);
+	}
 }
 
 void HistoryItem::markReactionsRead() {
@@ -1965,7 +2007,7 @@ bool HistoryItem::markContentsRead(bool fromThisClient) {
 		markReactionsRead();
 		result = true;
 	}
-	if (isUnreadMention() || isIncomingUnreadMedia()) {
+	if (isUnreadMention() || isIncomingUnreadMedia() || (unsupportedTTL() && hasUnreadMediaFlag())) {
 		markMediaAndMentionRead();
 		result = true;
 	}
@@ -2289,6 +2331,10 @@ TimeId HistoryItem::scheduleRepeatPeriod() const {
 
 bool HistoryItem::isSponsored() const {
 	return _flags & MessageFlag::Sponsored;
+}
+
+bool HistoryItem::isAyuNoForwards() const {
+	return _flags & MessageFlag::AyuNoForwards;
 }
 
 bool HistoryItem::canLookupMessageAuthor() const {
@@ -2799,9 +2845,9 @@ void HistoryItem::applySentMessage(const MTPDmessage &data) {
 		_flags &= ~MessageFlag::InvertMedia;
 	}
 	if (data.is_noforwards()) {
-		_flags |= MessageFlag::NoForwards;
+		_flags |= MessageFlag::AyuNoForwards;
 	} else {
-		_flags &= ~MessageFlag::NoForwards;
+		_flags &= ~MessageFlag::AyuNoForwards;
 	}
 
 	const auto wasTypes = sharedMediaTypes();
@@ -3051,6 +3097,17 @@ void HistoryItem::clearMediaAsExpired() {
 	}
 	unarmMediaDestroy();
 	auto &owner = _history->owner();
+
+	const auto &settings = AyuSettings::getInstance();
+	if (settings.saveDeletedMessages()) {
+		if (!_deleted) {
+			RemoveComponents(HistoryServiceSelfDestruct::Bit());
+			_ayuExpired = true;
+			setDeleted();
+		}
+		return;
+	}
+
 	if (const auto document = media->document()) {
 		document->cancel();
 		if (const auto active = document->activeMediaView()) {
@@ -3348,6 +3405,10 @@ void HistoryItem::setRealId(MsgId newId) {
 }
 
 bool HistoryItem::canPin() const {
+	if (_deleted) {
+		return false;
+	}
+
 	if (!isRegular() || isService()) {
 		return false;
 	} else if (const auto m = media(); m && m->call()) {
@@ -3371,7 +3432,7 @@ bool HistoryItem::allowsReschedule() const {
 
 bool HistoryItem::allowsForward() const {
 	return !isService()
-		&& (isRegular() || isEphemeral())
+		&& (isRegular() || isEphemeral() || isAyuSecret())
 		&& !forbidsForward()
 		&& history()->peer->allowsForwarding()
 		&& (!_media || _media->allowsForward());
@@ -3385,6 +3446,10 @@ bool HistoryItem::isTooOldForEdit(TimeId now) const {
 }
 
 bool HistoryItem::allowsEdit(TimeId now) const {
+	if (_deleted) {
+		return false;
+	}
+
 	const auto richPageSource = Get<HistoryMessageRichPageSource>();
 	const auto richPage = BestRichPage(richPageSource);
 	return !isService()
@@ -3405,6 +3470,10 @@ bool HistoryItem::allowsEditMedia() const {
 }
 
 bool HistoryItem::canBeEdited() const {
+	if (_deleted) {
+		return false;
+	}
+
 	if ((!isRegular()
 			&& !isScheduled()
 			&& !isBusinessShortcut()
@@ -3443,17 +3512,15 @@ bool HistoryItem::canStopPoll() const {
 }
 
 bool HistoryItem::forbidsForward() const {
-	return (_flags & MessageFlag::NoForwards);
+	return false;
 }
 
 bool HistoryItem::forbidsSaving() const {
 	if (forbidsForward()) {
 		return true;
-	} else if (_media && _media->ttlSeconds()) {
-		return true;
-	} else if (const auto invoice = _media ? _media->invoice() : nullptr) {
+	}/* else if (const auto invoice = _media ? _media->invoice() : nullptr) {
 		return HasExtendedMedia(*invoice);
-	}
+	}*/
 	return false;
 }
 
@@ -3480,6 +3547,11 @@ bool HistoryItem::canDelete() const {
 		&& !isWelcomeTemplate()) {
 		return false;
 	}
+
+	if (isDeleted()) {
+		return true;
+	}
+
 	if (isWelcomeTemplate()) {
 		return CanEditPeerInfo(_history->peer);
 	}
@@ -3541,12 +3613,19 @@ bool HistoryItem::canDeleteForEveryone(TimeId now) const {
 }
 
 bool HistoryItem::canBeSelected() const {
-	return (isRegular() || isEphemeral())
+	return (isRegular()
+			|| isEphemeral()
+			|| isAyuSecret()
+			|| isAyuRestored())
 		&& !isService()
 		&& !IsAnchoredEphemeral(this);
 }
 
 bool HistoryItem::suggestReport() const {
+	if (_deleted) {
+		return false;
+	}
+
 	if (out() || isService() || !isRegular() || IsAnchoredEphemeral(this)) {
 		return false;
 	} else if (_history->peer->isChannel()) {
@@ -3558,6 +3637,10 @@ bool HistoryItem::suggestReport() const {
 }
 
 bool HistoryItem::suggestBanReport() const {
+	if (_deleted) {
+		return false;
+	}
+
 	const auto channel = _history->peer->asChannel();
 	if (!channel || !channel->canRestrictParticipant(from())) {
 		return false;
@@ -3566,6 +3649,10 @@ bool HistoryItem::suggestBanReport() const {
 }
 
 bool HistoryItem::suggestDeleteAllReport() const {
+	if (_deleted) {
+		return false;
+	}
+
 	auto channel = _history->peer->asChannel();
 	if (!channel || !channel->canDeleteMessages()) {
 		return false;
@@ -3747,6 +3834,10 @@ void HistoryItem::translationDone(
 }
 
 bool HistoryItem::canReact() const {
+	if (_deleted) {
+		return false;
+	}
+
 	if (!isRegular()) {
 		return false;
 	} else if (isService()) {
@@ -3855,11 +3946,11 @@ void HistoryItem::updateReactionsUnknown() {
 
 const std::vector<Data::MessageReaction> &HistoryItem::reactions() const {
 	static const auto kEmpty = std::vector<Data::MessageReaction>();
-	return _reactions ? _reactions->list() : kEmpty;
+	return _reactions && !AyuFeatures::MessageShot::ignoreRender(AyuFeatures::MessageShot::RenderPart::Reactions) ? _reactions->list() : kEmpty;
 }
 
 std::vector<Data::MessageReaction> HistoryItem::reactionsWithLocal() const {
-	if (!_reactions) {
+	if (!_reactions || AyuFeatures::MessageShot::ignoreRender(AyuFeatures::MessageShot::RenderPart::Reactions)) {
 		return {};
 	}
 	auto result = _reactions->list();
@@ -4246,6 +4337,113 @@ void HistoryItem::setPostAuthor(const QString &postAuthor) {
 	history()->owner().requestItemResize(this);
 }
 
+bool HistoryItem::hideEditedBadge() const {
+	if (!(_flags & MessageFlag::HideEdited)) {
+		return false;
+	} else if (_ayuEditedBadge < 0) {
+		_ayuEditedBadge = (Has<HistoryMessageEdited>()
+			&& AyuMessages::isBotMessage(this)
+			&& AyuMessages::hasRevisions(this)) ? 1 : 0;
+	}
+	return !_ayuEditedBadge;
+}
+
+void HistoryItem::ayuShowEditedBadge() {
+	_ayuEditedBadge = 1;
+}
+
+void HistoryItem::setDeleted() {
+	_deleted = true;
+	_deletedAnimated = true;
+	if (!_ayuDeletedAt) {
+		_ayuDeletedAt = base::unixtime::now();
+	}
+
+	// cleanup reactions as they tend to bug with deleted messages
+	if (hasUnreadReaction()) {
+		history()->unreadReactions().erase(id);
+		if (const auto topic = this->topic()) {
+			topic->unreadReactions().erase(id);
+		} else if (const auto sublist = this->savedSublist()) {
+			sublist->unreadReactions().erase(id);
+		}
+	}
+
+	if (isService()) {
+		const auto &settings = AyuSettings::getInstance();
+		setAyuHint(settings.deletedMark());
+	} else {
+		history()->owner().requestItemViewRefresh(this);
+		history()->owner().requestItemResize(this);
+	}
+}
+
+bool HistoryItem::isDeleted() const {
+	return _deleted;
+}
+
+bool HistoryItem::isBurnt() const {
+	return _ayuExpired
+		|| (((media() && media()->ttlSeconds()) || unsupportedTTL()) && !hasUnreadMediaFlag());
+}
+
+bool HistoryItem::wasDeletedAnimated() const {
+	return _deletedAnimated;
+}
+
+void HistoryItem::markDeletedAnimated() {
+	_deletedAnimated = false;
+}
+
+void HistoryItem::setAyuHint(const QString &hint) {
+	try {
+		auto msgsigned = Get<HistoryMessageSigned>();
+		if (hint.isEmpty()) {
+			if (!msgsigned) {
+				return;
+			}
+			RemoveComponents(HistoryMessageSigned::Bit());
+			history()->owner().requestItemViewRefresh(this);
+			history()->owner().requestItemResize(this);
+			return;
+		}
+
+		if (!isService()) {
+			if (!(_flags & MessageFlag::HasPostAuthor)) {
+				_flags |= MessageFlag::HasPostAuthor;
+			}
+
+			if (!msgsigned) {
+				AddComponents(HistoryMessageSigned::Bit());
+				msgsigned = Get<HistoryMessageSigned>();
+			} else if (msgsigned->author == hint) {
+				return;
+			}
+			msgsigned->author = hint;
+			msgsigned->isAnonymousRank = !isDiscussionPost()
+				&& this->author()->isMegagroup();
+		} else if (/* isService() && */!_text.empty()) {
+			const auto data = Get<HistoryServiceData>();
+			const auto postfix = QString(" (%1)").arg(hint);
+			if (!_text.text.endsWith(postfix)) { // fix stacking for TTL messages
+				auto prepared = PreparedServiceText{
+					.text = _text.append(postfix),
+					.links = data->textLinks
+				};
+				setServiceText(std::move(prepared));
+			}
+		} else {
+			return;
+		}
+
+		// update bottom info
+		history()->owner().requestItemViewRefresh(this);
+		history()->owner().requestItemResize(this);
+	} catch (...) {
+		DEBUG_LOG(("AyuGram: crash in setting hint"));
+	}
+}
+
 void HistoryItem::setReplies(HistoryMessageRepliesData &&data, bool notify) {
 	if (data.isNull) {
 		return;
@@ -4430,7 +4628,7 @@ void HistoryItem::applyTTL(TimeId destroyAt) {
 		const auto session = &_history->session();
 		crl::on_main(session, [session, id = fullId()]{
 			if (const auto item = session->data().message(id)) {
-				session->data().destroyMessageWithCacheCleanup(item);
+				processMessageDelete(item);
 			}
 		});
 	} else {
@@ -4574,7 +4772,22 @@ bool HistoryItem::unread(not_null<Data::Thread*> thread) const {
 		return true;
 	}
 
+	if (out() && isAyuSecret()) {
+		return !_ayuSecretRead;
+	}
 	return out() || (_flags & MessageFlag::ClientSideUnread);
+}
+
+bool HistoryItem::isAyuSecret() const {
+	return AyuSecret::IsSecretPeer(_history->peer);
+}
+
+void HistoryItem::setAyuSecretRead() {
+	if (_ayuSecretRead) {
+		return;
+	}
+	_ayuSecretRead = true;
+	_history->owner().requestItemRepaint(this);
 }
 
 MsgId HistoryItem::replyToId() const {
@@ -4675,10 +4888,18 @@ void HistoryItem::detectTextLinks(
 }
 
 void HistoryItem::setText(TextWithEntities textWithEntities) {
-	detectTextLinks(textWithEntities);
-	setTextValue((_media && _media->consumeMessageText(textWithEntities))
+	auto text = textWithEntities;
+	const auto &settings = AyuSettings::getInstance();
+	if (settings.filterZalgo()) {
+		text.text = filterZalgo(text.text);
+	}
+
+	applyLocalPremiumEmoji(text);
+
+	detectTextLinks(text);
+	setTextValue((_media && _media->consumeMessageText(text))
 		? TextWithEntities()
-		: std::move(textWithEntities));
+		: std::move(text));
 }
 
 std::shared_ptr<const Iv::RichPage> HistoryItem::richPage() const {
@@ -4852,6 +5073,10 @@ bool HistoryItem::hasPossibleRestrictions() const {
 }
 
 bool HistoryItem::isEmpty() const {
+	if (isMessageHidden(const_cast<HistoryItem*>(this))) {
+		return true;
+	}
+
 	return _text.empty()
 		&& !_media
 		&& !Has<HistoryMessageRichPageSource>()
@@ -4947,6 +5172,10 @@ TextWithEntities HistoryItem::notificationText(
 }
 
 ItemPreview HistoryItem::toPreview(ToPreviewOptions options) const {
+	if (FiltersController::filtered(const_cast<HistoryItem*>(this))) {
+		return {};
+	}
+
 	if (isService()) {
 		const_cast<HistoryItem*>(this)->resolveDependent();
 
@@ -5594,7 +5823,11 @@ void HistoryItem::refreshMedia(const MTPMessageMedia *media) {
 	}
 	_media = nullptr;
 	if (media) {
+		auto saved = std::move(_ayuSavedMedia);
 		setMedia(*media);
+		if (_ayuSavedMedia.empty()) {
+			_ayuSavedMedia = std::move(saved);
+		}
 	}
 	if (was || _media) {
 		if (const auto views = Get<HistoryMessageViews>()) {
@@ -6112,9 +6345,19 @@ void HistoryItem::createServiceFromMtp(const MTPDmessageService &message) {
 }
 
 void HistoryItem::setMedia(const MTPMessageMedia &media) {
+	_ayuSavedMedia = AyuMapper::serializeSavableMedia(media);
 	_media = CreateMedia(this, media);
 	checkStoryForwardInfo();
 	checkBuyButton();
+	if (_media && _media->ttlSeconds() && isRegular()) {
+		const auto session = &_history->session();
+		crl::on_main(session, [session, id = fullId()] {
+			if (const auto item = session->data().message(id)) {
+				AyuMessages::saveTtlMedia(item);
+				AyuMessages::cacheDeletedMedia(item);
+			}
+		});
+	}
 }
 
 void HistoryItem::checkStoryForwardInfo() {
@@ -9209,4 +9452,8 @@ void HistoryItem::overrideMedia(std::unique_ptr<Data::Media> media) {
 	Expects(!media || media->parent() == this);
 
 	_media = std::move(media);
+}
+
+void HistoryItem::removeTranslationBit() {
+	RemoveComponents(HistoryMessageTranslation::Bit());
 }

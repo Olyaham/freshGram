@@ -23,6 +23,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/painter.h"
 #include "styles/style_chat.h"
 
+#include "ayu/features/message_shot/message_shot.h"
+
+
 namespace HistoryView {
 namespace {
 
@@ -86,7 +89,7 @@ QSize UnwrappedMedia::countCurrentSize(int newWidth) {
 	if (_parent->hasRightLayout()) {
 		const auto infoHeight = bottomInfoHeight();
 		const auto minimal = std::min(
-			st::largeEmojiSize + 2 * st::largeEmojiOutline,
+			st::largeEmojiSize,
 			_contentSize.height());
 		accumulate_max(
 			newHeight,
@@ -273,7 +276,7 @@ void UnwrappedMedia::drawSurrounding(
 	const auto rightActionSize = _parent->rightActionSize();
 	const auto fullRight = calculateFullRight(inner);
 	auto fullBottom = height();
-	if (needInfoDisplay()) {
+	if (needInfoDisplay() && !AyuFeatures::MessageShot::ignoreRender(AyuFeatures::MessageShot::RenderPart::Date)) {
 		_parent->drawInfo(
 			p,
 			context,
@@ -390,7 +393,7 @@ void UnwrappedMedia::drawSurrounding(
 			replyRight = rectx + rectw;
 		}
 	}
-	if (rightActionSize) {
+	if (rightActionSize && !AyuFeatures::MessageShot::isTakingShot()) {
 		const auto position = calculateFastActionPosition(
 			inner,
 			rightAligned,

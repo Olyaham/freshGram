@@ -40,10 +40,15 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_document_resolver.h"
 #include "data/data_file_click_handler.h"
 #include "api/api_transcribes.h"
+#include "ayu/features/recognition/local_transcribe.h"
 #include "apiwrap.h"
 #include "styles/style_chat.h"
 #include "styles/style_chat_style.h"
 #include "styles/style_dialogs.h"
+
+#include "ayu/ayu_settings.h"
+#include "ayu/features/message_shot/message_shot.h"
+
 
 namespace HistoryView {
 namespace {
@@ -398,14 +403,18 @@ Document::Document(
 			const auto &data = &_parent->data()->history()->owner();
 			_parent->data()->removeFromSharedMediaIndex();
 			setDocumentLinks(_data, realParent, [=] {
-				_openl = nullptr;
+				const auto &settings = AyuSettings::getInstance();
+				if (!settings.saveDeletedMessages()) {
+					_openl = nullptr;
+				}
 
 				auto lifetime = std::make_shared<rpl::lifetime>();
 				TTLVoiceStops(fullId) | rpl::on_next([=]() mutable {
 					if (lifetime) {
 						base::take(lifetime)->destroy();
 					}
-					if (const auto item = data->message(fullId)) {
+					if (const auto item = data->message(fullId);
+						item && !item->keepsUnburnt()) {
 						// Destroys this.
 						item->clearMediaAsExpired();
 					}
@@ -498,15 +507,18 @@ QSize Document::countOptimalSize() {
 		const auto history = _realParent->history();
 		const auto session = &history->session();
 		const auto transcribes = &session->api().transcribes();
+		const auto local = AyuRecognition::LocalTranscriptionEnabled();
 		const auto media = _parent->data()->media();
 		if ((media && media->ttlSeconds())
 			|| IsHostedInstantViewMedia(_parent)
 			|| _realParent->isScheduled()
 			|| _realParent->isAdminLogEntry()
-			|| (!session->premium()
+			|| (!local
+				&& !session->premium()
 				&& !transcribes->freeFor(_realParent)
 				&& !transcribes->trialsSupport())
-			|| (!session->premium()
+			|| (!local
+				&& !session->premium()
 				&& _data->duration() > transcribes->trialsMaxLengthMs())) {
 			voice->transcribe = nullptr;
 			voice->transcribeText = {};
@@ -771,6 +783,7 @@ void Document::draw(
 		}
 
 		if (!mediaEditor
+			&& !AyuFeatures::MessageShot::isTakingShot()
 			&& (radial
 				|| (!loaded && !_data->loading())
 				|| _data->waitingForAlbum())) {
@@ -880,6 +893,10 @@ void Document::draw(
 						: stm->historyFilePlay)
 					: _data->isImage()
 					? stm->historyFileImage
+					: _data->filename().endsWith(
+						u".plugin"_q,
+						Qt::CaseInsensitive)
+					? stm->historyFilePlugin
 					: stm->historyFileDocument;
 			} else {
 				return _data->isSongWithCover()
@@ -1225,7 +1242,8 @@ void Document::drawCornerDownload(
 		LayoutMode mode) const {
 	if (dataLoaded()
 		|| _data->loadedInMediaCache()
-		|| !downloadInCorner()) {
+		|| !downloadInCorner()
+		|| AyuFeatures::MessageShot::isTakingShot()) {
 		return;
 	}
 	auto topMinus = isBubbleTop() ? 0 : st::msgFileTopMinus;
@@ -1637,15 +1655,15 @@ void Document::setStatusSize(int64 newSize, TimeId realDuration) const {
 		realDuration);
 	if (auto thumbed = Get<HistoryDocumentThumbed>()) {
 		if (_statusSize == Ui::FileStatusSizeReady) {
-			thumbed->link = tr::lng_media_download(tr::now).toUpper();
+			thumbed->link = tr::lng_media_download(tr::now);
 		} else if (_statusSize == Ui::FileStatusSizeLoaded) {
-			thumbed->link = tr::lng_media_open_with(tr::now).toUpper();
+			thumbed->link = tr::lng_media_open_with(tr::now);
 		} else if (_statusSize == Ui::FileStatusSizeFailed) {
-			thumbed->link = tr::lng_media_download(tr::now).toUpper();
+			thumbed->link = tr::lng_media_download(tr::now);
 		} else if (_statusSize >= 0) {
-			thumbed->link = tr::lng_media_cancel(tr::now).toUpper();
+			thumbed->link = tr::lng_media_cancel(tr::now);
 		} else {
-			thumbed->link = tr::lng_media_open_with(tr::now).toUpper();
+			thumbed->link = tr::lng_media_open_with(tr::now);
 		}
 		thumbed->linkw = st::semiboldFont->width(thumbed->link);
 	}
@@ -2005,6 +2023,12 @@ void Document::parentTextUpdated() {
 void Document::hideSpoilers() {
 	if (const auto captioned = Get<HistoryDocumentCaptioned>()) {
 		captioned->caption.setSpoilerRevealed(false, anim::type::instant);
+	}
+}
+
+void Document::revealSpoilers() {
+	if (const auto captioned = Get<HistoryDocumentCaptioned>()) {
+		captioned->caption.setSpoilerRevealed(true, anim::type::instant);
 	}
 }
 

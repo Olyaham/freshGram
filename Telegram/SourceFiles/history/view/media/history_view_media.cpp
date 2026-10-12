@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/media/history_view_media.h"
+
 #include "ui/basic_click_handlers.h"
 
 #include "boxes/send_credits_box.h" // CreditsEmoji.
@@ -628,7 +629,13 @@ TextState Media::getStateGrouped(
 Ui::BubbleRounding Media::adjustedBubbleRounding(RectParts square) const {
 	auto result = bubbleRounding();
 	using Corner = Ui::BubbleCornerRounding;
+	const auto material = Ui::MaterialBubbles();
 	const auto adjust = [&](bool round, Corner already, RectPart corner) {
+		if (material) {
+			return (already == Corner::None || !round || (square & corner))
+				? Corner::None
+				: already;
+		}
 		return (already == Corner::Tail || !round || (square & corner))
 			? Corner::None
 			: already;
@@ -666,10 +673,15 @@ Images::CornersMaskRef MediaRoundingMask(
 	auto result = Images::CornersMaskRef();
 	const auto &small = Ui::CachedCornersMasks(Radius::BubbleSmall);
 	const auto &large = Ui::CachedCornersMasks(Radius::BubbleLarge);
+	const auto smallCorner = Ui::MaterialBubbles()
+		? Corner::None
+		: Corner::Small;
 	for (auto i = 0; i != 4; ++i) {
-		switch ((*rounding)[i]) {
-		case Corner::Small: result.p[i] = &small[i]; break;
-		case Corner::Large: result.p[i] = &large[i]; break;
+		const auto corner = (*rounding)[i];
+		if (corner == smallCorner) {
+			result.p[i] = &small[i];
+		} else if (corner == Corner::Large) {
+			result.p[i] = &large[i];
 		}
 	}
 	return result;

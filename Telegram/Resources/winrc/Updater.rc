@@ -51,11 +51,11 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "CompanyName", "Telegram FZ-LLC"
-            VALUE "FileDescription", "Telegram Desktop Updater"
+            VALUE "CompanyName", "Snowy-Fluffy"
+            VALUE "FileDescription", "freshGram Updater"
             VALUE "FileVersion", "7.3.1.0"
             VALUE "LegalCopyright", "Copyright (C) 2014-2026"
-            VALUE "ProductName", "Telegram Desktop"
+            VALUE "ProductName", "freshGram"
             VALUE "ProductVersion", "7.3.1.0"
         END
     END

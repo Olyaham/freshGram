@@ -20,6 +20,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "webrtc/webrtc_device_common.h"
 #include "window/section_widget.h"
 
+#include "ayu/ayu_settings.h"
+
+
 namespace Core {
 namespace {
 
@@ -310,6 +313,7 @@ QByteArray Settings::serialize() const {
 		size += Serialize::stringSize(id);
 	}
 	size += sizeof(qint32) // _trayIconMonochrome
+		+ sizeof(qint32) // _birthDateEnabled
 		+ sizeof(qint32) // _ttlVoiceClickTooltipHidden
 		+ Serialize::stringSize(_playbackDeviceId.current())
 		+ Serialize::stringSize(_captureDeviceId.current())
@@ -319,6 +323,7 @@ QByteArray Settings::serialize() const {
 		+ Serialize::stringSize(noWarningExtensions)
 		+ Serialize::stringSize(_customFontFamily)
 		+ sizeof(qint32) // _dialogsNoChatWidthRatio
+		+ sizeof(qint32) // _datacenterEnabled
 		+ sizeof(qint32) // _systemUnlockEnabled
 		+ sizeof(qint32) // _weatherInCelsius
 		+ Serialize::bytearraySize(_tonsiteStorageToken)
@@ -329,6 +334,7 @@ QByteArray Settings::serialize() const {
 		+ sizeof(qint32) // _videoQuality
 		+ sizeof(qint32) // _ivZoom
 		+ sizeof(qint32) // _systemDarkModeEnabled
+		+ sizeof(qint32) // _gameeEnabled
 		+ sizeof(qint32) // _quickDialogAction
 		+ sizeof(ushort) // _notificationsVolume
 		+ sizeof(qint32) // _notificationsDisplayChecksum
@@ -486,6 +492,7 @@ QByteArray Settings::serialize() const {
 		}
 		stream
 			<< qint32(_trayIconMonochrome.current() ? 1 : 0)
+			<< qint32(_birthDateEnabled.current() ? 1 : 0)
 			<< qint32(_ttlVoiceClickTooltipHidden.current() ? 1 : 0)
 			<< _playbackDeviceId.current()
 			<< _captureDeviceId.current()
@@ -499,6 +506,7 @@ QByteArray Settings::serialize() const {
 					_dialogsNoChatWidthRatio.current() * 1000000)),
 				0,
 				1000000))
+			<< qint32(_datacenterEnabled.current() ? 1 : 0)
 			<< qint32(_systemUnlockEnabled ? 1 : 0)
 			<< qint32(!_weatherInCelsius ? 0 : *_weatherInCelsius ? 1 : 2)
 			<< _tonsiteStorageToken
@@ -509,6 +517,7 @@ QByteArray Settings::serialize() const {
 			<< SerializeVideoQuality(_videoQuality)
 			<< qint32(_ivZoom.current())
 			<< qint32(_systemDarkModeEnabled.current() ? 1 : 0)
+			<< qint32(_gameeEnabled.current() ? 1 : 0)
 			<< qint32(_quickDialogAction)
 			<< _notificationsVolume
 			<< _notificationsDisplayChecksum
@@ -535,6 +544,8 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	if (serialized.isEmpty()) {
 		return;
 	}
+
+    AyuSettings::load();
 
 	QDataStream stream(serialized);
 	stream.setVersion(QDataStream::Qt_5_1);
@@ -648,10 +659,12 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	qint32 storiesClickTooltipHidden = _storiesClickTooltipHidden.current() ? 1 : 0;
 	base::flat_set<QString> recentEmojiSkip;
 	qint32 trayIconMonochrome = (_trayIconMonochrome.current() ? 1 : 0);
+	qint32 birthDateEnabled = (_birthDateEnabled.current() ? 1 : 0);
 	qint32 ttlVoiceClickTooltipHidden = _ttlVoiceClickTooltipHidden.current() ? 1 : 0;
 	QByteArray ivPosition;
 	QByteArray callPanelPosition;
 	QString customFontFamily = _customFontFamily;
+	qint32 datacenterEnabled = (_datacenterEnabled.current() ? 1 : 0);
 	qint32 systemUnlockEnabled = _systemUnlockEnabled ? 1 : 0;
 	qint32 weatherInCelsius = !_weatherInCelsius ? 0 : *_weatherInCelsius ? 1 : 2;
 	QByteArray tonsiteStorageToken = _tonsiteStorageToken;
@@ -660,6 +673,7 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	qint32 recordVideoMessages = _recordVideoMessages ? 1 : 0;
 	quint32 videoQuality = SerializeVideoQuality(_videoQuality);
 	quint32 chatFiltersHorizontal = _chatFiltersHorizontal.current() ? 1 : 0;
+	quint32 gameeEnabled = _gameeEnabled.current() ? 1 : 0;
 	quint32 quickDialogAction = quint32(_quickDialogAction);
 	ushort notificationsVolume = _notificationsVolume;
 	qint32 systemAccentColorEnabled = _systemAccentColorEnabled
@@ -939,6 +953,12 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 		trayIconMonochrome = 0;
 	}
 	if (!stream.atEnd()) {
+		stream >> birthDateEnabled;
+	}
+	else {
+		birthDateEnabled = 1;
+	}
+	if (!stream.atEnd()) {
 		stream >> ttlVoiceClickTooltipHidden;
 	}
 	if (!stream.atEnd()) {
@@ -979,6 +999,12 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 			1.);
 	}
 	if (!stream.atEnd()) {
+		stream >> datacenterEnabled;
+	}
+	else {
+		datacenterEnabled = 1;
+	}
+	if (!stream.atEnd()) {
 		stream >> systemUnlockEnabled;
 	}
 	if (!stream.atEnd()) {
@@ -1007,6 +1033,9 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	}
 	if (!stream.atEnd()) {
 		stream >> systemDarkModeEnabled;
+	}
+	if (!stream.atEnd()) {
+		stream >> gameeEnabled;
 	}
 	if (!stream.atEnd()) {
 		stream >> quickDialogAction;
@@ -1106,7 +1135,8 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	case ScreenCorner::TopLeft:
 	case ScreenCorner::TopRight:
 	case ScreenCorner::BottomRight:
-	case ScreenCorner::BottomLeft: _notificationsCorner = uncheckedNotificationsCorner; break;
+	case ScreenCorner::BottomLeft:
+	case ScreenCorner::TopCenter: _notificationsCorner = uncheckedNotificationsCorner; break;
 	}
 	_notificationsDisplayChecksum = notificationsDisplayChecksum;
 	_systemAccentColorEnabled = (systemAccentColorEnabled == 1);
@@ -1300,6 +1330,7 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	_storiesClickTooltipHidden = (storiesClickTooltipHidden == 1);
 	_recentEmojiSkip = std::move(recentEmojiSkip);
 	_trayIconMonochrome = (trayIconMonochrome == 1);
+	_birthDateEnabled = (birthDateEnabled == 1);
 	_ttlVoiceClickTooltipHidden = (ttlVoiceClickTooltipHidden == 1);
 	if (!ivPosition.isEmpty()) {
 		_ivPosition = Deserialize(ivPosition);
@@ -1308,6 +1339,7 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 		_callPanelPosition = Deserialize(callPanelPosition);
 	}
 	_customFontFamily = customFontFamily;
+	_datacenterEnabled = (datacenterEnabled == 1);
 	_systemUnlockEnabled = (systemUnlockEnabled == 1);
 	_weatherInCelsius = !weatherInCelsius
 		? std::optional<bool>()
@@ -1318,6 +1350,7 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	_recordVideoMessages = (recordVideoMessages == 1);
 	_videoQuality = DeserializeVideoQuality(videoQuality);
 	_chatFiltersHorizontal = (chatFiltersHorizontal == 1);
+	_gameeEnabled = (gameeEnabled == 1);
 	_quickDialogAction = Dialogs::Ui::QuickDialogAction(quickDialogAction);
 	_notificationsVolume = notificationsVolume;
 }

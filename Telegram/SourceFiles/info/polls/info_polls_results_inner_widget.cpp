@@ -662,8 +662,7 @@ ListController *CreateAnswerRows(
 				container,
 				tr::lng_polls_show_more(
 					lt_count_decimal,
-					controller->loadMoreCount() | rpl::map(_1 + 0.),
-					tr::upper),
+					controller->loadMoreCount() | rpl::map(_1 + 0.)),
 				st::pollResultsShowMore)));
 	more->entity()->setClickedCallback([=] {
 		controller->allowLoadMore();

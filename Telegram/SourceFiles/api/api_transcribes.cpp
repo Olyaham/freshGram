@@ -8,6 +8,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "api/api_transcribes.h"
 
 #include "apiwrap.h"
+#include "lang_auto.h"
+#include "logs.h"
+#include "ayu/features/recognition/local_transcribe.h"
+#include "ayu/features/recognition/transcription_backend.h"
+#include "ui/toast/toast.h"
 #include "api/api_text_entities.h"
 #include "data/data_channel.h"
 #include "data/data_document.h"
@@ -108,6 +113,12 @@ void Transcribes::toggle(not_null<HistoryItem*> item) {
 		load(item);
 		_session->data().requestItemResize(item);
 	} else if (!i->second.requestId) {
+		if (i->second.pending && i->second.backend) {
+			AyuRecognition::CancelBackendTranscription(item);
+			_map.erase(i);
+			_session->data().requestItemResize(item);
+			return;
+		}
 		i->second.shown = !i->second.shown;
 		if (i->second.roundview) {
 			_session->data().requestItemViewRefresh(item);
@@ -170,8 +181,128 @@ void Transcribes::apply(const MTPDupdateTranscribedAudio &update) {
 	}
 }
 
+void Transcribes::loadLocal(not_null<HistoryItem*> item) {
+	const auto id = item->fullId();
+	auto &entry = _map.emplace(id).first->second;
+	entry.requestId = 0;
+	entry.shown = true;
+	entry.failed = false;
+	entry.toolong = false;
+	entry.pending = true;
+	entry.local = true;
+	entry.result = QString();
+	if (const auto media = item->media()) {
+		if (const auto document = media->document()) {
+			if (document->isVideoMessage()) {
+				entry.roundview = true;
+				document->owner().requestItemViewRefresh(item);
+			}
+		}
+	}
+	AyuRecognition::TranscribeLocally(item, [=](
+			AyuRecognition::LocalTranscript transcript) {
+		using Status = AyuRecognition::LocalTranscribeStatus;
+		const auto i = _map.find(id);
+		if (i == _map.end()) {
+			return;
+		}
+		auto &entry = i->second;
+		entry.pending = false;
+		if (transcript.status == Status::Done) {
+			entry.result = transcript.text.isEmpty()
+				? tr::ayu_TranscribeNoSpeech(tr::now)
+				: transcript.text;
+		} else if (transcript.status == Status::NoModel) {
+			_map.erase(i);
+			Ui::Toast::Show(tr::ayu_TranscribeNoModel(tr::now));
+		} else {
+			entry.failed = true;
+			if (!transcript.error.isEmpty()) {
+				LOG(("Transcribe Error: %1").arg(transcript.error));
+			}
+		}
+		if (const auto item = _session->data().message(id)) {
+			if (const auto media = item->media()) {
+				if (const auto document = media->document()) {
+					if (document->isVideoMessage()) {
+						_session->data().requestItemViewRefresh(item);
+					}
+				}
+			}
+			_session->data().requestItemResize(item);
+		}
+	});
+}
+
+void Transcribes::loadBackend(
+		not_null<HistoryItem*> item,
+		AyuRecognition::EngineProvider engine) {
+	const auto id = item->fullId();
+	auto &entry = _map.emplace(id).first->second;
+	entry.requestId = 0;
+	entry.shown = true;
+	entry.failed = false;
+	entry.toolong = false;
+	entry.pending = true;
+	entry.local = true;
+	entry.backend = true;
+	entry.result = QString();
+	if (const auto media = item->media()) {
+		if (const auto document = media->document()) {
+			if (document->isVideoMessage()) {
+				entry.roundview = true;
+				document->owner().requestItemViewRefresh(item);
+			}
+		}
+	}
+	AyuRecognition::TranscribeWithBackend(item, engine, [=](
+			AyuRecognition::LocalTranscript transcript) {
+		using Status = AyuRecognition::LocalTranscribeStatus;
+		const auto i = _map.find(id);
+		if (i == _map.end()) {
+			return;
+		}
+		auto &entry = i->second;
+		entry.pending = false;
+		if (transcript.status == Status::Done) {
+			entry.result = transcript.text.isEmpty()
+				? tr::ayu_TranscribeNoSpeech(tr::now)
+				: transcript.text;
+		} else if (transcript.status == Status::NoModel) {
+			_map.erase(i);
+			Ui::Toast::Show(tr::ayu_TranscribeNoModel(tr::now));
+		} else {
+			entry.failed = true;
+			if (!transcript.error.isEmpty()) {
+				Ui::Toast::Show(tr::ayu_TranscribeFailed(
+					tr::now,
+					lt_error,
+					transcript.error));
+			}
+		}
+		if (const auto item = _session->data().message(id)) {
+			if (const auto media = item->media()) {
+				if (const auto document = media->document()) {
+					if (document->isVideoMessage()) {
+						_session->data().requestItemViewRefresh(item);
+					}
+				}
+			}
+			_session->data().requestItemResize(item);
+		}
+	});
+}
+
 void Transcribes::load(not_null<HistoryItem*> item) {
 	if (!item->isHistoryEntry() || item->isLocal()) {
+		return;
+	}
+	const auto route = AyuRecognition::ResolveTranscription(item);
+	if (route.destination == AyuRecognition::BackendDestination::Engine) {
+		loadBackend(item, route.engine);
+		return;
+	} else if (route.destination == AyuRecognition::BackendDestination::StaticLocal) {
+		loadLocal(item);
 		return;
 	}
 	const auto toggleRound = [](not_null<HistoryItem*> item, Entry &entry) {

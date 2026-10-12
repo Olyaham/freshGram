@@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "ui/effects/outline_segments.h"
 
+#include "ayu/ui/ayu_userpic.h"
+
+
 namespace Ui {
 
 void PaintOutlineSegments(
@@ -15,6 +18,12 @@ void PaintOutlineSegments(
 		const std::vector<OutlineSegment> &segments,
 		float64 fromFullProgress) {
 	Expects(!segments.empty());
+
+	if (!AyuUserpic::IsCircle()) {
+		const auto r = AyuUserpic::ComputeRadiusF(std::min(ellipse.width(), ellipse.height()));
+		PaintOutlineSegments(p, ellipse, r, segments);
+		return;
+	}
 
 	p.setBrush(Qt::NoBrush);
 	const auto count = std::min(int(segments.size()), kOutlineSegmentsMax);
@@ -98,7 +107,7 @@ QLinearGradient UnreadStoryOutlineGradient(QRectF rect) {
 	return UnreadStoryOutlineGradient(
 		std::move(rect),
 		st::groupCallLive1->c,
-		st::groupCallMuted1->c);
+		st::groupCallLive1->c);
 }
 
 } // namespace Ui

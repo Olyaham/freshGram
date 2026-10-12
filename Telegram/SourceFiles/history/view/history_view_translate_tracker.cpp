@@ -26,6 +26,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "spellcheck/platform/platform_language.h"
 
+#include "ayu/ayu_settings.h"
+
+
 namespace HistoryView {
 namespace {
 
@@ -67,11 +70,7 @@ void TranslateTracker::setup() {
 	}) | rpl::distinct_until_changed();
 
 	using namespace rpl::mappers;
-	_trackingLanguage = rpl::combine(
-		Core::App().settings().translateChatEnabledValue(),
-		Data::AmPremiumValue(&_history->session()),
-		std::move(autoTranslationValue),
-		_1 && (_2 || _3));
+	_trackingLanguage = Core::App().settings().translateChatEnabledValue();
 	_trackingLanguage.value() | rpl::on_next([=](bool tracking) {
 		_trackingLifetime.destroy();
 		if (tracking) {
@@ -82,6 +81,11 @@ void TranslateTracker::setup() {
 			checkRecognized({});
 			stopAndRevert();
 		}
+	}, _lifetime);
+
+	AyuSettings::getInstance().translationProviderChanges(
+	) | rpl::on_next([=](TranslationProvider) {
+		resetProvider();
 	}, _lifetime);
 }
 
@@ -115,7 +119,7 @@ bool TranslateTracker::add(
 
 	if ((item->out() && !item->history()->peer->autoTranslation())
 		|| item->isService()
-		|| !item->isRegular()
+		|| (!item->isRegular() && !item->isAyuRestored())
 		|| item->isOnlyEmojiAndSpaces()) {
 		return false;
 	}
@@ -270,6 +274,32 @@ void TranslateTracker::stopAndRevert() {
 	}
 }
 
+void TranslateTracker::resetProvider() {
+	cancelToRequest();
+	cancelSentRequest();
+	_provider = Ui::CreateTranslateProvider(&_history->session());
+	invalidateTranslations();
+}
+
+void TranslateTracker::invalidateTranslations() {
+	const auto clear = [&](not_null<History*> history) {
+		for (const auto &block : history->blocks) {
+			for (const auto &view : block->messages) {
+				const auto item = view->data();
+				if (!item->Has<HistoryMessageTranslation>()) {
+					continue;
+				}
+				item->removeTranslationBit();
+				history->owner().requestItemTextRefresh(item);
+			}
+		}
+	};
+	clear(_history);
+	if (const auto migrated = _history->migrateFrom()) {
+		clear(migrated);
+	}
+}
+
 void TranslateTracker::requestSome() {
 	if (_requestInProcess || _itemsToRequest.empty()) {
 		return;
@@ -316,7 +346,7 @@ void TranslateTracker::requestSome() {
 			requests.push_back(Ui::PrepareTranslateProviderRequest(
 				_provider.get(),
 				session->data().peer(id.peer),
-				id.msg,
+				item->isDeleted() ? MsgId() : id.msg,
 				item->originalText()));
 			ids.push_back(id);
 		}

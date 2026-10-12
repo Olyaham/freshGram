@@ -16,18 +16,9 @@
 [submodule "Telegram/lib_base"]
 	path = Telegram/lib_base
 	url = https://github.com/desktop-app/lib_base.git
-[submodule "Telegram/codegen"]
-	path = Telegram/codegen
-	url = https://github.com/desktop-app/codegen.git
-[submodule "Telegram/lib_ui"]
-	path = Telegram/lib_ui
-	url = https://github.com/desktop-app/lib_ui.git
 [submodule "Telegram/lib_lottie"]
 	path = Telegram/lib_lottie
 	url = https://github.com/desktop-app/lib_lottie.git
-[submodule "Telegram/lib_tl"]
-	path = Telegram/lib_tl
-	url = https://github.com/desktop-app/lib_tl.git
 [submodule "Telegram/lib_spellcheck"]
 	path = Telegram/lib_spellcheck
 	url = https://github.com/desktop-app/lib_spellcheck
@@ -106,3 +97,12 @@
 [submodule "Telegram/ThirdParty/zxcvbn"]
 	path = Telegram/ThirdParty/zxcvbn
 	url = https://github.com/tsyrogit/zxcvbn-c.git
+[submodule "Telegram/ThirdParty/whisper.cpp"]
+	path = Telegram/ThirdParty/whisper.cpp
+	url = https://github.com/ggml-org/whisper.cpp
+[submodule "Telegram/ThirdParty/leptonica"]
+	path = Telegram/ThirdParty/leptonica
+	url = https://github.com/DanBloomberg/leptonica
+[submodule "Telegram/ThirdParty/tesseract"]
+	path = Telegram/ThirdParty/tesseract
+	url = https://github.com/tesseract-ocr/tesseract

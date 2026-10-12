@@ -15,6 +15,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/shadow.h"
 #include "base/event_filter.h"
 #include "base/qt/qt_key_modifiers.h"
+#include "ayu/data/mention_guard.h"
 #include "history/history.h"
 #include "history/history_item.h"
 #include "history/history_unread_things.h"
@@ -330,6 +331,7 @@ void CornerButtons::mentionsClick() {
 		}
 	}
 	showAt(msgId);
+	AyuMentions::GuardJump(thread, msgId);
 }
 
 void CornerButtons::reactionsClick() {

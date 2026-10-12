@@ -59,6 +59,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "styles/style_layers.h"
 
+#include "ayu/ayu_settings.h"
+#include "ayu/utils/telegram_helpers.h"
+
+
 namespace {
 
 bool PeerCallKnown(not_null<PeerData*> peer) {
@@ -627,6 +631,11 @@ QString NewMessagePostAuthor(const Api::SendAction &action) {
 bool ShouldSendSilent(
 		not_null<PeerData*> peer,
 		const Api::SendOptions &options) {
+	const auto &ghost = AyuSettings::ghost(&peer->session());
+	if (ghost.shouldSendWithoutSound()) {
+		return !options.silent;
+	}
+
 	return options.silent
 		|| (peer->isBroadcast()
 			&& peer->owner().notifySettings().silentPosts(peer))
@@ -658,6 +667,9 @@ bool LookupReplyIsTopicPost(HistoryItem *replyTo) {
 }
 
 bool CanReplyToEphemeral(not_null<const HistoryItem*> item) {
+	if (item->isAyuSecret() && !item->isService()) {
+		return true;
+	}
 	const auto &session = item->history()->session();
 	return session.ephemeralMessages().replyBot(item) != nullptr;
 }
@@ -758,6 +770,10 @@ void ConfirmDeleteSelectedEphemeral(
 TextWithEntities DropDisallowedCustomEmoji(
 		not_null<PeerData*> to,
 		TextWithEntities text) {
+	if (true) {
+		return text;
+	}
+
 	if (to->session().premium() || to->isSelf()) {
 		return text;
 	}
@@ -972,7 +988,8 @@ MessageFlags FlagsFromMTP(
 			? Flag::IsOrWasScheduled
 			: Flag())
 		| ((flags & MTP::f_views) ? Flag::HasViews : Flag())
-		| ((flags & MTP::f_noforwards) ? Flag::NoForwards : Flag())
+		// | ((flags & MTP::f_noforwards) ? Flag::NoForwards : Flag())
+		| (flags & MTP::f_noforwards ? Flag::AyuNoForwards : Flag())
 		| ((flags & MTP::f_invert_media) ? Flag::InvertMedia : Flag())
 		| ((flags & MTP::f_video_processing_pending)
 			? Flag::EstimatedDate
@@ -1026,15 +1043,16 @@ MTPMessageReplyHeader NewMessageReplyHeader(const Api::SendAction &action) {
 		const auto replyToTop = LookupReplyToTop(action.history, replyTo);
 		const auto topicPost = replyTo.topicRootId
 			&& (replyTo.topicRootId != Data::ForumTopic::kGeneralId);
+		const auto quoteNormalized = reverseLocalPremiumEmoji(replyTo.quote, action.history, true);
 		auto quoteEntities = Api::EntitiesToMTP(
 			&action.history->session(),
-			replyTo.quote.entities,
+			quoteNormalized.entities,
 			Api::ConvertOption::SkipLocal);
 		return MTP_messageReplyHeader(
 			MTP_flags(Flag::f_reply_to_msg_id
 				| (replyToTop ? Flag::f_reply_to_top_id : Flag())
 				| (externalPeerId ? Flag::f_reply_to_peer_id : Flag())
-				| (replyTo.quote.empty()
+				| (quoteNormalized.empty()
 					? Flag()
 					: (Flag::f_quote
 						| Flag::f_quote_text
@@ -1316,6 +1334,14 @@ void CheckReactionNotificationSchedule(
 	if (from == Api::ReactionsNotifyFrom::None) {
 		return;
 	}
+	const auto peer = item->history()->peer;
+	const auto &settings = AyuSettings::getInstance();
+	if ((peer->isChannel() && !peer->isMegagroup() && !settings.showChannelReactions())
+		|| (peer->isMegagroup() && !settings.showGroupReactions())
+		|| (peer->isUser() && !settings.showPrivateChatReactions())) {
+		item->markEffectWatched();
+		return;
+	}
 	for (const auto &[emoji, reactions] : item->recentReactions()) {
 		for (const auto &reaction : reactions) {
 			if (!reaction.unread) {
@@ -1445,9 +1471,9 @@ bool CanHoldItemNotification(not_null<const HistoryItem*> item) {
 }
 
 [[nodiscard]] TextWithEntities UnsupportedMessageText() {
-	const auto siteLink = u"https://desktop.telegram.org"_q;
+	const auto siteLink = u"https://github.com/Snowy-Fluffy/freshGram/releases"_q;
 	auto result = TextWithEntities{
-		tr::lng_message_unsupported(tr::now, lt_link, siteLink)
+		tr::lng_message_unsupported(tr::now, lt_link, siteLink).replace("Telegram", "freshGram")
 	};
 	TextUtilities::ParseEntities(result, Ui::ItemTextNoMonoOptions().flags);
 	result.entities.push_front(

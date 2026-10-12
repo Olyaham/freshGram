@@ -21,8 +21,37 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtCore/QMutex>
 #include <QtSvg/QSvgRenderer>
 
+#include "ayu/ayu_settings.h"
+#include "ayu/ui/ayu_userpic.h"
+
+
 namespace Ui {
 namespace {
+
+[[nodiscard]] QColor UserpicBgColor() {
+	auto bg = QColor(st::sideBarBg->c);
+	const style::color *references[] = {
+		&st::windowBg,
+		&st::dialogsBgOver,
+		&st::dialogsBgActive,
+	};
+	auto highest = 0.f;
+	auto closest = 1.f;
+	for (const auto reference : references) {
+		const auto lightness = float(QColor((*reference)->c).lightnessF());
+		highest = std::max(highest, lightness);
+		closest = std::min(closest, std::abs(lightness - float(bg.lightnessF())));
+	}
+	if (highest >= 0.5f || closest >= 0.05f) {
+		return bg;
+	}
+	bg.setHslF(
+		std::max(float(bg.hslHueF()), 0.f),
+		bg.hslSaturationF(),
+		std::min(highest + 0.13f, 1.f));
+	return bg;
+}
+
 
 [[nodiscard]] bool IsExternal(const QString &name) {
 	return !name.isEmpty()
@@ -55,7 +84,7 @@ void PaintSavedMessagesInner(
 	// X XX          XX X   |      |
 	// XX              XX  ---    ---
 
-	const auto thinkness = base::SafeRound(size * 0.055);
+	const auto thinkness = base::SafeRound(size * 0.045);
 	const auto increment = int(thinkness) % 2 + (size % 2);
 	const auto width = base::SafeRound(size * 0.15) * 2 + increment;
 	const auto height = base::SafeRound(size * 0.19) * 2 + increment;
@@ -303,29 +332,25 @@ void EmptyUserpic::paint(
 
 	PainterHighQualityEnabler hq(p);
 	{
-		auto gradient = QLinearGradient(x, y, x, y + size);
-		gradient.setStops({
-			{ 0., _colors.color1->c },
-			{ 1., _colors.color2->c }
-		});
-		p.setBrush(gradient);
+		auto bg = UserpicBgColor();
+		p.setBrush(bg);
 	}
 	p.setPen(Qt::NoPen);
 	paintBackground();
 
 	if (IsExternal(_string)) {
-		PaintExternalMessagesInner(p, x, y, size, st::historyPeerUserpicFg);
+		PaintExternalMessagesInner(p, x, y, size, st::windowBgActive);
 	} else if (IsInaccessible(_string)) {
 		PaintInaccessibleAccountInner(
 			p,
 			x,
 			y,
 			size,
-			st::historyPeerUserpicFg);
+			st::windowBgActive);
 	} else {
 		p.setFont(font);
 		p.setBrush(Qt::NoBrush);
-		p.setPen(st::historyPeerUserpicFg);
+		p.setPen(st::windowBgActive);
 		p.drawText(
 			QRect(x, y, size, size),
 			_string,
@@ -340,7 +365,7 @@ void EmptyUserpic::paintCircle(
 		int outerWidth,
 		int size) const {
 	paint(p, x, y, outerWidth, size, [&] {
-		p.drawEllipse(x, y, size, size);
+		AyuUserpic::PaintShape(p, x, y, size);
 	});
 }
 
@@ -352,7 +377,11 @@ void EmptyUserpic::paintRounded(
 		int size,
 		int radius) const {
 	paint(p, x, y, outerWidth, size, [&] {
-		p.drawRoundedRect(x, y, size, size, radius, radius);
+		if (AyuSettings::getInstance().singleCornerRadius()) {
+			AyuUserpic::PaintShape(p, x, y, size);
+		} else {
+			p.drawRoundedRect(x, y, size, size, radius, radius);
+		}
 	});
 }
 
@@ -363,7 +392,7 @@ void EmptyUserpic::paintSquare(
 		int outerWidth,
 		int size) const {
 	paint(p, x, y, outerWidth, size, [&] {
-		p.fillRect(x, y, size, size, p.brush());
+		AyuUserpic::PaintShape(p, x, y, size);
 	});
 }
 
@@ -374,7 +403,11 @@ void EmptyUserpic::paintMonoforum(
 		int outerWidth,
 		int size) const {
 	paint(p, x, y, outerWidth, size, [&] {
-		PaintMonoforumShape(p, QRect(x, y, size, size));
+		if (AyuSettings::getInstance().singleCornerRadius()) {
+			AyuUserpic::PaintShape(p, x, y, size);
+		} else {
+			PaintMonoforumShape(p, QRect(x, y, size, size));
+		}
 	});
 }
 
@@ -384,12 +417,8 @@ void EmptyUserpic::PaintSavedMessages(
 		int y,
 		int outerWidth,
 		int size) {
-	auto bg = QLinearGradient(x, y, x, y + size);
-	bg.setStops({
-		{ 0., st::historyPeerSavedMessagesBg->c },
-		{ 1., st::historyPeerSavedMessagesBg2->c }
-	});
-	const auto &fg = st::historyPeerUserpicFg;
+	auto bg = UserpicBgColor();
+	const auto &fg = st::windowBgActive;
 	PaintSavedMessages(p, x, y, outerWidth, size, QBrush(bg), fg);
 }
 
@@ -406,7 +435,7 @@ void EmptyUserpic::PaintSavedMessages(
 	PainterHighQualityEnabler hq(p);
 	p.setBrush(std::move(bg));
 	p.setPen(Qt::NoPen);
-	p.drawEllipse(x, y, size, size);
+	AyuUserpic::PaintShape(p, x, y, size);
 
 	PaintSavedMessagesInner(p, x, y, size, fg);
 }
@@ -423,12 +452,8 @@ void EmptyUserpic::PaintRepliesMessages(
 		int y,
 		int outerWidth,
 		int size) {
-	auto bg = QLinearGradient(x, y, x, y + size);
-	bg.setStops({
-		{ 0., st::historyPeerSavedMessagesBg->c },
-		{ 1., st::historyPeerSavedMessagesBg2->c }
-	});
-	const auto &fg = st::historyPeerUserpicFg;
+	auto bg = UserpicBgColor();
+	const auto &fg = st::windowBgActive;
 	PaintRepliesMessages(p, x, y, outerWidth, size, QBrush(bg), fg);
 }
 
@@ -445,7 +470,7 @@ void EmptyUserpic::PaintRepliesMessages(
 	PainterHighQualityEnabler hq(p);
 	p.setBrush(bg);
 	p.setPen(Qt::NoPen);
-	p.drawEllipse(x, y, size, size);
+	AyuUserpic::PaintShape(p, x, y, size);
 
 	PaintRepliesMessagesInner(p, x, y, size, fg);
 }
@@ -462,12 +487,8 @@ void EmptyUserpic::PaintHiddenAuthor(
 		int y,
 		int outerWidth,
 		int size) {
-	auto bg = QLinearGradient(x, y, x, y + size);
-	bg.setStops({
-		{ 0., st::premiumButtonBg2->c },
-		{ 1., st::premiumButtonBg3->c },
-	});
-	const auto &fg = st::premiumButtonFg;
+	auto bg = UserpicBgColor();
+	const auto &fg = st::windowBgActive;
 	PaintHiddenAuthor(p, x, y, outerWidth, size, QBrush(bg), fg);
 }
 
@@ -484,7 +505,7 @@ void EmptyUserpic::PaintHiddenAuthor(
 	PainterHighQualityEnabler hq(p);
 	p.setBrush(bg);
 	p.setPen(Qt::NoPen);
-	p.drawEllipse(x, y, size, size);
+	AyuUserpic::PaintShape(p, x, y, size);
 
 	PaintHiddenAuthorInner(p, x, y, size, fg);
 }
@@ -501,12 +522,8 @@ void EmptyUserpic::PaintMyNotes(
 		int y,
 		int outerWidth,
 		int size) {
-	auto bg = QLinearGradient(x, y, x, y + size);
-	bg.setStops({
-		{ 0., st::historyPeerSavedMessagesBg->c },
-		{ 1., st::historyPeerSavedMessagesBg2->c }
-	});
-	const auto &fg = st::historyPeerUserpicFg;
+	auto bg = UserpicBgColor();
+	const auto &fg = st::windowBgActive;
 	PaintMyNotes(p, x, y, outerWidth, size, QBrush(bg), fg);
 }
 
@@ -523,7 +540,7 @@ void EmptyUserpic::PaintMyNotes(
 	PainterHighQualityEnabler hq(p);
 	p.setBrush(bg);
 	p.setPen(Qt::NoPen);
-	p.drawEllipse(x, y, size, size);
+	AyuUserpic::PaintShape(p, x, y, size);
 
 	PaintMyNotesInner(p, x, y, size, fg);
 }

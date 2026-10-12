@@ -21,7 +21,16 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_polls.h"
 #include "styles/style_widgets.h"
 
+#include "ayu/ayu_settings.h"
+#include "styles/style_ayu_icons.h"
+
+
 namespace Ui {
+
+double DefaultBgOpacity() {
+	return AyuSettings::getInstance().replyBackgroundOpacity() / 100.;
+}
+
 namespace {
 
 void EnsureCorners(
@@ -43,8 +52,14 @@ void EnsureBlockquoteCache(
 	cache = std::make_unique<Text::QuotePaintCache>();
 	const auto &colors = values();
 	cache->bg = colors.bg;
+	cache->bg2 = colors.bg;
 	cache->outlines = colors.outlines;
 	cache->icon = colors.name;
+
+	const auto &settings = AyuSettings::getInstance();
+	if (settings.simpleQuotesAndReplies()) {
+		cache->bg = QColor(0, 0, 0, 0);
+	}
 }
 
 void EnsurePreCache(
@@ -58,7 +73,7 @@ void EnsurePreCache(
 	const auto bg = bgOverride();
 	cache->bg = bg.value_or(color->c);
 	if (!bg) {
-		cache->bg.setAlpha(kDefaultBgOpacity * 255);
+		cache->bg.setAlpha(DefaultBgOpacity() * 255);
 	}
 	cache->outlines[0] = color->c;
 	cache->outlines[0].setAlpha(kDefaultOutline1Opacity * 255);
@@ -118,7 +133,7 @@ int HistoryServiceMsgInvertedShrink() {
 
 ColorIndexValues SimpleColorIndexValues(QColor color, int patternIndex) {
 	auto bg = color;
-	bg.setAlpha(kDefaultBgOpacity * 255);
+	bg.setAlpha(DefaultBgOpacity() * 255);
 	auto result = ColorIndexValues{
 		.name = color,
 		.bg = bg,
@@ -370,6 +385,14 @@ ChatStyle::ChatStyle(rpl::producer<ColorIndicesCompressed> colorIndices) {
 		st::historyBubbleTailInRightSelected,
 		st::historyBubbleTailOutRight,
 		st::historyBubbleTailOutRightSelected);
+
+	make(
+		&MessageStyle::channelBadgeIcon,
+		st::inChannelBadgeIcon,
+		st::inChannelBadgeSelectedIcon,
+		st::outChannelBadgeIcon,
+		st::outChannelBadgeSelectedIcon);
+
 	make(
 		&MessageStyle::historyRepliesIcon,
 		st::historyRepliesInIcon,
@@ -502,6 +525,12 @@ ChatStyle::ChatStyle(rpl::producer<ColorIndicesCompressed> colorIndices) {
 		st::historyFileInDocumentSelected,
 		st::historyFileOutDocument,
 		st::historyFileOutDocumentSelected);
+	make(
+		&MessageStyle::historyFilePlugin,
+		st::ayuHistoryFileInPlugin,
+		st::ayuHistoryFileInPluginSelected,
+		st::ayuHistoryFileOutPlugin,
+		st::ayuHistoryFileOutPluginSelected);
 	make(
 		&MessageStyle::historyAudioDownload,
 		st::historyAudioInDownload,
@@ -872,7 +901,7 @@ ColorIndexValues ChatStyle::computeColorIndexValues(
 			.name = (*(selected ? listSelected : list)[paletteIndex])->c,
 		};
 		result.bg = result.name;
-		result.bg.setAlpha(kDefaultBgOpacity * 255);
+		result.bg.setAlpha(DefaultBgOpacity() * 255);
 		result.outlines[0] = result.name;
 		result.outlines[0].setAlpha(kDefaultOutline1Opacity * 255);
 		result.outlines[1] = result.outlines[2] = QColor(0, 0, 0, 0);
@@ -893,7 +922,7 @@ ColorIndexValues ChatStyle::computeColorIndexValues(
 		.outlines = { color(0), color(1), color(2) }
 	};
 	result.bg = result.outlines[0];
-	result.bg.setAlpha(kDefaultBgOpacity * 255);
+	result.bg.setAlpha(DefaultBgOpacity() * 255);
 	result.name = selected
 		? EnsurePeerNameReadable(
 			result.outlines[0],
@@ -1060,7 +1089,7 @@ not_null<Text::QuotePaintCache*> ChatStyle::collectibleCache(
 	EnsureBlockquoteCache(cache, [&] {
 		const auto name = collectibleNameColor(collectible, selected);
 		auto bg = name;
-		bg.setAlpha(kDefaultBgOpacity * 255);
+		bg.setAlpha(DefaultBgOpacity() * 255);
 
 		const auto &strip = (_dark && !collectible->darkStrip.empty())
 			? collectible->darkStrip

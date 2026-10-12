@@ -1,0 +1,17 @@
+pkgname=freshgram
+pkgver=${FRESHGRAM_VERSION:?FRESHGRAM_VERSION is not set}
+pkgrel=1
+pkgdesc='Telegram Desktop fork with the AyuGram features and a Material look'
+arch=('x86_64')
+url='https://github.com/Snowy-Fluffy/freshGram'
+license=('GPL-3.0-or-later')
+depends=('glibc' 'gcc-libs' 'hicolor-icon-theme')
+optdepends=('xdg-desktop-portal: file dialogs and screen sharing')
+provides=('freshgram')
+options=('!strip' '!debug')
+source=('freshgram-root.tar')
+sha256sums=('SKIP')
+
+package() {
+	cp -a "$srcdir/usr" "$pkgdir/usr"
+}

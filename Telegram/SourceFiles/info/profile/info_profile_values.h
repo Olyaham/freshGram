@@ -45,6 +45,18 @@ inline auto ToSingleLine() {
 rpl::producer<not_null<PeerData*>> MigratedOrMeValue(
 	not_null<PeerData*> peer);
 
+struct RegistrationEstimate {
+	enum class Kind {
+		Approximate,
+		Earlier,
+		Later,
+	};
+	Kind kind = Kind::Approximate;
+	long long time = 0;
+};
+[[nodiscard]] RegistrationEstimate EstimateRegistration(long long userId);
+[[nodiscard]] rpl::producer<TextWithEntities> RegistrationValue(not_null<PeerData*> peer_id);
+[[nodiscard]] rpl::producer<TextWithEntities> DataCenterValue(not_null<PeerData*> peer_id);
 [[nodiscard]] rpl::producer<QString> NameValue(not_null<PeerData*> peer);
 [[nodiscard]] rpl::producer<QString> TitleValue(
 	not_null<Data::ForumTopic*> topic);
@@ -140,7 +152,7 @@ struct LinkWithUrl {
 [[nodiscard]] rpl::producer<bool> CanViewParticipantsValue(
 	not_null<ChannelData*> megagroup);
 
-enum class BadgeType : uchar;
+enum class BadgeType : ushort;
 [[nodiscard]] rpl::producer<BadgeType> BadgeValue(not_null<PeerData*> peer);
 [[nodiscard]] rpl::producer<EmojiStatusId> EmojiStatusIdValue(
 	not_null<PeerData*> peer);

@@ -26,12 +26,14 @@ const PROPERTYKEY pkey_AppUserModel_StartPinOption = { { 0x9F4C2855, 0x9F79, 0x4
 const PROPERTYKEY pkey_AppUserModel_ToastActivator = { { 0x9F4C2855, 0x9F79, 0x4B39, { 0xA8, 0xD0, 0xE1, 0xD4, 0x2D, 0xE1, 0xD5, 0xF3 } }, 26 };
 
 #ifdef OS_WIN_STORE
-const WCHAR AppUserModelIdBase[] = L"Telegram.TelegramDesktop.Store";
+const WCHAR AppUserModelIdBase[] = L"SnowyFluffy.freshGram.Store";
 #else // OS_WIN_STORE
-const WCHAR AppUserModelIdBase[] = L"Telegram.TelegramDesktop";
+const WCHAR AppUserModelIdBase[] = L"SnowyFluffy.freshGram";
 #endif // OS_WIN_STORE
 
-[[nodiscard]] QString PinnedIconsPath() {
+} // namespace
+
+QString PinnedIconsPath() {
 	WCHAR wstrPath[kMaxFileLen] = {};
 	if (GetEnvironmentVariable(L"APPDATA", wstrPath, kMaxFileLen)) {
 		auto appData = QDir(QString::fromStdWString(std::wstring(wstrPath)));
@@ -40,8 +42,6 @@ const WCHAR AppUserModelIdBase[] = L"Telegram.TelegramDesktop";
 	}
 	return QString();
 }
-
-} // namespace
 
 const std::wstring &MyExecutablePath() {
 	static const auto Path = [&] {
@@ -213,7 +213,7 @@ void CleanupShortcut() {
 		return;
 	}
 
-	QString path = systemShortcutPath() + u"Telegram.lnk"_q;
+	QString path = systemShortcutPath() + u"freshGram.lnk"_q;
 	std::wstring p = QDir::toNativeSeparators(path).toStdWString();
 
 	DWORD attributes = GetFileAttributes(p.c_str());
@@ -345,8 +345,8 @@ bool checkInstalled(QString path = {}) {
 		}
 	}
 
-	const auto installed = u"Telegram Desktop/Telegram.lnk"_q;
-	const auto old = u"Telegram Win (Unofficial)/Telegram.lnk"_q;
+	const auto installed = u"freshGram/freshGram.lnk"_q;
+	const auto old = u"freshGram for Windows/freshGram.lnk"_q;
 	return validateShortcutAt(path + installed)
 		|| validateShortcutAt(path + old);
 }
@@ -358,7 +358,7 @@ bool ValidateShortcut() {
 	}
 
 	if (cAlphaVersion()) {
-		path += u"TelegramAlpha.lnk"_q;
+		path += u"freshGramAlpha.lnk"_q;
 		if (validateShortcutAt(path)) {
 			return true;
 		}
@@ -367,7 +367,7 @@ bool ValidateShortcut() {
 			return true;
 		}
 
-		path += u"Telegram.lnk"_q;
+		path += u"freshGram.lnk"_q;
 		if (validateShortcutAt(path)) {
 			return true;
 		}

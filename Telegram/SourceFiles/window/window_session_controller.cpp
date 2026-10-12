@@ -5,6 +5,8 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_bridge.h"
+#include "ayu/secret/secret_peer.h"
 #include "window/window_session_controller.h"
 
 #include "apiwrap.h"
@@ -129,6 +131,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_window.h"
 #include "styles/style_dialogs.h"
 #include "styles/style_layers.h" // st::boxLabel
+
+#include "ayu/ayu_settings.h"
+
 
 namespace Window {
 namespace {
@@ -402,7 +407,7 @@ base::weak_ptr<Data::Thread> ForumThreadClickHandler::resolveThread(
 }
 
 MessageHighlightId SearchHighlightId(const QString &query) {
-	auto result = MessageHighlightId{ .quote = { query } };
+	auto result = MessageHighlightId{ .quote = { query.trimmed() } };
 	if (!result.quote.empty()) {
 		result.quoteOffset = kSearchQueryOffsetHint;
 	}
@@ -1391,6 +1396,12 @@ void SessionNavigation::showThread(
 void SessionNavigation::showPeerInfo(
 		not_null<PeerData*> peer,
 		const SectionShow &params) {
+	if (AyuSecret::IsSecretPeer(peer)) {
+		if (const auto real = AyuSecret::RealUser(peer)) {
+			showPeerInfo(real, params);
+		}
+		return;
+	}
 	//if (Adaptive::ThreeColumn()
 	//	&& !Core::App().settings().thirdSectionInfoEnabled()) {
 	//	Core::App().settings().setThirdSectionInfoEnabled(true);
@@ -1583,6 +1594,7 @@ SessionController::SessionController(
 , _defaultChatTheme(std::make_shared<Ui::ChatTheme>())
 , _chatStyle(std::make_unique<Ui::ChatStyle>(session->colorIndicesValue())) {
 	init();
+	AyuSecret::WatchActiveChat(this);
 
 	_chatStyleTheme = _defaultChatTheme;
 	_chatStyle->apply(_defaultChatTheme.get());
@@ -2060,7 +2072,11 @@ void SessionController::activateFirstChatsFilter() {
 		return;
 	}
 	_filtersActivated = true;
-	setActiveChatsFilter(session().data().chatsFilters().defaultId());
+
+	const auto &settings = AyuSettings::getInstance();
+	if (!settings.hideAllChatsFolder()) {
+		setActiveChatsFilter(session().data().chatsFilters().defaultId());
+	}
 }
 
 bool SessionController::uniqueChatsInSearchResults(
@@ -3418,6 +3434,9 @@ void SessionController::openPhoto(
 	if (openSharedStory(item) || openFakeItemStory(message.id, stories)) {
 		return;
 	}
+	if (item && item->isAyuSecret()) {
+		AyuSecret::BridgeFor(&session()).mediaOpened(item);
+	}
 	const auto origin = item
 		? Data::FileOrigin(item->fullId())
 		: Data::FileOrigin();
@@ -3456,7 +3475,11 @@ void SessionController::openDocument(
 	const auto item = session().data().message(message.id);
 	if (openSharedStory(item) || openFakeItemStory(message.id, stories)) {
 		return;
-	} else if (showInMediaView) {
+	}
+	if (item && item->isAyuSecret()) {
+		AyuSecret::BridgeFor(&session()).mediaOpened(item);
+	}
+	if (showInMediaView) {
 		if (OptionExternalMediaViewer.value()
 			&& !document->isTheme()
 			&& !HasSavingRestriction(item)) {

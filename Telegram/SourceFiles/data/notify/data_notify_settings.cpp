@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/secret/secret_peer.h"
 #include "data/notify/data_notify_settings.h"
 
 #include "apiwrap.h"
@@ -91,7 +92,8 @@ NotifySettings::NotifySettings(not_null<Session*> owner)
 }
 
 void NotifySettings::request(not_null<PeerData*> peer) {
-	if (peer->notify().settingsUnknown()) {
+	if (peer->notify().settingsUnknown()
+		&& !AyuSecret::IsSecretPeer(peer)) {
 		const auto channel = peer->asChannel();
 		peer->session().api().requestNotifySettings(
 			(channel && channel->isCommunity())

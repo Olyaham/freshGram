@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "storage/storage_domain.h"
 
+#include "ayu/features/fake_passcode/fake_passcode.h"
 #include "core/version.h"
 #include "storage/details/storage_file_utilities.h"
 #include "storage/serialize_common.h"
@@ -916,7 +917,11 @@ SetPasscodeResult Domain::setPasscode(
 		return changePasscode(nullptr, verification);
 	}
 	auto derived = prepareNewWrap(passcode);
-	return changePasscode(&derived, verification);
+	const auto result = changePasscode(&derived, verification);
+	if (result == SetPasscodeResult::Success) {
+		AyuFakePasscode::RealPasscodeChanged(passcode);
+	}
+	return result;
 }
 
 SetPasscodeResult Domain::setPasscode(
@@ -979,6 +984,7 @@ SetPasscodeResult Domain::changePasscode(
 	_keyDataDirty = false;
 
 	_verificationNonce = 0;
+	AyuFakePasscode::RealPasscodeChanged(QByteArray());
 	_passcodeKeyChanged.fire({});
 	return SetPasscodeResult::Success;
 }
@@ -1108,6 +1114,7 @@ void Domain::clearPasscodeAfterReset() {
 	*_keyData = std::move(updated);
 	_keyDataDirty = false;
 	_verificationNonce = 0;
+	AyuFakePasscode::RealPasscodeChanged(QByteArray());
 
 	_passcodeKeyChanged.fire({});
 }

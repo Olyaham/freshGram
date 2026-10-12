@@ -5,6 +5,7 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "ayu/ayu_settings.h"
 #include "info/profile/info_profile_actions.h"
 
 #include "api/api_blocked_peers.h"
@@ -117,6 +118,15 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QGuiApplication>
 #include <QtGui/QClipboard>
 
+#include "ayu/features/peek/peek_online.h"
+#include "ayu/features/streamer_mode/streamer_mode.h"
+#include "ayu/ui/utils/ayu_profile_values.h"
+#include "ayu/utils/telegram_helpers.h"
+#include "styles/style_ayu_styles.h"
+#include "ui/widgets/tooltip.h"
+#include "ui/text/text_entity.h"
+
+
 namespace Info {
 namespace Profile {
 namespace {
@@ -170,9 +180,12 @@ base::options::toggle ShowChannelJoinedBelowAbout({
 				end(usernames));
 			for (auto &username : std::move(subrange)) {
 				const auto isLast = (usernames.back() == username);
-				result.append(tr::link(
+				auto link = tr::link(
 					'@' + base::take(username.text),
-					username.entities.front().data()));
+					username.entities.front().data());
+				result.append(AyuFeatures::StreamerMode::spoilersActive()
+					? Ui::Text::Wrapped(std::move(link), EntityType::Spoiler)
+					: std::move(link));
 				if (!isLast) {
 					result.append(u", "_q);
 				}
@@ -202,8 +215,10 @@ base::options::toggle ShowChannelJoinedBelowAbout({
 			Core::App().openInternalUrl(link,
 				QVariant::fromValue(ClickHandlerContext{
 					.sessionWindow = weak,
-				}));
+					}));
 			return;
+		} else if (addToLink.isEmpty()) {
+			link = "@" + peer->username();
 		} else if (!link.startsWith(u"https://"_q)) {
 			link = peer->session().createInternalLinkFull(peer->username())
 				+ addToLink;
@@ -234,26 +249,11 @@ base::options::toggle ShowChannelJoinedBelowAbout({
 	return AboutValue(
 		peer
 	) | rpl::map([=](TextWithEntities &&value) {
-		if (ShowPeerIdBelowAbout.value()) {
-			using namespace Ui::Text;
-			if (!value.empty()) {
-				value.append("\n\n");
-			}
-			value.append(Italic(u"id: "_q));
-			const auto raw = peer->id.value & PeerId::kChatTypeMask;
-			value.append(Link(
-				Italic(Lang::FormatCountDecimal(raw)),
-				kPeerIdLinkIndex));
-		}
 		if (ShowChannelJoinedBelowAbout.value()) {
 			if (const auto channel = peer->asChannel()) {
 				if (!channel->amCreator() && channel->inviteDate) {
 					if (!value.empty()) {
-						if (ShowPeerIdBelowAbout.value()) {
-							value.append("\n");
-						} else {
-							value.append("\n\n");
-						}
+						value.append("\n\n");
 					}
 					using namespace Ui::Text;
 					value.append((channel->isMegagroup()
@@ -696,6 +696,7 @@ void SetupAboutPeerIdDrag(
 		object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
 			inner,
 			object_ptr<Ui::VerticalLayout>(inner)));
+	other->ease = anim::easeOutCubic;
 	other->toggleOn(state->expanded.value(), anim::type::normal);
 	constexpr auto kSlideDuration = float64(st::slideWrapDuration);
 	other->setDuration(kSlideDuration);
@@ -711,7 +712,7 @@ void SetupAboutPeerIdDrag(
 		timingArrow->paintRequest() | rpl::on_next([=] {
 			auto p = QPainter(timingArrow);
 			const auto progress = other->animating()
-				? (crl::now() - arrowAnimation->started()) / kSlideDuration
+				? anim::easeOutCubic(1., (crl::now() - arrowAnimation->started()) / kSlideDuration)
 				: 1.;
 
 			const auto path = Ui::ToggleUpDownArrowPath(
@@ -957,7 +958,10 @@ void DeleteContactNote(
 
 	rpl::duplicate(
 		birthday
-	) | rpl::map([](Data::Birthday value) {
+	) | rpl::map([](Data::Birthday value) -> rpl::producer<bool> {
+		if (AyuSettings::getInstance().hideBirthdayNotifications()) {
+			return rpl::single(false);
+		}
 		return Data::IsBirthdayTodayValue(value);
 	}) | rpl::flatten_latest(
 	) | rpl::distinct_until_changed(
@@ -1062,7 +1066,7 @@ auto AddMainButton(
 		const style::SettingsButton &st = st::infoMainButton) {
 	const auto button = AddActionButton(
 		parent,
-		std::move(text) | rpl::map(tr::upper),
+		std::move(text),
 		std::move(toggleOn),
 		std::move(callback),
 		nullptr,
@@ -1306,6 +1310,7 @@ private:
 	void addFastButtonsMode(not_null<UserData*> user);
 	void addReportAction();
 	void addBlockAction(not_null<UserData*> user);
+	void addPeekAction(not_null<UserData*> user);
 	void addLeaveChannelAction(not_null<ChannelData*> channel);
 	void addJoinChannelAction(not_null<ChannelData*> channel);
 	void fillUserActions(not_null<UserData*> user);
@@ -1406,6 +1411,80 @@ bool SetClickContext(
 		return true;
 	}
 	return false;
+}
+
+void AddRegistrationOrCreationButton(
+		not_null<Window::SessionController*> controller,
+		not_null<PeerData*> peer,
+		TextWithLabel &idInfo,
+		const auto &fitLabelToButton) {
+	if (peer->isBot() || peer->isServiceUser()) {
+		return;
+	}
+
+	const auto registrationDateButton = Ui::CreateChild<Ui::IconButton>(
+		idInfo.text->parentWidget(),
+		st::infoProfileLabeledButtonRegistrationDate);
+	const auto rightSkip = st::infoProfileLabeledButtonQrRightSkip;
+	fitLabelToButton(registrationDateButton, idInfo.text, rightSkip);
+	fitLabelToButton(registrationDateButton, idInfo.subtext, rightSkip);
+	registrationDateButton->setClickedCallback([=] {
+		const auto weak = QPointer<Ui::IconButton>(registrationDateButton);
+		getRegistrationDate(
+			peer,
+			[=](const TextWithEntities &result) {
+				if (result.empty() || !weak) {
+					return;
+				}
+				const auto parent = weak->window();
+				const auto tooltip = Ui::CreateChild<Ui::ImportantTooltip>(
+					parent,
+					Ui::MakeNiceTooltipLabel(
+						parent,
+						rpl::single(result),
+						st::boxWideWidth,
+						st::registrationDateImportantTooltipLabel),
+					st::defaultImportantTooltip);
+				tooltip->toggleFast(false);
+
+				const auto geometry = Ui::MapFrom(
+					parent,
+					weak.data(),
+					weak->rect());
+				const auto countPosition = [=](QSize size) {
+					const auto left = geometry.x()
+						+ (geometry.width() - size.width()) / 2;
+					const auto right = parent->width()
+						- st::normalFont->spacew;
+					return QPoint(
+						std::max(std::min(left, right - size.width()), 0),
+						geometry.y() - size.height() - st::normalFont->descent);
+				};
+				tooltip->pointAt(geometry, RectPart::Top, countPosition);
+
+				const auto weakTooltip = QPointer(tooltip);
+				tooltip->setHiddenCallback([weakTooltip] {
+					if (weakTooltip) {
+						weakTooltip->deleteLater();
+					}
+				});
+
+				base::install_event_filter(
+					tooltip,
+					qApp,
+					[weakTooltip](not_null<QEvent*> e) {
+						if (e->type() == QEvent::MouseButtonPress) {
+							if (weakTooltip) {
+								weakTooltip->toggleAnimated(false);
+							}
+						}
+						return base::EventFilterResult::Continue;
+					});
+
+				tooltip->toggleAnimated(true);
+			});
+		return false;
+	});
 }
 
 Section DetailsFiller::makeInfo() {
@@ -1681,7 +1760,7 @@ Section DetailsFiller::makeInfo() {
 				user->session().supportHelper().infoTextValue(user));
 		}
 
-		{
+		if (!user->isSelf()) {
 			const auto phoneLabel = addInfoOneLine(
 				tr::lng_info_mobile_label(),
 				PhoneWithSpoilerValue(user, PhoneOrHiddenValue(user)),
@@ -1716,13 +1795,26 @@ Section DetailsFiller::makeInfo() {
 
 		const auto usernameLine = addInfoOneLine(
 			UsernamesSubtext(_peer, tr::lng_info_username_label()),
-			UsernameValue(user, true) | rpl::map([=](TextWithEntities u) {
-				return u.text.isEmpty()
-					? TextWithEntities()
-					: tr::link(u, UsernameUrl(user, u.text.mid(1)));
-			}),
+			AyuFeatures::StreamerMode::spoilered(
+				UsernameValue(user, true) | rpl::map([=](TextWithEntities u) {
+					return u.text.isEmpty()
+						? TextWithEntities()
+						: tr::link(u, UsernameUrl(user, u.text.mid(1)));
+				})),
 			QString(),
 			st::infoProfileLabeledUsernamePadding);
+		if (Core::App().settings().birthDateEnabled()) {
+			addInfoOneLine(
+				tr::lng_freshgram_info_registration(),
+				AyuFeatures::StreamerMode::spoilered(RegistrationValue(user)),
+				tr::lng_context_copy_text(tr::now));
+		}
+		if (user->hasUserpic() && Core::App().settings().datacenterEnabled()) {
+			addInfoOneLine(
+				tr::lng_freshgram_info_dc(),
+				DataCenterValue(_peer),
+				tr::lng_context_copy_text(tr::now));
+		}
 		const auto callback = UsernamesLinkCallback(
 			_peer,
 			controller,
@@ -1791,6 +1883,51 @@ Section DetailsFiller::makeInfo() {
 				QString()
 			).text->setLinksTrusted();
 		}
+
+		if (!user->isSelf() && !user->isBot()) {
+			auto peekText = AyuPeek::value(
+				user
+			) | rpl::map([](const std::optional<AyuPeek::Result> &result) {
+				return result
+					? TextWithEntities{ AyuPeek::format(*result) }
+					: TextWithEntities();
+			});
+			addInfoOneLine(
+				tr::ayu_PeekLabel(),
+				std::move(peekText),
+				QString());
+		}
+
+		{
+			const auto dataCenter = getPeerDC(_peer);
+			const auto idLabel = dataCenter.isEmpty() ? u"ID"_q : dataCenter;
+
+			auto idDrawableText = IDValue(
+				user
+			) | rpl::map([](TextWithEntities &&text)
+			{
+				return Ui::Text::Code(text.text);
+			});
+			auto idInfo = addInfoOneLine(
+				rpl::single(idLabel),
+				AyuFeatures::StreamerMode::spoilered(std::move(idDrawableText)),
+				tr::ayu_ContextCopyID(tr::now)
+			);
+
+			idInfo.text->setClickHandlerFilter([=](const ClickHandlerPtr &handler, auto &&...)
+			{
+				if (Ui::Text::IsSpoilerLink(handler)) {
+					return true;
+				}
+				const auto idText = IDString(user);
+				if (!idText.isEmpty()) {
+					QGuiApplication::clipboard()->setText(idText);
+					controller->showToast(tr::ayu_IDCopiedToast(tr::now));
+				}
+				return false;
+			});
+			AddRegistrationOrCreationButton(controller, _peer, idInfo, fitLabelToButton);
+		}
 	} else {
 		const auto topicRootId = _topic ? _topic->rootId() : 0;
 		const auto addToLink = topicRootId
@@ -1814,7 +1951,7 @@ Section DetailsFiller::makeInfo() {
 			(topicRootId
 				? TopicSubtext(_peer)
 				: UsernamesSubtext(_peer, tr::lng_info_link_label())),
-			std::move(linkText),
+			AyuFeatures::StreamerMode::spoilered(std::move(linkText)),
 			QString());
 		const auto controller = _controller->parentController();
 		const auto linkCallback = UsernamesLinkCallback(
@@ -1878,6 +2015,64 @@ Section DetailsFiller::makeInfo() {
 		if (!_topic) {
 			setupAboutContextMenu(about.text, AboutWithAdvancedValue(_peer));
 			SetupAboutPeerIdDrag(about.text, _peer);
+		}
+
+		if (!_topic) {
+			const auto dataCenter = getPeerDC(_peer);
+			const auto idLabel = dataCenter.isEmpty() ? u"ID"_q : dataCenter;
+
+			auto idDrawableText = IDValue(
+				_peer
+			) | rpl::map([](TextWithEntities &&text)
+			{
+				return Ui::Text::Code(text.text);
+			});
+			auto idInfo = addInfoOneLine(
+				idLabel,
+				AyuFeatures::StreamerMode::spoilered(std::move(idDrawableText)),
+				tr::ayu_ContextCopyID(tr::now)
+			);
+
+			idInfo.text->setClickHandlerFilter([=, peer = _peer](const ClickHandlerPtr &handler, auto &&...)
+			{
+				if (Ui::Text::IsSpoilerLink(handler)) {
+					return true;
+				}
+				const auto idText = IDString(peer);
+				if (!idText.isEmpty()) {
+					QGuiApplication::clipboard()->setText(idText);
+					controller->showToast(tr::ayu_IDCopiedToast(tr::now));
+				}
+				return false;
+			});
+			AddRegistrationOrCreationButton(controller, _peer, idInfo, fitLabelToButton);
+		}
+
+		if (_topic) {
+			auto idDrawableText = IDValue(
+				_peer->forumTopicFor(topicRootId)->topicRootId()
+			) | rpl::map([](TextWithEntities &&text)
+			{
+				return Ui::Text::Code(text.text);
+			});
+			auto idInfo = addInfoOneLine(
+				rpl::single(u"ID"_q),
+				AyuFeatures::StreamerMode::spoilered(std::move(idDrawableText)),
+				tr::ayu_ContextCopyID(tr::now)
+			);
+
+			idInfo.text->setClickHandlerFilter([=, peer = _peer](const ClickHandlerPtr &handler, auto &&...)
+			{
+				if (Ui::Text::IsSpoilerLink(handler)) {
+					return true;
+				}
+				const auto idText = IDString(peer->forumTopicFor(topicRootId)->topicRootId());
+				if (!idText.isEmpty()) {
+					QGuiApplication::clipboard()->setText(idText);
+					controller->showToast(tr::ayu_IDCopiedToast(tr::now));
+				}
+				return false;
+			});
 		}
 	}
 	raw->toggleOn(tracker.atLeastOneShownValue());
@@ -3092,6 +3287,18 @@ void ActionsFiller::addReportAction() {
 		st::infoBlockButton);
 }
 
+void ActionsFiller::addPeekAction(not_null<UserData*> user) {
+	if (!AyuPeek::available(user)) {
+		return;
+	}
+	AddActionButton(
+		_wrap,
+		tr::ayu_PeekButton(),
+		rpl::single(true),
+		[=] { AyuPeek::start(user); },
+		&st::infoIconInformation);
+}
+
 void ActionsFiller::addBlockAction(not_null<UserData*> user) {
 	const auto controller = _controller->parentController();
 	const auto window = &controller->window();
@@ -3199,6 +3406,7 @@ void ActionsFiller::fillUserActions(not_null<UserData*> user) {
 		_wrap->add(CreateSkipWidget(_wrap, st::infoBlockButtonSkip));
 		addReportAction();
 	}
+	addPeekAction(user);
 	if (!user->isSelf() && !user->isSupport() && !user->isVerifyCodes()) {
 		addBlockAction(user);
 	}

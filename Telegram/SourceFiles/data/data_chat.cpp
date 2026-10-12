@@ -20,6 +20,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "apiwrap.h"
 #include "api/api_invite_links.h"
 
+#include "ayu/ayu_settings.h"
+#include "ayu/data/kept_dialogs.h"
+#include "ayu/utils/telegram_helpers.h"
+
+
 namespace {
 
 using UpdateFlag = Data::PeerUpdate::Flag;
@@ -62,6 +67,10 @@ ChatAdminRightsInfo ChatData::defaultAdminRights(not_null<UserData*> user) {
 		| Flag::ManageCall
 		| Flag::ManageWelcomeMessages
 		| (isCreator ? Flag::AddAdmins : Flag(0)));
+}
+
+bool ChatData::isAyuNoForwards() const {
+	return flags() & Flag::AyuNoForwards;
 }
 
 bool ChatData::allowsForwarding() const {
@@ -109,7 +118,12 @@ bool ChatData::anyoneCanAddMembers() const {
 }
 
 void ChatData::setName(const QString &newName) {
-	updateNameDelayed(newName.isEmpty() ? name() : newName, {}, {});
+	auto filteredName = newName;
+	const auto &settings = AyuSettings::getInstance();
+	if (settings.filterZalgo()) {
+		filteredName = filterZalgo(filteredName);
+	}
+	updateNameDelayed(filteredName.isEmpty() ? name() : filteredName, {}, {});
 }
 
 void ChatData::applyEditAdmin(not_null<UserData*> user, bool isAdmin) {
@@ -136,6 +150,11 @@ void ChatData::invalidateParticipants() {
 void ChatData::setFlags(ChatDataFlags which) {
 	const auto wasIn = amIn();
 	_flags.set(which);
+	if (wasIn != amIn()) {
+		crl::on_main(&session(), [=] {
+			AyuKept::chatAmInChanged(this);
+		});
+	}
 	if (wasIn && !amIn()) {
 		crl::on_main(&session(), [=] {
 			if (!amIn()) {

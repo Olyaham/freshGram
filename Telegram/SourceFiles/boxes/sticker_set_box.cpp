@@ -79,6 +79,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtWidgets/QApplication>
 #include <QtSvg/QSvgRenderer>
 
+#include "ayu/ayu_settings.h"
+#include "ayu/utils/telegram_helpers.h"
+#include "styles/style_ayu_styles.h"
+#include "data/data_user.h"
+
+
 namespace {
 
 constexpr auto kStickersPerRow = 5;
@@ -880,6 +886,22 @@ void StickerSetBox::updateButtons() {
 				.iconLottieSize = st::toastLottieIconSize,
 			});
 		};
+		const auto author = [=] {
+			auto ownerId = _inner->setId() >> 32;
+			auto increment = _inner->setId() - (ownerId << 32);
+			if (_inner->setId() >> 24 & 0xff) { // for newer ids, see https://github.com/arynyklas/SPOwnerBot
+				ownerId += 0x100000000;
+				increment = (ownerId - 0x100000000 << 32) + 0xff800000 - _inner->setId();
+			}
+			if (increment > 100000) { // there is probably a better way
+				ownerId += 0x80000000;
+				increment = (ownerId - 0x180000000 << 32) + 0xff400000 - _inner->setId();
+			}
+			QGuiApplication::clipboard()->setText(
+				QString::number(ownerId));
+			showToast(tr::lng_code_copied(tr::now) + " " + 
+				QString::number(increment));
+			};
 		const auto fillSetCreatorMenu = [&] {
 			using Filler = Fn<void(not_null<Ui::PopupMenu*>)>;
 			if (!_inner->amSetCreator()) {
@@ -1000,6 +1022,78 @@ void StickerSetBox::updateButtons() {
 				menu->addAction(std::move(item));
 			});
 		}();
+		const auto addPackIdActions = [=](Ui::PopupMenu *menu)
+		{
+			if (type == Data::StickersType::Stickers || type == Data::StickersType::Emoji) {
+				const auto &settings = AyuSettings::getInstance();
+				const auto weak = base::make_weak(this);
+				const auto session = _session;
+				const auto setId = _inner->setId();
+				const auto innerId = setId >> 32;
+
+				menu->addAction(
+					tr::ayu_MessageDetailsPackOwnerPC(tr::now),
+					[weak, session, innerId]
+					{
+						if (!weak) {
+							return;
+						}
+
+						const auto strong = weak.get();
+						if (!strong) {
+							return;
+						}
+
+						searchUserById(
+							innerId,
+							session,
+							[session, weak, innerId](const QString &username, PeerData *user)
+							{
+								if (!weak) {
+									return;
+								}
+
+								const auto strongInner = weak.get();
+								if (!strongInner) {
+									return;
+								}
+
+								if (!user) {
+									QGuiApplication::clipboard()->setText(QString::number(innerId));
+									strongInner->showToast(tr::ayu_IDCopiedToast(tr::now));
+									return;
+								}
+
+								if (const auto window = session->tryResolveWindow()) {
+									if (const auto mainWidget = window->widget()->sessionController()) {
+										mainWidget->showPeer(user);
+									}
+								}
+							});
+					},
+					&st::menuIconProfile);
+
+				if (settings.showPeerId() != PeerIdDisplay::Hidden) {
+					menu->addAction(
+						tr::ayu_ContextCopyID(tr::now),
+						[weak, setId]
+						{
+							if (!weak) {
+								return;
+							}
+
+							const auto strongInner = weak.get();
+							if (!strongInner) {
+								return;
+							}
+
+							QGuiApplication::clipboard()->setText(QString::number(setId));
+							strongInner->showToast(tr::ayu_IDCopiedToast(tr::now));
+						},
+						&st::menuIconCopy);
+				}
+			}
+		};
 		if (_inner->notInstalled()) {
 			if (!_session->premium()
 				&& _session->premiumPossible()
@@ -1100,6 +1194,11 @@ void StickerSetBox::updateButtons() {
 				if (fillSetCreatorMenu) {
 					fillSetCreatorMenu(raw);
 				}
+				addPackIdActions(raw);
+				raw->addAction(
+					tr::lng_channel_admin_status_creator(tr::now),
+					[=] { author(); closeBox(); },
+					&st::menuIconProfile);
 				if (installed && type != Data::StickersType::Emoji) {
 					raw->addAction(
 						((type == Data::StickersType::Masks)
@@ -1719,6 +1818,7 @@ void StickerSetBox::Inner::chosen(
 	const auto animation = options.scheduled
 		? Ui::MessageSendingAnimationFrom()
 		: messageSentAnimationInfo(index, sticker);
+
 	_show->processChosenSticker({
 		.document = sticker,
 		.options = options,
@@ -1770,6 +1870,16 @@ void StickerSetBox::Inner::contextMenuEvent(QContextMenuEvent *e) {
 			_menu->addAction(tr::lng_mediaview_copy(tr::now), [=] {
 				TextUtilities::SetClipboardText(text);
 			}, &st::menuIconCopy);
+
+			const auto &settings = AyuSettings::getInstance();
+			if (settings.showPeerId() != PeerIdDisplay::Hidden) {
+				_menu->addAction(tr::ayu_ContextCopyID(tr::now),
+								 [=]
+								 {
+									 QGuiApplication::clipboard()->setText(QString::number(_pack[index]->id));
+								 },
+								 &st::menuIconCopy);
+			}
 		}
 		if (!amSetCreator()) {
 			Api::AddAddToEmojiSetAction(
@@ -2418,6 +2528,18 @@ void StickerSetBox::Inner::paintSticker(
 		(_singleSize.width() - size.width()) / 2,
 		(_singleSize.height() - size.height()) / 2);
 	auto lottieFrame = QImage();
+
+	if (sticker->setType == Data::StickersType::Stickers) {
+		QPainterPath path;
+		path.addRoundedRect(QRectF(innerPos, size), st::stickerRoundingSize, st::stickerRoundingSize);
+
+		p.save();
+
+		p.setRenderHint(QPainter::Antialiasing, true);
+		p.setClipPath(path);
+		p.setRenderHint(QPainter::Antialiasing, false);
+	}
+
 	if (element.emoji) {
 		element.emoji->paint(p, {
 			.textColor = st::windowFg->c,
@@ -2455,6 +2577,11 @@ void StickerSetBox::Inner::paintSticker(
 			QRect(innerPos, size),
 			_pathGradient.get());
 	}
+
+	if (sticker->setType == Data::StickersType::Stickers) {
+		p.restore();
+	}
+
 	if (premium) {
 		_premiumMark.paint(
 			p,

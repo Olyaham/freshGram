@@ -37,6 +37,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <ada.h>
 
+#include "ayu/ayu_settings.h"
+#include "ayu/features/streamer_mode/streamer_mode.h"
+
+
 namespace Iv {
 namespace {
 
@@ -291,6 +295,11 @@ void Controller::createWebview(const Webview::StorageId &storageId) {
 	Expects(!_webview);
 
 	const auto window = _window.get();
+
+	if (AyuSettings::getInstance().streamerMode()) {
+		AyuFeatures::StreamerMode::hideWidgetWindow(window);
+	}
+
 	_webview = std::make_unique<Webview::Window>(
 		_container,
 		Webview::WindowConfig{

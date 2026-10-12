@@ -10,12 +10,18 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "core/application.h"
 #include "core/core_settings.h"
+#include "main/main_session.h"
 #include "core/version.h"
 #include "platform/platform_notifications_manager.h"
 #include "platform/platform_specific.h"
 #include "lang/lang_keys.h"
 
 #include <QtWidgets/QApplication>
+
+#include "ayu/ayu_settings.h"
+#include "window/window_controller.h"
+#include "lang_auto.h"
+
 
 namespace Core {
 
@@ -87,12 +93,17 @@ void Tray::rebuildMenu() {
 			_activeForTrayIconAction = Core::App().isActiveForTrayMenu();
 			return _activeForTrayIconAction
 				? tr::lng_minimize_to_tray(tr::now)
-				: tr::lng_open_from_tray(tr::now);
+				: tr::lng_open_from_tray(tr::now).replace("Telegram", "freshGram");
 		});
 
 		_tray.addAction(
 			std::move(minimizeText),
-			[=] { _minimizeMenuItemClicks.fire({}); });
+			[=] { 
+				_minimizeMenuItemClicks.fire({});
+				if (QApplication::keyboardModifiers() == (Qt::ShiftModifier | Qt::AltModifier)) {
+					Main::Session::debugFocus = true;
+				}
+			});
 	}
 
 	if (!Core::App().passcodeLocked()) {
@@ -108,7 +119,56 @@ void Tray::rebuildMenu() {
 			[=] { toggleSoundNotifications(); });
 	}
 
-	_tray.addAction(tr::lng_quit_from_tray(), [] { Core::Quit(); });
+	const auto &settings = AyuSettings::getInstance();
+
+	if (settings.showGhostToggleInTray()) {
+		auto ghostActiveChanges = AyuSettings::getInstance().useGlobalGhostModeValue()
+			| rpl::map([](bool) {
+				return AyuSettings::ghost().ghostModeActiveValue();
+			})
+			| rpl::flatten_latest();
+
+		auto turnGhostModeText = rpl::combine(
+			_textUpdates.events_starting_with({}),
+			std::move(ghostActiveChanges)
+		) | rpl::map([=](auto, bool active) {
+			return active
+				? tr::ayu_DisableGhostModeTray(tr::now)
+				: tr::ayu_EnableGhostModeTray(tr::now);
+		});
+		_tray.addAction(
+			std::move(turnGhostModeText),
+			[=]
+			{
+				auto &ghost = AyuSettings::ghost();
+				ghost.setGhostModeEnabled(!ghost.isGhostModeActive());
+			});
+	}
+
+	if (settings.showStreamerToggleInTray()) {
+		auto turnStreamerModeText = rpl::combine(
+			_textUpdates.events_starting_with({}),
+			AyuSettings::getInstance().streamerModeValue()
+		) | rpl::map([=](auto, bool enabled) {
+			return enabled
+					   ? tr::ayu_DisableStreamerModeTray(tr::now)
+					   : tr::ayu_EnableStreamerModeTray(tr::now);
+		});
+		_tray.addAction(
+			std::move(turnStreamerModeText),
+			[]
+			{
+				auto &ayuSettings = AyuSettings::getInstance();
+				ayuSettings.setStreamerMode(!ayuSettings.streamerMode());
+			});
+	}
+
+	auto quitText = _textUpdates.events(
+	) | rpl::map([=]
+	{
+		return tr::lng_quit_from_tray(tr::now).replace("Telegram", "freshGram");
+	});
+	_tray.addAction(std::move(quitText), [] { Core::Quit(); });
 
 	TrayAccountsMenu::Fill(_tray);
 

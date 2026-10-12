@@ -18,11 +18,12 @@ msgNameStyle: semiboldTextStyle;
 msgServiceFont: semiboldFont;
 msgServiceNameFont: semiboldFont;
 msgServicePhotoWidth: 100px;
+msgServiceUserpicSuggestionPhotoWidth: 100px;
 msgDateFont: font(13px);
 msgMinWidth: 160px;
 msgPhotoSize: 33px;
 msgPhotoSkip: 40px;
-msgPadding: margins(11px, 8px, 11px, 8px);
+msgPadding: margins(13px, 7px, 13px, 8px);
 msgTagBadgePadding: margins(5px, -1px, 5px, 0px);
 msgTagBadgeBoostSkip: 2px;
 
@@ -62,7 +63,7 @@ middleClickAutoscrollMaxSpeed: 7200px;
 
 historyReplyTop: 2px;
 historyReplyBottom: 2px;
-historyReplyPreview: 32px;
+historyReplyPreview: 30px;
 historyReplyPreviewMargin: margins(7px, 4px, 4px, 4px);
 historyEditCoverRadialBg: 24px;
 historyEditCoverRadial: InfiniteRadialAnimation(defaultInfiniteRadialAnimation) {
@@ -170,7 +171,7 @@ maxMediaSize: 430px;
 maxStickerSize: 224px;
 maxAnimatedEmojiSize: 112px;
 maxGifSize: 320px;
-maxVideoMessageSize: 240px;
+maxVideoMessageSize: 360px;
 maxSignatureSize: 144px;
 maxWallPaperWidth: 160px;
 maxWallPaperHeight: 240px;
@@ -190,9 +191,7 @@ historyScroll: ScrollArea(defaultScrollArea) {
 	barBg: historyScrollBarBg;
 	barBgOver: historyScrollBarBgOver;
 
-	round: 3px;
-
-	width: 12px;
+	width: 9px;
 	deltax: 3px;
 	deltat: 3px;
 	deltab: 3px;
@@ -226,8 +225,7 @@ membersInnerDropdown: InnerDropdown(defaultInnerDropdown) {
 	scroll: ScrollArea(defaultSolidScroll) {
 		deltat: 0px;
 		deltab: 0px;
-		round: 1px;
-		width: 8px;
+		width: 9px;
 		deltax: 3px;
 	}
 	scrollMargin: margins(0px, 5px, 0px, 5px);
@@ -351,7 +349,7 @@ historyStatusFgActive: windowActiveTextFg;
 historyStatusFgTyping: historyStatusFgActive;
 
 historyUnreadBarHeight: 32px;
-historyUnreadBarMargin: 8px;
+historyUnreadBarMargin: 3px;
 historyUnreadBarFont: semiboldFont;
 
 historyForwardChooseMargins: margins(30px, 10px, 30px, 10px);
@@ -592,7 +590,6 @@ historyGroupCallBlobMinRadius: 23px;
 historyGroupCallBlobMaxRadius: 25px;
 
 largeEmojiSize: 36px;
-largeEmojiOutline: 1px;
 largeEmojiPadding: margins(0px, 0px, 0px, 0px);
 largeEmojiSkip: 4px;
 
@@ -928,7 +925,7 @@ chatSimilarBadgePadding: margins(2px, 0px, 3px, 1px);
 chatSimilarBadgeTop: 43px;
 chatSimilarBadgeIcon: icon{{ "chat/mini_subscribers", premiumButtonFg }};
 chatSimilarBadgeIconPosition: point(0px, 1px);
-chatSimilarLockedIconPosition: point(0px, 1px);
+chatSimilarLockedIconPosition: point(0px, 0px);
 chatSimilarBadgeFont: font(10px bold);
 chatSimilarNameTop: 59px;
 chatSimilarName: TextStyle(defaultTextStyle) {

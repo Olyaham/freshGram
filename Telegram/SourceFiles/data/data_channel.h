@@ -89,6 +89,8 @@ enum class ChannelDataFlag : uint64 {
 	HasActiveVideoStream = (1ULL << 45),
 	Community = (1ULL << 46),
 	CommunityCollapsed = (1ULL << 47),
+
+	AyuNoForwards = (1ULL << 63),
 	HasWelcomeMessages = (1ULL << 48),
 };
 inline constexpr bool is_flag_type(ChannelDataFlag) { return true; };
@@ -414,6 +416,7 @@ public:
 
 	// Like in ChatData.
 	[[nodiscard]] bool allowsForwarding() const;
+	[[nodiscard]] bool isAyuNoForwards() const;
 	[[nodiscard]] bool canEditInformation() const;
 	[[nodiscard]] bool canEditPermissions() const;
 	[[nodiscard]] bool canEditUsername() const;

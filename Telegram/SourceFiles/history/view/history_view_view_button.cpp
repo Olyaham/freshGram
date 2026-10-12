@@ -61,7 +61,7 @@ namespace {
 [[nodiscard]] QString MakeMediaButtonText(not_null<Data::Media*> media) {
 	Expects(media->giveawayStart() || media->giveawayResults());
 
-	return tr::lng_prizes_how_works(tr::now, tr::upper);
+	return tr::lng_prizes_how_works(tr::now);
 }
 
 [[nodiscard]] ClickHandlerPtr MakeRichMessageButtonClickHandler(
@@ -258,7 +258,7 @@ void ViewButton::draw(
 	} else {
 		const auto radius = st::historyPagePreview.radius;
 		if (_inner->ripple) {
-			_inner->ripple->paint(p, r.left(), r.top(), r.width(), &cache->bg);
+			_inner->ripple->paint(p, r.left(), r.top(), r.width(), &cache->bg2);
 			if (_inner->ripple->empty()) {
 				_inner->ripple = nullptr;
 			}

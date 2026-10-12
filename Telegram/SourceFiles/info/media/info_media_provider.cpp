@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "info/media/info_media_provider.h"
 
 #include "apiwrap.h"
+#include "ayu/features/streamer_mode/streamer_mode.h"
 #include "info/media/info_media_widget.h"
 #include "info/media/info_media_list_section.h"
 #include "info/info_controller.h"
@@ -29,6 +30,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "storage/storage_facade.h"
 #include "storage/storage_shared_media.h"
 #include "styles/style_overview.h"
+
+#include "ayu/ayu_settings.h"
+#include "ayu/utils/telegram_helpers.h"
+
 
 namespace Info::Media {
 namespace {
@@ -495,6 +500,11 @@ std::unique_ptr<BaseLayout> Provider::createLayout(
 	if (!item) {
 		return nullptr;
 	}
+
+	if (isMessageHidden(item)) {
+		return nullptr;
+	}
+
 	const auto getPhoto = [&]() -> PhotoData* {
 		if (const auto media = item->media()) {
 			return media->photo();
@@ -512,7 +522,12 @@ std::unique_ptr<BaseLayout> Provider::createLayout(
 	using namespace Overview::Layout;
 	const auto options = [&] {
 		const auto media = item->media();
-		return MediaOptions{ .spoiler = media && media->hasSpoiler() };
+		return MediaOptions{
+			.spoiler = media
+				&& (media->hasSpoiler()
+					|| (AyuFeatures::StreamerMode::spoilersActive()
+						&& (media->photo() || media->document()))),
+		};
 	};
 	switch (type) {
 	case Type::Photo:

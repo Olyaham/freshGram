@@ -38,6 +38,8 @@ public:
 		bool toolong = false;
 		bool pending = false;
 		bool roundview = false;
+		bool local = false;
+		bool backend = false;
 		mtpRequestId requestId = 0;
 	};
 
@@ -62,6 +64,10 @@ public:
 
 private:
 	void load(not_null<HistoryItem*> item);
+	void loadLocal(not_null<HistoryItem*> item);
+	void loadBackend(
+		not_null<HistoryItem*> item,
+		AyuRecognition::EngineProvider engine);
 	void summarize(not_null<HistoryItem*> item);
 
 	const not_null<Main::Session*> _session;

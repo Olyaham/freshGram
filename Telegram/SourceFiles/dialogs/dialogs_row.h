@@ -268,6 +268,7 @@ private:
 	mutable Ui::MessageView _itemView;
 	mutable Ui::PeerBadge _badge;
 	mutable Ui::Text::String _name;
+	mutable bool _nameSpoilered = false;
 	mutable DateTextCache _dateCache;
 
 };

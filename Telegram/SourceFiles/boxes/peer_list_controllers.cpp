@@ -57,10 +57,64 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_menu_icons.h"
 #include "styles/style_premium.h"
 
+#include "styles/style_ayu_icons.h"
+
+
 namespace {
 
 constexpr auto kSortByOnlineThrottle = 3 * crl::time(1000);
 constexpr auto kSearchPerPage = 50;
+
+class ContactsMutualRow final : public PeerListRow {
+public:
+	using PeerListRow::PeerListRow;
+
+protected:
+	QSize rightActionSize() const override {
+		return isMutualContact()
+			? QSize(st::ayuContactsMutualIcon.width(), st::ayuContactsMutualIcon.height())
+			: QSize();
+	}
+
+	QMargins rightActionMargins() const override {
+		const auto size = rightActionSize();
+		if (size.isEmpty()) {
+			return QMargins();
+		}
+		const auto right = st::contactsWithStories.item.photoPosition.x();
+		return QMargins(
+			right,
+			(st::contactsWithStories.item.height - size.height()) / 2,
+			right,
+			0);
+	}
+
+	bool rightActionDisabled() const override {
+		return false;
+	}
+
+	void rightActionPaint(
+			Painter &p,
+			int x,
+			int y,
+			int outerWidth,
+			bool selected,
+			bool actionSelected) override {
+		if (!isMutualContact()) {
+			return;
+		}
+		(selected || actionSelected
+			? st::ayuContactsMutualIconOver
+			: st::ayuContactsMutualIcon).paint(p, x, y, outerWidth);
+	}
+
+private:
+	[[nodiscard]] bool isMutualContact() const {
+		const auto user = peer()->asUser();
+		return user && (user->flags() & UserDataFlag::MutualContact);
+	}
+
+};
 
 } // namespace
 
@@ -87,13 +141,22 @@ object_ptr<Ui::BoxContent> PrepareContactsBox(
 		std::unique_ptr<PeerListRow> createRow(
 				not_null<UserData*> user) override {
 			return !user->isSelf()
-				? ContactsBoxController::createRow(user)
+				? std::make_unique<ContactsMutualRow>(user)
 				: nullptr;
 		}
 
 		void rowMiddleClicked(
 				not_null<PeerListRow*> row) override {
 			_wheelClicks.fire(row->peer());
+		}
+
+		void rowRightActionClicked(
+				not_null<PeerListRow*> row) override {
+			if (const auto user = row->peer()->asUser();
+				user && (user->flags() & UserDataFlag::MutualContact)) {
+				delegate()->peerListUiShow()->showToast(
+					tr::ayu_MutualContactInfo(tr::now));
+			}
 		}
 
 	private:
@@ -651,6 +714,50 @@ void PeerListStories::applyForRow(
 	}
 }
 
+class ContactsBoxRow final : public PeerListRow {
+public:
+	using PeerListRow::PeerListRow;
+
+	bool isMutual() const {
+		const auto user = peer()->asUser();
+		return user && (user->flags() & UserDataFlag::MutualContact);
+	}
+
+	QSize rightActionSize() const override {
+		return isMutual() ? st::menuIconGroups.size() : QSize();
+	}
+
+	QMargins rightActionMargins() const override {
+		if (!isMutual()) return QMargins();
+		return QMargins(
+			st::contactsCheckPosition.x(),
+			(st::contactsPadding.top()
+				+ st::contactsPhotoSize
+				+ st::contactsPadding.bottom()
+				- st::menuIconGroups.height()) / 2,
+			st::defaultPeerListItem.photoPosition.x()
+				+ st::contactsCheckPosition.x(),
+			0);
+	}
+
+	bool rightActionDisabled() const override {
+		return true;
+	}
+
+	void rightActionPaint(
+			Painter &p,
+			int x,
+			int y,
+			int outerWidth,
+			bool selected,
+			bool actionSelected) override {
+		if (isMutual()) {
+			st::menuIconGroups.paint(p, x, y, outerWidth);
+		}
+	}
+
+};
+
 ContactsBoxController::ContactsBoxController(
 	not_null<Main::Session*> session)
 : ContactsBoxController(
@@ -823,7 +930,7 @@ bool ContactsBoxController::appendRow(not_null<UserData*> user) {
 
 std::unique_ptr<PeerListRow> ContactsBoxController::createRow(
 		not_null<UserData*> user) {
-	return std::make_unique<PeerListRow>(user);
+	return std::make_unique<ContactsBoxRow>(user);
 }
 
 RecipientMoneyRestrictionError WriteMoneyRestrictionError(

@@ -7,11 +7,17 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "ui/userpic_view.h"
 
+#include "base/debug_log.h"
+
+#include "ayu/features/streamer_mode/streamer_mode.h"
 #include "ui/empty_userpic.h"
 #include "ui/painter.h"
 #include "ui/image/image_prepare.h"
 
 #include <cmath>
+
+#include "ayu/ui/ayu_userpic.h"
+
 
 namespace Ui {
 namespace {
@@ -49,16 +55,19 @@ void PaintCommunityUserpicEffect(
 	const auto version = style::PaletteVersion();
 	const auto rgba = color.rgba();
 	const auto peek = size * kPeek;
+	const auto ayuState = AyuUserpic::PackedState();
 	const auto regenerate = cache.image.isNull()
 		|| (cache.size != size)
 		|| (cache.color != rgba)
 		|| (cache.paletteVersion != version)
-		|| (cache.dpr != dpr);
+		|| (cache.dpr != dpr)
+		|| (cache.ayuState != ayuState);
 	if (regenerate) {
 		cache.size = size;
 		cache.color = rgba;
 		cache.paletteVersion = version;
 		cache.dpr = dpr;
+		cache.ayuState = ayuState;
 
 		const auto imageW = int(std::ceil((peek + size * kCover) * dpr));
 		const auto imageH = int(std::ceil(size * dpr));
@@ -73,7 +82,10 @@ void PaintCommunityUserpicEffect(
 		auto q = QPainter(&cache.image);
 		auto hq = PainterHighQualityEnabler(q);
 		const auto gap = size * kGap;
-		const auto rounding = Ui::ForumUserpicRadiusMultiplier();
+		const auto rounding = AyuUserpic::ShouldOverrideShape(
+			Ui::PeerUserpicShape::Forum)
+			? AyuUserpic::ComputeRadiusF(size)
+			: size * Ui::ForumUserpicRadiusMultiplier();
 
 		// The userpic and every card share a pivot on the userpic's left edge
 		// where its bottom-left rounding starts; each card is pinned there and
@@ -121,8 +133,8 @@ void PaintCommunityUserpicEffect(
 		q.setBrush(Qt::transparent);
 		q.drawRoundedRect(
 			QRectF(peek - gap, -gap, size + 2 * gap, size + 2 * gap),
-			size * rounding + gap,
-			size * rounding + gap);
+			rounding + gap,
+			rounding + gap);
 	}
 	p.drawImage(QPointF(x - peek, y), cache.image);
 }
@@ -142,8 +154,10 @@ void ValidateUserpicCache(
 	const auto full = QSize(size, size);
 	const auto version = style::PaletteVersion();
 	const auto shapeValue = static_cast<uint32>(shape) & 3;
+	const auto ayuState = AyuUserpic::PackedState();
 	const auto regenerate = (view.cached.size() != QSize(size, size))
 		|| (view.shape != shapeValue)
+		|| (view.ayuState != ayuState)
 		|| (cloud && !view.empty.null())
 		|| (empty && empty != view.empty.get())
 		|| (empty && view.paletteVersion != version);
@@ -153,13 +167,30 @@ void ValidateUserpicCache(
 	view.empty = empty;
 	view.shape = shapeValue;
 	view.paletteVersion = version;
+	view.ayuState = ayuState;
 
+	const auto ayuOverride = AyuUserpic::ShouldOverrideShape(shape);
+
+	if (cloud && (cloud->isNull() || full.isEmpty())) {
+		static auto logged = false;
+		if (!logged) {
+			logged = true;
+			LOG(("Userpic: cannot scale the image, cloud %1x%2, size %3."
+				).arg(cloud->width()).arg(cloud->height()).arg(size));
+		}
+		view.cached = QImage();
+		return;
+	}
 	if (cloud) {
 		view.cached = cloud->scaled(
 			full,
 			Qt::IgnoreAspectRatio,
 			Qt::SmoothTransformation);
-		if (shape == PeerUserpicShape::Monoforum) {
+		if (ayuOverride) {
+			view.cached = Images::Round(
+				std::move(view.cached),
+				ImageRoundRadius::AyuUserpic);
+		} else if (shape == PeerUserpicShape::Monoforum) {
 			view.cached = Ui::ApplyMonoforumShape(std::move(view.cached));
 		} else if (shape == PeerUserpicShape::Forum) {
 			view.cached = Images::Round(
@@ -177,7 +208,9 @@ void ValidateUserpicCache(
 		view.cached.fill(Qt::transparent);
 
 		auto p = QPainter(&view.cached);
-		if (shape == PeerUserpicShape::Monoforum) {
+		if (ayuOverride) {
+			empty->paintCircle(p, 0, 0, size, size);
+		} else if (shape == PeerUserpicShape::Monoforum) {
 			empty->paintMonoforum(p, 0, 0, size, size);
 		} else if (shape == PeerUserpicShape::Forum) {
 			empty->paintRounded(
@@ -190,6 +223,9 @@ void ValidateUserpicCache(
 		} else {
 			empty->paintCircle(p, 0, 0, size, size);
 		}
+	}
+	if (AyuFeatures::StreamerMode::spoilersActive()) {
+		AyuFeatures::StreamerMode::spoilerImage(view.cached);
 	}
 }
 

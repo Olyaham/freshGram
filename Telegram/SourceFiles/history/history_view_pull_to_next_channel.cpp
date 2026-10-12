@@ -1061,6 +1061,8 @@ void PullToNextChannel::updateGeometry() {
 	if (bottom > top) {
 		_hint->setGeometry(_scroll->x(), top, _scroll->width(), bottom - top);
 		_hint->raise();
+	} else {
+		_hint->hideNow();
 	}
 }
 

@@ -47,6 +47,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtCore/QDateTime>
 #include <QtCore/QLocale>
 
+#include "ayu/ayu_settings.h"
+#include "ayu/ayu_url_handlers.h"
+#include "ayu/utils/telegram_helpers.h"
+
+
 #include <ada.h>
 
 namespace {
@@ -450,10 +455,14 @@ void HiddenUrlClickHandler::Open(QString url, QVariant context) {
 		const auto open = [=] {
 			UrlClickHandler::Open(url, openContext);
 		};
-		if (forceConfirmation
+		const auto requiresConfirmation = forceConfirmation
 			|| (confirmAfterIvFallback && !canTryIv)
 			|| (HiddenUrlRequiresConfirmation(parsedUrl)
-				&& !skipConfirmation)) {
+				&& !skipConfirmation);
+		const auto skipWarning
+			= AyuSettings::getInstance().disableOpenLinkWarning()
+			&& AyuUrlHandlers::IsWebUrl(parsedUrl);
+		if (!skipWarning && requiresConfirmation) {
 			if (!my.show) {
 				Core::App().hideMediaView();
 			}
@@ -871,9 +880,9 @@ auto FormattedDateClickHandler::getTextEntity() const -> TextEntity {
 }
 
 QString FormattedDateClickHandler::tooltip() const {
-	return QLocale().toString(
-		base::unixtime::parse(_date),
-		QLocale::LongFormat);
+	return formatLongDateTime(
+		QLocale(),
+		base::unixtime::parse(_date));
 }
 
 TonAddressClickHandler::TonAddressClickHandler(QString address)

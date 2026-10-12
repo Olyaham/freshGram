@@ -738,7 +738,8 @@ void HttpChecker::start() {
 		+ (updaterVersion > 1 ? QString::number(updaterVersion) : QString());
 	auto url = QUrl(path);
 	DEBUG_LOG(("Update Info: requesting update state"));
-	const auto request = QNetworkRequest(url);
+	auto request = QNetworkRequest(url);
+	request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
 	_manager = std::make_unique<QNetworkAccessManager>();
 	_reply = _manager->get(request);
 	_reply->connect(_reply, &QNetworkReply::finished, [=] {
@@ -929,6 +930,7 @@ void HttpLoaderActor::sendRequest() {
 	request.setAttribute(
 		QNetworkRequest::HttpPipeliningAllowedAttribute,
 		true);
+	request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
 	_reply.reset(_manager.get(request));
 	connect(
 		_reply.get(),
@@ -2182,12 +2184,7 @@ void UpdateApplication() {
 #elif defined OS_MAC_STORE // OS_WIN_STORE
 			return "https://itunes.apple.com/ae/app/telegram-desktop/id946399090";
 #else // OS_WIN_STORE || OS_MAC_STORE
-			if (KSandbox::isFlatpak()) {
-				return "https://flathub.org/apps/details/org.telegram.desktop";
-			} else if (KSandbox::isSnap()) {
-				return "https://snapcraft.io/telegram-desktop";
-			}
-			return "https://desktop.telegram.org";
+			return "https://github.com/Snowy-Fluffy/freshGram/releases";
 #endif // OS_WIN_STORE || OS_MAC_STORE
 		}();
 		UrlClickHandler::Open(url);

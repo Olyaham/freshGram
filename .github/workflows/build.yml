@@ -1,0 +1,406 @@
+name: Build
+
+on:
+  push:
+    branches-ignore:
+      - 'dependabot/**'
+    tags:
+      - 'v*'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - 'changelog.txt'
+      - 'LEGAL'
+      - 'LICENSE'
+      - 'Telegram/build/docker/centos_env/**'
+      - '.github/workflows/build-env.yml'
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - 'changelog.txt'
+      - 'LEGAL'
+      - 'LICENSE'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Publish a GitHub release with this tag (for example v7.2.10), leave empty to only build
+        type: string
+        required: false
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  linux:
+    name: Linux x86_64
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+
+    steps:
+      - name: Check API credentials
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+        run: |
+          if [ -z "$API_ID" ] || [ -z "$API_HASH" ]; then
+            echo "::error::Repository secrets API_ID and API_HASH are required, see docs/api_credentials.md."
+            exit 1
+          fi
+
+      - name: Clone
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Free up disk space
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: true
+
+      - name: Add swap
+        run: |
+          sudo swapoff -a || true
+          sudo fallocate -l 8G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          free -m
+
+      - name: Log in to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull build environment
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          image="ghcr.io/$owner/freshgram-build-env:latest"
+          if ! docker pull "$image"; then
+            echo "::error::Build environment image is missing, run the 'Build environment' workflow first."
+            exit 1
+          fi
+          echo "IMAGE=$image" >> "$GITHUB_ENV"
+
+      - name: Restore compiler cache
+        id: ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-linux-${{ github.run_id }}
+          restore-keys: ccache-linux-
+
+      - name: Build, part 1
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+        run: |
+          mkdir -p "$CCACHE_DIR"
+          docker run --rm \
+            --cpus=1.9 \
+            -u "$(id -u)" \
+            -v "$PWD:/usr/src/tdesktop" \
+            -v "$CCACHE_DIR:/var/cache/ccache" \
+            -e CONFIG=Release \
+            -e KEEP_GOING=1 \
+            -e CMAKE_BUILD_PARALLEL_LEVEL=2 \
+            -e CCACHE_MAXSIZE=3G \
+            -e CCACHE_SLOPPINESS=pch_defines,time_macros \
+            "$IMAGE" \
+            env -u CCACHE_DISABLE nice -n 10 timeout 55m /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+            -D CMAKE_CONFIGURATION_TYPES=Release \
+            -D CMAKE_INSTALL_PREFIX=/usr \
+            -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
+            -D DESKTOP_APP_DISABLE_CRASH_REPORTS=ON \
+            -D TDESKTOP_API_ID="$API_ID" \
+            -D TDESKTOP_API_HASH="$API_HASH" 2>&1 | tee build.log || true
+
+      - name: Save compiler cache, part 1
+        if: always() && steps.ccache.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-linux-${{ github.run_id }}-part1
+
+      - name: Build, part 2
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+        run: |
+          mkdir -p "$CCACHE_DIR"
+          docker run --rm \
+            --cpus=1.9 \
+            -u "$(id -u)" \
+            -v "$PWD:/usr/src/tdesktop" \
+            -v "$CCACHE_DIR:/var/cache/ccache" \
+            -e CONFIG=Release \
+            -e KEEP_GOING=1 \
+            -e CMAKE_BUILD_PARALLEL_LEVEL=2 \
+            -e CCACHE_MAXSIZE=3G \
+            -e CCACHE_SLOPPINESS=pch_defines,time_macros \
+            "$IMAGE" \
+            env -u CCACHE_DISABLE nice -n 10 timeout 55m /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+            -D CMAKE_CONFIGURATION_TYPES=Release \
+            -D CMAKE_INSTALL_PREFIX=/usr \
+            -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
+            -D DESKTOP_APP_DISABLE_CRASH_REPORTS=ON \
+            -D TDESKTOP_API_ID="$API_ID" \
+            -D TDESKTOP_API_HASH="$API_HASH" 2>&1 | tee -a build.log || true
+
+      - name: Save compiler cache, part 2
+        if: always() && steps.ccache.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-linux-${{ github.run_id }}-part2
+
+      - name: Build, part 3
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+        run: |
+          mkdir -p "$CCACHE_DIR"
+          docker run --rm \
+            --cpus=1.9 \
+            -u "$(id -u)" \
+            -v "$PWD:/usr/src/tdesktop" \
+            -v "$CCACHE_DIR:/var/cache/ccache" \
+            -e CONFIG=Release \
+            -e KEEP_GOING=1 \
+            -e CMAKE_BUILD_PARALLEL_LEVEL=2 \
+            -e CCACHE_MAXSIZE=3G \
+            -e CCACHE_SLOPPINESS=pch_defines,time_macros \
+            "$IMAGE" \
+            env -u CCACHE_DISABLE nice -n 10 timeout 55m /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+            -D CMAKE_CONFIGURATION_TYPES=Release \
+            -D CMAKE_INSTALL_PREFIX=/usr \
+            -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
+            -D DESKTOP_APP_DISABLE_CRASH_REPORTS=ON \
+            -D TDESKTOP_API_ID="$API_ID" \
+            -D TDESKTOP_API_HASH="$API_HASH" 2>&1 | tee -a build.log || true
+
+      - name: Save compiler cache, part 3
+        if: always() && steps.ccache.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-linux-${{ github.run_id }}-part3
+
+      - name: Build, part 4
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+        run: |
+          mkdir -p "$CCACHE_DIR"
+          docker run --rm \
+            --cpus=1.9 \
+            -u "$(id -u)" \
+            -v "$PWD:/usr/src/tdesktop" \
+            -v "$CCACHE_DIR:/var/cache/ccache" \
+            -e CONFIG=Release \
+            -e KEEP_GOING=1 \
+            -e CMAKE_BUILD_PARALLEL_LEVEL=2 \
+            -e CCACHE_MAXSIZE=3G \
+            -e CCACHE_SLOPPINESS=pch_defines,time_macros \
+            "$IMAGE" \
+            env -u CCACHE_DISABLE nice -n 10 timeout 55m /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+            -D CMAKE_CONFIGURATION_TYPES=Release \
+            -D CMAKE_INSTALL_PREFIX=/usr \
+            -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
+            -D DESKTOP_APP_DISABLE_CRASH_REPORTS=ON \
+            -D TDESKTOP_API_ID="$API_ID" \
+            -D TDESKTOP_API_HASH="$API_HASH" 2>&1 | tee -a build.log || true
+
+      - name: Save compiler cache, part 4
+        if: always() && steps.ccache.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-linux-${{ github.run_id }}-part4
+
+      - name: Build, part 5
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+        run: |
+          mkdir -p "$CCACHE_DIR"
+          docker run --rm \
+            --cpus=1.9 \
+            -u "$(id -u)" \
+            -v "$PWD:/usr/src/tdesktop" \
+            -v "$CCACHE_DIR:/var/cache/ccache" \
+            -e CONFIG=Release \
+            -e KEEP_GOING=1 \
+            -e CMAKE_BUILD_PARALLEL_LEVEL=2 \
+            -e CCACHE_MAXSIZE=3G \
+            -e CCACHE_SLOPPINESS=pch_defines,time_macros \
+            "$IMAGE" \
+            env -u CCACHE_DISABLE nice -n 10 timeout 55m /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+            -D CMAKE_CONFIGURATION_TYPES=Release \
+            -D CMAKE_INSTALL_PREFIX=/usr \
+            -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
+            -D DESKTOP_APP_DISABLE_CRASH_REPORTS=ON \
+            -D TDESKTOP_API_ID="$API_ID" \
+            -D TDESKTOP_API_HASH="$API_HASH" 2>&1 | tee -a build.log || true
+
+      - name: Save compiler cache, part 5
+        if: always() && steps.ccache.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-linux-${{ github.run_id }}-part5
+
+      - name: Build
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+        run: |
+          mkdir -p "$CCACHE_DIR"
+          docker run --rm \
+            --cpus=1.9 \
+            -u "$(id -u)" \
+            -v "$PWD:/usr/src/tdesktop" \
+            -v "$CCACHE_DIR:/var/cache/ccache" \
+            -e CONFIG=Release \
+            -e KEEP_GOING=1 \
+            -e CMAKE_BUILD_PARALLEL_LEVEL=2 \
+            -e CCACHE_MAXSIZE=3G \
+            -e CCACHE_SLOPPINESS=pch_defines,time_macros \
+            "$IMAGE" \
+            env -u CCACHE_DISABLE nice -n 10 /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+            -D CMAKE_CONFIGURATION_TYPES=Release \
+            -D CMAKE_INSTALL_PREFIX=/usr \
+            -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
+            -D DESKTOP_APP_DISABLE_CRASH_REPORTS=ON \
+            -D TDESKTOP_API_ID="$API_ID" \
+            -D TDESKTOP_API_HASH="$API_HASH" 2>&1 | tee -a build.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Show build errors
+        if: failure()
+        run: |
+          grep -n -E "FAILED:|error:|Error [0-9]|undefined reference" build.log | head -100 || true
+          grep -n -A12 "FAILED:" build.log | head -300 || true
+
+      - name: Save compiler cache
+        if: always() && steps.ccache.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-linux-${{ github.run_id }}
+
+      - name: Package
+        run: |
+          set -e
+          binary=$(find out/Release -maxdepth 1 -type f -perm -u+x \( -iname 'freshgram' -o -iname 'telegram' \) | head -1)
+          test -n "$binary"
+          echo "Built $binary ($(stat -c %s "$binary") bytes)"
+          mkdir -p dist
+          tar -C out/install -czf dist/freshGram-linux-x86_64.tar.gz usr
+          (cd dist && sha256sum freshGram-linux-x86_64.tar.gz > SHA256SUMS)
+
+      - name: Arch Linux package
+        run: |
+          set -e
+          version=$(awk '/^AppVersionStr /{print $2}' Telegram/build/version)
+          rm -rf arch
+          mkdir -p arch
+          cp Telegram/build/arch/PKGBUILD arch/PKGBUILD
+          tar -C out/install -cf arch/freshgram-root.tar usr
+          docker run --rm -e FRESHGRAM_VERSION="$version" -v "$PWD/arch:/pkg" archlinux:base-devel bash -c '
+            set -e
+            useradd -m builder
+            chown -R builder /pkg
+            su builder -c "cd /pkg && FRESHGRAM_VERSION=$FRESHGRAM_VERSION makepkg -f --nodeps"
+          '
+          cp arch/freshgram-*.pkg.tar.zst dist/freshGram.pacman
+          (cd dist && sha256sum freshGram-linux-x86_64.tar.gz freshGram.pacman > SHA256SUMS)
+
+      - name: Flatpak bundle
+        continue-on-error: true
+        run: |
+          set -e
+          Telegram/build/flatpak/build.sh out/install/usr dist/freshGram.flatpak
+          (cd dist && sha256sum freshGram-linux-x86_64.tar.gz freshGram.pacman freshGram.flatpak > SHA256SUMS)
+
+      - name: AppImage
+        continue-on-error: true
+        run: |
+          set -e
+          Telegram/build/appimage/build.sh out/install/usr dist/freshGram.AppImage
+
+      - name: Debian package
+        continue-on-error: true
+        run: |
+          set -e
+          version=$(awk '/^AppVersionStr /{print $2}' Telegram/build/version)
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          Telegram/build/deb/build.sh out/install/usr dist/freshGram.deb "$version"
+
+      - name: RPM package
+        continue-on-error: true
+        run: |
+          set -e
+          sudo apt-get update
+          sudo apt-get install -y rpm
+          version=$(awk '/^AppVersionStr /{print $2}' Telegram/build/version)
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          Telegram/build/rpm/build.sh out/install/usr dist/freshGram.rpm "$version"
+
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum $(ls | grep -v '^SHA256SUMS$') > SHA256SUMS
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: freshGram-linux-x86_64
+          path: dist/
+          retention-days: 7
+
+      - name: Resolve release tag
+        id: release
+        run: |
+          tag=""
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            tag="${{ github.ref_name }}"
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            tag="${{ github.event.inputs.release_tag }}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          pre=false
+          if [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+ || "$tag" == *beta* ]]; then
+            pre=true
+          fi
+          echo "prerelease=$pre" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        if: steps.release.outputs.tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: freshGram ${{ steps.release.outputs.tag }}
+          prerelease: ${{ steps.release.outputs.prerelease }}
+          generate_release_notes: true
+          files: |
+            dist/freshGram-linux-x86_64.tar.gz
+            dist/freshGram.pacman
+            dist/freshGram.flatpak
+            dist/freshGram.AppImage
+            dist/freshGram.deb
+            dist/freshGram.rpm
+            dist/SHA256SUMS

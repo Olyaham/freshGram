@@ -340,7 +340,7 @@ void Launcher::init() {
 	prepareSettings();
 	initQtMessageLogging();
 
-	QApplication::setApplicationName(u"TelegramDesktop"_q);
+	QApplication::setApplicationName(u"freshGram"_q);
 
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
 	// fallback session management is useless for tdesktop since it doesn't have
@@ -603,6 +603,7 @@ void Launcher::processArguments() {
 		{ "-tosettings"     , KeyFormat::NoValues },
 		{ "-startintray"    , KeyFormat::NoValues },
 		{ "-quit"           , KeyFormat::NoValues },
+		{ "-ghost"          , KeyFormat::NoValues },
 		{ "-workdir"        , KeyFormat::OneValue },
 		{ "--"              , KeyFormat::AllLeftValues },
 		{ "-scale"          , KeyFormat::OneValue },
@@ -652,6 +653,7 @@ void Launcher::processArguments() {
 	gStartToSettings = parseResult.contains("-tosettings");
 	gStartInTray = parseResult.contains("-startintray");
 	gQuit = parseResult.contains("-quit");
+	gGhost = parseResult.contains("-ghost");
 	_customWorkingDir = parseResult.value("-workdir", {}).join(QString());
 	if (!_customWorkingDir.isEmpty()) {
 		_customWorkingDir = QDir(_customWorkingDir).absolutePath() + '/';

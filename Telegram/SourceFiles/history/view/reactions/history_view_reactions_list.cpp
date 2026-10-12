@@ -35,6 +35,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_menu_icons.h"
 #include "styles/style_widgets.h"
 
+#include "ayu/features/filters/filters_controller.h"
+
+
 namespace HistoryView::Reactions {
 namespace {
 
@@ -158,6 +161,9 @@ private:
 	const auto &owner = window->session().data();
 	for (const auto &peerWithDate : whoReadIds->list) {
 		if (const auto peer = owner.peerLoaded(peerWithDate.peer)) {
+			if (FiltersController::isBlocked(peer)) {
+				continue;
+			}
 			result.push_back(peer);
 		}
 	}

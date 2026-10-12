@@ -129,6 +129,8 @@ struct BubbleWithGaps {
 	not_null<TornEdgeCache*> torn;
 };
 
+[[nodiscard]] bool MaterialBubbles();
+
 void PaintBubble(QPainter &p, const SimpleBubble &args);
 void PaintBubble(QPainter &p, const ComplexBubble &args);
 void PaintBubble(QPainter &p, const BubbleWithGaps &args);

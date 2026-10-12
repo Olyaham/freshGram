@@ -77,6 +77,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "apiwrap.h"
 #include "ui/text/format_values.h" // Ui::FormatPhone
 
+#include "ayu/features/peek/peek_online.h"
+#include "ayu/secret/secret_manager.h"
+#include "ayu/secret/secret_policy.h"
+#include "ayu/ayu_settings.h"
+#include "ayu/ayu_worker.h"
+
+
 namespace Api {
 namespace {
 
@@ -364,6 +371,9 @@ void Updates::setState(int32 pts, int32 date, int32 qts, int32 seq) {
 	}
 	if (_updatesDate < date && !_byMinChannelTimer.isActive()) {
 		_updatesDate = date;
+		if (AyuSecret::Enabled()) {
+			AyuSecret::NoteDate(&session(), date);
+		}
 	}
 	if (qts && _updatesQts < qts) {
 		_updatesQts = qts;
@@ -479,12 +489,33 @@ void Updates::stateDone(const MTPupdates_State &state) {
 	const auto &d = state.c_updates_state();
 	setState(d.vpts().v, d.vdate().v, d.vqts().v, d.vseq().v);
 
+	auto secretMissed = false;
+	if (AyuSecret::Enabled()) {
+		const auto range = AyuSecret::CatchUpRange(
+			&session(),
+			d.vqts().v,
+			d.vdate().v);
+		if (range.missed) {
+			if (range.qts > 0 && range.qts < _updatesQts) {
+				_updatesQts = range.qts;
+			}
+			if (range.date > 0 && range.date < _updatesDate) {
+				_updatesDate = range.date;
+			}
+			secretMissed = true;
+		}
+	}
+
 	_lastUpdateTime = crl::now();
 	_noUpdatesTimer.callOnce(kNoUpdatesTimeout);
 	_ptsWaiter.setRequesting(false);
 
 	session().api().requestDialogs();
 	updateOnline();
+	AyuPeek::restoreIfNeeded(&session());
+	if (secretMissed) {
+		getDifference();
+	}
 }
 
 void Updates::differenceDone(const MTPupdates_Difference &result) {
@@ -494,6 +525,10 @@ void Updates::differenceDone(const MTPupdates_Difference &result) {
 	case mtpc_updates_differenceEmpty: {
 		const auto &d = result.c_updates_differenceEmpty();
 		setState(_ptsWaiter.current(), d.vdate().v, _updatesQts, d.vseq().v);
+		if (AyuSecret::Enabled()) {
+			AyuSecret::SaveState(&session(), _updatesQts, d.vdate().v);
+			AyuSecret::CatchUpFinished(&session());
+		}
 
 		_lastUpdateTime = crl::now();
 		_noUpdatesTimer.callOnce(kNoUpdatesTimeout);
@@ -505,6 +540,12 @@ void Updates::differenceDone(const MTPupdates_Difference &result) {
 		feedDifference(d.vusers(), d.vchats(), d.vnew_messages(), d.vother_updates());
 
 		const auto &s = d.vintermediate_state().c_updates_state();
+		if (AyuSecret::Enabled()) {
+			AyuSecret::Get(&session()).handleDifference(
+				d.vnew_encrypted_messages().v,
+				s.vqts().v);
+			AyuSecret::SaveState(&session(), s.vqts().v, s.vdate().v);
+		}
 		setState(s.vpts().v, s.vdate().v, s.vqts().v, s.vseq().v);
 
 		_ptsWaiter.setRequesting(false);
@@ -518,10 +559,20 @@ void Updates::differenceDone(const MTPupdates_Difference &result) {
 		const auto &d = result.c_updates_difference();
 		feedDifference(d.vusers(), d.vchats(), d.vnew_messages(), d.vother_updates());
 
+		if (AyuSecret::Enabled()) {
+			AyuSecret::Get(&session()).handleDifference(
+				d.vnew_encrypted_messages().v,
+				d.vstate().c_updates_state().vqts().v);
+			AyuSecret::SaveState(
+				&session(),
+				d.vstate().c_updates_state().vqts().v,
+				d.vstate().c_updates_state().vdate().v);
+			AyuSecret::CatchUpFinished(&session());
+		}
 		stateDone(d.vstate());
 	} break;
 	case mtpc_updates_differenceTooLong: {
-		LOG(("API Error: updates.differenceTooLong is not supported by Telegram Desktop!"));
+		LOG(("API Error: updates.differenceTooLong is not supported by freshGram!"));
 	} break;
 	};
 }
@@ -998,8 +1049,11 @@ void Updates::updateOnline(crl::time lastNonIdleTime, bool gotOtherOffline) {
 		Core::App().checkAutoLock(lastNonIdleTime);
 	});
 
-	const auto &config = _session->serverConfig();
-	bool isOnline = Core::App().hasActiveWindow(&session());
+	const auto &ghost = AyuSettings::ghost(_session);
+	const auto& config = _session->serverConfig();
+	bool isOnlineOrig = Core::App().hasActiveWindow(&session());
+	bool isOnline = ghost.sendOnlinePackets() && isOnlineOrig;
+
 	int updateIn = config.onlineUpdatePeriod;
 	Assert(updateIn >= 0);
 	if (isOnline) {
@@ -1023,7 +1077,7 @@ void Updates::updateOnline(crl::time lastNonIdleTime, bool gotOtherOffline) {
 		|| (isOnline && gotOtherOffline)) {
 		api().request(base::take(_onlineRequest)).cancel();
 
-		_lastWasOnline = isOnline;
+		_lastWasOnline = isOnlineOrig;
 		_lastSetOnline = ms;
 		if (!Core::Quitting()) {
 			_onlineRequest = api().request(MTPaccount_UpdateStatus(
@@ -1046,7 +1100,7 @@ void Updates::updateOnline(crl::time lastNonIdleTime, bool gotOtherOffline) {
 		session().changes().peerUpdated(
 			self,
 			Data::PeerUpdate::Flag::OnlineStatus);
-		if (!isOnline) { // Went offline, so we need to save message draft to the cloud.
+		if (!isOnlineOrig) { // Went offline, so we need to save message draft to the cloud.
 			api().saveCurrentDraftToCloud();
 			session().data().maybeStopWatchForOffline(self);
 		}
@@ -1343,7 +1397,7 @@ void Updates::applyUpdateNoPtsCheck(const MTPUpdate &update) {
 		auto unknownReadIds = base::flat_set<MsgId>();
 		for (const auto &msgId : d.vmessages().v) {
 			if (const auto item = _session->data().nonChannelMessage(msgId.v)) {
-				if (item->isUnreadMedia() || item->isUnreadMention()) {
+				if (item->isUnreadMedia() || item->isUnreadMention() || (item->unsupportedTTL() && item->hasUnreadMediaFlag())) {
 					item->markMediaAndMentionRead();
 					_session->data().requestItemRepaint(item);
 
@@ -1756,7 +1810,7 @@ void Updates::feedUpdate(const MTPUpdate &update) {
 		auto unknownReadIds = base::flat_set<MsgId>();
 		for (const auto &msgId : d.vmessages().v) {
 			if (auto item = session().data().message(channel->id, msgId.v)) {
-				if (item->isUnreadMedia() || item->isUnreadMention()) {
+				if (item->isUnreadMedia() || item->isUnreadMention() || (item->unsupportedTTL() && item->hasUnreadMediaFlag())) {
 					item->markMediaAndMentionRead();
 					session().data().requestItemRepaint(item);
 					item->applyMediaContentsRead(TimeId(0));
@@ -2128,6 +2182,7 @@ void Updates::feedUpdate(const MTPUpdate &update) {
 			} else if (d.vstatus().type() == mtpc_userStatusOnline) {
 				cSetOtherOnline(
 					d.vstatus().c_userStatusOnline().vexpires().v);
+				AyuWorker::markAsOnline(_session);
 			}
 		}
 	} break;
@@ -2220,16 +2275,26 @@ void Updates::feedUpdate(const MTPUpdate &update) {
 		}
 	} break;
 
-	case mtpc_updateNewEncryptedMessage: {
-	} break;
-
-	case mtpc_updateEncryptedChatTyping: {
-	} break;
-
-	case mtpc_updateEncryption: {
-	} break;
-
+	case mtpc_updateNewEncryptedMessage:
+	case mtpc_updateEncryptedChatTyping:
+	case mtpc_updateEncryption:
 	case mtpc_updateEncryptedMessagesRead: {
+		if (AyuSecret::Enabled()) {
+			AyuSecret::Get(&session()).handleUpdate(update);
+			if (update.type() == mtpc_updateNewEncryptedMessage) {
+				const auto &data = update.c_updateNewEncryptedMessage();
+				const auto date = data.vmessage().match([](const auto &message) {
+					return message.vdate().v;
+				});
+				AyuSecret::SaveState(&session(), data.vqts().v, date);
+				setState(0, 0, data.vqts().v, 0);
+			} else if (update.type() == mtpc_updateEncryption) {
+				AyuSecret::SaveState(
+					&session(),
+					AyuSecret::LoadState(&session()).qts,
+					update.c_updateEncryption().vdate().v);
+			}
+		}
 	} break;
 
 	case mtpc_updatePhoneCall:

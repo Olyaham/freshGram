@@ -21,6 +21,8 @@ add_subdirectory(lib_webrtc)
 add_subdirectory(lib_webview)
 add_subdirectory(codegen)
 
+add_subdirectory(lib_icu)
+
 get_filename_component(src_loc SourceFiles REALPATH)
 get_filename_component(res_loc Resources REALPATH)
 
@@ -28,6 +30,8 @@ include(cmake/telegram_options.cmake)
 include(cmake/lib_ffmpeg.cmake)
 include(cmake/lib_stripe.cmake)
 include(cmake/lib_tgcalls.cmake)
+include(cmake/lib_whisper.cmake)
+include(cmake/lib_tesseract.cmake)
 include(cmake/lib_prisma.cmake)
 include(cmake/lib_fido2.cmake)
 include(cmake/lib_zxcvbn.cmake)
@@ -74,6 +78,8 @@ target_link_libraries(Telegram
 PRIVATE
     tdesktop::lib_fido2
     tdesktop::lib_tgcalls
+    tdesktop::lib_whisper
+    tdesktop::lib_tesseract
     tdesktop::td_export
     tdesktop::td_gram
     tdesktop::td_iv
@@ -109,6 +115,235 @@ PRIVATE
     desktop-app::external_openal
     desktop-app::external_wallet_engine
     desktop-app::external_xxhash
+
+    ayugram::lib_icu
+)
+
+set(ayugram_files
+        ayu/ayu_worker.cpp
+        ayu/ayu_worker.h
+        ayu/ayu_url_handlers.cpp
+        ayu/ayu_url_handlers.h
+        ayu/ayu_state.cpp
+        ayu/ayu_state.h
+        ayu/ayu_settings.cpp
+        ayu/ayu_settings.h
+        ayu/ayu_infra.cpp
+        ayu/ayu_infra.h
+        ayu/utils/ayu_mapper.cpp
+        ayu/data/mention_guard.cpp
+        ayu/data/mention_guard.h
+        ayu/utils/builtin_lang.cpp
+        ayu/utils/builtin_lang.h
+        ayu/utils/crash_trace.cpp
+        ayu/features/fake_passcode/fake_passcode.cpp
+        ayu/features/fake_passcode/fake_passcode.h
+        ayu/features/recognition/local_transcribe.cpp
+        ayu/features/recognition/local_transcribe.h
+        ayu/features/recognition/transcription_backend.cpp
+        ayu/features/recognition/transcription_backend.h
+        ayu/features/recognition/transcription_config.cpp
+        ayu/features/recognition/transcription_config.h
+        ayu/features/recognition/voice_asr_engine.cpp
+        ayu/features/recognition/voice_asr_engine.h
+        ayu/features/recognition/recognition_audio.cpp
+        ayu/features/recognition/recognition_audio.h
+        ayu/features/recognition/recognition_models.cpp
+        ayu/features/recognition/recognition_models.h
+        ayu/features/recognition/speech_recognition.cpp
+        ayu/features/recognition/text_recognition.cpp
+        ayu/features/recognition/text_recognition.h
+        ayu/features/recognition/speech_recognition.h
+        ayu/ui/boxes/fake_passcode_box.cpp
+        ayu/ui/boxes/fake_passcode_box.h
+        ayu/ui/boxes/recognition_models_box.cpp
+        ayu/ui/components/recognition_picker.cpp
+        ayu/ui/components/recognition_picker.h
+        ayu/ui/boxes/recognition_models_box.h
+        ayu/ui/fagram/fagram_nav_drawer.cpp
+        ayu/ui/fagram/fagram_nav_drawer.h
+        ayu/ui/fagram/fagram_switch.cpp
+        ayu/ui/fagram/fagram_switch.h
+        ayu/ui/fagram/fagram_design.h
+        ayu/ui/fagram/fagram_top_bar.cpp
+        ayu/ui/fagram/fagram_top_bar.h
+        ayu/utils/debug_logging.cpp
+        ayu/utils/debug_logging.h
+        ayu/utils/mtp_retry_log.cpp
+        ayu/utils/network_privacy.cpp
+        ayu/utils/network_privacy.h
+        ayu/utils/mtp_retry_log.h
+        ayu/utils/crash_trace.h
+        ayu/utils/id_search.cpp
+        ayu/utils/id_search.h
+        ayu/utils/ayu_mapper.h
+        ayu/utils/qt_key_modifiers_extended.h
+        ayu/utils/telegram_helpers.cpp
+        ayu/utils/telegram_helpers.h
+        ayu/utils/windows_utils.cpp
+        ayu/utils/windows_utils.h
+        ayu/ui/status_marquee.cpp
+        ayu/ui/status_marquee.h
+        ayu/ui/ayu_logo.cpp
+        ayu/ui/ayu_logo.h
+        ayu/ui/toasts.cpp
+        ayu/ui/toasts.h
+        ayu/ui/ayu_userpic.cpp
+        ayu/ui/ayu_userpic.h
+        ayu/ui/utils/ayu_profile_values.cpp
+        ayu/ui/utils/ayu_profile_values.h
+        ayu/ui/utils/color_cut_quantizer.cpp
+        ayu/ui/utils/color_cut_quantizer.h
+        ayu/ui/utils/color_utils.cpp
+        ayu/ui/utils/color_utils.h
+        ayu/ui/utils/palette.cpp
+        ayu/ui/utils/palette.h
+        ayu/ui/utils/itunes_search.cpp
+        ayu/ui/utils/itunes_search.h
+        ayu/ui/settings/ayu_builder.cpp
+        ayu/ui/settings/ayu_builder.h
+        ayu/ui/settings/settings_appearance.cpp
+        ayu/ui/settings/settings_appearance.h
+        ayu/ui/settings/settings_ayu_utils.cpp
+        ayu/ui/settings/settings_ayu_utils.h
+        ayu/ui/settings/settings_chats.cpp
+        ayu/ui/settings/settings_chats.h
+        ayu/ui/settings/settings_general.cpp
+        ayu/ui/settings/settings_general.h
+        ayu/ui/settings/settings_ayu.cpp
+        ayu/ui/settings/settings_ayu.h
+        ayu/ui/settings/settings_filters.cpp
+        ayu/ui/settings/settings_filters.h
+        ayu/ui/settings/settings_main.cpp
+        ayu/ui/settings/settings_main.h
+        ayu/ui/settings/settings_other.cpp
+        ayu/ui/settings/settings_other.h
+        ayu/ui/settings/filters/settings_filters_list.cpp
+        ayu/ui/settings/filters/settings_filters_list.h
+        ayu/ui/settings/filters/per_dialog_filter.cpp
+        ayu/ui/settings/filters/per_dialog_filter.h
+        ayu/ui/settings/filters/edit_filter.cpp
+        ayu/ui/settings/filters/edit_filter.h
+        ayu/ui/context_menu/context_menu.cpp
+        ayu/ui/context_menu/context_menu.h
+        ayu/ui/context_menu/menu_item_subtext.cpp
+        ayu/ui/context_menu/menu_item_subtext.h
+        ayu/ui/message_history/history_inner.cpp
+        ayu/ui/message_history/history_inner.h
+        ayu/ui/message_history/history_item.cpp
+        ayu/ui/message_history/history_item.h
+        ayu/ui/message_history/history_section.cpp
+        ayu/ui/message_history/history_section.h
+        ayu/ui/boxes/edit_mark_box.cpp
+        ayu/ui/boxes/edit_mark_box.h
+        ayu/ui/boxes/font_selector.cpp
+        ayu/ui/boxes/font_selector.h
+        ayu/ui/boxes/import_filters_box.cpp
+        ayu/ui/boxes/import_filters_box.h
+        ayu/ui/boxes/theme_selector_box.cpp
+        ayu/ui/boxes/theme_selector_box.h
+        ayu/ui/boxes/message_shot_box.cpp
+        ayu/ui/boxes/message_shot_box.h
+        ayu/ui/boxes/secret_chat_actions.cpp
+        ayu/ui/boxes/secret_chat_actions.h
+        ayu/ui/boxes/secret_key_box.cpp
+        ayu/ui/boxes/secret_key_box.h
+        ayu/ui/boxes/plugin_info_box.cpp
+        ayu/ui/boxes/plugin_info_box.h
+        ayu/ui/components/image_view.cpp
+        ayu/ui/components/image_view.h
+        ayu/ui/components/icon_picker.cpp
+        ayu/ui/components/icon_picker.h
+        ayu/ui/components/avatar_corners_preview.cpp
+        ayu/ui/components/avatar_corners_preview.h
+        ayu/ui/components/message_preview.cpp
+        ayu/ui/components/message_preview.h
+        ayu/ui/components/saved_music.cpp
+        ayu/ui/components/saved_music.h
+        ayu/libs/json.hpp
+        ayu/libs/json_ext.hpp
+        ayu/libs/sqlite/sqlite3.c
+        ayu/libs/sqlite/sqlite3.h
+        ayu/libs/sqlite/sqlite_orm.h
+        ayu/features/streamer_mode/platform/linux/streamer_mode_linux.cpp
+        ayu/features/streamer_mode/platform/linux/streamer_mode_linux.h
+        ayu/features/streamer_mode/platform/mac/streamer_mode_mac.mm
+        ayu/features/streamer_mode/platform/mac/streamer_mode_mac.h
+        ayu/features/streamer_mode/platform/win/streamer_mode_win.cpp
+        ayu/features/streamer_mode/platform/win/streamer_mode_win.h
+        ayu/features/streamer_mode/platform/platform_streamer_mode.h
+        ayu/features/streamer_mode/streamer_mode.cpp
+        ayu/features/streamer_mode/streamer_mode.h
+        ayu/features/peek/peek_online.cpp
+        ayu/features/peek/peek_online.h
+        ayu/features/message_shot/message_shot.cpp
+        ayu/features/message_shot/message_shot.h
+        ayu/features/message_shot/message_shot_theme_state.cpp
+        ayu/features/message_shot/message_shot_theme_state.h
+        ayu/features/forward/ayu_forward.cpp
+        ayu/features/forward/ayu_forward.h
+        ayu/features/forward/ayu_forward_rich.cpp
+        ayu/features/forward/ayu_forward_rich.h
+        ayu/features/forward/ayu_sync.cpp
+        ayu/features/forward/ayu_sync.h
+        ayu/features/translator/ayu_translator.cpp
+        ayu/features/translator/ayu_translator.h
+        ayu/features/translator/ayu_translate_provider.cpp
+        ayu/features/translator/ayu_translate_provider.h
+        ayu/features/translator/html_parser.cpp
+        ayu/features/translator/html_parser.h
+        ayu/features/translator/implementations/google.cpp
+        ayu/features/translator/implementations/google.h
+        ayu/features/translator/implementations/yandex.cpp
+        ayu/features/translator/implementations/yandex.h
+        ayu/features/translator/implementations/base.cpp
+        ayu/features/translator/implementations/base.h
+        ayu/features/filters/filters_controller.cpp
+        ayu/features/filters/filters_controller.h
+        ayu/features/filters/filters_cache_controller.cpp
+        ayu/features/filters/filters_cache_controller.h
+        ayu/features/filters/filters_utils.cpp
+        ayu/features/filters/filters_utils.h
+        ayu/data/deleted_restore.cpp
+        ayu/data/deleted_restore.h
+        ayu/data/kept_dialogs.cpp
+        ayu/data/kept_dialogs.h
+        ayu/data/known_users.cpp
+        ayu/data/known_users.h
+        ayu/data/local_pins.cpp
+        ayu/data/local_pins.h
+        ayu/secret/secret_bridge.cpp
+        ayu/secret/secret_bridge.h
+        ayu/secret/secret_crypto.cpp
+        ayu/secret/secret_crypto.h
+        ayu/secret/secret_files.cpp
+        ayu/secret/secret_files.h
+        ayu/secret/secret_manager.cpp
+        ayu/secret/secret_model.cpp
+        ayu/secret/secret_model.h
+        ayu/secret/secret_manager.h
+        ayu/secret/secret_peer.h
+        ayu/secret/secret_policy.cpp
+        ayu/secret/secret_policy.h
+        ayu/secret/secret_protocol.cpp
+        ayu/secret/secret_protocol.h
+        ayu/secret/secret_send.cpp
+        ayu/secret/secret_send.h
+        ayu/secret/secret_tl.h
+        ayu/secret/secret_vault.cpp
+        ayu/secret/secret_vault.h
+        ayu/data/messages_storage.cpp
+        ayu/data/messages_storage.h
+        ayu/data/entities.h
+        ayu/data/ayu_database.cpp
+        ayu/data/ayu_database.h
+        ayu/data/ayu_database_backup.cpp
+        ayu/data/ayu_vault.cpp
+        ayu/data/ayu_vault.h
+        ayu/data/ayu_database_backup.h
+
+        info/profile/info_profile_music_button.cpp
+        info/profile/info_profile_music_button.h
 )
 
 if (NOT DESKTOP_APP_DISABLE_SWIFT6)
@@ -119,6 +354,7 @@ target_precompile_headers(Telegram PRIVATE $<$<COMPILE_LANGUAGE:CXX,OBJCXX>:${sr
 nice_target_sources(Telegram ${src_loc}
 PRIVATE
     ${style_files}
+    ${ayugram_files}
 
     api/api_attached_stickers.cpp
     api/api_attached_stickers.h
@@ -1462,8 +1698,6 @@ PRIVATE
     intro/intro_qr.h
     intro/intro_signup.cpp
     intro/intro_signup.h
-    intro/intro_start.cpp
-    intro/intro_start.h
     intro/intro_step.cpp
     intro/intro_step.h
     intro/intro_widget.cpp
@@ -2385,6 +2619,8 @@ endif()
 
 nice_target_sources(Telegram ${res_loc}
 PRIVATE
+    qrc/ayu/ayu.qrc
+
     qrc/emoji_1.qrc
     qrc/emoji_2.qrc
     qrc/emoji_3.qrc
@@ -2446,26 +2682,46 @@ elseif (APPLE)
 
     set(icons_path ${CMAKE_CURRENT_SOURCE_DIR}/Telegram/Images.xcassets)
     if (CMAKE_GENERATOR STREQUAL Xcode)
-        target_add_resource(Telegram ${icons_path})
+        set(ayugram_icons
+            Default
+            Alt
+            Discord
+            Spotify
+            Extera
+            Nothing
+            Bard
+            Yaplus
+            Win95
+            Chibi
+            Chibi2
+            Extera2
+        )
+
+        foreach (icon ${ayugram_icons})
+            target_add_resource(Telegram "${CMAKE_CURRENT_SOURCE_DIR}/Telegram/AppIcon-${icon}.icon")
+            set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/Telegram/AppIcon-${icon}.icon" PROPERTIES
+                    XCODE_EXPLICIT_FILE_TYPE "folder.iconcomposer.icon"
+            )
+        endforeach()
     else()
         set(icon_path ${icons_path}/Icon.iconset)
         find_program(ICONUTIL iconutil)
         find_program(PNG2ICNS png2icns)
         if (ICONUTIL)
             add_custom_command(
-                OUTPUT Icon.icns
+                OUTPUT AppIcon-Default.icns
                 COMMAND ${ICONUTIL}
                 ARGS
                     --convert icns
-                    --output Icon.icns
+                    --output AppIcon-Default.icns
                     ${icon_path}
             )
         elseif (PNG2ICNS)
             add_custom_command(
-                OUTPUT Icon.icns
+                OUTPUT AppIcon-Default.icns
                 COMMAND ${PNG2ICNS}
                 ARGS
-                    Icon.icns
+                    AppIcon-Default.icns
                     ${icon_path}/icon_16x16.png
                     ${icon_path}/icon_32x32.png
                     ${icon_path}/icon_128x128.png
@@ -2474,8 +2730,8 @@ elseif (APPLE)
             )
         endif()
         if (ICONUTIL OR PNG2ICNS)
-            set_source_files_properties(Icon.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
-            target_add_resource(Telegram Icon.icns)
+            set_source_files_properties(AppIcon-Default.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+            target_add_resource(Telegram AppIcon-Default.icns)
         endif()
     endif()
 
@@ -2533,9 +2789,9 @@ else()
 endif()
 
 if (build_macstore)
-    set(bundle_identifier "org.telegram.desktop")
-    set(bundle_entitlements "Telegram Lite.entitlements")
-    set(output_name "Telegram Lite")
+    set(bundle_identifier "io.github.snowyfluffy.freshgram")
+    set(bundle_entitlements "Telegram.entitlements")
+    set(output_name "freshGram")
     target_link_options(Telegram
     PRIVATE
         -F${libs_loc}/breakpad/src/client/mac/build/Release
@@ -2551,12 +2807,12 @@ if (build_macstore)
     )
 else()
     if (CMAKE_GENERATOR STREQUAL Xcode)
-        set(bundle_identifier "com.tdesktop.Telegram$<$<CONFIG:Debug>:Debug>")
+        set(bundle_identifier "io.github.snowyfluffy.freshgram$<$<CONFIG:Debug>:Debug>")
     else()
-        set(bundle_identifier "com.tdesktop.Telegram")
+        set(bundle_identifier "io.github.snowyfluffy.freshgram")
     endif()
     set(bundle_entitlements "Telegram.entitlements")
-    set(output_name "Telegram")
+    set(output_name "freshGram")
 endif()
 
 if (CMAKE_GENERATOR STREQUAL Xcode)
@@ -2573,7 +2829,9 @@ set_target_properties(Telegram PROPERTIES
     XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER ${bundle_identifier}
     XCODE_ATTRIBUTE_CURRENT_PROJECT_VERSION ${desktop_app_version_string}
     XCODE_ATTRIBUTE_PRODUCT_NAME ${output_name}
-    XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME Icon
+    XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME AppIcon-Default
+    XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES "AppIcon-Alt AppIcon-Discord AppIcon-Spotify AppIcon-Extera AppIcon-Nothing AppIcon-Bard AppIcon-Yaplus AppIcon-Win95 AppIcon-Chibi AppIcon-Chibi2 AppIcon-Extera2"
+    XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS YES
     XCODE_ATTRIBUTE_ENABLE_HARDENED_RUNTIME YES
     XCODE_ATTRIBUTE_COMBINE_HIDPI_IMAGES YES
     XCODE_ATTRIBUTE_COPY_PHASE_STRIP NO
@@ -2596,13 +2854,14 @@ PRIVATE
     TDESKTOP_API_ID=${TDESKTOP_API_ID}
     TDESKTOP_API_HASH=${TDESKTOP_API_HASH}
     G_LOG_DOMAIN="Telegram"
+    U_STATIC_IMPLEMENTATION=1
 )
 
 get_property(is_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 if (APPLE
     OR is_multi_config
     OR NOT CMAKE_EXECUTABLE_SUFFIX STREQUAL ""
-    OR NOT "${output_name}" STREQUAL "Telegram")
+    OR NOT "${output_name}" STREQUAL "freshGram")
     set(output_folder ${CMAKE_BINARY_DIR})
 else()
     set(output_folder ${CMAKE_BINARY_DIR}/bin)
@@ -2784,28 +3043,28 @@ endif()
 
 if (LINUX AND DESKTOP_APP_USE_PACKAGED)
     include(GNUInstallDirs)
-    configure_file("../lib/xdg/org.telegram.desktop.service" "${CMAKE_CURRENT_BINARY_DIR}/org.telegram.desktop.service" @ONLY)
-    configure_file("../lib/xdg/org.telegram.desktop.metainfo.xml" "${CMAKE_CURRENT_BINARY_DIR}/org.telegram.desktop.metainfo.xml" @ONLY)
-    generate_appstream_changelog(Telegram "${CMAKE_SOURCE_DIR}/changelog.txt" "${CMAKE_CURRENT_BINARY_DIR}/org.telegram.desktop.metainfo.xml")
+    configure_file("../lib/xdg/io.github.snowyfluffy.freshgram.service" "${CMAKE_CURRENT_BINARY_DIR}/io.github.snowyfluffy.freshgram.service" @ONLY)
+    configure_file("../lib/xdg/io.github.snowyfluffy.freshgram.metainfo.xml" "${CMAKE_CURRENT_BINARY_DIR}/io.github.snowyfluffy.freshgram.metainfo.xml" @ONLY)
+    generate_appstream_changelog(Telegram "${CMAKE_SOURCE_DIR}/changelog.txt" "${CMAKE_CURRENT_BINARY_DIR}/io.github.snowyfluffy.freshgram.metainfo.xml")
     install(TARGETS Telegram RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" BUNDLE DESTINATION "${CMAKE_INSTALL_BINDIR}")
-    install(FILES "Resources/art/icon16.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/16x16/apps" RENAME "org.telegram.desktop.png")
-    install(FILES "Resources/art/icon16@2x.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/16x16@2/apps" RENAME "org.telegram.desktop.png")
-    install(FILES "Resources/art/icon32.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/32x32/apps" RENAME "org.telegram.desktop.png")
-    install(FILES "Resources/art/icon32@2x.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/32x32@2/apps" RENAME "org.telegram.desktop.png")
-    install(FILES "Resources/art/icon48.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/48x48/apps" RENAME "org.telegram.desktop.png")
-    install(FILES "Resources/art/icon48@2x.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/48x48@2/apps" RENAME "org.telegram.desktop.png")
-    install(FILES "Resources/art/icon64.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/64x64/apps" RENAME "org.telegram.desktop.png")
-    install(FILES "Resources/art/icon64@2x.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/64x64@2/apps" RENAME "org.telegram.desktop.png")
-    install(FILES "Resources/art/icon128.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/128x128/apps" RENAME "org.telegram.desktop.png")
-    install(FILES "Resources/art/icon128@2x.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/128x128@2/apps" RENAME "org.telegram.desktop.png")
-    install(FILES "Resources/art/icon256.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/256x256/apps" RENAME "org.telegram.desktop.png")
-    install(FILES "Resources/art/icon256@2x.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/256x256@2/apps" RENAME "org.telegram.desktop.png")
-    install(FILES "Resources/art/icon512.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/512x512/apps" RENAME "org.telegram.desktop.png")
-    install(FILES "Resources/art/icon512@2x.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/512x512@2/apps" RENAME "org.telegram.desktop.png")
-    install(FILES "Resources/icons/tray_monochrome.svg" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/symbolic/apps" RENAME "org.telegram.desktop-symbolic.svg")
-    install(FILES "Resources/icons/tray_monochrome_attention.svg" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/symbolic/apps" RENAME "org.telegram.desktop-attention-symbolic.svg")
-    install(FILES "Resources/icons/tray_monochrome_mute.svg" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/symbolic/apps" RENAME "org.telegram.desktop-mute-symbolic.svg")
-    install(FILES "../lib/xdg/org.telegram.desktop.desktop" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications")
-    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/org.telegram.desktop.service" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/dbus-1/services")
-    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/org.telegram.desktop.metainfo.xml" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/metainfo")
+    install(FILES "Resources/art/icon16.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/16x16/apps" RENAME "io.github.snowyfluffy.freshgram.png")
+    install(FILES "Resources/art/icon16@2x.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/16x16@2/apps" RENAME "io.github.snowyfluffy.freshgram.png")
+    install(FILES "Resources/art/icon32.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/32x32/apps" RENAME "io.github.snowyfluffy.freshgram.png")
+    install(FILES "Resources/art/icon32@2x.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/32x32@2/apps" RENAME "io.github.snowyfluffy.freshgram.png")
+    install(FILES "Resources/art/icon48.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/48x48/apps" RENAME "io.github.snowyfluffy.freshgram.png")
+    install(FILES "Resources/art/icon48@2x.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/48x48@2/apps" RENAME "io.github.snowyfluffy.freshgram.png")
+    install(FILES "Resources/art/icon64.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/64x64/apps" RENAME "io.github.snowyfluffy.freshgram.png")
+    install(FILES "Resources/art/icon64@2x.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/64x64@2/apps" RENAME "io.github.snowyfluffy.freshgram.png")
+    install(FILES "Resources/art/icon128.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/128x128/apps" RENAME "io.github.snowyfluffy.freshgram.png")
+    install(FILES "Resources/art/icon128@2x.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/128x128@2/apps" RENAME "io.github.snowyfluffy.freshgram.png")
+    install(FILES "Resources/art/icon256.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/256x256/apps" RENAME "io.github.snowyfluffy.freshgram.png")
+    install(FILES "Resources/art/icon256@2x.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/256x256@2/apps" RENAME "io.github.snowyfluffy.freshgram.png")
+    install(FILES "Resources/art/icon512.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/512x512/apps" RENAME "io.github.snowyfluffy.freshgram.png")
+    install(FILES "Resources/art/icon512@2x.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/512x512@2/apps" RENAME "io.github.snowyfluffy.freshgram.png")
+    install(FILES "Resources/icons/tray_monochrome.svg" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/symbolic/apps" RENAME "io.github.snowyfluffy.freshgram-symbolic.svg")
+    install(FILES "Resources/icons/tray_monochrome_attention.svg" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/symbolic/apps" RENAME "io.github.snowyfluffy.freshgram-attention-symbolic.svg")
+    install(FILES "Resources/icons/tray_monochrome_mute.svg" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/symbolic/apps" RENAME "io.github.snowyfluffy.freshgram-mute-symbolic.svg")
+    install(FILES "../lib/xdg/io.github.snowyfluffy.freshgram.desktop" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications")
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/io.github.snowyfluffy.freshgram.service" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/dbus-1/services")
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/io.github.snowyfluffy.freshgram.metainfo.xml" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/metainfo")
 endif()

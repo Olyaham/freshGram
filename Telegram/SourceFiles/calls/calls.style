@@ -503,7 +503,6 @@ callPanelDuration: 150;
 
 callPanelSignalBars: CallSignalBars {
 	width: 2px;
-	radius: 1px;
 	skip: 2px;
 	min: 4px;
 	max: 10px;
@@ -520,42 +519,34 @@ callBarSignalBars: CallSignalBars(callPanelSignalBars) {
 
 callTitleButton: windowTitleButton;
 callTitleMinimizeIcon: icon {
-	{ "title_shadow_minimize", windowShadowFg },
 	{ "title_button_minimize", callNameFg },
 };
 callTitleMinimizeIconOver: icon {
 	{ windowTitleButtonSize, callBgButton },
 	{ windowTitleButtonSize, callMuteRipple },
-	{ "title_shadow_minimize", windowShadowFg },
 	{ "title_button_minimize", callNameFg },
 };
 callTitleMaximizeIcon: icon {
-	{ "title_shadow_maximize", windowShadowFg },
 	{ "title_button_maximize", callNameFg },
 };
 callTitleMaximizeIconOver: icon {
 	{ windowTitleButtonSize, callBgButton },
 	{ windowTitleButtonSize, callMuteRipple },
-	{ "title_shadow_maximize", windowShadowFg },
 	{ "title_button_maximize", callNameFg },
 };
 callTitleRestoreIcon: icon {
-	{ "title_shadow_restore", windowShadowFg },
 	{ "title_button_restore", callNameFg },
 };
 callTitleRestoreIconOver: icon {
 	{ windowTitleButtonSize, callBgButton },
 	{ windowTitleButtonSize, callMuteRipple },
-	{ "title_shadow_restore", windowShadowFg },
 	{ "title_button_restore", callNameFg },
 };
 callTitleCloseIcon: icon {
-	{ "title_shadow_close", windowShadowFg },
 	{ "title_button_close", callNameFg },
 };
 callTitleCloseIconOver: icon {
 	{ windowTitleButtonSize, titleButtonCloseBgOver },
-	{ "title_shadow_close", windowShadowFg },
 	{ "title_button_close", titleButtonCloseFgOver },
 };
 callTitle: WindowTitle(defaultWindowTitle) {
@@ -704,7 +695,7 @@ groupCallPopupMenuWithCover: PopupMenu(groupCallPopupMenu) {
 	}
 }
 groupCallMenuCover: ShortInfoCover(shortInfoCover) {
-	radius: roundRadiusSmall;
+	radius: roundRadiusLarge;
 	size: groupCallMenuCoverSize;
 	namePosition: point(17px, 28px);
 	statusPosition: point(17px, 8px);
@@ -1528,7 +1519,7 @@ groupCallTooltip: Tooltip(defaultTooltip) {
 groupCallNiceTooltip: ImportantTooltip(defaultImportantTooltip) {
 	bg: importantTooltipBg;
 	padding: margins(10px, 3px, 10px, 5px);
-	radius: 4px;
+	radius: 10px;
 	arrow: 4px;
 }
 groupCallNiceTooltipLabel: defaultImportantTooltipLabel;

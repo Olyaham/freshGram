@@ -19,6 +19,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/empty_userpic.h"
 #include "ui/painter.h"
 
+#include "ayu/ui/ayu_userpic.h"
+
+
 namespace Ui {
 
 VideoUserpicPlayer::VideoUserpicPlayer() = default;
@@ -61,8 +64,20 @@ QImage VideoUserpicPlayer::frame(
 	request.outer = request.resize = size * ratio;
 
 	const auto broadcast = peer->monoforumBroadcast();
+	const auto peerShape = broadcast
+		? Ui::PeerUserpicShape::Monoforum
+		: peer->isForum()
+		? Ui::PeerUserpicShape::Forum
+		: Ui::PeerUserpicShape::Circle;
+	const auto ayuOverride = AyuUserpic::ShouldOverrideShape(peerShape);
 
-	if (broadcast) {
+	if (ayuOverride) {
+		AyuUserpic::ApplyFrameRounding(
+			request,
+			_roundingCorners,
+			_ellipseMask,
+			size);
+	} else if (broadcast) {
 		if (_monoforumMask.isNull()) {
 			_monoforumMask = Ui::MonoforumShapeMask(request.resize);
 		}
@@ -81,7 +96,7 @@ QImage VideoUserpicPlayer::frame(
 	}
 
 	auto result = _streamed->frame(request);
-	if (broadcast) {
+	if (!ayuOverride && broadcast) {
 		constexpr auto kFormat = QImage::Format_ARGB32_Premultiplied;
 		if (result.format() != kFormat) {
 			result = std::move(result).convertToFormat(kFormat);

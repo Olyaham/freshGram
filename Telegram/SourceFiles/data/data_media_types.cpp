@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "data/data_media_types.h"
 
+#include "ayu/features/streamer_mode/streamer_mode.h"
 #include "base/random.h"
 #include "boxes/send_credits_box.h" // CreditsEmoji.
 #include "history/history.h"
@@ -771,7 +772,14 @@ bool Media::hasSpoiler() const {
 }
 
 bool Media::hasSpoilerForPreview() const {
-	return hasSpoiler() || ttlSeconds();
+	return hasSpoiler()
+		|| ttlSeconds()
+		|| (AyuFeatures::StreamerMode::spoilersActive()
+			&& (photo()
+				|| (document()
+					&& (document()->isVideoFile()
+						|| document()->isAnimation()
+						|| document()->isVideoMessage()))));
 }
 
 crl::time Media::ttlSeconds() const {
@@ -1066,7 +1074,7 @@ std::unique_ptr<HistoryView::Media> MediaPhoto::createView(
 					message,
 					_chat,
 					_photo,
-					st::msgServicePhotoWidth));
+					st::msgServiceUserpicSuggestionPhotoWidth));
 		}
 		return std::make_unique<HistoryView::Photo>(
 			message,
@@ -1078,7 +1086,7 @@ std::unique_ptr<HistoryView::Media> MediaPhoto::createView(
 		message,
 		realParent,
 		_photo,
-		_spoiler);
+		_spoiler || AyuFeatures::StreamerMode::spoilersActive());
 }
 
 MediaFile::MediaFile(
@@ -1429,7 +1437,7 @@ crl::time MediaFile::ttlSeconds() const {
 }
 
 bool MediaFile::allowsForward() const {
-	return !ttlSeconds();
+	return true;
 }
 
 bool MediaFile::updateInlineResultMedia(const MTPMessageMedia &media) {
@@ -1502,14 +1510,14 @@ std::unique_ptr<HistoryView::Media> MediaFile::createView(
 				message,
 				realParent,
 				_document,
-				_spoiler);
+				_spoiler || AyuFeatures::StreamerMode::spoilersActive());
 		}
 	} else if (_document->isAnimation() || _document->isVideoFile()) {
 		return std::make_unique<HistoryView::Gif>(
 			message,
 			realParent,
 			_document,
-			_spoiler);
+			_spoiler || AyuFeatures::StreamerMode::spoilersActive());
 	} else if (_document->isTheme() && _document->hasThumbnail()) {
 		return std::make_unique<HistoryView::ThemeDocument>(
 			message,

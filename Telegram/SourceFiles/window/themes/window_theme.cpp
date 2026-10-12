@@ -54,7 +54,7 @@ namespace {
 
 constexpr auto kThemeFileSizeLimit = 5 * 1024 * 1024;
 constexpr auto kBackgroundSizeLimit = 25 * 1024 * 1024;
-constexpr auto kNightThemeFile = ":/gui/night.tdesktop-theme"_cs;
+constexpr auto kNightThemeFile = ":/gui/Google Dark.tdesktop-theme"_cs;
 constexpr auto kDarkValueThreshold = 0.5;
 
 struct Applying {
@@ -1682,7 +1682,7 @@ std::shared_ptr<FilePrepareResult> PrepareWallPaper(
 
 	QByteArray jpeg;
 	QBuffer jpegBuffer(&jpeg);
-	image.save(&jpegBuffer, "JPG", 87);
+	image.save(&jpegBuffer, "JPG", 100);
 
 	const auto scaled = [&](int size) {
 		return image.scaled(

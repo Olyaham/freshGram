@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "apiwrap.h"
 #include "api/api_transcribes.h"
+#include "ayu/features/recognition/local_transcribe.h"
 #include "lang/lang_keys.h"
 #include "mainwindow.h"
 #include "main/main_session.h"
@@ -68,6 +69,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <QSvgRenderer>
 #include <QtWidgets/QApplication>
+
+#include "ayu/features/message_shot/message_shot.h"
+
 
 namespace HistoryView {
 namespace {
@@ -134,10 +138,10 @@ using ::Media::ValidFrameSize;
 		const auto centerRect = r - centerMargins;
 		const auto &icon = context.imageStyle()->historyVideoMessageTtlIcon;
 		const auto iconRect = QRect(
-			rect::right(centerRect) - icon.width() * 0.75,
-			rect::bottom(centerRect) - icon.height() * 0.75,
-			icon.width(),
-			icon.height());
+			rect::right(centerRect) - icon.width() * 1.2,
+			rect::bottom(centerRect) - icon.height() * 1.2,
+			icon.width() / 3,
+			icon.height() / 3);
 		{
 			auto hq = PainterHighQualityEnabler(p);
 			auto path = QPainterPath();
@@ -220,7 +224,8 @@ Gif::Gif(
 					base::take(lifetime)->destroy();
 				}
 				if (!isOut) {
-					if (const auto item = data->message(fullId)) {
+					if (const auto item = data->message(fullId);
+						item && !item->keepsUnburnt()) {
 						// Destroys this.
 						item->clearMediaAsExpired();
 					}
@@ -833,7 +838,7 @@ void Gif::draw(Painter &p, const PaintContext &context) const {
 			|| (!streamingMode
 				&& ((!loaded && !_data->loading()) || !autoplay))
 			|| ttlCovered);
-	if (paintInCenter) {
+	if (paintInCenter && !AyuFeatures::MessageShot::isTakingShot()) {
 		const auto radialRevealed = 1.;
 		const auto opacity = (item->isSending() || _data->uploading())
 			? 1.
@@ -912,7 +917,7 @@ void Gif::draw(Painter &p, const PaintContext &context) const {
 			return spoilerTagBackground();
 		});
 	}
-	if (displayMute) {
+	if (displayMute && !AyuFeatures::MessageShot::isTakingShot()) {
 		auto muteRect = style::rtlrect(rthumb.x() + (rthumb.width() - st::historyVideoMessageMuteSize) / 2, rthumb.y() + st::msgDateImgDelta, st::historyVideoMessageMuteSize, st::historyVideoMessageMuteSize, width());
 		p.setPen(Qt::NoPen);
 		p.setBrush(sti->msgDateImgBg);
@@ -928,7 +933,7 @@ void Gif::draw(Painter &p, const PaintContext &context) const {
 		drawPurchasedTag(p, rthumb, context);
 	}
 
-	if (!unwrapped && !skipDrawingSurrounding) {
+	if (!unwrapped && !skipDrawingSurrounding && !AyuFeatures::MessageShot::ignoreRender(AyuFeatures::MessageShot::RenderPart::Date)) {
 		const auto sponsoredSkip = !_data->isVideoFile()
 			&& _realParent->isSponsored();
 		if ((!isRound || !inWebPage) && !sponsoredSkip && !mediaEditor) {
@@ -939,7 +944,9 @@ void Gif::draw(Painter &p, const PaintContext &context) const {
 			}
 		}
 	} else if (!skipDrawingSurrounding) {
-		if (isRound && !mediaEditor) {
+		if (isRound && !mediaEditor
+			&& !AyuFeatures::MessageShot::ignoreRender(
+				AyuFeatures::MessageShot::RenderPart::Date)) {
 			const auto mediaUnread = item->hasUnreadMediaFlag();
 			const auto statusText = _seeking
 				? Ui::FormatDurationText(1 + int64(base::SafeRound(
@@ -1058,7 +1065,7 @@ void Gif::draw(Painter &p, const PaintContext &context) const {
 			}
 		}
 	}
-	if (!inWebPage && !skipDrawingSurrounding) {
+	if (!inWebPage && !skipDrawingSurrounding && !AyuFeatures::MessageShot::ignoreRender(AyuFeatures::MessageShot::RenderPart::Date)) {
 		auto fullRight = paintx + usex + usew;
 		auto fullBottom = painty + painth;
 		auto maxRight = _parent->width() - st::msgMargin.left();
@@ -1368,7 +1375,10 @@ void Gif::drawCornerStatus(
 			: nullptr),
 		.download = download,
 		.loading = _data->loading(),
-		.mute = (_streamed && _data->isVideoFile() && !download),
+		.mute = (_streamed
+			&& _data->isVideoFile()
+			&& !download
+			&& !AyuFeatures::MessageShot::isTakingShot()),
 	});
 }
 
@@ -1910,7 +1920,7 @@ void Gif::drawGrouped(
 		&& (radial
 			|| (!streamingMode
 				&& ((!loaded && !_data->loading()) || !autoplay)));
-	if (paintInCenter) {
+	if (paintInCenter && !AyuFeatures::MessageShot::isTakingShot()) {
 		const auto radialRevealed = 1.;
 		const auto opacity = (item->isSending() || _data->uploading())
 			? 1.
@@ -2106,6 +2116,12 @@ bool Gif::uploading() const {
 void Gif::hideSpoilers() {
 	if (_spoiler) {
 		_spoiler->revealed = false;
+	}
+}
+
+void Gif::revealSpoilers() {
+	if (_spoiler) {
+		_spoiler->revealed = true;
 	}
 }
 
@@ -2724,11 +2740,20 @@ bool Gif::needInfoDisplay() const {
 }
 
 bool Gif::needCornerStatusDisplay() const {
+	if (AyuFeatures::MessageShot::ignoreRender(AyuFeatures::MessageShot::RenderPart::Date)) {
+		return false;
+	}
+
 	return _data->isVideoFile()
 		|| needInfoDisplay();
 }
 
 void Gif::ensureTranscribeButton() const {
+	if (AyuFeatures::MessageShot::isTakingShot()) {
+		_transcribe = nullptr;
+		return;
+	}
+
 	const auto media = _parent->data()->media();
 	if (_data->isVideoMessage()
 		&& (!media || !media->ttlSeconds())
@@ -2736,6 +2761,7 @@ void Gif::ensureTranscribeButton() const {
 		&& !_parent->data()->isAdminLogEntry()
 		&& (_parent->context() != Context::MediaEditor)
 		&& (_data->session().premium()
+			|| AyuRecognition::LocalTranscriptionEnabled()
 			|| _data->session().api().transcribes().trialsSupport())) {
 		if (!_transcribe) {
 			_transcribe = std::make_unique<TranscribeButton>(

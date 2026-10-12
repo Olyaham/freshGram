@@ -95,6 +95,17 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/random.h"
 #include "spellcheck/spellcheck_highlight_syntax.h"
 
+#include "ayu/data/local_pins.h"
+#include "ayu/ayu_settings.h"
+#include "ayu/data/kept_dialogs.h"
+#include "ayu/data/known_users.h"
+#include "ayu/features/streamer_mode/streamer_mode.h"
+#include "ayu/secret/secret_bridge.h"
+#include "ayu/data/messages_storage.h"
+#include "ayu/features/filters/filters_controller.h"
+#include "ayu/utils/telegram_helpers.h"
+
+
 namespace Data {
 namespace {
 
@@ -366,6 +377,21 @@ Session::Session(not_null<Main::Session*> session)
 
 	setupMigrationViewer();
 	setupChannelLeavingViewer();
+	AyuKept::setup(this, _lifetime);
+	AyuFeatures::StreamerMode::spoilersActiveValue(
+	) | rpl::skip(1) | rpl::on_next([=] {
+		auto items = std::vector<not_null<const HistoryItem*>>();
+		items.reserve(_views.size());
+		for (const auto &[item, views] : _views) {
+			items.push_back(item);
+		}
+		for (const auto item : items) {
+			requestItemViewRefresh(item);
+		}
+	}, _lifetime);
+	crl::on_main(_session, [=] {
+		AyuSecret::Start(_session);
+	});
 	setupPeerNameViewer();
 	setupUserIsContactViewer();
 
@@ -421,7 +447,10 @@ Session::Session(not_null<Main::Session*> session)
 			}
 		}, _lifetime);
 
-		_stories->loadMore(Data::StorySourcesList::NotHidden);
+		const auto &settings = AyuSettings::getInstance();
+		if (!settings.disableStories()) {
+			_stories->loadMore(Data::StorySourcesList::NotHidden);
+		}
 	});
 
 	session->appConfig().ignoredRestrictionReasonsChanges(
@@ -930,6 +959,7 @@ not_null<UserData*> Session::processUser(const MTPUser &data) {
 	if (flags) {
 		session().changes().peerUpdated(result, flags);
 	}
+	AyuUsers::note(result);
 	return result;
 }
 
@@ -999,7 +1029,8 @@ not_null<PeerData*> Session::processChat(const MTPChat &data) {
 			| Flag::Forbidden
 			| Flag::CallActive
 			| Flag::CallNotEmpty
-			| Flag::NoForwards;
+			| Flag::NoForwards
+			| Flag::AyuNoForwards;
 		const auto flagsSet = (data.is_left() ? Flag::Left : Flag())
 			| (data.is_creator() ? Flag::Creator : Flag())
 			| (data.is_deactivated() ? Flag::Deactivated : Flag())
@@ -1009,7 +1040,8 @@ not_null<PeerData*> Session::processChat(const MTPChat &data) {
 					&& chat->groupCall()->fullCount() > 0))
 				? Flag::CallNotEmpty
 				: Flag())
-			| (data.is_noforwards() ? Flag::NoForwards : Flag());
+			| (data.is_noforwards() ? Flag::NoForwards : Flag())
+			| (data.is_ayuNoforwards() ? Flag::AyuNoForwards : Flag());
 		chat->setFlags((chat->flags() & ~flagsMask) | flagsSet);
 		chat->count = data.vparticipants_count().v;
 
@@ -1122,6 +1154,7 @@ not_null<PeerData*> Session::processChat(const MTPChat &data) {
 				? (Flag::Left | Flag::Creator)
 				: Flag())
 			| Flag::NoForwards
+			| Flag::AyuNoForwards
 			| Flag::JoinToWrite
 			| Flag::RequestToJoin
 			| Flag::Forum
@@ -1172,6 +1205,7 @@ not_null<PeerData*> Session::processChat(const MTPChat &data) {
 					| (data.is_creator() ? Flag::Creator : Flag()))
 				: Flag())
 			| (data.is_noforwards() ? Flag::NoForwards : Flag())
+			| (data.is_ayuNoforwards() ? Flag::AyuNoForwards : Flag())
 			| (data.is_join_to_send() ? Flag::JoinToWrite : Flag())
 			| (data.is_join_request() ? Flag::RequestToJoin : Flag())
 			| ((data.is_forum() && data.is_megagroup())
@@ -1260,7 +1294,9 @@ not_null<PeerData*> Session::processChat(const MTPChat &data) {
 		channel->setName(qs(data.vtitle()), QString());
 
 		channel->setAccessHash(data.vaccess_hash().v);
-		channel->setPhoto(MTP_chatPhotoEmpty());
+		if (channel->userpicPhotoUnknown()) {
+			channel->setPhoto(MTP_chatPhotoEmpty());
+		}
 		channel->date = 0;
 		channel->setMembersCount(0);
 
@@ -1697,6 +1733,12 @@ History *Session::historyLoaded(const PeerData *peer) {
 }
 
 void Session::deleteConversationLocally(not_null<PeerData*> peer) {
+	if (const auto kept = historyLoaded(peer)) {
+		if (AyuKept::keepOnDelete(kept)) {
+			return;
+		}
+	}
+	AyuKept::forget(peer);
 	const auto markLeft = [&] {
 		if (const auto channel = peer->asMegagroup()) {
 			channel->addFlags(ChannelDataFlag::Left);
@@ -1869,8 +1911,18 @@ void Session::setupChannelLeavingViewer() {
 	}) | rpl::on_next([=](not_null<ChannelData*> channel) {
 		if (channel->amIn()) {
 			channel->clearInvitePeek();
+			AyuKept::takeUserLeaving(channel);
+			if (const auto history = historyLoaded(channel->id)) {
+				if (history->ayuKept()) {
+					AyuKept::forget(channel);
+				}
+			}
 		} else {
 			if (const auto history = historyLoaded(channel->id)) {
+				const auto leaving = AyuKept::takeUserLeaving(channel);
+				if (history->inChatList() && !leaving) {
+					AyuKept::markLost(history);
+				}
 				history->removeJoinedMessage();
 				history->updateChatListExistence();
 				history->updateChatListSortPosition();
@@ -2781,6 +2833,12 @@ void Session::setChatPinned(
 void Session::setPinnedFromEntryList(Dialogs::Key key, bool pinned) {
 	Expects(key.entry()->folderKnown());
 
+	if (!pinned && AyuLocalPins::isLocal(key)) {
+		return;
+	}
+	if (const auto history = key.history(); history && pinned) {
+		AyuLocalPins::forget(this, history->peer->id);
+	}
 	const auto list = chatsListFor(key.entry())->pinned();
 	if (pinned) {
 		list->addPinned(key);
@@ -2811,7 +2869,14 @@ void Session::applyPinnedChats(
 			}
 		});
 	}
+	for (const auto &peer : list) {
+		peer.match([&](const MTPDdialogPeer &data) {
+			AyuLocalPins::forget(this, peerFromMTP(data.vpeer()));
+		}, [](const auto &) {
+		});
+	}
 	chatsList(folder)->pinned()->applyList(this, list);
+	AyuLocalPins::reapply(this);
 	notifyPinnedDialogsOrderUpdated();
 }
 
@@ -2836,6 +2901,7 @@ void Session::applyDialogs(
 	if (requestFolder && count) {
 		requestFolder->chatsList()->setCloudListSize(*count);
 	}
+	AyuLocalPins::reapply(this);
 }
 
 void Session::applyDialog(
@@ -2911,7 +2977,8 @@ bool Session::pinnedCanPin(not_null<Dialogs::Entry*> entry) const {
 		return pinnedChatsOrder(forum).size() < pinnedChatsLimit(forum);
 	} else {
 		const auto folder = entry->folder();
-		return pinnedChatsOrder(folder).size() < pinnedChatsLimit(folder);
+		return (int(pinnedChatsOrder(folder).size())
+			- AyuLocalPins::count(this, folder)) < pinnedChatsLimit(folder);
 	}
 }
 
@@ -2953,17 +3020,8 @@ int Session::pinnedChatsLimit(not_null<Data::SavedMessages*> saved) const {
 }
 
 rpl::producer<int> Session::maxPinnedChatsLimitValue(
-		Data::Folder *folder) const {
-	// Premium limit from appconfig.
-	// We always use premium limit in the MainList limit producer,
-	// because it slices the list to that limit. We don't want to slice
-	// premium-ly added chats from the pinned list because of sync issues.
-	return _session->appConfig().value(
-	) | rpl::map([folder, limits = Data::PremiumLimits(_session)] {
-		return folder
-			? limits.dialogsFolderPinnedPremium()
-			: limits.dialogsPinnedPremium();
-	});
+		Data::Folder*) const {
+	return rpl::single(AyuLocalPins::kListLimit);
 }
 
 rpl::producer<int> Session::maxPinnedChatsLimitValue(
@@ -3047,6 +3105,9 @@ void Session::reorderTwoPinnedChats(
 		: chatsListFor(key1.entry());
 	list->pinned()->reorder(key1, key2);
 	notifyPinnedDialogsOrderUpdated();
+	if (AyuLocalPins::isLocal(key1) || AyuLocalPins::isLocal(key2)) {
+		AyuLocalPins::saveOrder(this);
+	}
 }
 
 bool Session::updateExistingMessage(const MTPDmessage &data) {
@@ -3077,6 +3138,35 @@ void Session::updateEditedMessage(const MTPMessage &data) {
 		Reactions::CheckUnknownForUnread(this, data);
 		return;
 	}
+
+	const auto &settings = AyuSettings::getInstance();
+	HistoryMessageEdition edit;
+
+	if (data.type() != mtpc_message) {
+		goto proceed;
+	}
+	edit = HistoryMessageEdition(_session, data.c_message());
+	if (settings.saveMessagesHistory()
+		&& !existing->isLocal()
+		&& (!edit.isEditHide || AyuMessages::isBotMessage(existing))) {
+		const auto &msg = existing->originalText();
+		const auto unchanged = edit.richPage
+			? (Iv::FlattenRichPageSummary(edit.richPage) == msg)
+			: (edit.textWithEntities == msg);
+		if (unchanged || msg.empty()) {
+			goto proceed;
+		}
+
+		AyuMessages::addEditedMessage(existing);
+		if (edit.isEditHide) {
+			existing->ayuShowEditedBadge();
+		}
+	}
+
+	FiltersController::invalidate(existing);
+
+proceed:
+
 	if (existing->isLocalUpdateMedia() && data.type() == mtpc_message) {
 		updateExistingMessage(data.c_message());
 	}
@@ -3149,6 +3239,17 @@ const Session::Messages *Session::messagesList(PeerId peerId) const {
 	return (i != end(_messages)) ? &i->second : nullptr;
 }
 
+std::vector<not_null<HistoryItem*>> Session::messagesOf(PeerId peerId) const {
+	auto result = std::vector<not_null<HistoryItem*>>();
+	if (const auto list = messagesList(peerId)) {
+		result.reserve(list->size());
+		for (const auto &[id, item] : *list) {
+			result.push_back(item);
+		}
+	}
+	return result;
+}
+
 auto Session::messagesListForInsert(PeerId peerId)
 -> not_null<Messages*> {
 	return &_messages[peerId];
@@ -3158,6 +3259,7 @@ void Session::registerMessage(not_null<HistoryItem*> item) {
 	const auto peerId = item->history()->peer->id;
 	const auto list = messagesListForInsert(peerId);
 	const auto itemId = item->id;
+
 	const auto i = list->find(itemId);
 	if (i != list->end()) {
 		LOG(("App Error: Trying to re-registerMessage()."));
@@ -3227,9 +3329,17 @@ void Session::checkTTLs() {
 		}
 		expired.insert(expired.end(), items.begin(), items.end());
 	}
-	if (!expired.empty()) {
-		notifyItemsAboutToBeDestroyed(expired);
-		for (const auto &item : expired) {
+	auto toDestroy = std::vector<not_null<HistoryItem*>>();
+	for (const auto &item : expired) {
+		if (isMessageSavable(item)) {
+			processMessageDelete(item);
+		} else {
+			toDestroy.push_back(item);
+		}
+	}
+	if (!toDestroy.empty()) {
+		notifyItemsAboutToBeDestroyed(toDestroy);
+		for (const auto &item : toDestroy) {
 			item->destroy();
 		}
 	}
@@ -3361,8 +3471,13 @@ void Session::processMessagesDeleted(
 	for (const auto &messageId : data) {
 		const auto i = list ? list->find(messageId.v) : Messages::iterator();
 		if (list && i != list->end()) {
-			const auto history = i->second->history();
-			toDestroy.push_back(i->second);
+			const auto item = i->second;
+			const auto history = item->history();
+			if (isMessageSavable(item)) {
+				processMessageDelete(item);
+			} else {
+				toDestroy.push_back(item);
+			}
 			historiesToCheck.emplace(history);
 		} else if (affected) {
 			affected->unknownMessageDeleted(messageId.v);
@@ -3378,6 +3493,7 @@ void Session::processMessagesDeleted(
 		if (!history->chatListMessageKnown()) {
 			history->requestChatListMessage();
 		}
+		AyuKept::checkWiped(history);
 	}
 }
 
@@ -3387,7 +3503,11 @@ void Session::processNonChannelMessagesDeleted(const QVector<MTPint> &data) {
 	for (const auto &messageId : data) {
 		if (const auto item = nonChannelMessage(messageId.v)) {
 			const auto history = item->history();
-			toDestroy.push_back(item);
+			if (isMessageSavable(item)) {
+				processMessageDelete(item);
+			} else {
+				toDestroy.push_back(item);
+			}
 			historiesToCheck.emplace(history);
 		}
 	}
@@ -3401,6 +3521,7 @@ void Session::processNonChannelMessagesDeleted(const QVector<MTPint> &data) {
 		if (!history->chatListMessageKnown()) {
 			history->requestChatListMessage();
 		}
+		AyuKept::checkWiped(history);
 	}
 }
 
@@ -5591,7 +5712,10 @@ void Session::registerItemView(not_null<ViewElement*> view) {
 }
 
 void Session::unregisterItemView(not_null<ViewElement*> view) {
-	Expects(!_heavyViewParts.contains(view));
+	// Expects(!_heavyViewParts.contains(view));
+	if (_heavyViewParts.contains(view)) {
+		view->unloadHeavyPart();
+	}
 
 	_shownSpoilers.remove(view);
 

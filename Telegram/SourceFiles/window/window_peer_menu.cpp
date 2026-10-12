@@ -141,6 +141,20 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QAction>
 #include <QtWidgets/QApplication>
 
+#include "ayu/ayu_settings.h"
+#include "ayu/data/local_pins.h"
+#include "ayu/data/kept_dialogs.h"
+#include "ayu/utils/telegram_helpers.h"
+#include "ayu/features/peek/peek_online.h"
+#include "ayu/secret/secret_manager.h"
+#include "ayu/secret/secret_peer.h"
+#include "ayu/secret/secret_policy.h"
+#include "ayu/ui/boxes/secret_chat_actions.h"
+#include "styles/style_ayu_icons.h"
+#include "ayu/ui/context_menu/context_menu.h"
+#include "ayu/features/forward/ayu_forward.h"
+
+
 namespace Window {
 namespace {
 
@@ -315,6 +329,7 @@ private:
 	void addToggleArchive();
 	void addClearHistory();
 	void addDeleteChat();
+	void addScreenshotAction();
 	void addLeaveChat();
 	void addJoinChat();
 	void addTopicLink();
@@ -334,6 +349,9 @@ private:
 	void addReport();
 	void addNewContact();
 	void addShareContact();
+	void addSecretChat();
+	void addPeekLastSeen();
+	void fillSecretActions();
 	void addEditContact();
 	void addBotToGroup();
 	void addNewMembers();
@@ -409,6 +427,8 @@ bool PinnedLimitReached(
 		owner->setChatPinned(wasted, FilterId(), false);
 		owner->setChatPinned(history, FilterId(), true);
 		history->session().api().savePinnedOrder(folder);
+	} else if (AyuSettings::getInstance().localPinnedChats()) {
+		AyuLocalPins::pin(history);
 	} else if (folder) {
 		controller->show(Box(FolderPinsLimitBox, &history->session()));
 	} else {
@@ -439,6 +459,15 @@ void TogglePinnedThread(
 	}
 	const auto owner = &entry->owner();
 	const auto isPinned = !entry->isPinnedDialog(FilterId());
+	if (!isPinned) {
+		if (const auto history = entry->asHistory();
+			history && AyuLocalPins::unpin(history)) {
+			if (onToggled) {
+				onToggled();
+			}
+			return;
+		}
+	}
 	if (isPinned && PinnedLimitReached(controller, entry)) {
 		return;
 	}
@@ -879,8 +908,51 @@ void Filler::addClearHistory() {
 		&st::menuIconClear);
 }
 
+void Filler::addScreenshotAction() {
+	if (!Main::Session::screenshotAction || !_peer || !_peer->isUser()) {
+		return;
+	}
+	const auto peer = _peer;
+	_addAction(
+		tr::lng_action_you_took_screenshot(tr::now),
+		[=] {
+			peer->session().api().request(MTPmessages_SendScreenshotNotification(
+				peer->input(),
+				MTP_inputReplyToMessage(
+					MTP_flags(0),
+					MTP_int(0),
+					MTPint(),
+					MTPInputPeer(),
+					MTPstring(),
+					MTPVector<MTPMessageEntity>(),
+					MTPint(),
+					MTPInputPeer(),
+					MTPint(),
+					MTPbytes()),
+				MTP_long(base::RandomValue<uint64>())
+			)).done([=](const MTPUpdates &result) {
+				peer->session().api().applyUpdates(result);
+			}).send();
+		},
+		&st::menuIconSaveImage);
+}
+
 void Filler::addDeleteChat() {
-	if (_topic || (!_sublist && _peer->isChannel())) {
+	if (_topic) {
+		return;
+	} else if (!_sublist && _peer->isChannel()) {
+		if (AyuKept::isKept(_peer)) {
+			const auto peer = _peer;
+			_addAction({
+				.text = tr::lng_box_delete(tr::now),
+				.handler = [=] {
+					Core::App().closeChatFromWindows(peer);
+					peer->owner().deleteConversationLocally(peer);
+				},
+				.icon = &st::menuIconDeleteAttention,
+				.isAttention = true,
+			});
+		}
 		return;
 	}
 	_addAction({
@@ -1146,6 +1218,35 @@ void Filler::addShareContact() {
 		&st::menuIconShare);
 }
 
+void Filler::addSecretChat() {
+	const auto user = _peer->asUser();
+	if (!user
+		|| !AyuSecret::Enabled()
+		|| AyuSecret::IsSecretPeer(user)
+		|| user->isSelf()
+		|| user->isBot()
+		|| user->isInaccessible()
+		|| user->isServiceUser()) {
+		return;
+	}
+	const auto controller = _controller;
+	_addAction(
+		tr::ayu_StartSecretChat(tr::now),
+		[=] { AyuSecret::Get(&controller->session()).start(user); },
+		&st::menuIconLock);
+}
+
+void Filler::addPeekLastSeen() {
+	const auto user = _peer->asUser();
+	if (!user || !AyuPeek::available(user)) {
+		return;
+	}
+	_addAction(
+		tr::ayu_PeekButton(tr::now),
+		[=] { AyuPeek::start(user); },
+		&st::menuIconInfo);
+}
+
 void Filler::addEditContact() {
 	const auto user = _peer->asUser();
 	if (!user || !user->isContact() || user->isSelf()) {
@@ -1216,7 +1317,8 @@ void Filler::addDeleteContact() {
 }
 
 void Filler::addDeleteTopic() {
-	if (!_topic || !_topic->canDelete()) {
+	if (!_topic
+		|| (!_topic->canDelete() && !AyuKept::isKeptDeletedTopic(_topic))) {
 		return;
 	}
 	const auto controller = _controller;
@@ -1602,7 +1704,7 @@ void Filler::addToggleNoForwards() {
 			}
 		}).send();
 	};
-	const auto disabledNow = !user->allowsForwarding();
+	const auto disabledNow = user->isAyuNoForwards();
 	_addAction(disabledNow
 		? tr::lng_enable_sharing(tr::now)
 		: tr::lng_disable_sharing(tr::now), [=] {
@@ -1704,7 +1806,44 @@ void Filler::addSendMoney() {
 	}
 }
 
+void Filler::fillSecretActions() {
+	const auto peer = _peer;
+	const auto controller = _controller;
+	const auto info = AyuSecret::Get(&controller->session()).chat(
+		AyuSecret::ChatIdOfPeer(peer));
+	const auto ready = info && (info->state == AyuSecret::ChatState::Ready);
+	const auto ended = info
+		&& (info->state == AyuSecret::ChatState::Discarded);
+	if (ready) {
+		_addAction(
+			tr::ayu_SecretTimer(tr::now),
+			[=] { Ui::ShowSecretTimer(controller, peer); },
+			&st::menuIconTTL);
+		_addAction(
+			tr::ayu_SecretKey(tr::now),
+			[=] { Ui::ShowSecretKey(controller, peer); },
+			&st::menuIconLock);
+	}
+	_addAction(
+		tr::ayu_SecretClear(tr::now),
+		[=] { Ui::ConfirmSecretClear(controller, peer); },
+		&st::menuIconClear);
+	_addAction(PeerMenuCallback::Args{ .isSeparator = true });
+	_addAction(PeerMenuCallback::Args{
+		.text = ended
+			? tr::ayu_SecretChatDelete(tr::now)
+			: tr::ayu_SecretChatEnd(tr::now),
+		.handler = [=] { Ui::ConfirmSecretEnd(controller, peer); },
+		.icon = &st::menuIconDeleteAttention,
+		.isAttention = true,
+	});
+}
+
 void Filler::fill() {
+	if (_peer && AyuSecret::IsSecretPeer(_peer)) {
+		fillSecretActions();
+		return;
+	}
 	if (_folder) {
 		fillArchiveActions();
 	} else if (_sublist && _peer->isSelf()) {
@@ -1929,6 +2068,7 @@ void Filler::fillContextMenuActions() {
 	}
 	addBanFromChannel();
 	addClearHistory();
+	AyuUi::AddDeleteOwnMessagesAction(_peer, _topic, _controller, _addAction);
 	addDeleteChat();
 	addLeaveChat();
 	addDeleteTopic();
@@ -1936,8 +2076,12 @@ void Filler::fillContextMenuActions() {
 
 void Filler::fillHistoryActions() {
 	addToggleMuteSubmenu(true);
+	AyuUi::AddAyuGramActions(_peer, _thread, _controller, _addAction);
 	addCreateTopic();
 	addInfo();
+	addPeekLastSeen();
+	AyuUi::AddJumpToBeginningAction(_peer, _thread, _controller, _addAction);
+	AyuUi::AddOpenChannelAction(_peer, _controller, _addAction);
 	addViewAsTopics();
 	addManageChat();
 	addStoryArchive();
@@ -1953,8 +2097,10 @@ void Filler::fillHistoryActions() {
 	addTranslate();
 	addReport();
 	addClearHistory();
+	AyuUi::AddDeleteOwnMessagesAction(_peer, _topic, _controller, _addAction);
 	addDeleteChat();
 	addLeaveChat();
+	addScreenshotAction();
 }
 
 void Filler::fillProfileActions() {
@@ -1962,6 +2108,8 @@ void Filler::fillProfileActions() {
 	addSupportInfo();
 	addNewContact();
 	addShareContact();
+	addSecretChat();
+	addPeekLastSeen();
 	addEditContact();
 	addBotToGroup();
 	addNewMembers();
@@ -1974,6 +2122,8 @@ void Filler::fillProfileActions() {
 	addTopicLink();
 	addManageTopic();
 	addToggleTopicClosed();
+	AyuUi::AddOpenChannelAction(_peer, _controller, _addAction);
+	AyuUi::AddShadowBanAction(_peer, _addAction);
 	addViewDiscussion();
 	addDirectMessages();
 	addExportChat();
@@ -1988,8 +2138,10 @@ void Filler::fillProfileActions() {
 }
 
 void Filler::fillRepliesActions() {
+	AyuUi::AddAyuGramActions(_peer, _thread, _controller, _addAction);
 	if (_topic) {
 		addInfo();
+		AyuUi::AddJumpToBeginningAction(_peer, _thread, _controller, _addAction);
 		addManageTopic();
 	}
 	addBoostChat();
@@ -2288,6 +2440,10 @@ void PeerMenuDeleteTopic(
 		not_null<Window::SessionNavigation*> navigation,
 		not_null<PeerData*> peer,
 		MsgId rootId) {
+	if (const auto forum = peer->forum()
+		; forum && AyuKept::purgeDeletedTopic(forum, rootId)) {
+		return;
+	}
 	const auto api = &peer->session().api();
 	api->request(MTPmessages_DeleteTopicHistory(
 		peer->input(),
@@ -3272,7 +3428,12 @@ base::weak_qptr<Ui::BoxContent> ShowForwardMessagesBox(
 				|| (count && (forum || monoforum || community))) {
 				return;
 			} else if (!count || forum || monoforum || community) {
-				ChooseRecipientBoxController::rowClicked(row);
+				if (base::IsCtrlPressed() || base::IsShiftPressed()) {
+					delegate()->peerListSetRowChecked(row, !row->checked());
+					_selectionChanges.fire({});
+				} else {
+					ChooseRecipientBoxController::rowClicked(row);
+				}
 			} else if (count) {
 				delegate()->peerListSetRowChecked(row, !row->checked());
 				_selectionChanges.fire({});
@@ -3670,7 +3831,11 @@ base::weak_qptr<Ui::BoxContent> ShowForwardMessagesBox(
 			std::move(comment),
 			options,
 			forwardOptions);
-		if (!state->submit && successCallback) {
+		const auto items = history->owner().idsToItems(msgIds);
+		const auto ayuForwarding = AyuForward::isAyuForwardNeeded(items)
+			|| AyuForward::isFullAyuForwardNeeded(items.front());
+
+		if ((!state->submit || ayuForwarding) && successCallback) {
 			successCallback();
 		}
 	};
@@ -4024,6 +4189,7 @@ base::weak_qptr<Ui::BoxContent> ShowSendNowMessagesBox(
 					MTP_int(session->scheduledMessages().lookupId(item)));
 			}
 		}
+		markReadAfterAction(history);
 		session->api().request(MTPmessages_SendScheduledMessages(
 			history->peer->input(),
 			MTP_vector<MTPint>(ids)

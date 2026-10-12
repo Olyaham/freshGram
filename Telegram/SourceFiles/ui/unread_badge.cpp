@@ -21,10 +21,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/unread_badge_paint.h"
 #include "styles/style_dialogs.h"
 
+#include "ayu/ayu_settings.h"
+#include "styles/style_info.h"
+
+
 namespace Ui {
 namespace {
 
-constexpr auto kPlayStatusLimit = 2;
+constexpr auto kPlayStatusLimit = 12;
 constexpr auto kBotVerifiedScale = 0.88;
 
 class ScaledBotVerifiedEmoji final : public Ui::Text::CustomEmoji {
@@ -238,6 +242,9 @@ PeerBadge::~PeerBadge() = default;
 int PeerBadge::drawGetWidth(Painter &p, Descriptor &&descriptor) {
 	Expects(descriptor.customEmojiRepaint != nullptr);
 
+	const auto &settings = AyuSettings::getInstance();
+	const auto hidePremiumStatuses = settings.hidePremiumStatuses();
+
 	const auto peer = descriptor.peer;
 	if ((descriptor.scam && (peer->isScam() || peer->isFake()))
 		|| (descriptor.direct && peer->isMonoforum())) {
@@ -261,8 +268,10 @@ int PeerBadge::drawGetWidth(Painter &p, Descriptor &&descriptor) {
 			|| descriptor.bothVerifyAndStatus
 			|| !emojiStatus);
 	const auto paintEmoji = emojiStatus
-		&& (!paintVerify || descriptor.bothVerifyAndStatus);
-	const auto paintStar = premiumStar && !paintVerify;
+		&& (!paintVerify || descriptor.bothVerifyAndStatus)
+		&& !hidePremiumStatuses;
+	const auto paintStar = premiumStar && !paintVerify
+		&& !hidePremiumStatuses;
 
 	auto result = 0;
 	if (paintEmoji) {
@@ -345,7 +354,7 @@ int PeerBadge::drawPremiumEmojiStatus(
 	const auto peer = descriptor.peer;
 	const auto id = peer->emojiStatusId();
 	const auto rectForName = descriptor.rectForName;
-	const auto iconw = descriptor.premium->width();
+	const auto iconw = descriptor.premium->width() + st::infoVerifiedCheckPosition.x();
 	const auto iconx = rectForName.x()
 		+ std::min(descriptor.nameWidth, rectForName.width() - iconw);
 	const auto icony = rectForName.y();

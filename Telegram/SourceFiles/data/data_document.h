@@ -328,6 +328,7 @@ public:
 	[[nodiscard]] StorageFileLocation videoPreloadLocation() const;
 
 	DocumentId id = 0;
+	int32 _dc = 0;
 	int64 size = 0;
 	QSize dimensions;
 	int32 date = 0;
@@ -335,6 +336,10 @@ public:
 	FileStatus status = FileReady;
 
 	std::unique_ptr<Data::UploadState> uploadingData;
+
+	int32 getDC() const {
+		return _dc;
+	}
 
 private:
 	enum class Flag : ushort {
@@ -400,7 +405,6 @@ private:
 
 	int _videoPreloadPrefix = 0;
 	// Two types of location: from MTProto by dc+access or from web by url
-	int32 _dc = 0;
 	uint64 _access = 0;
 	QByteArray _fileReference;
 	QString _url;

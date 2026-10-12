@@ -871,7 +871,9 @@ void Generator::paintBubble(const Bubble &bubble) {
 		if (bubble.attachToBottom) {
 			rounding.bottomRight = Corner::Small;
 		} else if (bubble.tail) {
-			rounding.bottomRight = Corner::Tail;
+			rounding.bottomRight = Ui::MaterialBubbles()
+				? Corner::Large
+				: Corner::Tail;
 		}
 	} else {
 		if (bubble.attachToTop) {
@@ -880,7 +882,9 @@ void Generator::paintBubble(const Bubble &bubble) {
 		if (bubble.attachToBottom) {
 			rounding.bottomLeft = Corner::Small;
 		} else if (bubble.tail) {
-			rounding.bottomLeft = Corner::Tail;
+			rounding.bottomLeft = Ui::MaterialBubbles()
+				? Corner::Large
+				: Corner::Tail;
 		}
 	}
 	Ui::PaintBubble(*_p, Ui::SimpleBubble{
@@ -919,7 +923,7 @@ void Generator::paintBubble(const Bubble &bubble) {
 			_p->setOpacity(Ui::kDefaultOutline1Opacity);
 			_p->setClipRect(rbar.x(), rbar.y(), outline, rbar.height());
 			_p->drawRoundedRect(rbar, radius, radius);
-			_p->setOpacity(Ui::kDefaultBgOpacity);
+			_p->setOpacity(Ui::DefaultBgOpacity());
 			_p->setClipRect(
 				rbar.x() + outline,
 				rbar.y(),

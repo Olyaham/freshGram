@@ -7,7 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
 
+#include "base/flat_map.h"
 #include "base/unique_qptr.h"
+#include "dialogs/dialogs_search_media.h"
 #include "ui/rp_widget.h"
 
 namespace Ui {
@@ -27,6 +29,8 @@ enum class ChatSearchTab : uchar {
 	Archive,
 	ThisCommunity,
 };
+
+[[nodiscard]] QString SearchMediaLabel(SearchMediaFilter media);
 
 enum class ChatSearchPeerTabType : uchar {
 	Chat,
@@ -48,12 +52,17 @@ public:
 		ChatSearchTab active,
 		ChatSearchPeerTabType peerTabType,
 		std::shared_ptr<Ui::DynamicImage> fromUserpic,
-		QString fromName);
+		QString fromName,
+		SearchMediaFilter media,
+		base::flat_map<
+			SearchMediaFilter,
+			std::shared_ptr<Ui::DynamicImage>> mediaIcons);
 
 	[[nodiscard]] rpl::producer<> cancelInRequests() const;
 	[[nodiscard]] rpl::producer<> cancelFromRequests() const;
 	[[nodiscard]] rpl::producer<> changeFromRequests() const;
 	[[nodiscard]] rpl::producer<ChatSearchTab> tabChanges() const;
+	[[nodiscard]] rpl::producer<SearchMediaFilter> mediaChanges() const;
 
 private:
 	struct Section {
@@ -72,6 +81,7 @@ private:
 	int resizeGetHeight(int newWidth) override;
 	void paintEvent(QPaintEvent *e) override;
 	void showMenu();
+	void showMediaMenu();
 
 	void updateSection(
 		not_null<Section*> section,
@@ -80,7 +90,13 @@ private:
 
 	Section _in;
 	Section _from;
+	Section _media;
 	rpl::variable<ChatSearchTab> _active;
+	SearchMediaFilter _mediaCurrent = SearchMediaFilter::All;
+	base::flat_map<
+		SearchMediaFilter,
+		std::shared_ptr<Ui::DynamicImage>> _mediaIcons;
+	rpl::event_stream<SearchMediaFilter> _mediaChanges;
 
 	base::unique_qptr<Ui::PopupMenu> _menu;
 

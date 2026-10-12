@@ -178,6 +178,9 @@ public:
 	[[nodiscard]] bool hasPasscode() const;
 	[[nodiscard]] bool appLockEnabled() const;
 	[[nodiscard]] bool hasLocalPasscode() const;
+	[[nodiscard]] MTP::AuthKeyPtr localKey() const {
+		return _localKey;
+	}
 
 private:
 	enum class StartModernResult {

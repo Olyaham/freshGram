@@ -1,6 +1,6 @@
 {
     "name": "CentOS",
-    "image": "tdesktop:centos_env",
+    "image": "freshgram:centos_env",
     "customizations": {
         "vscode": {
             "settings": {
@@ -21,6 +21,9 @@
     },
     "capAdd": [
         "SYS_PTRACE"
+    ],
+    "runArgs": [
+        "--security-opt=label=disable"
     ],
     "securityOpt": [
         "seccomp=unconfined"

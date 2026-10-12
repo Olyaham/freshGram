@@ -44,6 +44,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <xxhash.h> // XXH64.
 #include <QtWidgets/QApplication>
 
+#include "styles/style_ayu_icons.h"
+#include "ayu/ui/ayu_userpic.h"
+
+
 [[nodiscard]] PeerListRowId UniqueRowIdFromString(const QString &d) {
 	return XXH64(d.data(), d.size() * sizeof(ushort), 0);
 }
@@ -1113,7 +1117,7 @@ void PeerListRow::paintDisabledCheckUserpic(
 				* Ui::ForumUserpicRadiusMultiplier();
 			p.drawRoundedRect(userpicEllipse, radius, radius);
 		} else {
-			p.drawEllipse(userpicEllipse);
+			AyuUserpic::PaintShape(p, userpicEllipse);
 		}
 
 		p.setPen(iconBorderPen);
@@ -1125,7 +1129,7 @@ void PeerListRow::paintDisabledCheckUserpic(
 }
 
 void PeerListRow::setStatusText(const QString &text) {
-	_status.setText(st::defaultTextStyle, text, Ui::NameTextOptions());
+	_status.setText(st::defaultTextStyle, text, Ui::PlainNameTextOptions());
 }
 
 float64 PeerListRow::checkedRatio() {

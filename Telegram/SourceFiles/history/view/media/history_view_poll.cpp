@@ -29,7 +29,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/image/image.h"
 #include "ui/item_text_options.h"
 #include "ui/text/text_options.h"
-#include "ui/text/text_utilities.h"
 #include "ui/text/format_values.h"
 #include "ui/effects/animations.h"
 #include "ui/effects/radial_animation.h"
@@ -83,6 +82,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_dialogs.h"
 #include "styles/style_polls.h"
 #include "styles/style_widgets.h"
+
+#include "ayu/ui/ayu_userpic.h"
 
 
 namespace HistoryView {
@@ -3522,7 +3523,7 @@ void Poll::Header::paintRecentVoters(
 			p.setPen(pen);
 			p.setBrush(Qt::NoBrush);
 			PainterHighQualityEnabler hq(p);
-			p.drawEllipse(x, y, size, size);
+			AyuUserpic::PaintShape(p, x, y, size);
 		};
 		if (_owner->usesBubblePattern(context)) {
 			const auto add = st::lineWidth * 2;

@@ -19,6 +19,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <set>
 
+#include "ayu/ui/ayu_userpic.h"
+
+
 namespace Ui {
 namespace {
 
@@ -177,7 +180,9 @@ void Item::paintOnce(Painter &p, int x, int y, int outerWidth) {
 		return;
 	}
 
-	auto radius = _st.height / 2;
+	auto radius = std::min(
+		AyuUserpic::ComputeRadius(_st.height),
+		_st.height / 2);
 	auto inner = style::rtlrect(
 		x + radius,
 		y,
@@ -236,8 +241,9 @@ void Item::paintDeleteButton(
 	p.setBrush(_color);
 	{
 		PainterHighQualityEnabler hq(p);
-		p.drawEllipse(
-			style::rtlrect(x, y, _st.height, _st.height, outerWidth));
+		const auto rect = style::rtlrect(
+			x, y, _st.height, _st.height, outerWidth);
+		AyuUserpic::PaintShape(p, rect);
 	}
 
 	CrossAnimation::paint(
@@ -420,6 +426,7 @@ public:
 		ScrollCallback callback);
 
 	[[nodiscard]] QString getQuery() const;
+	[[nodiscard]] bool hasRawQuery() const;
 	void setQuery(const QString &query);
 	bool setInnerFocus();
 	void clearQuery();
@@ -612,6 +619,10 @@ QString MultiSelect::getQuery() const {
 	return _inner->getQuery();
 }
 
+bool MultiSelect::hasRawQuery() const {
+	return _inner->hasRawQuery();
+}
+
 void MultiSelect::setQuery(const QString &query) {
 	_inner->setQuery(query);
 }
@@ -714,6 +725,10 @@ void MultiSelect::Inner::queryChanged() {
 
 QString MultiSelect::Inner::getQuery() const {
 	return _field->getLastText().trimmed();
+}
+
+bool MultiSelect::Inner::hasRawQuery() const {
+	return !_field->getLastText().isEmpty();
 }
 
 void MultiSelect::Inner::setQuery(const QString &query) {

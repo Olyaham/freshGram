@@ -1,0 +1,97 @@
+/*
+ * This is the source code of AyuGram for Desktop.
+ *
+ * We do not and cannot prevent the use of our code,
+ * but be respectful and credit the original author.
+ *
+ * Copyright @Radolyn, 2025
+ */
+
+using "ui/colors.palette";
+using "ui/chat/chat.style";
+using "ui/widgets/widgets.style";
+using "dialogs/dialogs.style";
+
+ayuSearchMediaPhoto: icon {{ "info/info_media_photo", menuIconColor }};
+ayuSearchMediaVideo: icon {{ "info/info_media_video", menuIconColor }};
+ayuSearchMediaFile: icon {{ "info/info_media_file", menuIconColor }};
+ayuSearchMediaMusic: icon {{ "info/info_media_audio", menuIconColor }};
+ayuSearchMediaVoice: icon {{ "info/info_media_voice", menuIconColor }};
+ayuSearchMediaRound: icon {{ "info/info_media_round", menuIconColor }};
+ayuSearchMediaLink: icon {{ "info/info_media_link", menuIconColor }};
+ayuSearchMediaGif: icon {{ "info/info_media_gif", menuIconColor }};
+
+ayuSecretChatIcon: ThreeStateIcon {
+	icon: icon {{ "ayu/secret_lock", dialogsChatIconFg, point(2px, 4px) }};
+	over: icon {{ "ayu/secret_lock", dialogsChatIconFgOver, point(2px, 4px) }};
+	active: icon {{ "ayu/secret_lock", dialogsChatIconFgActive, point(2px, 4px) }};
+}
+
+ayuDeletedChatIcon: ThreeStateIcon {
+	icon: icon {{ "ayu/deleted_chat", dialogsChatIconFg, point(1px, 4px) }};
+	over: icon {{ "ayu/deleted_chat", dialogsChatIconFgOver, point(1px, 4px) }};
+	active: icon {{ "ayu/deleted_chat", dialogsChatIconFgActive, point(1px, 4px) }};
+}
+
+ayuGhostIcon: icon {{ "ayu/ghost", menuIconColor }};
+ayuGhostModeGlobalIcon: icon {{ "ayu/ghost_mode_global", historyPeerUserpicFg }};
+ayuEditsHistoryIcon: icon {{ "ayu/edits_history", menuIconColor }};
+ayuLReadMenuIcon: icon {{ "ayu/lread", menuIconColor }};
+ayuSReadMenuIcon: icon {{ "ayu/sread", menuIconColor }};
+ayuStreamerModeMenuIcon: icon {{ "ayu/streamer", menuIconColor }};
+ayuToBeginningMenuIcon: icon {{ "ayu/to_beginning", menuIconColor }};
+ayuRepeatMenuIcon: icon {{ "ayu/repeat", menuIconColor }};
+ayuContactsMutualIcon: icon {{ "ayu/contacts_mutual", contactsStatusFg }};
+ayuContactsMutualIconOver: icon {{ "ayu/contacts_mutual", contactsStatusFgOver }};
+
+messageFieldAttachIcon: icon {{ "ayu/message_field/attach", menuIconColor }};
+messageFieldCommandsIcon: icon {{ "ayu/message_field/commands", menuIconColor }};
+messageFieldEmojiIcon: icon {{ "ayu/message_field/emoji", menuIconColor }};
+messageFieldVoiceIcon: icon {{ "ayu/message_field/voice", menuIconColor }};
+messageFieldTTLIcon: icon {{ "ayu/message_field/ttl", menuIconColor }};
+messageFieldCocoonAiIcon: icon{
+	{ size(24px, 24px), transparent },
+	{ "chat/ai_letters-20x20", menuIconColor, point(2px, 2px) },
+	{ "chat/ai_star1-20x20", menuIconColor, point(2px, 2px) },
+	{ "chat/ai_star2-20x20", menuIconColor, point(2px, 2px) },
+};
+
+messageFieldAiArticleIcon: icon{
+	{ size(44px, 24px), transparent },
+	{ "/menu/article_rich-24x24", menuIconColor },
+	{ "chat/ai_letters-20x20", menuIconColor, point(22px, 2px) },
+	{ "chat/ai_star1-20x20", menuIconColor, point(22px, 2px) },
+	{ "chat/ai_star2-20x20", menuIconColor, point(22px, 2px) },
+};
+
+inChannelBadgeIcon: icon {{ "ayu/channel", msgInDateFg }};
+inChannelBadgeSelectedIcon: icon {{ "ayu/channel", msgInDateFgSelected }};
+outChannelBadgeIcon: icon {{ "ayu/channel", msgOutDateFg }};
+outChannelBadgeSelectedIcon: icon {{ "ayu/channel", msgOutDateFgSelected }};
+
+winEnterWithGuestIcon: icon {{ "ayu/ghost_tray", windowFg }};
+
+editedIcon: IconEmoji{
+    icon: icon{{ "ayu/edited", windowFg }};
+    padding: margins(0px, 0px, 0px, 0px);
+    useIconColor: false;
+}
+
+deletedIcon: IconEmoji{
+    icon: icon{{ "ayu/trash_bin", windowFg }};
+    padding: margins(0px, 0px, 0px, 0px);
+    useIconColor: false;
+}
+
+burntIcon: IconEmoji{
+    icon: icon{{ "ayu/burnt", windowFg }};
+    padding: margins(0px, 0px, 0px, 0px);
+    useIconColor: false;
+}
+
+ayuHistoryFileInPlugin: icon {{ "ayu/history_file_plugin", historyFileInIconFg }};
+ayuHistoryFileInPluginSelected: icon {{ "ayu/history_file_plugin", historyFileInIconFgSelected }};
+ayuHistoryFileOutPlugin: icon {{ "ayu/history_file_plugin", historyFileOutIconFg }};
+ayuHistoryFileOutPluginSelected: icon {{ "ayu/history_file_plugin", historyFileOutIconFgSelected }};
+
+menuIconClearAttention: icon {{ "menu/clear", menuIconAttentionColor }};
