@@ -54,9 +54,12 @@ The ordinary Linux run contains 27 CTest groups. The sanitizer run contains 19;
 small-stack and publication-preload cases run separately without sanitizers.
 Nonce tests are smoke checks, not a statistical assessment of the RNG.
 
-Live domain startup, disk-key verification, fake-passcode changes, UI/worker
-thread lifetimes and the complete PFS Manager handshake require client testing.
-The standalone adapters do not establish those runtime properties.
+The full Linux Debug client separately passed disposable-profile checks of
+domain startup, disk-key verification, worker-based fake-passcode changes,
+disk-write failures and provider-dialog worker lifetimes. See
+`docs/transcription-providers.md` for that run's scope. The complete PFS Manager
+handshake still requires authenticated client testing. The standalone adapters
+do not establish those runtime properties.
 
 Streaming publication requires a fresh destination and same-filesystem hard
 links. Unsupported filesystems return failure. A seal/publication failure with

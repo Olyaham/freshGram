@@ -288,14 +288,16 @@ void Load() {
 		state.blobs.push_back(MakeDecoy());
 	}
 	const auto packed = PackData(state.data);
-	QDir().mkpath(BasePath());
+	if (!QDir().mkpath(BasePath())) {
+		return false;
+	}
 	auto file = FileWriteDescriptor(FileName(), BasePath(), true);
 	file.writeData(state.salt);
 	file.writeData(PackBlobs(state.blobs));
 	auto encrypted = EncryptedDescriptor(packed.size() + sizeof(quint32));
 	encrypted.stream << packed;
 	file.writeEncrypted(encrypted, key);
-	return true;
+	return file.finish();
 }
 
 [[nodiscard]] QByteArray MakeBlobWith(

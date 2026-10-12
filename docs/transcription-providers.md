@@ -89,10 +89,36 @@ Mar2ianen and Olyaham, and NedoBot references are retained in
 
 Isolated checks cover Rust mock protocols, in-flight cancellation, Gemini cleanup,
 strict response parsing, the real Qt loader → C ABI → local HTTP mock path, and
-ABI/capability rejection. These checks do not validate the running client's UI,
-real provider credentials, native GPU/NPU execution, or Windows/macOS deployment.
-The crypto harness also exercises credential persistence with the real legacy
-AYV1 decoder and migration to FGV2. Production settings, routing, provider dialogs,
-model downloads, passcode integration and transcription UI translation units
-were syntax-checked against the generated 7.3.1 API, language and style headers.
-The client itself was not built for this integration.
+ABI/capability rejection. The crypto harness also exercises credential persistence
+with the real legacy AYV1 decoder and migration to FGV2.
+
+The complete 7.3.1 Linux client was built and linked in Debug using Qt 6.11.2.
+A disposable-profile run passed 23 stages and a separate process restart passed
+five more. These exercised the real Groq, Gemini, Custom and Local dialogs,
+masked keys, FGV2 persistence without plaintext, independent scope persistence,
+models, prompt, language, separate module paths and explicit key clearing.
+The actual Custom connection-test button submitted unsaved fields and WAV data
+to a local HTTP mock; closing the dialog cancelled the transport and suppressed
+late result UI. Startup verified the disk key and downstream vault, discovered
+the bundled cloud component and left ASR unloaded while idle.
+
+After removing the temporary runtime scenario, the final client was rebuilt.
+Both the build-tree executable and the staged CMake installation painted the
+startup screen, persisted their disposable-profile local key and exited normally.
+The installed cloud library matched the bundled artifact, exposed ABI 1 with
+zero Local capabilities and had resolvable runtime dependencies. The executable
+contained no native Whisper/ggml engine definitions.
+
+The same client run checked worker-based passcode creation and change, fake
+unlock recovery, removal, and injected disk-write failures. The standalone
+adapters do not substitute for these runtime checks.
+
+Separate Local components transcribed the whisper.cpp JFK sample with the
+SHA-256-verified `ggml-tiny.en.bin` model on CPU and AMD Radeon 780M through Vulkan.
+Both builds passed in-flight cancellation and missing-model checks. Local
+cancellation uses the isolated FFI bridge to avoid the incorrect closure-pointer
+cast in `whisper-rs 0.16.0`'s safe-callback helper.
+
+Live Groq/Gemini credentials, authenticated voice-message routing, complete
+secret-chat PFS exchanges, NPU execution and native Windows/macOS deployment
+remain unverified by this run.

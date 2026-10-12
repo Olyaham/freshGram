@@ -9372,7 +9372,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_TranscriptionChooseModule" = "Choose installed ASR module";
 "ayu_RequireEncryption" = "Require encryption for archived message content";
 "ayu_TranscriptionLanguage" = "Language for all providers (auto, en, ru, …)";
-"ayu_TranscriptionAllowGpu" = "Allow GPU acceleration when supported by the module";
+"ayu_TranscriptionAllowGpu" = "Allow GPU acceleration";
 "ayu_TranscriptionTesting" = "Testing… Press Test again to cancel.";
 "ayu_TranscriptionCapabilities" = "Local test passed. Compiled backends: {backend}. Device selection is automatic; CoreML needs a matching model.";
 "ayu_MaterialIcons" = "Material Icons";
