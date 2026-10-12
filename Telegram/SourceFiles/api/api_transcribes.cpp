@@ -12,6 +12,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "logs.h"
 #include "ayu/features/recognition/local_transcribe.h"
 #include "ayu/features/recognition/transcription_backend.h"
+#include "crl/crl_on_main.h"
 #include "ui/toast/toast.h"
 #include "api/api_text_entities.h"
 #include "data/data_channel.h"
@@ -32,14 +33,16 @@ namespace Api {
 Transcribes::Transcribes(not_null<ApiWrap*> api)
 : _session(&api->session())
 , _api(&api->instance()) {
-	_session->data().itemRemoved() | rpl::on_next([=](
-			not_null<const HistoryItem*> item) {
-		AyuRecognition::CancelBackendTranscription(item);
-		const auto i = _map.find(item->fullId());
-		if (i != _map.end()) {
-			_map.erase(i);
-		}
-	}, _lifetime);
+	crl::on_main(_session, [=] {
+		_session->data().itemRemoved() | rpl::on_next([=](
+				not_null<const HistoryItem*> item) {
+			AyuRecognition::CancelBackendTranscription(item);
+			const auto i = _map.find(item->fullId());
+			if (i != _map.end()) {
+				_map.erase(i);
+			}
+		}, _lifetime);
+	});
 }
 
 Transcribes::~Transcribes() {

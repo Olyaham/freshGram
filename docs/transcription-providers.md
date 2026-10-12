@@ -102,6 +102,13 @@ to a local HTTP mock; closing the dialog cancelled the transport and suppressed
 late result UI. Startup verified the disk key and downstream vault, discovered
 the bundled cloud component and left ASR unloaded while idle.
 
+A follow-up offline regression exercised the production `Main::Session`
+constructor with a synthetic user, persisted that session and restored it in a
+second process. Both runs passed transcription-cache removal checks. The
+message-removal subscription is queued with a session lifetime guard because
+`ApiWrap` is constructed before `Data::Session`; subscribing in the transcription
+constructor would abort during login or session restoration.
+
 After removing the temporary runtime scenario, the final client was rebuilt.
 Both the build-tree executable and the staged CMake installation painted the
 startup screen, persisted their disposable-profile local key and exited normally.
