@@ -1,0 +1,36 @@
+[package]
+name = "voice-asr"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Pluggable voice transcription (Groq, Gemini Transcribe, optional local Whisper) with an isolated C ABI for desktop clients."
+authors = ["Mar2ianen", "Olyaham"]
+
+[lib]
+name = "voice_asr"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+local = ["dep:whisper-rs", "dep:hound"]
+local-cuda = ["local", "whisper-rs/cuda"]
+local-vulkan = ["local", "whisper-rs/vulkan"]
+local-metal = ["local", "whisper-rs/metal"]
+local-hipblas = ["local", "whisper-rs/hipblas"]
+local-coreml = ["local", "whisper-rs/coreml"]
+local-sycl = ["local", "whisper-rs/intel-sycl"]
+
+[dependencies]
+reqwest = { version = "0.13", features = ["json", "multipart", "stream"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "fs"] }
+tokio-util = { version = "0.7", features = ["io"] }
+tempfile = "3"
+thiserror = "2"
+whisper-rs = { version = "0.16", optional = true }
+hound = { version = "3", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+axum = { version = "0.8", features = ["multipart"] }
