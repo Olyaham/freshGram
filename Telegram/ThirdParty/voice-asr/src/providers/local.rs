@@ -1,15 +1,10 @@
 //! Local Whisper via the `whisper-rs` bindings (tazz4843) over
 //! whisper.cpp (ggml-org).
 //!
-//! Deliberately `unsafe`-free: only the safe `whisper-rs` API is used
-//! (`set_abort_callback_safe`, bounded `get_segment`, lossy text access).
 //! GPU use follows the linked build flavor (`local-cuda`, `local-vulkan`, …);
 //! `use_gpu` only decides whether the GPU path may be attempted.
 
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-};
+use std::sync::{Arc, atomic::AtomicBool};
 
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
@@ -121,10 +116,7 @@ fn run_whisper(
     } else {
         params.set_language(Some(lang));
     }
-    params.set_abort_callback_safe(move || flag.load(Ordering::Relaxed));
-
-    state
-        .full(params, &samples)
+    crate::ffi::decode_local(&mut state, params, &samples, &flag)
         .map_err(|e| TranscriptError::Model(format!("decode: {e:?}")))?;
 
     let count = state.full_n_segments();

@@ -82,6 +82,27 @@ pub struct VasrJob {
 /// Invoked exactly once, on a worker thread — never on the caller's thread.
 pub type VasrCallback = Option<extern "C" fn(*mut VasrTranscript, *mut c_void)>;
 
+#[cfg(feature = "local")]
+// WHY: whisper-rs 0.16.0 casts its boxed callback to the wrong type;
+// a borrowed atomic avoids that cast and the leaked allocation.
+pub(crate) fn decode_local(
+    state: &mut whisper_rs::WhisperState,
+    mut params: whisper_rs::FullParams<'_, '_>,
+    samples: &[f32],
+    cancelled: &AtomicBool,
+) -> Result<(), whisper_rs::WhisperError> {
+    unsafe extern "C" fn abort(data: *mut c_void) -> bool {
+        // SAFETY: decode_local holds this AtomicBool throughout synchronous full().
+        unsafe { &*data.cast::<AtomicBool>() }.load(Ordering::Relaxed)
+    }
+    // SAFETY: full() joins computation before returning; the callback only reads the flag.
+    unsafe {
+        params.set_abort_callback(Some(abort));
+        params.set_abort_callback_user_data(ptr::from_ref(cancelled).cast_mut().cast());
+    }
+    state.full(params, samples)
+}
+
 impl VasrTranscript {
     fn wrap(transcript: Transcript) -> Self {
         let text = CString::new(transcript.text.clone()).unwrap_or_default();

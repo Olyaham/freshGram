@@ -97,6 +97,10 @@ JSON is size-bounded; malformed transcripts fail instead of becoming silence.
 Raw API error bodies are never returned to the host. Custom endpoints may omit
 the API key for self-hosted services.
 
+Local cancellation uses an owned atomic flag through a synchronous `ffi`
+bridge. This avoids the incorrect closure-pointer cast and leaked callback
+allocation in `whisper-rs 0.16.0`'s `set_abort_callback_safe` helper.
+
 ## C usage sketch
 
 ```c
