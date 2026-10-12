@@ -71,5 +71,6 @@ void Remove(int id);
 void SetClearCacheOnLock(bool value);
 
 void RealPasscodeChanged(const QByteArray &passcode);
+[[nodiscard]] Fn<void()> PrepareRealPasscodeChange(const QByteArray &passcode);
 
 } // namespace AyuFakePasscode

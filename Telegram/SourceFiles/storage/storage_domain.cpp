@@ -265,6 +265,7 @@ PasscodeDerivation::PasscodeDerivation(PasscodeDerivation &&other) noexcept
 : _wrap(base::take(other._wrap))
 , _passcode(base::take(other._passcode))
 , _key(base::take(other._key))
+, _passcodeCommitted(base::take(other._passcodeCommitted))
 , _cleansed(base::take(other._cleansed)) {
 }
 
@@ -274,6 +275,7 @@ PasscodeDerivation &PasscodeDerivation::operator=(
 	_wrap = base::take(other._wrap);
 	_passcode = base::take(other._passcode);
 	_key = base::take(other._key);
+	_passcodeCommitted = base::take(other._passcodeCommitted);
 	_cleansed = base::take(other._cleansed);
 	return *this;
 }
@@ -688,6 +690,58 @@ void Domain::writeAccounts() {
 	_keyDataDirty = false;
 }
 
+bool Domain::syncAndVerifyLocalKey() const {
+	if (!_localKey || _owner->accounts().empty()) {
+		return false;
+	}
+	Sync();
+	auto disk = FileReadDescriptor();
+	if (!ReadFile(disk, ComputeKeyName(_dataName), BaseGlobalPath())) {
+		return false;
+	}
+	auto parsed = KeyData();
+	auto encryptedInfo = QByteArray();
+	if (ReadKeyData(disk.stream, parsed, encryptedInfo) != ReadKeyDataResult::Success
+		|| !disk.stream.atEnd()
+		|| parsed.legacy != _keyData->legacy
+		|| parsed.committed != _keyData->committed
+		|| parsed.openSalt != _keyData->openSalt
+		|| parsed.openKeyEncrypted != _keyData->openKeyEncrypted
+		|| parsed.passcodeWraps.size() != _keyData->passcodeWraps.size()) {
+		return false;
+	}
+	for (auto i = size_t(0); i != parsed.passcodeWraps.size(); ++i) {
+		const auto &a = parsed.passcodeWraps[i];
+		const auto &b = _keyData->passcodeWraps[i];
+		if (!SameWrapKey(a, b) || a.generation != b.generation
+			|| a.keyEncrypted != b.keyEncrypted) {
+			return false;
+		}
+	}
+	auto info = EncryptedDescriptor();
+	if (!DecryptLocal(info, encryptedInfo, _localKey)) {
+		return false;
+	}
+	auto count = qint32();
+	info.stream >> count;
+	if (count <= 0 || count > Main::Domain::kPremiumMaxAccounts) {
+		return false;
+	}
+	auto foundAccount = false;
+	for (auto i = 0; i != count; ++i) {
+		auto index = qint32();
+		info.stream >> index;
+		for (const auto &account : _owner->accounts()) {
+			foundAccount = foundAccount || account.index == index;
+		}
+	}
+	if (!info.stream.atEnd()) {
+		auto active = qint32();
+		info.stream >> active;
+	}
+	return foundAccount && CheckStreamStatus(info.stream) && info.stream.atEnd();
+}
+
 QByteArray Domain::prepareAccountsInfo() const {
 	Expects(_localKey != nullptr);
 
@@ -856,12 +910,14 @@ PasscodeDerivation Domain::prepareOpen(const QByteArray &passcode) const {
 }
 
 PasscodeDerivation Domain::prepareNewWrap(const QByteArray &passcode) const {
-	return PasscodeDerivation(
+	auto result = PasscodeDerivation(
 		std::make_unique<PasscodeWrap>(PasscodeWrap{
 			.kdf = DefaultPasscodeKdf(),
 			.salt = RandomSalt(),
 		}),
 		passcode);
+	result._passcodeCommitted = AyuFakePasscode::PrepareRealPasscodeChange(passcode);
+	return result;
 }
 
 // The only decisions this makes before the derivation runs are which wrap the
@@ -918,9 +974,6 @@ SetPasscodeResult Domain::setPasscode(
 	}
 	auto derived = prepareNewWrap(passcode);
 	const auto result = changePasscode(&derived, verification);
-	if (result == SetPasscodeResult::Success) {
-		AyuFakePasscode::RealPasscodeChanged(passcode);
-	}
 	return result;
 }
 
@@ -1023,6 +1076,9 @@ SetPasscodeResult Domain::installPasscode(
 	_keyDataDirty = false;
 
 	_verificationNonce = 0;
+	if (auto committed = base::take(derived._passcodeCommitted)) {
+		committed();
+	}
 	_passcodeKeyChanged.fire({});
 	return SetPasscodeResult::Success;
 }

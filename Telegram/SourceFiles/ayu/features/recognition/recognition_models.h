@@ -59,6 +59,7 @@ public:
 		not_null<Main::Session*> session,
 		const Model &model,
 		Fn<void()> destroyCallback);
+	~ModelLoader() override;
 
 	void destroy() override;
 
@@ -67,13 +68,17 @@ public:
 	}
 
 private:
+	struct PublicationState;
+
 	void unpack(const QString &path) override;
 	void fail() override;
 
 	const Model _model;
+	const std::shared_ptr<PublicationState> _publication;
 	// Be sure to always call it in the main thread.
 	Fn<void()> _destroyCallback;
 	rpl::lifetime _lifetime;
+	bool _destroyRequested = false;
 
 };
 

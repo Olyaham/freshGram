@@ -136,7 +136,10 @@ jobs:
           Write-Host "::error::Preparing the libraries did not finish in time. The finished part is cached, run the workflow again to continue."
           exit 1
 
-      - name: Configure
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Configure client
         shell: cmd
         env:
           API_ID: ${{ secrets.API_ID }}
@@ -191,6 +194,10 @@ jobs:
           Copy-Item $exe.FullName dist/freshGram.exe
           New-Item -ItemType Directory -Force portable/TelegramForcePortable | Out-Null
           Copy-Item $exe.FullName portable/freshGram.exe
+          $asr = Join-Path $exe.DirectoryName 'voice-asr/cloud/voice_asr.dll'
+          if (-not (Test-Path $asr)) { throw "Cloud ASR component was not built" }
+          New-Item -ItemType Directory -Force portable/voice-asr/cloud | Out-Null
+          Copy-Item $asr portable/voice-asr/cloud/voice_asr.dll
           Compress-Archive -Path portable/* -DestinationPath dist/freshGram-windows-portable.zip -Force
           $hashes = Get-ChildItem dist -File | Where-Object { $_.Name -ne 'SHA256SUMS-windows' } | ForEach-Object {
             "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"

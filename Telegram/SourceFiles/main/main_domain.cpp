@@ -87,6 +87,12 @@ Storage::StartResult Domain::startWith(
 
 	const auto result = _local->start(std::move(derived));
 	if (result == Storage::StartResult::Success) {
+		if (_local->syncAndVerifyLocalKey()) {
+			AyuDatabase::initialize();
+		} else {
+			AyuDatabase::lock();
+			LOG(("Archive Error: local key persistence could not be verified."));
+		}
 		activateAfterStarting();
 		Wallet::DropUnusedPasscode();
 		crl::on_main(&Core::App(), [=] { suggestExportIfNeeded(); });
@@ -123,6 +129,7 @@ bool Domain::tryPasscode(
 }
 
 void Domain::finish() {
+	AyuDatabase::lock();
 	if (_walletKeyring) {
 		_walletKeyring->clear();
 	}
@@ -169,6 +176,11 @@ void Domain::resetWithForgottenPasscode() {
 	}
 	if (_accounts.empty()) {
 		_local->startFromScratch();
+		if (_local->syncAndVerifyLocalKey()) {
+			AyuDatabase::initialize();
+		} else {
+			AyuDatabase::lock();
+		}
 		activateAfterStarting();
 	} else {
 		for (const auto &[index, account] : _accounts) {
@@ -186,8 +198,6 @@ bool Domain::finishPasscodeClearAfterReset() {
 
 void Domain::activateAfterStarting() {
 	Expects(started());
-
-	AyuDatabase::initialize();
 
 	auto toActivate = _accounts.front().account.get();
 	for (const auto &[index, account] : _accounts) {

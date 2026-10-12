@@ -12,6 +12,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 class ApiWrap;
 
+namespace AyuRecognition {
+enum class EngineProvider;
+} // namespace AyuRecognition
+
 namespace Main {
 class Session;
 } // namespace Main
@@ -30,6 +34,7 @@ struct SummaryEntry {
 class Transcribes final {
 public:
 	explicit Transcribes(not_null<ApiWrap*> api);
+	~Transcribes();
 
 	struct Entry {
 		QString result;
@@ -64,7 +69,6 @@ public:
 
 private:
 	void load(not_null<HistoryItem*> item);
-	void loadLocal(not_null<HistoryItem*> item);
 	void loadBackend(
 		not_null<HistoryItem*> item,
 		AyuRecognition::EngineProvider engine);
@@ -81,6 +85,7 @@ private:
 	base::flat_map<uint64, FullMsgId> _ids;
 
 	base::flat_map<FullMsgId, SummaryEntry> _summaries;
+	rpl::lifetime _lifetime;
 
 };
 

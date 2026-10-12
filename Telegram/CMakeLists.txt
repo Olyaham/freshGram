@@ -30,8 +30,8 @@ include(cmake/telegram_options.cmake)
 include(cmake/lib_ffmpeg.cmake)
 include(cmake/lib_stripe.cmake)
 include(cmake/lib_tgcalls.cmake)
-include(cmake/lib_whisper.cmake)
 include(cmake/lib_tesseract.cmake)
+include(cmake/voice_asr.cmake)
 include(cmake/lib_prisma.cmake)
 include(cmake/lib_fido2.cmake)
 include(cmake/lib_zxcvbn.cmake)
@@ -78,7 +78,6 @@ target_link_libraries(Telegram
 PRIVATE
     tdesktop::lib_fido2
     tdesktop::lib_tgcalls
-    tdesktop::lib_whisper
     tdesktop::lib_tesseract
     tdesktop::td_export
     tdesktop::td_gram
@@ -131,6 +130,7 @@ set(ayugram_files
         ayu/ayu_infra.cpp
         ayu/ayu_infra.h
         ayu/utils/ayu_mapper.cpp
+        ayu/utils/file_perms.h
         ayu/data/mention_guard.cpp
         ayu/data/mention_guard.h
         ayu/utils/builtin_lang.cpp
@@ -138,22 +138,21 @@ set(ayugram_files
         ayu/utils/crash_trace.cpp
         ayu/features/fake_passcode/fake_passcode.cpp
         ayu/features/fake_passcode/fake_passcode.h
-        ayu/features/recognition/local_transcribe.cpp
         ayu/features/recognition/local_transcribe.h
         ayu/features/recognition/transcription_backend.cpp
         ayu/features/recognition/transcription_backend.h
         ayu/features/recognition/transcription_config.cpp
         ayu/features/recognition/transcription_config.h
+        ayu/features/recognition/transcription_secrets.cpp
+        ayu/features/recognition/transcription_secrets.h
         ayu/features/recognition/voice_asr_engine.cpp
         ayu/features/recognition/voice_asr_engine.h
         ayu/features/recognition/recognition_audio.cpp
         ayu/features/recognition/recognition_audio.h
         ayu/features/recognition/recognition_models.cpp
         ayu/features/recognition/recognition_models.h
-        ayu/features/recognition/speech_recognition.cpp
         ayu/features/recognition/text_recognition.cpp
         ayu/features/recognition/text_recognition.h
-        ayu/features/recognition/speech_recognition.h
         ayu/ui/boxes/fake_passcode_box.cpp
         ayu/ui/boxes/fake_passcode_box.h
         ayu/ui/boxes/recognition_models_box.cpp
@@ -327,6 +326,7 @@ set(ayugram_files
         ayu/secret/secret_policy.h
         ayu/secret/secret_protocol.cpp
         ayu/secret/secret_protocol.h
+        ayu/secret/secret_rekey.h
         ayu/secret/secret_send.cpp
         ayu/secret/secret_send.h
         ayu/secret/secret_tl.h
@@ -336,6 +336,8 @@ set(ayugram_files
         ayu/data/messages_storage.h
         ayu/data/entities.h
         ayu/data/ayu_database.cpp
+        ayu/data/ayu_archive.h
+        ayu/data/ayu_encryption.h
         ayu/data/ayu_database.h
         ayu/data/ayu_database_backup.cpp
         ayu/data/ayu_vault.cpp
@@ -2848,6 +2850,7 @@ target_sources(Telegram PRIVATE ${entitlement_sources})
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/Telegram PREFIX Resources FILES ${entitlement_sources})
 
 target_include_directories(Telegram PRIVATE ${src_loc})
+target_include_directories(Telegram PRIVATE ${third_party_loc}/voice-asr/include)
 
 target_compile_definitions(Telegram
 PRIVATE
@@ -3047,6 +3050,12 @@ if (LINUX AND DESKTOP_APP_USE_PACKAGED)
     configure_file("../lib/xdg/io.github.snowyfluffy.freshgram.metainfo.xml" "${CMAKE_CURRENT_BINARY_DIR}/io.github.snowyfluffy.freshgram.metainfo.xml" @ONLY)
     generate_appstream_changelog(Telegram "${CMAKE_SOURCE_DIR}/changelog.txt" "${CMAKE_CURRENT_BINARY_DIR}/io.github.snowyfluffy.freshgram.metainfo.xml")
     install(TARGETS Telegram RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" BUNDLE DESTINATION "${CMAKE_INSTALL_BINDIR}")
+    if (FRESHGRAM_BUNDLE_CLOUD_ASR)
+        install(DIRECTORY "$<TARGET_FILE_DIR:Telegram>/voice-asr/cloud"
+            DESTINATION "${CMAKE_INSTALL_LIBDIR}/freshgram/voice-asr")
+        target_compile_definitions(Telegram PRIVATE
+            FRESHGRAM_ASR_SYSTEM_DIR="${CMAKE_INSTALL_FULL_LIBDIR}/freshgram/voice-asr")
+    endif()
     install(FILES "Resources/art/icon16.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/16x16/apps" RENAME "io.github.snowyfluffy.freshgram.png")
     install(FILES "Resources/art/icon16@2x.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/16x16@2/apps" RENAME "io.github.snowyfluffy.freshgram.png")
     install(FILES "Resources/art/icon32.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/32x32/apps" RENAME "io.github.snowyfluffy.freshgram.png")

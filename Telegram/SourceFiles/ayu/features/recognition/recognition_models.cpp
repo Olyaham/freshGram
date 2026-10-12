@@ -2,6 +2,7 @@
 #include "ayu/features/recognition/recognition_models.h"
 
 #include "ayu/ayu_settings.h"
+#include "ayu/utils/file_perms.h"
 #include "base/unique_qptr.h"
 #include "base/weak_ptr.h"
 #include "settings.h"
@@ -17,8 +18,13 @@
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
+#include <QtCore/QSaveFile>
+#include <QtCore/QUuid>
 
+#include <atomic>
 #include <map>
+#include <mutex>
+#include <utility>
 
 namespace AyuRecognition {
 namespace {
@@ -166,7 +172,8 @@ void LoadCachedManifest() {
 	// The loader creates only the last level of its output folder.
 	const auto parent = ModelsPath() + u"/.download"_q;
 	QDir().mkpath(parent);
-	return parent + '/' + QString::number(id);
+	return parent + '/' + QString::number(id) + '-'
+		+ QUuid::createUuid().toString(QUuid::WithoutBraces);
 }
 
 [[nodiscard]] QString ShaOfFile(const QString &path) {
@@ -446,6 +453,11 @@ QString EnabledOcrLanguages() {
 	return result.join('+');
 }
 
+struct ModelLoader::PublicationState {
+	std::mutex mutex;
+	std::atomic<bool> cancelled = false;
+};
+
 ModelLoader::ModelLoader(
 	QObject *parent,
 	not_null<Main::Session*> session,
@@ -459,46 +471,96 @@ ModelLoader::ModelLoader(
 	DownloadFolder(model.id),
 	model.size)
 , _model(model)
+, _publication(std::make_shared<PublicationState>())
 , _destroyCallback(std::move(destroyCallback)) {
+}
+
+ModelLoader::~ModelLoader() {
+	const auto lock = std::lock_guard(_publication->mutex);
+	_publication->cancelled.store(true);
 }
 
 void ModelLoader::unpack(const QString &path) {
 	const auto weak = base::make_weak(this);
 	const auto model = _model;
 	const auto folder = _folder;
+	const auto publication = _publication;
 	crl::async([=] {
 		auto success = false;
 		if (QFileInfo(path).size() == model.size
 			&& ShaOfFile(path) == model.sha256) {
 			const auto target = ModelPath(model);
-			QDir().mkpath(QFileInfo(target).absolutePath());
-			QFile::remove(target);
-			success = QFile::rename(path, target)
-				|| (QFile::copy(path, target) && QFile::remove(path));
+			if (QDir().mkpath(QFileInfo(target).absolutePath())) {
+				auto source = QFile(path);
+				auto staged = QSaveFile(target);
+				staged.setDirectWriteFallback(false);
+				if (source.open(QIODevice::ReadOnly)
+					&& staged.open(QIODevice::WriteOnly)) {
+					auto buffer = QByteArray(1024 * 1024, Qt::Uninitialized);
+					success = true;
+					while (true) {
+						if (publication->cancelled.load()) {
+							success = false;
+							break;
+						}
+						const auto read = source.read(buffer.data(), buffer.size());
+						if (read < 0) {
+							success = false;
+							break;
+						} else if (!read) {
+							break;
+						} else if (staged.write(buffer.constData(), read) != read) {
+							success = false;
+							break;
+						}
+					}
+					success = success && source.error() == QFileDevice::NoError;
+					const auto lock = std::lock_guard(publication->mutex);
+					if (success && !publication->cancelled.load()) {
+						success = staged.commit();
+					} else {
+						staged.cancelWriting();
+						success = false;
+					}
+				}
+			}
 		} else {
 			LOG(("Recognition Error: '%1' failed the integrity check."
 				).arg(model.file));
 		}
+		if (success) {
+			AyuUtils::RestrictFile(ModelPath(model));
+		}
 		QDir(folder).removeRecursively();
-		crl::on_main(weak, [=] {
-			if (success) {
-				destroy();
+		crl::on_main(weak, [weak, success] {
+			const auto strong = weak.get();
+			if (!strong) {
+				return;
+			} else if (success) {
+				strong->destroy();
 			} else {
-				fail();
+				strong->fail();
 			}
 		});
 	});
 }
 
 void ModelLoader::destroy() {
-	Expects(_destroyCallback);
-
-	crl::on_main(_destroyCallback);
+	if (_destroyRequested) {
+		return;
+	}
+	_destroyRequested = true;
+	if (auto callback = std::exchange(_destroyCallback, {})) {
+		crl::on_main(base::make_weak(this), std::move(callback));
+	}
 }
 
 void ModelLoader::fail() {
+	const auto weak = base::make_weak(this);
 	BlobLoader::fail();
-	destroy();
+	if (const auto strong = weak.get()) {
+		strong->destroy();
+	}
 }
 
 ModelLoader *ModelDownload(int id) {

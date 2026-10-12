@@ -1,9 +1,11 @@
 #include "ayu/data/ayu_database_backup.h"
 
 #include "ayu/ayu_settings.h"
+#include "ayu/data/ayu_archive.h"
 #include "ayu/data/ayu_database.h"
-#include "ayu/data/ayu_vault.h"
 #include "ayu/libs/sqlite/sqlite3.h"
+#include "ayu/secret/secret_vault.h"
+#include "ayu/utils/file_perms.h"
 #include "base/timer.h"
 #include "logs.h"
 
@@ -12,14 +14,16 @@
 #include <QtCore/QFile>
 #include <QtCore/QFileInfo>
 #include <QtCore/QSaveFile>
+#include <QtCore/QTemporaryFile>
 
 #include <crl/crl_async.h>
 #include <crl/crl_on_main.h>
 
 #include <algorithm>
 #include <atomic>
-#include <memory>
 #include <mutex>
+#include <string>
+#include <system_error>
 #include <vector>
 
 namespace AyuDatabaseBackup {
@@ -48,6 +52,12 @@ struct Entry {
 	return "./tdata/ayu_backups";
 }
 
+// Envelope context for sealed backups. The file name (timestamp + row
+// count) is unique and stable, binding each blob to its own file.
+[[nodiscard]] std::string BackupContext(const QString &path) {
+	return "ayu-backup-v1:" + QFileInfo(path).fileName().toStdString();
+}
+
 struct Handle {
 	sqlite3 *db = nullptr;
 
@@ -72,14 +82,18 @@ struct Handle {
 		return false;
 	}
 	memcpy(buffer, plain.constData(), size_t(size));
-	return sqlite3_deserialize(
+	const auto result = sqlite3_deserialize(
 		handle.db,
 		"main",
 		buffer,
 		size,
 		size,
-		SQLITE_DESERIALIZE_FREEONCLOSE | SQLITE_DESERIALIZE_RESIZEABLE)
-		== SQLITE_OK;
+		SQLITE_DESERIALIZE_FREEONCLOSE | SQLITE_DESERIALIZE_RESIZEABLE);
+	if (result != SQLITE_OK) {
+		sqlite3_free(buffer);
+		return false;
+	}
+	return true;
 }
 
 [[nodiscard]] bool Exec(sqlite3 *db, const QString &sql) {
@@ -125,13 +139,12 @@ struct Handle {
 			"WHERE type='table' AND name='%1'").arg(name)) == 1;
 }
 
-[[nodiscard]] bool Verify(const QString &path, qint64 *rows = nullptr) {
-	const auto plain = AyuVault::ReadFile(path, true);
-	if (!plain || plain->size() < 15 || !plain->startsWith("SQLite format 3")) {
+[[nodiscard]] bool VerifyPlain(const QByteArray &plain, qint64 *rows = nullptr) {
+	if (plain.size() < 15 || !plain.startsWith("SQLite format 3")) {
 		return false;
 	}
 	auto handle = Handle();
-	if (!OpenMemory(handle, *plain) || !QuickCheckOk(handle.db)) {
+	if (!OpenMemory(handle, plain) || !QuickCheckOk(handle.db)) {
 		return false;
 	}
 	auto total = qint64(0);
@@ -149,29 +162,71 @@ struct Handle {
 	return true;
 }
 
-[[nodiscard]] std::vector<Entry> List() {
-	auto names = QDir(Directory()).entryList(
-		QStringList() << "ayudata_*.enc",
-		QDir::Files,
-		QDir::Name);
-	std::reverse(names.begin(), names.end());
-	auto result = std::vector<Entry>();
-	for (const auto &name : names) {
-		auto entry = Entry();
-		entry.path = Directory() + '/' + name;
-		const auto parts = name.chopped(4).split('_');
-		if (parts.size() >= 4) {
-			entry.rows = parts.back().toLongLong();
-		}
-		result.push_back(std::move(entry));
+[[nodiscard]] bool ReplaceFile(
+		const QString &sourcePath,
+		const QString &destinationPath) {
+	auto source = QFile(sourcePath);
+	if (!source.open(QIODevice::ReadOnly)) {
+		return false;
 	}
+	auto destination = QSaveFile(destinationPath);
+	destination.setDirectWriteFallback(false);
+	if (!destination.open(QIODevice::WriteOnly)) {
+		return false;
+	}
+	auto buffer = QByteArray(1024 * 1024, Qt::Uninitialized);
+	while (true) {
+		const auto read = source.read(buffer.data(), buffer.size());
+		if (read < 0) {
+			destination.cancelWriting();
+			return false;
+		}
+		if (!read) {
+			break;
+		}
+		if (destination.write(buffer.constData(), read) != read) {
+			destination.cancelWriting();
+			return false;
+		}
+	}
+	if (source.error() != QFileDevice::NoError || !destination.commit()) {
+		return false;
+	}
+	AyuUtils::RestrictFile(destinationPath);
+	return true;
+}
+
+[[nodiscard]] std::vector<Entry> List() {
+	auto result = std::vector<Entry>();
+	for (const auto &directory : { Directory(), QString("./tdata") }) {
+		const auto names = QDir(directory).entryList(
+			QStringList() << "ayudata_*.enc" << "ayudata_*.db",
+			QDir::Files,
+			QDir::Name);
+		for (const auto &name : names) {
+			auto entry = Entry();
+			entry.path = directory + '/' + name;
+			const auto parts = QFileInfo(name).completeBaseName().split('_');
+			if (parts.size() >= 4) {
+				entry.rows = parts[3].toLongLong();
+			}
+			result.push_back(std::move(entry));
+		}
+	}
+	std::sort(result.begin(), result.end(), [](const auto &a, const auto &b) {
+		return QFileInfo(a.path).lastModified()
+			> QFileInfo(b.path).lastModified();
+	});
 	return result;
 }
 
 void ScrubSecrets(const QString &path) {
-	const auto plain = AyuVault::ReadFile(path, true);
+	auto plain = QByteArray();
+	if (!AyuArchive::ReadFile(path, BackupContext(path), plain)) {
+		return;
+	}
 	auto handle = Handle();
-	if (!plain || !OpenMemory(handle, *plain)) {
+	if (!OpenMemory(handle, plain)) {
 		return;
 	}
 	auto dirty = false;
@@ -186,21 +241,28 @@ void ScrubSecrets(const QString &path) {
 	if (!dirty) {
 		return;
 	}
-	static_cast<void>(Exec(handle.db, QString("PRAGMA secure_delete = ON")));
+	if (!Exec(handle.db, QString("PRAGMA secure_delete = ON"))) {
+		return;
+	}
 	for (const auto &table : { "SecretMessage", "SecretChat", "SecretState" }) {
-		if (TableExists(handle.db, table)) {
-			static_cast<void>(
-				Exec(handle.db, QString("DELETE FROM %1").arg(table)));
+		if (TableExists(handle.db, table)
+			&& !Exec(handle.db, QString("DELETE FROM %1").arg(table))) {
+			return;
 		}
 	}
-	static_cast<void>(Exec(handle.db, QString("VACUUM")));
+	if (!Exec(handle.db, QString("VACUUM"))) {
+		return;
+	}
 	auto size = sqlite3_int64();
 	const auto data = sqlite3_serialize(handle.db, "main", &size, 0);
 	if (data) {
-		AyuVault::WriteSealedFile(path, QByteArray(
+		const auto scrubbed = QByteArray(
 			reinterpret_cast<const char*>(data),
-			qsizetype(size)));
+			qsizetype(size));
 		sqlite3_free(data);
+		if (!AyuArchive::WriteFile(path, scrubbed, BackupContext(path))) {
+			LOG(("[AyuGram] Database: failed to publish a scrubbed backup."));
+		}
 	}
 }
 
@@ -236,105 +298,171 @@ void Rotate() {
 
 } // namespace
 
-bool create() {
-	if (!QFile::exists(MainPath()) || UpToDate()) {
-		return false;
+void removeStaleTemps() {
+	// Orphaned temp files from interrupted runs. Hidden dotfiles need
+	// QDir::Hidden to be listed at all. Idempotent: safe to run on
+	// every create() call, including the up-to-date early exit. A
+	// concurrent guarded create() may lose its temp to this sweep and
+	// abort that one backup (no corruption: writers fail, never half
+	// publish, and temp names are unique per run except .pending.db).
+	for (const auto &stale : QDir(Directory()).entryList(
+			{ ".pending*.db", "*.sealing", ".scratch*.db", ".decrypt*", "*.opening" },
+			QDir::Files | QDir::Hidden)) {
+		QFile::remove(Directory() + '/' + stale);
 	}
+}
+
+bool create() {
 	auto expected = false;
 	if (!Running.compare_exchange_strong(expected, true)) {
 		return false;
 	}
 	const auto guard = gsl::finally([] { Running = false; });
 	const auto lock = std::lock_guard(BackupMutex);
-	auto sealed = QByteArray();
+	removeStaleTemps();
+	if (!QFile::exists(MainPath()) || UpToDate()) {
+		return false;
+	}
+	if (!QDir().mkpath(Directory())) {
+		return false;
+	}
+	AyuUtils::RestrictDir(Directory());
+	if (!AyuSecret::Vault::Available()) {
+		return false;
+	}
+	auto snapshot = QByteArray();
 	auto rows = qint64(0);
-	if (!AyuDatabase::exportSealed(sealed, rows)) {
+	if (!AyuDatabase::exportSnapshot(snapshot, rows)) {
 		return false;
 	}
-	QDir().mkpath(Directory());
-	const auto name = QString("%1/ayudata_%2_%3.enc")
+	const auto stamp = QDateTime::currentDateTimeUtc().toString("yyyyMMdd_HHmmss");
+	auto name = QString("%1/ayudata_%2_%3.enc")
 		.arg(Directory())
-		.arg(QDateTime::currentDateTimeUtc().toString("yyyyMMdd_HHmmss"))
+		.arg(stamp)
 		.arg(rows);
-	auto file = QSaveFile(name);
-	if (!file.open(QIODevice::WriteOnly)
-		|| file.write(sealed) != sealed.size()
-		|| !file.commit()) {
+	for (auto dup = 1; QFile::exists(name); ++dup) {
+		name = QString("%1/ayudata_%2_%3_%4.enc")
+			.arg(Directory())
+			.arg(stamp)
+			.arg(rows)
+			.arg(dup);
+	}
+	auto temporary = QTemporaryFile(Directory() + "/.pendingXXXXXX.db");
+	temporary.setAutoRemove(true);
+	if (!temporary.open()) {
 		return false;
 	}
-	QFile::setPermissions(
+	AyuUtils::RestrictFile(temporary.fileName());
+	if (temporary.write(snapshot) != snapshot.size()
+		|| !temporary.flush()) {
+		return false;
+	}
+	const auto source = temporary.fileName();
+	temporary.close();
+	const auto written = AyuSecret::Vault::SealFileStreamed(
+		source,
 		name,
-		QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+		BackupContext(name));
+	if (!written) {
+		LOG(("[AyuGram] Database: backup publication failed."));
+		return false;
+	}
+	AyuUtils::RestrictFile(name);
 	Rotate();
 	return true;
 }
 
+void clear() {
+	const auto lock = std::lock_guard(BackupMutex);
+	QDir(Directory()).removeRecursively();
+	const auto root = QDir("./tdata");
+	for (const auto &name : root.entryList(
+			{ "ayudata_*" },
+			QDir::Files | QDir::Hidden)) {
+		QFile::remove(root.absoluteFilePath(name));
+	}
+}
+
+void recoverStaging() {
+	// Crash recovery runs at startup (not only on the corrupt path, so
+	// it cannot be skipped): a previous restore may have left a
+	// verified staging copy while Main was already gone.
+	const auto staging = MainPath() + ".restoring";
+	const auto directory = QDir(QFileInfo(staging).path());
+	const auto prefix = QFileInfo(staging).fileName();
+	for (const auto &name : directory.entryList(
+			{ prefix + ".*.opening", prefix + ".opening" },
+			QDir::Files | QDir::Hidden)) {
+		QFile::remove(directory.filePath(name));
+	}
+	if (!QFile::exists(staging)) {
+		return;
+	}
+	auto plain = QByteArray();
+	auto format = AyuArchive::Format::Plain;
+	const auto valid = AyuArchive::ReadFile(
+		staging,
+		"ayu-snapshot-v1",
+		plain,
+		&format)
+		&& VerifyPlain(plain);
+	if (!QFile::exists(MainPath())
+		&& valid
+		&& (format == AyuArchive::Format::Fgv2
+			|| AyuArchive::WriteFile(staging, plain, "ayu-snapshot-v1"))
+		&& AyuSecret::Vault::PublishFile(staging, MainPath())) {
+		LOG(("[AyuGram] Database restored from staging copy."));
+	} else if (QFile::exists(MainPath())) {
+		QFile::remove(staging);
+	} else if (!valid) {
+		QFile::remove(staging);
+	}
+}
+
 bool restore(int &index) {
 	const auto list = List();
+	const auto strict = AyuSettings::RequireEncryptionForStorage();
 	for (auto i = index; i < int(list.size()); ++i) {
-		if (!Verify(list[i].path)) {
+		auto plain = QByteArray();
+		auto format = AyuArchive::Format::Plain;
+		if (!AyuArchive::ReadFile(
+				list[i].path,
+				BackupContext(list[i].path),
+				plain,
+				&format)
+			|| !VerifyPlain(plain)) {
 			continue;
 		}
-		QFile::remove(MainPath());
-		if (QFile::copy(list[i].path, MainPath())) {
-			index = i + 1;
-			LOG(("[AyuGram] Database restored from '%1'.").arg(list[i].path));
-			return true;
+		if (strict && format == AyuArchive::Format::Plain) {
+			LOG(("[AyuGram] Database: strict mode skips a plaintext backup."));
+			continue;
 		}
+		const auto staging = MainPath() + ".restoring";
+		QFile::remove(staging);
+		if (!AyuArchive::WriteFile(staging, plain, "ayu-snapshot-v1")) {
+			QFile::remove(staging);
+			continue;
+		}
+		auto staged = QByteArray();
+		if (!AyuArchive::ReadFile(
+				staging,
+				"ayu-snapshot-v1",
+				staged)
+			|| !VerifyPlain(staged)) {
+			QFile::remove(staging);
+			continue;
+		}
+		if (!ReplaceFile(staging, MainPath())) {
+			QFile::remove(staging);
+			continue;
+		}
+		QFile::remove(staging);
+		index = i + 1;
+		LOG(("[AyuGram] Database restored from '%1'.").arg(list[i].path));
+		return true;
 	}
 	index = int(list.size());
 	return false;
-}
-
-void removeAll() {
-	const auto lock = std::lock_guard(BackupMutex);
-	QDir(Directory()).removeRecursively();
-	const auto moved = QDir("./tdata").entryList(
-		QStringList() << "ayudata_*.enc",
-		QDir::Files);
-	for (const auto &name : moved) {
-		QFile::remove("./tdata/" + name);
-	}
-}
-
-void purgeUser(long long userId) {
-	static const auto kTables = {
-		"DeletedExtra", "DeletedMarkup", "DeletedMessage", "EditedMessage",
-		"DeletedDialog", "KeptTopic", "KeptDialog", "KnownUser", "LocalPin",
-		"SecretChat", "SecretMessage", "SecretState", "PeekedStatus",
-		"PeekRestore", "SpyMessageRead", "SpyMessageContentsRead",
-	};
-	const auto lock = std::lock_guard(BackupMutex);
-	for (const auto &entry : List()) {
-		const auto plain = AyuVault::ReadFile(entry.path, true);
-		auto handle = Handle();
-		if (!plain || !OpenMemory(handle, *plain)) {
-			QFile::remove(entry.path);
-			continue;
-		}
-		static_cast<void>(Exec(handle.db, QString("PRAGMA secure_delete = ON")));
-		for (const auto &table : kTables) {
-			if (TableExists(handle.db, table)) {
-				static_cast<void>(Exec(handle.db, QString(
-					"DELETE FROM %1 WHERE userId = %2"
-				).arg(table).arg(userId)));
-			}
-		}
-		static_cast<void>(Exec(handle.db, QString("VACUUM")));
-		auto size = sqlite3_int64();
-		const auto data = sqlite3_serialize(handle.db, "main", &size, 0);
-		if (!data) {
-			QFile::remove(entry.path);
-			continue;
-		}
-		const auto saved = AyuVault::WriteSealedFile(entry.path, QByteArray(
-			reinterpret_cast<const char*>(data),
-			qsizetype(size)));
-		sqlite3_free(data);
-		if (!saved) {
-			QFile::remove(entry.path);
-		}
-	}
 }
 
 void startPeriodic() {
@@ -348,7 +476,7 @@ void startPeriodic() {
 				settings.backupKeepCount(),
 				settings.backupIntervalHours());
 		}
-		crl::async([] {
+		crl::async([=] {
 			[[maybe_unused]] const auto created = create();
 		});
 	});

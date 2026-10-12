@@ -15,7 +15,7 @@ dnf -y install epel-release
 dnf config-manager --set-enabled powertools
 dnf -y install cmake autoconf automake libtool pkgconfig make patch git \
 	python3.11-pip python3.11-devel gperf flex bison clang-tools-extra \
-	lld ccache nasm file which wget perl-open perl-XML-Parser perl-IPC-Cmd \
+	lld ccache nasm file which wget curl perl-open perl-XML-Parser perl-IPC-Cmd \
 	perl-Time-Piece \
 	xorg-x11-util-macros $TOOLSET-gcc $TOOLSET-gcc-c++ $TOOLSET-binutils \
 	$TOOLSET-gdb $TOOLSET-libasan-devel libffi-devel fontconfig-devel \
@@ -81,6 +81,13 @@ ENV CMAKE_BUILD_TYPE=None
 ENV CMAKE_BUILD_PARALLEL_LEVEL='{{ JOBS }}'
 
 ENV SOURCE_DATE_EPOCH=1
+
+ENV RUSTUP_HOME=/usr/local/rustup
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o /usr/src/rustup-init.sh \
+    && CARGO_HOME=/usr/local/cargo sh /usr/src/rustup-init.sh -y --profile minimal --default-toolchain stable \
+    && rm /usr/src/rustup-init.sh
+ENV PATH=/usr/local/cargo/bin:$PATH
+ENV CARGO_HOME=/usr/src/tdesktop/out/asr-cargo
 
 RUN <<EOF
 git init Implib.so

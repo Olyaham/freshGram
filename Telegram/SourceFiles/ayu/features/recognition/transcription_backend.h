@@ -14,7 +14,6 @@ namespace AyuRecognition {
 
 enum class BackendDestination {
 	Server,
-	StaticLocal,
 	Engine,
 };
 
@@ -25,10 +24,13 @@ struct BackendRoute {
 
 [[nodiscard]] BackendRoute ResolveTranscription(
 	not_null<HistoryItem*> item);
+[[nodiscard]] bool UsesExternalTranscription(not_null<HistoryItem*> item);
+[[nodiscard]] TranscriptionConfig CurrentTranscriptionConfig(EngineProvider engine);
 void TranscribeWithBackend(
 	not_null<HistoryItem*> item,
 	EngineProvider engine,
 	Fn<void(LocalTranscript)> done);
-void CancelBackendTranscription(not_null<HistoryItem*> item);
+void CancelBackendTranscription(not_null<const HistoryItem*> item);
+void CancelBackendTranscriptions(not_null<Main::Session*> session);
 
 } // namespace AyuRecognition

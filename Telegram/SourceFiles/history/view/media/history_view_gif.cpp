@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "apiwrap.h"
 #include "api/api_transcribes.h"
 #include "ayu/features/recognition/local_transcribe.h"
+#include "ayu/features/recognition/transcription_backend.h"
 #include "lang/lang_keys.h"
 #include "mainwindow.h"
 #include "main/main_session.h"
@@ -2761,7 +2762,7 @@ void Gif::ensureTranscribeButton() const {
 		&& !_parent->data()->isAdminLogEntry()
 		&& (_parent->context() != Context::MediaEditor)
 		&& (_data->session().premium()
-			|| AyuRecognition::LocalTranscriptionEnabled()
+			|| AyuRecognition::UsesExternalTranscription(_realParent)
 			|| _data->session().api().transcribes().trialsSupport())) {
 		if (!_transcribe) {
 			_transcribe = std::make_unique<TranscribeButton>(

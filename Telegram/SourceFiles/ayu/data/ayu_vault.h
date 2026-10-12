@@ -1,6 +1,9 @@
 // This file is part of freshGram.
 #pragma once
 
+#include <QtCore/QByteArray>
+#include <QtCore/QString>
+
 #include <memory>
 #include <optional>
 
@@ -22,10 +25,7 @@ void SetKey(MTP::AuthKeyPtr key);
 	bool requireSealed = false);
 
 bool WriteFile(const QString &path, const QByteArray &plain);
-bool WriteSealedFile(const QString &path, const QByteArray &plain);
-[[nodiscard]] std::optional<QByteArray> ReadFile(
-	const QString &path,
-	bool requireSealed = false);
+[[nodiscard]] std::optional<QByteArray> ReadFile(const QString &path);
 void SealFilesIn(const QString &directory);
 
 } // namespace AyuVault

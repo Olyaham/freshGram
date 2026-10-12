@@ -2,11 +2,14 @@
 
 #include "ayu/secret/secret_crypto.h"
 
+#include <QtCore/QByteArray>
 #include <QtCore/QString>
 
 #include <string>
 
 namespace AyuSecret::Vault {
+
+void SetReady(bool ready);
 
 [[nodiscard]] bool Available();
 
@@ -22,10 +25,34 @@ namespace AyuSecret::Vault {
 	const QString &path,
 	const Bytes &plain,
 	const std::string &context);
+[[nodiscard]] bool SealToFile(
+	const QString &path,
+	const QByteArray &plain,
+	const std::string &context);
 [[nodiscard]] bool OpenFromFile(
 	const QString &path,
 	Bytes &plain,
 	const std::string &context,
 	bool *legacy = nullptr);
+// Chunked variant of sealing a file, for multi-hundred-MB inputs: same
+// FGV2 layout, O(chunk) memory. Writes to a temporary sibling and
+// renames over dst atomically.
+[[nodiscard]] bool SealFileStreamed(
+	const QString &srcPath,
+	const QString &dstPath,
+	const std::string &context);
+// Chunked counterpart: decrypts into dstPath with O(chunk) memory.
+// The GCM tag is verified; dstPath is removed on any failure.
+[[nodiscard]] bool OpenFileStreamed(
+	const QString &srcPath,
+	const QString &dstPath,
+	const std::string &context);
+// Atomically publishes tempPath as a fresh dstPath. Callers must pass
+// a destination that does not exist (unique names, removed staging):
+// QFile::rename cannot replace, and a failed publish must never
+// destroy a previous file — it drops only the temp copy.
+[[nodiscard]] bool PublishFile(
+	const QString &tempPath,
+	const QString &dstPath);
 
 } // namespace AyuSecret::Vault

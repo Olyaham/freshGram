@@ -1,13 +1,14 @@
 // This is the source code of freshGram.
 #include "ayu/features/recognition/transcription_backend.h"
 
-#include "ayu/ayu_settings.h"
 #include "ayu/features/recognition/recognition_audio.h"
 #include "ayu/features/recognition/recognition_models.h"
-#include "ayu/features/recognition/speech_recognition.h"
-#include "ayu/secret/secret_peer.h"
 #include "ayu/features/recognition/voice_asr_engine.h"
+#include "ayu/secret/secret_peer.h"
+#include "ayu/ayu_settings.h"
 #include "base/weak_ptr.h"
+#include "crl/crl_async.h"
+#include "crl/crl_on_main.h"
 #include "data/data_document.h"
 #include "data/data_document_media.h"
 #include "data/data_file_origin.h"
@@ -19,10 +20,11 @@
 #include <QtCore/QDir>
 #include <QtCore/QFile>
 #include <QtCore/QFileInfo>
+#include <QtCore/QTemporaryDir>
 #include <QtCore/QThread>
 
-#include <atomic>
 #include <algorithm>
+#include <atomic>
 #include <map>
 
 namespace AyuRecognition {
@@ -37,11 +39,10 @@ struct BackendJob {
 	uint64 generation = 0;
 	EngineProvider engine = EngineProvider::Telegram;
 	DocumentId documentId = 0;
-	QString inputPath;
-	QString wavPath;
 	std::shared_ptr<Data::DocumentMedia> media;
 	std::shared_ptr<std::atomic<bool>> cancelled;
-	void *cancelToken = nullptr;
+	std::shared_ptr<EngineLibrary> library;
+	TranscriptionConfig config;
 	Fn<void(LocalTranscript)> done;
 	rpl::lifetime lifetime;
 };
@@ -49,12 +50,11 @@ struct BackendJob {
 std::map<std::pair<void*, FullMsgId>, std::shared_ptr<BackendJob>> BackendJobs;
 std::atomic<uint64> BackendGeneration = 0;
 
-EngineLibrary &BackendEngine() {
-	static auto engine = EngineLibrary();
-	if (!engine.IsLoaded()) {
-		engine.Load(AyuSettings::getInstance().transcriptionEnginePath());
-	}
-	return engine;
+void CancelJob(const std::shared_ptr<BackendJob> &job) {
+	job->cancelled->store(true);
+	job->library->CancelCurrent();
+	job->lifetime.destroy();
+	job->done = nullptr;
 }
 
 [[nodiscard]] LocalTranscript BackendFailure(const QString &error) {
@@ -67,8 +67,6 @@ EngineLibrary &BackendEngine() {
 void FinishBackend(
 		const std::shared_ptr<BackendJob> &job,
 		LocalTranscript result) {
-	QFile::remove(job->inputPath);
-	QFile::remove(job->wavPath);
 	const auto key = std::make_pair(job->address, job->id);
 	const auto i = BackendJobs.find(key);
 	if (i == end(BackendJobs) || i->second->generation != job->generation) {
@@ -83,7 +81,9 @@ void FinishBackend(
 	}
 }
 
-[[nodiscard]] TranscriptionConfig BackendConfig(EngineProvider engine) {
+} // namespace
+
+TranscriptionConfig CurrentTranscriptionConfig(EngineProvider engine) {
 	const auto &settings = AyuSettings::getInstance();
 	auto config = TranscriptionConfig();
 	config.provider = engine;
@@ -98,8 +98,14 @@ void FinishBackend(
 	config.prompt = settings.transcriptionPrompt();
 	config.localModel = SelectedWhisperModelPath();
 	config.threads = std::clamp(QThread::idealThreadCount() / 2, 1, 8);
+	config.useGpu = settings.transcriptionLocalUseGpu();
+	config.enginePath = (engine == EngineProvider::WhisperLocal)
+		? settings.transcriptionLocalEnginePath()
+		: settings.transcriptionEnginePath();
 	return config;
 }
+
+namespace {
 
 void StartBackend(const std::shared_ptr<BackendJob> &job) {
 	const auto session = job->session.get();
@@ -108,71 +114,66 @@ void StartBackend(const std::shared_ptr<BackendJob> &job) {
 		return;
 	}
 	const auto document = session->data().document(job->documentId);
-	auto path = document->filepath(true);
-	if (path.isEmpty() || !QFileInfo::exists(path)) {
-		const auto bytes = job->media->bytes();
-		if (bytes.isEmpty()) {
-			FinishBackend(job, BackendFailure(u"No data."_q));
-			return;
-		}
-		job->inputPath = UniqueTempPath(u".bin"_q);
-		auto input = QFile(job->inputPath);
-		if (!input.open(QIODevice::WriteOnly)
-			|| input.write(bytes) != bytes.size()) {
-			FinishBackend(job, BackendFailure(u"Could not save the file."_q));
-			return;
-		}
-		path = job->inputPath;
-	}
-	job->wavPath = UniqueTempPath(u".wav"_q);
-	const auto config = BuildVoiceAsrConfigJson(BackendConfig(job->engine));
+	const auto originalPath = document->filepath(true);
+	const auto bytes = job->media->bytes();
 	if (job->engine == EngineProvider::WhisperLocal
-		&& SelectedWhisperModelPath().isEmpty()) {
+		&& job->config.localModel.isEmpty()) {
 		FinishBackend(job, LocalTranscript{
 			.status = LocalTranscribeStatus::NoModel,
 		});
 		return;
 	}
-	auto &engine = BackendEngine();
 	crl::async([=] {
-		// WHY: every provider receives the same decoded WAV, so cloud
-		// endpoints never see a mislabeled container and no per-backend
-		// remux can leak temp files.
-		const auto cancelled = std::atomic<bool>(false);
-		const auto audio = DecodeAudioFile(path, cancelled);
-		if (job->cancelled->load()) {
-			FinishBackend(job, BackendFailure(u"Cancelled."_q));
-			return;
-		} else if (audio.samples.empty()) {
-			FinishBackend(job, BackendFailure(audio.error));
-			return;
-		}
-		if (!WriteWavFile(job->wavPath, audio.samples)) {
-			FinishBackend(job, BackendFailure(u"Could not save the file."_q));
-			return;
-		}
-		job->cancelToken = engine.CreateCancel();
-		const auto result = engine.TranscribeBlocking(
-			config,
-			job->wavPath,
-			u"audio.wav"_q,
-			u"audio/wav"_q,
-			job->cancelToken);
-		engine.FreeCancel(job->cancelToken);
-		job->cancelToken = nullptr;
-		if (job->cancelled->load()) {
-			FinishBackend(job, BackendFailure(u"Cancelled."_q));
-			return;
-		}
-		auto transcript = LocalTranscript();
-		if (result.ok) {
-			transcript.status = LocalTranscribeStatus::Done;
-			transcript.text = result.text;
-		} else {
-			transcript = BackendFailure(DescribeEngineError(result.code, result.error));
-		}
+		auto temp = QTemporaryDir(QDir::tempPath() + u"/freshgram-asr-XXXXXX"_q);
+		const auto run = [&]() -> LocalTranscript {
+			if (job->cancelled->load()) {
+				return { .status = LocalTranscribeStatus::Cancelled };
+			} else if (!temp.isValid()) {
+				return BackendFailure(u"Could not create the temporary directory."_q);
+			} else if (job->engine == EngineProvider::Telegram) {
+				return BackendFailure(u"Telegram transcription is unavailable for this message."_q);
+			} else if (!job->library->Load(
+					job->config.enginePath,
+					job->engine == EngineProvider::WhisperLocal)) {
+				return BackendFailure(u"Install or select a compatible ASR module in Settings."_q);
+			}
+			auto path = originalPath;
+			if (path.isEmpty() || !QFileInfo::exists(path)) {
+				path = temp.filePath(u"input"_q);
+				auto input = QFile(path);
+				if (bytes.isEmpty() || !input.open(QIODevice::WriteOnly)
+					|| input.write(bytes) != bytes.size()) {
+					return BackendFailure(u"Could not save the audio."_q);
+				}
+			}
+			if (QFileInfo(path).size() > kMaxDocumentSize) {
+				return BackendFailure(u"The audio file is too large."_q);
+			}
+			const auto audio = DecodeAudioFile(path, *job->cancelled);
+			if (job->cancelled->load()) {
+				return { .status = LocalTranscribeStatus::Cancelled };
+			} else if (audio.samples.empty() || !audio.error.isEmpty()) {
+				return BackendFailure(audio.error);
+			}
+			const auto wav = temp.filePath(u"audio.wav"_q);
+			if (!WriteWavFile(wav, audio.samples)) {
+				return BackendFailure(u"Could not save the decoded audio."_q);
+			}
+			const auto result = job->library->TranscribeBlocking(
+				BuildVoiceAsrConfigJson(job->config),
+				wav,
+				u"audio.wav"_q,
+				u"audio/wav"_q);
+			if (job->cancelled->load()) {
+				return { .status = LocalTranscribeStatus::Cancelled };
+			} else if (!result.ok) {
+				return BackendFailure(DescribeEngineError(result.code, result.error));
+			}
+			return { .status = LocalTranscribeStatus::Done, .text = result.text };
+		};
+		const auto transcript = run();
 		crl::on_main([=] {
-			FinishBackend(job, std::move(transcript));
+			FinishBackend(job, transcript);
 		});
 	});
 }
@@ -196,17 +197,13 @@ BackendRoute ResolveTranscription(not_null<HistoryItem*> item) {
 	if (provider == TranscriptionProvider::Default) {
 		provider = TranscriptionProvider::Telegram;
 	}
-	const auto engine = EngineLibrary::IsAvailable(settings.transcriptionEnginePath());
+	const auto serverUnavailable = AyuSecret::IsSecretPeer(peer) || item->isLocal();
 	switch (provider) {
 	case TranscriptionProvider::Telegram:
-		return { BackendDestination::Server, EngineProvider::Telegram };
+		return { serverUnavailable ? BackendDestination::Engine : BackendDestination::Server,
+			EngineProvider::Telegram };
 	case TranscriptionProvider::WhisperLocal:
-		if (engine) {
-			return { BackendDestination::Engine, EngineProvider::WhisperLocal };
-		}
-		return SpeechRecognitionAvailable()
-			? BackendRoute{ BackendDestination::StaticLocal, EngineProvider::WhisperLocal }
-			: BackendRoute{ BackendDestination::Server, EngineProvider::Telegram };
+		return { BackendDestination::Engine, EngineProvider::WhisperLocal };
 	case TranscriptionProvider::Groq:
 		return { BackendDestination::Engine, EngineProvider::Groq };
 	case TranscriptionProvider::Gemini:
@@ -218,7 +215,7 @@ BackendRoute ResolveTranscription(not_null<HistoryItem*> item) {
 	case TranscriptionProvider::Default:
 		return { BackendDestination::Server, EngineProvider::Telegram };
 	}
-	if (item->history()->session().premium()) {
+	if (!serverUnavailable && item->history()->session().premium()) {
 		return { BackendDestination::Server, EngineProvider::Telegram };
 	}
 	if (!settings.transcriptionGroqKey().isEmpty()) {
@@ -228,15 +225,19 @@ BackendRoute ResolveTranscription(not_null<HistoryItem*> item) {
 		return { BackendDestination::Engine, EngineProvider::Gemini };
 	}
 	if (!settings.transcriptionCustomBase().isEmpty()
-		&& !settings.transcriptionCustomKey().isEmpty()) {
+		&& !settings.transcriptionCustomModel().isEmpty()) {
 		return { BackendDestination::Engine, EngineProvider::Custom };
 	}
-	if (engine) {
+	if (!SelectedWhisperModelPath().isEmpty()
+		&& EngineLibrary::IsAvailable(settings.transcriptionLocalEnginePath(), true)) {
 		return { BackendDestination::Engine, EngineProvider::WhisperLocal };
 	}
-	return SpeechRecognitionAvailable()
-		? BackendRoute{ BackendDestination::StaticLocal, EngineProvider::WhisperLocal }
-		: BackendRoute{ BackendDestination::Server, EngineProvider::Telegram };
+	return { serverUnavailable ? BackendDestination::Engine : BackendDestination::Server,
+		EngineProvider::Telegram };
+}
+
+bool UsesExternalTranscription(not_null<HistoryItem*> item) {
+	return ResolveTranscription(item).destination == BackendDestination::Engine;
 }
 
 void TranscribeWithBackend(
@@ -263,6 +264,8 @@ void TranscribeWithBackend(
 	job->address = static_cast<void*>(session);
 	job->generation = ++BackendGeneration;
 	job->engine = engine;
+	job->config = CurrentTranscriptionConfig(engine);
+	job->library = std::make_shared<EngineLibrary>();
 	job->documentId = document->id;
 	job->media = document->createMediaView();
 	job->cancelled = std::make_shared<std::atomic<bool>>(false);
@@ -273,7 +276,6 @@ void TranscribeWithBackend(
 		StartBackend(job);
 		return;
 	}
-	document->save(::Data::FileOrigin(job->id), QString());
 	session->downloaderTaskFinished(
 	) | rpl::filter([=] {
 		const auto session = job->session.get();
@@ -283,9 +285,10 @@ void TranscribeWithBackend(
 	}) | rpl::take(1) | rpl::on_next([=] {
 		StartBackend(job);
 	}, job->lifetime);
+	document->save(::Data::FileOrigin(job->id), QString());
 }
 
-void CancelBackendTranscription(not_null<HistoryItem*> item) {
+void CancelBackendTranscription(not_null<const HistoryItem*> item) {
 	const auto session = &item->history()->session();
 	const auto key = std::make_pair(
 		static_cast<void*>(session),
@@ -296,13 +299,19 @@ void CancelBackendTranscription(not_null<HistoryItem*> item) {
 	}
 	const auto job = i->second;
 	BackendJobs.erase(i);
-	job->cancelled->store(true);
-	if (job->cancelToken) {
-		BackendEngine().Cancel(job->cancelToken);
+	CancelJob(job);
+}
+
+void CancelBackendTranscriptions(not_null<Main::Session*> session) {
+	for (auto i = BackendJobs.begin(); i != BackendJobs.end();) {
+		if (i->first.first != session.get()) {
+			++i;
+			continue;
+		}
+		const auto job = i->second;
+		i = BackendJobs.erase(i);
+		CancelJob(job);
 	}
-	job->lifetime.destroy();
-	QFile::remove(job->inputPath);
-	QFile::remove(job->wavPath);
 }
 
 } // namespace AyuRecognition

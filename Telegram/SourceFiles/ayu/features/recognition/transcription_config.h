@@ -30,6 +30,7 @@ struct TranscriptionConfig {
 	QString enginePath;
 	QString localModel;
 	int threads = 4;
+	bool useGpu = true;
 };
 
 [[nodiscard]] std::string BuildVoiceAsrConfigJson(

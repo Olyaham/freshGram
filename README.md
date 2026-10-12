@@ -9,7 +9,17 @@ It is based on the [Telegram API][telegram_api] and the [MTProto][telegram_proto
 
 The source code is published under GPLv3 with OpenSSL exception, the license is available [here][license].
 
+This downstream is based on Telegram Desktop **7.3.1**. See the
+[base record](docs/upstream-base.md) and the
+[transcription provider settings](docs/transcription-providers.md).
+
 ## Features
+
+- Voice transcription with Telegram, Groq, Gemini Transcribe, Custom endpoints
+  and an optional dynamically loaded Local Whisper component. Providers can be
+  selected independently for chats, secret chats and private messages.
+- ASR keys and archived message content use the downstream encrypted vault;
+  archived content can require encryption through the Storage settings.
 
 ### From AyuGram Desktop
 
@@ -122,6 +132,8 @@ Autoupdate is disabled by default because freshGram has no update server.
 2. Run the `Build environment` workflow once, it builds the library image and pushes it to GitHub Packages.
 3. The `Build` workflow builds Linux x86_64 on every push and pull request and produces `freshGram-linux-x86_64.tar.gz`, `freshGram.pacman` (an Arch Linux package, install it with `pacman -U`) and `freshGram.flatpak` (install it with `flatpak install --user freshGram.flatpak`).
 4. The `Build Windows` and `Build macOS` workflows run on every push and manually, and produce `freshGram.exe` (with `freshGram-windows-portable.zip`, which also holds the `TelegramForcePortable` folder that keeps all data next to the exe) and `freshGram.dmg` (ad-hoc signed, open it with right click - Open).
+   The portable ZIP includes the cloud ASR DLL. Use it for bundled cloud transcription;
+   the standalone executable requires a separately installed ASR component.
    The first run builds all libraries, which can take more than one run: the finished part is cached, so run the workflow again until it passes.
    Run any of the three manually with `release_tag` (for example `v7.2.10`) or push a `v*` tag to publish a release with all the files attached.
 

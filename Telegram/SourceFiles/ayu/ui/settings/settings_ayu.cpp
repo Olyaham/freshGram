@@ -859,6 +859,12 @@ void BuildStorage(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.keywords = { u"delete"_q, u"clear"_q, u"storage"_q },
 	});
 	builder.addSkip();
+	ayu.addSettingToggle({
+		.id = u"ayu/requireEncryption"_q,
+		.title = tr::ayu_RequireEncryption(),
+		.getter = &AyuSettings::requireEncryption,
+		.setter = &AyuSettings::setRequireEncryption,
+	});
 	builder.addDividerText(tr::ayu_StorageDescription());
 }
 

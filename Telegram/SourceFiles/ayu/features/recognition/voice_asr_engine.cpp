@@ -20,23 +20,40 @@ void EngineLibrary::Unload() {
 		_library.unload();
 	}
 	_loaded = false;
+	_capabilities = 0;
 	_path = QString();
 }
 
-QStringList EngineLibrary::SearchPaths(const QString &customPath) {
+QStringList EngineLibrary::SearchPaths(const QString &customPath, bool local) {
 	auto paths = QStringList();
 	if (!customPath.isEmpty()) {
-		paths.push_back(customPath);
+		return { QFileInfo(customPath).absoluteFilePath() };
 	}
 	const auto appDir = QCoreApplication::applicationDirPath();
-	paths.push_back(appDir + u"/voice-asr/voice_asr"_q);
-	paths.push_back(u"./tdata/voice-asr/voice_asr"_q);
+#if defined Q_OS_WIN
+	const auto name = u"voice_asr.dll"_q;
+#elif defined Q_OS_MAC
+	const auto name = u"libvoice_asr.dylib"_q;
+#else
+	const auto name = u"libvoice_asr.so"_q;
+#endif
+	const auto flavor = local ? u"local/"_q : u"cloud/"_q;
+	paths.push_back(appDir + u"/voice-asr/"_q + flavor + name);
+	paths.push_back(QDir::currentPath() + u"/tdata/voice-asr/"_q + flavor + name);
+#ifdef FRESHGRAM_ASR_SYSTEM_DIR
+	paths.push_back(QString::fromUtf8(FRESHGRAM_ASR_SYSTEM_DIR) + u"/"_q + flavor + name);
+#endif
+	if (!local) {
+		paths.push_back(appDir + u"/voice-asr/"_q + name);
+		paths.push_back(QDir::currentPath() + u"/tdata/voice-asr/"_q + name);
+	}
 	return paths;
 }
 
-bool EngineLibrary::IsAvailable(const QString &customPath) {
-	for (const auto &path : SearchPaths(customPath)) {
-		if (QLibrary::isLibrary(path)) {
+bool EngineLibrary::IsAvailable(const QString &customPath, bool local) {
+	for (const auto &path : SearchPaths(customPath, local)) {
+		const auto info = QFileInfo(path);
+		if (info.isFile() && info.isReadable() && QLibrary::isLibrary(path)) {
 			return true;
 		}
 	}
@@ -44,6 +61,14 @@ bool EngineLibrary::IsAvailable(const QString &customPath) {
 }
 
 bool EngineLibrary::ResolveAll() {
+	const auto abi = reinterpret_cast<decltype(&vasr_abi_version)>(
+		_library.resolve("vasr_abi_version"));
+	const auto capabilities = reinterpret_cast<decltype(&vasr_capabilities)>(
+		_library.resolve("vasr_capabilities"));
+	if (!abi || abi() != 1 || !capabilities) {
+		return false;
+	}
+	_capabilities = capabilities();
 	_engineNew = reinterpret_cast<EngineNew>(_library.resolve("vasr_engine_new"));
 	_engineFree = reinterpret_cast<EngineFree>(_library.resolve("vasr_engine_free"));
 	_cancelNew = reinterpret_cast<CancelNew>(_library.resolve("vasr_cancel_new"));
@@ -66,14 +91,19 @@ bool EngineLibrary::ResolveAll() {
 		&& _lastMessage;
 }
 
-bool EngineLibrary::Load(const QString &customPath) {
-	for (const auto &path : SearchPaths(customPath)) {
+bool EngineLibrary::Load(const QString &customPath, bool local) {
+	for (const auto &path : SearchPaths(customPath, local)) {
 		if (_loaded && _path == path) {
 			return true;
 		}
 		Unload();
+		_library.setLoadHints(QLibrary::LoadHints());
 		_library.setFileName(path);
 		if (!_library.load() || !ResolveAll()) {
+			Unload();
+			continue;
+		}
+		if (local && !(_capabilities & VASR_CAP_LOCAL)) {
 			Unload();
 			continue;
 		}
@@ -93,19 +123,15 @@ bool EngineLibrary::IsLoaded() const {
 	return _loaded;
 }
 
-void *EngineLibrary::CreateCancel() {
-	return (_loaded && _cancelNew) ? _cancelNew() : nullptr;
+unsigned int EngineLibrary::Capabilities() const {
+	return _capabilities;
 }
 
-void EngineLibrary::Cancel(void *token) {
-	if (token && _cancelCall) {
-		_cancelCall(token);
-	}
-}
-
-void EngineLibrary::FreeCancel(void *token) {
-	if (token && _cancelFree) {
-		_cancelFree(token);
+void EngineLibrary::CancelCurrent() {
+	_cancelled.store(true);
+	const auto lock = std::lock_guard(_cancelMutex);
+	if (_cancel) {
+		_cancelCall(_cancel);
 	}
 }
 
@@ -113,13 +139,24 @@ EngineResult EngineLibrary::TranscribeBlocking(
 		const std::string &configJson,
 		const QString &audioPath,
 		const QString &filename,
-		const QString &mime,
-		void *cancel) {
+		const QString &mime) {
 	auto result = EngineResult();
 	if (!IsLoaded()) {
 		result.code = -1;
 		result.error = u"Engine library not found."_q;
 		return result;
+	}
+	{
+		const auto lock = std::lock_guard(_cancelMutex);
+		_cancel = _cancelNew();
+		if (!_cancel) {
+			result.code = VASR_INTERNAL;
+			result.error = u"Could not create the cancellation token."_q;
+			return result;
+		}
+		if (_cancelled.load()) {
+			_cancelCall(_cancel);
+		}
 	}
 	const auto path = audioPath.toUtf8();
 	const auto name = filename.toUtf8();
@@ -130,15 +167,20 @@ EngineResult EngineLibrary::TranscribeBlocking(
 		path.constData(),
 		name.constData(),
 		type.isEmpty() ? nullptr : type.constData(),
-		cancel);
+		_cancel);
 	if (!transcript) {
 		result.code = _lastCode();
 		result.error = QString::fromUtf8(_lastMessage());
-		return result;
+	} else {
+		result.ok = true;
+		result.text = QString::fromUtf8(_transcriptText(transcript));
+		_transcriptFree(transcript);
 	}
-	result.ok = true;
-	result.text = QString::fromUtf8(_transcriptText(transcript));
-	_transcriptFree(transcript);
+	{
+		const auto lock = std::lock_guard(_cancelMutex);
+		_cancelFree(_cancel);
+		_cancel = nullptr;
+	}
 	return result;
 }
 

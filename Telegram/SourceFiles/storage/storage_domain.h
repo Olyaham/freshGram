@@ -64,6 +64,7 @@ private:
 	std::unique_ptr<PasscodeWrap> _wrap;
 	QByteArray _passcode;
 	MTP::AuthKeyPtr _key;
+	Fn<void()> _passcodeCommitted;
 	bool _cleansed = false;
 
 };
@@ -128,6 +129,7 @@ public:
 	~Domain();
 
 	[[nodiscard]] StartResult start(PasscodeDerivation derived);
+	[[nodiscard]] bool syncAndVerifyLocalKey() const;
 	void startAdded(
 		not_null<Main::Account*> account,
 		std::unique_ptr<MTP::Config> config);

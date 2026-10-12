@@ -17,6 +17,8 @@
 #include "ayu/data/kept_dialogs.h"
 #include "ayu/data/ayu_database_backup.h"
 #include "ayu/data/ayu_vault.h"
+#include "ayu/features/recognition/transcription_secrets.h"
+#include "ayu/utils/file_perms.h"
 #include "ayu/features/streamer_mode/streamer_mode.h"
 #include "ayu/ui/ayu_logo.h"
 #include "core/application.h"
@@ -30,12 +32,15 @@
 #include "window/window_controller.h"
 
 #include <filesystem>
+#include <atomic>
 #include <fstream>
 #include <QApplication>
 
 using json = nlohmann::json;
 
 namespace {
+
+std::atomic<bool> RequireEncryptionForStorage = false;
 
 std::filesystem::path getSettingsPath() {
 	const auto path = cWorkingDir() + u"tdata/ayu_settings.json"_q;
@@ -53,24 +58,6 @@ void repaintApp() {
 }
 
 rpl::lifetime lifetime; // idk reactivity dies when placed in `GhostModeAccountSettings` as field
-
-QString SealSecret(const QString &plain) {
-	if (plain.isEmpty() || !AyuVault::HasKey()) {
-		return QString();
-	}
-	return QString::fromLatin1(AyuVault::Seal(plain.toUtf8()).toBase64());
-}
-
-QString UnsealSecret(const QString &stored) {
-	if (stored.isEmpty()) {
-		return QString();
-	}
-	auto plain = QByteArray();
-	if (!AyuVault::Unseal(QByteArray::fromBase64(stored.toLatin1()), plain, true)) {
-		return QString();
-	}
-	return QString::fromUtf8(plain);
-}
 
 } // namespace
 
@@ -415,6 +402,7 @@ AyuSettings &AyuSettings::getInstance() {
 void AyuSettings::load() {
 	const auto applied = gsl::finally([] {
 		const auto &settings = getInstance();
+		::RequireEncryptionForStorage.store(settings.requireEncryption());
 		AyuDatabaseBackup::configure(
 			settings.backupKeepCount(),
 			settings.backupIntervalHours());
@@ -482,10 +470,12 @@ void AyuSettings::save() {
 	file.open(getSettingsPath());
 	file << p.dump(4);
 	file.close();
+	AyuUtils::RestrictFile(QString::fromStdString(getSettingsPath().string()));
 }
 
 void AyuSettings::reset() {
 	getInstance() = AyuSettings();
+	::RequireEncryptionForStorage.store(false);
 	save();
 }
 
@@ -768,19 +758,22 @@ void AyuSettings::setWhisperModel(const QString &val) {
 }
 
 void AyuSettings::setTranscriptionGroqKey(const QString &val) {
-	if (_transcriptionGroqKey.current() == val) return;
+	if (transcriptionGroqKey() == val && (!val.isEmpty() || _transcriptionGroqSealed.isEmpty())) return;
+	_transcriptionGroqSealed.clear();
 	_transcriptionGroqKey = val;
 	save();
 }
 
 void AyuSettings::setTranscriptionGeminiKey(const QString &val) {
-	if (_transcriptionGeminiKey.current() == val) return;
+	if (transcriptionGeminiKey() == val && (!val.isEmpty() || _transcriptionGeminiSealed.isEmpty())) return;
+	_transcriptionGeminiSealed.clear();
 	_transcriptionGeminiKey = val;
 	save();
 }
 
 void AyuSettings::setTranscriptionCustomKey(const QString &val) {
-	if (_transcriptionCustomKey.current() == val) return;
+	if (transcriptionCustomKey() == val && (!val.isEmpty() || _transcriptionCustomSealed.isEmpty())) return;
+	_transcriptionCustomSealed.clear();
 	_transcriptionCustomKey = val;
 	save();
 }
@@ -789,6 +782,27 @@ void AyuSettings::setTranscriptionGroqModel(const QString &val) {
 	if (_transcriptionGroqModel.current() == val) return;
 	_transcriptionGroqModel = val;
 	save();
+}
+
+const QString &AyuSettings::transcriptionGroqKey() const {
+	if (_transcriptionGroqKey.current().isEmpty() && !_transcriptionGroqSealed.isEmpty()) {
+		_transcriptionGroqKey = AyuRecognition::OpenTranscriptionSecret(_transcriptionGroqSealed, "freshgram/asr/groq-key/v1");
+	}
+	return _transcriptionGroqKey.current();
+}
+
+const QString &AyuSettings::transcriptionGeminiKey() const {
+	if (_transcriptionGeminiKey.current().isEmpty() && !_transcriptionGeminiSealed.isEmpty()) {
+		_transcriptionGeminiKey = AyuRecognition::OpenTranscriptionSecret(_transcriptionGeminiSealed, "freshgram/asr/gemini-key/v1");
+	}
+	return _transcriptionGeminiKey.current();
+}
+
+const QString &AyuSettings::transcriptionCustomKey() const {
+	if (_transcriptionCustomKey.current().isEmpty() && !_transcriptionCustomSealed.isEmpty()) {
+		_transcriptionCustomKey = AyuRecognition::OpenTranscriptionSecret(_transcriptionCustomSealed, "freshgram/asr/custom-key/v1");
+	}
+	return _transcriptionCustomKey.current();
 }
 
 void AyuSettings::setTranscriptionGeminiModel(const QString &val) {
@@ -824,6 +838,22 @@ void AyuSettings::setTranscriptionPrompt(const QString &val) {
 void AyuSettings::setTranscriptionEnginePath(const QString &val) {
 	if (_transcriptionEnginePath.current() == val) return;
 	_transcriptionEnginePath = val;
+	save();
+}
+
+void AyuSettings::setTranscriptionLocalEnginePath(const QString &val) {
+	if (_transcriptionLocalEnginePath.current() == val) {
+		return;
+	}
+	_transcriptionLocalEnginePath = val;
+	save();
+}
+
+void AyuSettings::setTranscriptionLocalUseGpu(bool val) {
+	if (_transcriptionLocalUseGpu.current() == val) {
+		return;
+	}
+	_transcriptionLocalUseGpu = val;
 	save();
 }
 
@@ -907,6 +937,19 @@ void AyuSettings::setLocalPremium(bool val) {
 	if (_localPremium.current() == val) return;
 	_localPremium = val;
 	save();
+}
+
+void AyuSettings::setRequireEncryption(bool val) {
+	if (_requireEncryption.current() == val) {
+		return;
+	}
+	::RequireEncryptionForStorage.store(val);
+	_requireEncryption = val;
+	save();
+}
+
+bool AyuSettings::RequireEncryptionForStorage() {
+	return ::RequireEncryptionForStorage.load();
 }
 
 void AyuSettings::setShowChannelReactions(bool val) {
@@ -1471,9 +1514,9 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"iconSet", s._iconSet.current()},
 		{"designStyle", s._designStyle.current()},
 		{"whisperModel", s._whisperModel.current()},
-		{"transcriptionGroqKey", SealSecret(s._transcriptionGroqKey.current())},
-		{"transcriptionGeminiKey", SealSecret(s._transcriptionGeminiKey.current())},
-		{"transcriptionCustomKey", SealSecret(s._transcriptionCustomKey.current())},
+		{"transcriptionGroqKey", AyuRecognition::SealTranscriptionSecret(s._transcriptionGroqKey.current(), s._transcriptionGroqSealed, "freshgram/asr/groq-key/v1")},
+		{"transcriptionGeminiKey", AyuRecognition::SealTranscriptionSecret(s._transcriptionGeminiKey.current(), s._transcriptionGeminiSealed, "freshgram/asr/gemini-key/v1")},
+		{"transcriptionCustomKey", AyuRecognition::SealTranscriptionSecret(s._transcriptionCustomKey.current(), s._transcriptionCustomSealed, "freshgram/asr/custom-key/v1")},
 		{"transcriptionGroqModel", s._transcriptionGroqModel.current()},
 		{"transcriptionGeminiModel", s._transcriptionGeminiModel.current()},
 		{"transcriptionCustomBase", s._transcriptionCustomBase.current()},
@@ -1481,6 +1524,8 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"transcriptionLanguage", s._transcriptionLanguage.current()},
 		{"transcriptionPrompt", s._transcriptionPrompt.current()},
 		{"transcriptionEnginePath", s._transcriptionEnginePath.current()},
+		{"transcriptionLocalEnginePath", s._transcriptionLocalEnginePath.current()},
+		{"transcriptionLocalUseGpu", s._transcriptionLocalUseGpu.current()},
 		{"ocrLanguages", s._ocrLanguages.current()},
 		{"maxEditRevisions", s._maxEditRevisions.current()},
 		{"deletedRestoreLimit", s._deletedRestoreLimit.current()},
@@ -1493,6 +1538,7 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"reactionBackgroundOpacity", s._reactionBackgroundOpacity.current()},
 		{"disableNotificationsDelay", s._disableNotificationsDelay.current()},
 		{"localPremium", s._localPremium.current()},
+		{"requireEncryption", s._requireEncryption.current()},
 		{"showChannelReactions", s._showChannelReactions.current()},
 		{"showGroupReactions", s._showGroupReactions.current()},
 		{"showPrivateChatReactions", s._showPrivateChatReactions.current()},
@@ -1619,9 +1665,12 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._materialBubbles = j.value("materialBubbles", defaults._materialBubbles.current());
 	s._designStyle = j.value("designStyle", defaults._designStyle.current());
 	s._whisperModel = j.value("whisperModel", defaults._whisperModel.current());
-	s._transcriptionGroqKey = UnsealSecret(j.value("transcriptionGroqKey", QString()));
-	s._transcriptionGeminiKey = UnsealSecret(j.value("transcriptionGeminiKey", QString()));
-	s._transcriptionCustomKey = UnsealSecret(j.value("transcriptionCustomKey", QString()));
+	s._transcriptionGroqSealed = j.value("transcriptionGroqKey", QString());
+	s._transcriptionGeminiSealed = j.value("transcriptionGeminiKey", QString());
+	s._transcriptionCustomSealed = j.value("transcriptionCustomKey", QString());
+	s._transcriptionGroqKey = QString();
+	s._transcriptionGeminiKey = QString();
+	s._transcriptionCustomKey = QString();
 	s._transcriptionGroqModel = j.value("transcriptionGroqModel", defaults._transcriptionGroqModel.current());
 	s._transcriptionGeminiModel = j.value("transcriptionGeminiModel", defaults._transcriptionGeminiModel.current());
 	s._transcriptionCustomBase = j.value("transcriptionCustomBase", defaults._transcriptionCustomBase.current());
@@ -1629,6 +1678,8 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._transcriptionLanguage = j.value("transcriptionLanguage", defaults._transcriptionLanguage.current());
 	s._transcriptionPrompt = j.value("transcriptionPrompt", defaults._transcriptionPrompt.current());
 	s._transcriptionEnginePath = j.value("transcriptionEnginePath", defaults._transcriptionEnginePath.current());
+	s._transcriptionLocalEnginePath = j.value("transcriptionLocalEnginePath", defaults._transcriptionLocalEnginePath.current());
+	s._transcriptionLocalUseGpu = j.value("transcriptionLocalUseGpu", defaults._transcriptionLocalUseGpu.current());
 	s._ocrLanguages = j.value("ocrLanguages", defaults._ocrLanguages.current());
 	s._iconSet = j.contains("iconSet")
 		? j.value("iconSet", defaults._iconSet.current())
@@ -1646,6 +1697,7 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._reactionBackgroundOpacity = j.value("reactionBackgroundOpacity", defaults._reactionBackgroundOpacity.current());
 	s._disableNotificationsDelay = j.value("disableNotificationsDelay", defaults._disableNotificationsDelay.current());
 	s._localPremium = j.value("localPremium", defaults._localPremium.current());
+	s._requireEncryption = j.value("requireEncryption", defaults._requireEncryption.current());
 	s._showChannelReactions = j.value("showChannelReactions", defaults._showChannelReactions.current());
 	s._showGroupReactions = j.value("showGroupReactions", defaults._showGroupReactions.current());
 	s._showPrivateChatReactions = j.value("showPrivateChatReactions", defaults._showPrivateChatReactions.current());

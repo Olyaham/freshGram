@@ -157,13 +157,18 @@ jobs:
           rm libraries.tar.zst
           df -h /
 
-      - name: Configure
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Configure client
         env:
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
         run: |
           cd freshGram/Telegram
-          # std::filesystem in whisper.cpp, Tesseract and the settings needs 10.15.
+          # Tesseract and the settings need std::filesystem on macOS 10.15.
           ./configure.sh \
             -D TDESKTOP_API_ID="$API_ID" \
             -D TDESKTOP_API_HASH="$API_HASH" \
@@ -191,6 +196,7 @@ jobs:
           mkdir -p dist dmg
           rm -rf dmg/freshGram.app
           cp -R "$app" dmg/freshGram.app
+          test -f dmg/freshGram.app/Contents/MacOS/voice-asr/cloud/libvoice_asr.dylib
           codesign --force --deep --sign - dmg/freshGram.app
           ln -s /Applications dmg/Applications
           hdiutil create -volname freshGram -srcfolder dmg -ov -format UDZO dist/freshGram-${{ matrix.suffix }}.dmg

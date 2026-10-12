@@ -24,6 +24,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/rect.h"
 #include "api/api_transcribes.h"
 #include "ayu/features/recognition/local_transcribe.h"
+#include "ayu/features/recognition/transcription_backend.h"
 #include "apiwrap.h"
 #include "styles/style_chat.h"
 #include "window/window_session_controller.h"
@@ -333,7 +334,7 @@ void TranscribeButton::paint(
 bool TranscribeButton::hasLock() const {
 	const auto session = &_item->history()->session();
 	if (session->premium()
-		|| (!_summarize && AyuRecognition::LocalTranscriptionEnabled())) {
+		|| (!_summarize && AyuRecognition::UsesExternalTranscription(_item))) {
 		return false;
 	}
 	const auto transcribes = &session->api().transcribes();
@@ -367,7 +368,9 @@ void TranscribeButton::setOpened(bool opened, Fn<void()> update) {
 }
 
 ClickHandlerPtr TranscribeButton::link() {
-	if (!_item->isHistoryEntry() || _item->isLocal()) {
+	if (!_item->isHistoryEntry()
+		|| (_item->isLocal() && (_summarize
+			|| !AyuRecognition::UsesExternalTranscription(_item)))) {
 		return nullptr;
 	} else if (_link) {
 		return _link;
@@ -381,7 +384,7 @@ ClickHandlerPtr TranscribeButton::link() {
 			return;
 		}
 		if (session->premium()
-			|| (!summarize && AyuRecognition::LocalTranscriptionEnabled())) {
+			|| (!summarize && AyuRecognition::UsesExternalTranscription(item))) {
 			auto &transcribes = session->api().transcribes();
 			return summarize
 				? transcribes.toggleSummary(item)

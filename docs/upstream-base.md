@@ -27,6 +27,17 @@ Verification performed during the rebase:
   APIs and custom UI layouts were reconciled explicitly.
 - Application version, Windows resources and the UWP manifest use 7.3.1.
 
-Application compilation and live UI validation are separate checks; the source
-rebase alone does not establish either. Existing crypto integration work remains
-preserved on its own branch and is not replaced by this rebase.
+The downstream FGV2/AYV1 vault, archive encryption, backup protections and PFS
+changes were integrated after the rebase. ASR credentials use that vault. A
+successful disk-key verification gates vault readiness, and fake-passcode updates
+follow a committed passcode change independently of the settings window.
+
+Targeted production translation units were syntax-checked using generated layer
+230, language, emoji and style headers. The standalone crypto suite passed 27
+CTest groups, including legacy credential migration and PFS wire checks; its
+ASan/UBSan run passed 19 groups. The real Qt/Rust ASR loader passed HTTP success,
+failure and in-flight cancellation scenarios. Rust mock checks passed 16 tests.
+
+The full client was not built or run. Live GUI/MTProto behavior, complete PFS
+handshakes, passcode changes and native Windows/macOS/GPU deployment still require
+runtime validation. Earlier branches and the original dirty checkout are retained.

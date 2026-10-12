@@ -9,16 +9,20 @@
 #include "lang_auto.h"
 #include "lang/lang_keys.h"
 #include "ayu/ayu_settings.h"
-#include "ayu/features/recognition/speech_recognition.h"
+#include "ayu/data/ayu_vault.h"
+#include "ayu/secret/secret_vault.h"
 #include "ayu/features/recognition/text_recognition.h"
 #include "ayu/features/recognition/transcription_config.h"
+#include "ayu/features/recognition/transcription_backend.h"
 #include "ayu/features/recognition/voice_asr_engine.h"
 #include "ayu/ui/boxes/recognition_models_box.h"
 #include "ayu/ui/settings/ayu_builder.h"
 #include "ayu/ui/settings/settings_ayu_utils.h"
 #include "ayu/ui/settings/settings_main.h"
 #include "base/platform/base_platform_info.h"
+#include "base/weak_ptr.h"
 #include "core/application.h"
+#include "core/file_utilities.h"
 #include "crl/crl_async.h"
 #include "crl/crl_on_main.h"
 #include "lang/lang_text_entity.h"
@@ -26,12 +30,15 @@
 #include "settings/settings_builder.h"
 #include "settings/settings_common.h"
 #include "styles/style_menu_icons.h"
+#include "styles/style_layers.h"
 #include "styles/style_settings.h"
 #include "ui/boxes/single_choice_box.h"
 #include "ui/layers/generic_box.h"
 #include "ui/toast/toast.h"
 #include "ui/widgets/buttons.h"
+#include "ui/widgets/checkbox.h"
 #include "ui/widgets/fields/input_field.h"
+#include "ui/widgets/fields/password_input.h"
 #include "ui/wrap/vertical_layout.h"
 #include "window/window_controller.h"
 #include "window/window_session_controller.h"
@@ -39,6 +46,9 @@
 #include <QtCore/QRegularExpression>
 
 #include <QtCore/QFile>
+#include <QtCore/QDir>
+#include <QtCore/QTemporaryDir>
+#include <QtCore/QUrl>
 
 #include <memory>
 #include <vector>
@@ -138,24 +148,34 @@ void FillTranscriptionCredentialsBox(
 	auto *settings = &AyuSettings::getInstance();
 	box->setTitle(tr::ayu_TranscriptionCredentials());
 	const auto layout = box->verticalLayout();
-	Ui::InputField *groqKey = nullptr;
-	Ui::InputField *geminiKey = nullptr;
+	Ui::PasswordInput *groqKey = nullptr;
+	Ui::PasswordInput *geminiKey = nullptr;
+	Ui::InputField *groqModel = nullptr;
+	Ui::InputField *geminiModel = nullptr;
 	Ui::InputField *geminiPrompt = nullptr;
 	Ui::InputField *customBase = nullptr;
 	Ui::InputField *customModel = nullptr;
-	Ui::InputField *customKey = nullptr;
+	Ui::PasswordInput *customKey = nullptr;
+	const auto addKey = [=](rpl::producer<QString> placeholder, const QString &value) {
+		const auto row = layout->add(object_ptr<Ui::RpWidget>(layout));
+		row->resize(row->width(), st::defaultInputField.heightMin);
+		const auto field = Ui::CreateChild<Ui::PasswordInput>(
+			row, st::defaultInputField, std::move(placeholder), value);
+		row->sizeValue() | rpl::on_next([=](QSize size) {
+			field->resize(size.width(), field->height());
+		}, row->lifetime());
+		return field;
+	};
 	if (provider == TranscriptionProvider::Groq) {
-		groqKey = layout->add(object_ptr<Ui::InputField>(
-			layout,
-			st::defaultInputField,
-			rpl::single(tr::ayu_TranscriptionGroqKey(tr::now)),
-			settings->transcriptionGroqKey()));
+		groqKey = addKey(tr::ayu_TranscriptionGroqKey(), settings->transcriptionGroqKey());
+		groqModel = layout->add(object_ptr<Ui::InputField>(
+			layout, st::defaultInputField,
+			tr::ayu_TranscriptionModel(), settings->transcriptionGroqModel()));
 	} else if (provider == TranscriptionProvider::Gemini) {
-		geminiKey = layout->add(object_ptr<Ui::InputField>(
-			layout,
-			st::defaultInputField,
-			rpl::single(tr::ayu_TranscriptionGeminiKey(tr::now)),
-			settings->transcriptionGeminiKey()));
+		geminiKey = addKey(tr::ayu_TranscriptionGeminiKey(), settings->transcriptionGeminiKey());
+		geminiModel = layout->add(object_ptr<Ui::InputField>(
+			layout, st::defaultInputField,
+			tr::ayu_TranscriptionModel(), settings->transcriptionGeminiModel()));
 		geminiPrompt = layout->add(object_ptr<Ui::InputField>(
 			layout,
 			st::defaultInputField,
@@ -172,18 +192,87 @@ void FillTranscriptionCredentialsBox(
 			st::defaultInputField,
 			rpl::single(tr::ayu_TranscriptionCustomModel(tr::now)),
 			settings->transcriptionCustomModel()));
-		customKey = layout->add(object_ptr<Ui::InputField>(
-			layout,
-			st::defaultInputField,
-			rpl::single(tr::ayu_TranscriptionCustomKey(tr::now)),
-			settings->transcriptionCustomKey()));
+		customKey = addKey(tr::ayu_TranscriptionCustomKey(), settings->transcriptionCustomKey());
+	}
+	const auto local = (provider == TranscriptionProvider::WhisperLocal);
+	const auto language = layout->add(object_ptr<Ui::InputField>(
+		layout, st::defaultInputField,
+		tr::ayu_TranscriptionLanguage(), settings->transcriptionLanguage()));
+	Ui::Checkbox *gpu = nullptr;
+	if (local) {
+		gpu = layout->add(object_ptr<Ui::Checkbox>(
+			layout, tr::ayu_TranscriptionAllowGpu(tr::now),
+			settings->transcriptionLocalUseGpu()));
 	}
 	const auto enginePath = layout->add(object_ptr<Ui::InputField>(
 		layout,
 		st::defaultInputField,
 		rpl::single(tr::ayu_TranscriptionEnginePath(tr::now)),
-		settings->transcriptionEnginePath()));
+		local ? settings->transcriptionLocalEnginePath()
+			: settings->transcriptionEnginePath()));
+	const auto chooseModule = layout->add(object_ptr<Ui::RoundButton>(
+		layout, tr::ayu_TranscriptionChooseModule(), st::defaultBoxButton));
+	chooseModule->addClickHandler([=] {
+		FileDialog::GetOpenPath(box.get(),
+			tr::ayu_TranscriptionChooseModule(tr::now),
+			u"ASR modules (*.so *.dylib *.dll)"_q,
+			crl::guard(box, [=](FileDialog::OpenResult &&result) {
+				if (!result.paths.isEmpty()) {
+					enginePath->setTextWithTags({ .text = result.paths.front() });
+				}
+			}));
+	});
+	const auto readConfig = [=] {
+		const auto engine = local ? AyuRecognition::EngineProvider::WhisperLocal
+			: provider == TranscriptionProvider::Gemini
+			? AyuRecognition::EngineProvider::Gemini
+			: provider == TranscriptionProvider::Custom
+			? AyuRecognition::EngineProvider::Custom
+			: AyuRecognition::EngineProvider::Groq;
+		auto config = AyuRecognition::CurrentTranscriptionConfig(engine);
+		if (groqKey) config.groqKey = groqKey->getLastText().trimmed();
+		if (groqModel) config.groqModel = groqModel->getLastText().trimmed();
+		if (geminiKey) config.geminiKey = geminiKey->getLastText().trimmed();
+		if (geminiModel) config.geminiModel = geminiModel->getLastText().trimmed();
+		if (geminiPrompt) config.prompt = geminiPrompt->getLastText().trimmed();
+		if (customBase) config.customBase = customBase->getLastText().trimmed();
+		if (customModel) config.customModel = customModel->getLastText().trimmed();
+		if (customKey) config.customKey = customKey->getLastText().trimmed();
+		config.language = language->getLastText().trimmed();
+		config.enginePath = enginePath->getLastText().trimmed();
+		if (gpu) config.useGpu = gpu->checked();
+		return config;
+	};
+	const auto validate = [=](const AyuRecognition::TranscriptionConfig &config, bool testing) {
+		if (customBase) {
+			const auto url = QUrl(config.customBase);
+			if (!url.isValid() || url.host().isEmpty()
+				|| (url.scheme() != u"https"_q && url.scheme() != u"http"_q)) {
+				customBase->showError();
+				return false;
+			}
+		}
+		const auto model = groqModel ? groqModel : geminiModel ? geminiModel : customModel;
+		if (model && model->getLastText().trimmed().isEmpty()) {
+			model->showError();
+			return false;
+		}
+		const auto key = groqKey ? groqKey : geminiKey;
+		if (testing && key && key->getLastText().trimmed().isEmpty()) {
+			key->showError();
+			return false;
+		}
+		return true;
+	};
 	const auto save = [=] {
+		if (!validate(readConfig(), false)) {
+			return false;
+		}
+		if ((groqKey || geminiKey || customKey)
+			&& (!AyuVault::HasKey() || !AyuSecret::Vault::Available())) {
+			Ui::Toast::Show(Lang::Hard::SecureSaveError());
+			return false;
+		}
 		if (groqKey) {
 			settings->setTranscriptionGroqKey(groqKey->getLastText().trimmed());
 		}
@@ -193,6 +282,8 @@ void FillTranscriptionCredentialsBox(
 		if (geminiPrompt) {
 			settings->setTranscriptionPrompt(geminiPrompt->getLastText().trimmed());
 		}
+		if (groqModel) settings->setTranscriptionGroqModel(groqModel->getLastText().trimmed());
+		if (geminiModel) settings->setTranscriptionGeminiModel(geminiModel->getLastText().trimmed());
 		if (customBase) {
 			settings->setTranscriptionCustomBase(customBase->getLastText().trimmed());
 		}
@@ -202,51 +293,55 @@ void FillTranscriptionCredentialsBox(
 		if (customKey) {
 			settings->setTranscriptionCustomKey(customKey->getLastText().trimmed());
 		}
-		settings->setTranscriptionEnginePath(enginePath->getLastText().trimmed());
+		settings->setTranscriptionLanguage(language->getLastText().trimmed());
+		if (local) {
+			settings->setTranscriptionLocalEnginePath(enginePath->getLastText().trimmed());
+			settings->setTranscriptionLocalUseGpu(gpu->checked());
+		} else {
+			settings->setTranscriptionEnginePath(enginePath->getLastText().trimmed());
+		}
 		Ui::Toast::Show(tr::ayu_TranscriptionSaved(tr::now));
+		return true;
 	};
 	if (provider == TranscriptionProvider::Groq
 		|| provider == TranscriptionProvider::Gemini
-		|| provider == TranscriptionProvider::Custom) {
-		const auto testing = std::make_shared<bool>(false);
+		|| provider == TranscriptionProvider::Custom || local) {
+		struct TestState {
+			std::shared_ptr<AyuRecognition::EngineLibrary> active;
+			bool closed = false;
+		};
+		const auto testing = std::make_shared<TestState>();
+		const auto weak = base::make_weak(box.get());
+		box->lifetime().add([=] {
+			testing->closed = true;
+			if (testing->active) testing->active->CancelCurrent();
+		});
+		box->boxClosing() | rpl::on_next([=] {
+			testing->closed = true;
+			if (testing->active) testing->active->CancelCurrent();
+		}, box->lifetime());
 		box->addButton(tr::ayu_TranscriptionTest(), [=] {
-			if (*testing) {
+			if (testing->active) {
+				testing->active->CancelCurrent();
 				return;
 			}
-			*testing = true;
-			auto config = AyuRecognition::TranscriptionConfig();
-			auto engine = AyuRecognition::EngineProvider::Groq;
-			if (provider == TranscriptionProvider::Gemini) {
-				engine = AyuRecognition::EngineProvider::Gemini;
-			} else if (provider == TranscriptionProvider::Custom) {
-				engine = AyuRecognition::EngineProvider::Custom;
-			}
-			config.provider = engine;
-			config.groqKey = groqKey ? groqKey->getLastText().trimmed() : QString();
-			config.groqModel = settings->transcriptionGroqModel();
-			config.geminiKey = geminiKey ? geminiKey->getLastText().trimmed() : QString();
-			config.prompt = geminiPrompt ? geminiPrompt->getLastText().trimmed() : QString();
-			config.geminiModel = settings->transcriptionGeminiModel();
-			config.customBase = customBase ? customBase->getLastText().trimmed() : QString();
-			config.customModel = customModel ? customModel->getLastText().trimmed() : QString();
-			config.customKey = customKey ? customKey->getLastText().trimmed() : QString();
-			config.language = settings->transcriptionLanguage();
-			config.enginePath = enginePath->getLastText().trimmed();
+			const auto config = readConfig();
+			if (!validate(config, true)) return;
+			const auto engine = std::make_shared<AyuRecognition::EngineLibrary>();
+			testing->active = engine;
+			Ui::Toast::Show(tr::ayu_TranscriptionTesting(tr::now));
 			crl::async([=] {
 				const auto silence = std::vector<float>(16000, 0.f);
-				const auto wav = AyuRecognition::UniqueTempPath(u".wav"_q);
+				auto temp = QTemporaryDir(QDir::tempPath() + u"/freshgram-asr-test-XXXXXX"_q);
+				const auto wav = temp.filePath(u"audio.wav"_q);
 				auto result = AyuRecognition::EngineResult();
-				if (AyuRecognition::WriteWavFile(wav, silence)) {
-					auto engine = AyuRecognition::EngineLibrary();
-					if (engine.Load(config.enginePath)) {
-						auto *token = engine.CreateCancel();
-						result = engine.TranscribeBlocking(
+				if (temp.isValid() && AyuRecognition::WriteWavFile(wav, silence)) {
+					if (engine->Load(config.enginePath, local)) {
+						result = engine->TranscribeBlocking(
 							AyuRecognition::BuildVoiceAsrConfigJson(config),
 							wav,
 							u"audio.wav"_q,
-							u"audio/wav"_q,
-							token);
-						engine.FreeCancel(token);
+							u"audio/wav"_q);
 					} else {
 						result.code = -1;
 					}
@@ -254,11 +349,21 @@ void FillTranscriptionCredentialsBox(
 					result.code = 4;
 					result.error = u"Could not save the file."_q;
 				}
-				QFile::remove(wav);
+				const auto capabilities = engine->Capabilities();
 				crl::on_main([=] {
-					*testing = false;
+					if (!weak || testing->closed) return;
+					testing->active.reset();
 					if (result.ok) {
-						Ui::Toast::Show(tr::ayu_TranscriptionTestOk(tr::now));
+						auto backends = QStringList{ u"CPU"_q };
+						if (capabilities & VASR_CAP_CUDA) backends.push_back(u"CUDA"_q);
+						if (capabilities & VASR_CAP_VULKAN) backends.push_back(u"Vulkan"_q);
+						if (capabilities & VASR_CAP_METAL) backends.push_back(u"Metal"_q);
+						if (capabilities & VASR_CAP_HIPBLAS) backends.push_back(u"HIP"_q);
+						if (capabilities & VASR_CAP_SYCL) backends.push_back(u"SYCL"_q);
+						if (capabilities & VASR_CAP_COREML) backends.push_back(u"CoreML"_q);
+						Ui::Toast::Show(local ? tr::ayu_TranscriptionCapabilities(
+							tr::now, lt_backend, backends.join(u", "_q))
+							: tr::ayu_TranscriptionTestOk(tr::now));
 					} else if (result.code == -1) {
 						Ui::Toast::Show(tr::ayu_TranscriptionNoEngine(tr::now));
 					} else {
@@ -272,16 +377,14 @@ void FillTranscriptionCredentialsBox(
 		});
 	}
 	box->addButton(tr::lng_settings_save(), [=] {
-		save();
-		box->closeBox();
+		if (save()) box->closeBox();
 	});
+	box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });
 }
 
 void BuildTranscription(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	const auto controller = builder.controller();
 	auto *settings = &AyuSettings::getInstance();
-	const auto engine = AyuRecognition::EngineLibrary::IsAvailable(
-		settings->transcriptionEnginePath());
 
 	auto options = std::vector<std::pair<TranscriptionProvider, QString>>{
 		{ TranscriptionProvider::Telegram, u"Telegram"_q },
@@ -290,7 +393,7 @@ void BuildTranscription(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		{ TranscriptionProvider::Gemini, u"Gemini"_q },
 		{ TranscriptionProvider::Custom, tr::ayu_TranscriptionCustom(tr::now) },
 	};
-	if (AyuRecognition::SpeechRecognitionAvailable() || engine) {
+	{
 		options.emplace_back(
 			TranscriptionProvider::WhisperLocal,
 			tr::ayu_TranscriptionWhisper(tr::now));
@@ -308,7 +411,7 @@ void BuildTranscription(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		{ TranscriptionProvider::Gemini, u"Gemini"_q },
 		{ TranscriptionProvider::Custom, tr::ayu_TranscriptionCustom(tr::now) },
 	};
-	if (AyuRecognition::SpeechRecognitionAvailable() || engine) {
+	{
 		scopeOptions.emplace_back(
 			TranscriptionProvider::WhisperLocal,
 			tr::ayu_TranscriptionWhisper(tr::now));
@@ -426,27 +529,20 @@ void BuildTranscription(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 			}));
 		},
 	});
-	builder.addButton({
-		.id = u"ayu/transcriptionCredentials"_q,
-		.title = tr::ayu_TranscriptionCredentials(),
-		.st = &st::settingsButtonNoIcon,
-		.label = settings->transcriptionProviderValue()
-			| rpl::map(getIndex)
-			| rpl::map([=](int val) { return options[val].second; }),
-		.onClick = [=] {
-			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
-				FillTranscriptionCredentialsBox(box, settings->transcriptionProvider());
-			}));
-		},
-		.shown = settings->transcriptionProviderValue()
-			| rpl::map([](TranscriptionProvider value) {
-				return value == TranscriptionProvider::Groq
-					|| value == TranscriptionProvider::Gemini
-					|| value == TranscriptionProvider::Custom;
-			}),
-	});
-	if (!AyuRecognition::SpeechRecognitionAvailable() && !engine) {
-		return;
+	for (const auto provider : { TranscriptionProvider::Groq,
+		TranscriptionProvider::Gemini, TranscriptionProvider::Custom,
+		TranscriptionProvider::WhisperLocal }) {
+		builder.addButton({
+			.id = u"ayu/transcriptionCredentials/"_q + QString::number(int(provider)),
+			.title = rpl::single(options[getIndex(provider)].second),
+			.st = &st::settingsButtonNoIcon,
+			.label = tr::ayu_TranscriptionCredentials(),
+			.onClick = [=] {
+				controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+					FillTranscriptionCredentialsBox(box, provider);
+				}));
+			},
+		});
 	}
 	builder.addButton({
 		.id = u"ayu/whisperModel"_q,

@@ -21,6 +21,7 @@
 #include <QtCore/QFile>
 #include <QtCore/QProcess>
 #include <QtCore/QStandardPaths>
+#include <openssl/crypto.h>
 
 namespace AyuFakePasscode {
 namespace {
@@ -703,6 +704,35 @@ void SetClearCacheOnLock(bool value) {
 	}
 	state.data.clearCacheOnLock = value;
 	[[maybe_unused]] const auto written = WriteFile();
+}
+
+Fn<void()> PrepareRealPasscodeChange(const QByteArray &passcode) {
+	Load();
+	const auto key = LocalKey();
+	if (!key || GetState().data.list.empty()) {
+		return nullptr;
+	}
+	auto descriptor = EncryptedDescriptor(passcode.size() + sizeof(quint32));
+	descriptor.stream << passcode;
+	const auto sealed = PrepareEncrypted(descriptor, key);
+	return [sealed, key] {
+		if (LocalKey() != key) {
+			return;
+		}
+		auto opened = EncryptedDescriptor();
+		if (!DecryptLocal(opened, sealed, key)) {
+			return;
+		}
+		auto plain = QByteArray();
+		opened.stream >> plain;
+		const auto cleanse = gsl::finally([&] {
+			OPENSSL_cleanse(plain.data(), plain.size());
+			OPENSSL_cleanse(opened.data.data(), opened.data.size());
+		});
+		if (opened.stream.status() == QDataStream::Ok && opened.stream.atEnd()) {
+			RealPasscodeChanged(plain);
+		}
+	};
 }
 
 void RealPasscodeChanged(const QByteArray &passcode) {

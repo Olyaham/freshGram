@@ -604,11 +604,6 @@ void LocalPasscodeEnter::setupContent() {
 		using Result = Wallet::LocalPasscodeChangeResult;
 		Wallet::ChangeLocalPasscode(this, _passcode, newUtf8, [=](
 				Result result) {
-			if (result == Result::Done || result == Result::CommitFailed) {
-				auto changed = newText.toUtf8();
-				AyuFakePasscode::RealPasscodeChanged(changed);
-				OPENSSL_cleanse(changed.data(), changed.size());
-			}
 			const auto controller = weakController.get();
 			if (!weak || !controller) {
 				return;

@@ -1,10 +1,14 @@
 // This is the source code of freshGram.
 #pragma once
 
+#include "voice_asr.h"
+
 #include <QtCore/QLibrary>
 #include <QtCore/QString>
 #include <QtCore/QStringList>
 
+#include <atomic>
+#include <mutex>
 #include <string>
 
 namespace AyuRecognition {
@@ -23,34 +27,40 @@ public:
 	EngineLibrary &operator=(const EngineLibrary&) = delete;
 	~EngineLibrary();
 
-	[[nodiscard]] static bool IsAvailable(const QString &customPath);
-	[[nodiscard]] static QStringList SearchPaths(const QString &customPath);
-	bool Load(const QString &customPath);
+	[[nodiscard]] static bool IsAvailable(
+		const QString &customPath,
+		bool local = false);
+	[[nodiscard]] static QStringList SearchPaths(
+		const QString &customPath,
+		bool local = false);
+	bool Load(const QString &customPath, bool local = false);
 	[[nodiscard]] bool IsLoaded() const;
+	[[nodiscard]] unsigned int Capabilities() const;
 	[[nodiscard]] EngineResult TranscribeBlocking(
 		const std::string &configJson,
 		const QString &audioPath,
 		const QString &filename,
-		const QString &mime,
-		void *cancel);
-	void *CreateCancel();
-	void Cancel(void *token);
-	void FreeCancel(void *token);
+		const QString &mime);
+	void CancelCurrent();
 
 private:
-	using EngineNew = void* (*)();
-	using EngineFree = void (*)(void*);
-	using CancelNew = void* (*)();
-	using CancelFree = void (*)(void*);
-	using CancelCall = void (*)(void*);
-	using Transcribe = void* (*)(void*, const char*, const char*, const char*, const char*, void*);
-	using TranscriptFree = void (*)(void*);
-	using TranscriptText = const char* (*)(void*);
-	using LastCode = int (*)();
-	using LastMessage = const char* (*)();
+	using EngineNew = decltype(&vasr_engine_new);
+	using EngineFree = decltype(&vasr_engine_free);
+	using CancelNew = decltype(&vasr_cancel_new);
+	using CancelFree = decltype(&vasr_cancel_free);
+	using CancelCall = decltype(&vasr_cancel);
+	using Transcribe = decltype(&vasr_transcribe);
+	using TranscriptFree = decltype(&vasr_transcript_free);
+	using TranscriptText = decltype(&vasr_transcript_text);
+	using LastCode = decltype(&vasr_last_error_code);
+	using LastMessage = decltype(&vasr_last_error_message);
 
 	QLibrary _library;
-	void *_engine = nullptr;
+	VasrEngine *_engine = nullptr;
+	VasrCancel *_cancel = nullptr;
+	std::mutex _cancelMutex;
+	std::atomic<bool> _cancelled = false;
+	unsigned int _capabilities = 0;
 	bool _loaded = false;
 	QString _path;
 	EngineNew _engineNew = nullptr;

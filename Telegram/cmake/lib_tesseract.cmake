@@ -4,6 +4,8 @@
 # from the sources here, without the CMake projects of the libraries,
 # so no image libraries, archives, curl or ScrollView are involved.
 
+option(FRESHGRAM_DISABLE_RECOGNITION "Build without local OCR" OFF)
+
 add_library(lib_tesseract INTERFACE)
 add_library(tdesktop::lib_tesseract ALIAS lib_tesseract)
 

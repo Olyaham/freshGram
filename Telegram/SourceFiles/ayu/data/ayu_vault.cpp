@@ -95,18 +95,14 @@ bool WriteFile(const QString &path, const QByteArray &plain) {
 	return (file.write(bytes) == bytes.size()) && file.commit();
 }
 
-bool WriteSealedFile(const QString &path, const QByteArray &plain) {
-	return HasKey() && WriteFile(path, plain);
-}
-
-std::optional<QByteArray> ReadFile(const QString &path, bool requireSealed) {
+std::optional<QByteArray> ReadFile(const QString &path) {
 	auto file = QFile(path);
 	if (!file.open(QIODevice::ReadOnly)) {
 		return std::nullopt;
 	}
 	const auto bytes = file.readAll();
 	auto plain = QByteArray();
-	if (!Unseal(bytes, plain, requireSealed)) {
+	if (!Unseal(bytes, plain)) {
 		return std::nullopt;
 	}
 	return plain;

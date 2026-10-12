@@ -6,11 +6,16 @@
 // Copyright @Radolyn, 2026
 #include "ayu/data/ayu_database.h"
 
+#include "ayu/ayu_settings.h"
 #include "ayu/data/ayu_database_backup.h"
+#include "ayu/data/ayu_archive.h"
+#include "ayu/data/ayu_encryption.h"
 #include "ayu/data/ayu_vault.h"
 #include "ayu/data/entities.h"
 #include "ayu/libs/sqlite/sqlite3.h"
 #include "ayu/libs/sqlite/sqlite_orm.h"
+#include "ayu/secret/secret_vault.h"
+#include "ayu/utils/file_perms.h"
 #include "ayu/utils/id_search.h"
 #include "base/timer.h"
 #include "base/unixtime.h"
@@ -20,9 +25,15 @@
 #include "main/main_domain.h"
 #include "storage/storage_domain.h"
 
+#include <QtCore/QByteArray>
+
 #include <atomic>
 #include <chrono>
+#include <cstring>
+#include <limits>
 #include <mutex>
+#include <optional>
+#include <string>
 #include <system_error>
 #include <thread>
 
@@ -48,6 +59,7 @@ const auto kMemoryHandleCapture = [] {
 } // namespace
 
 using namespace sqlite_orm;
+using namespace AyuDatabase::Encryption;
 auto storage = make_storage(
 	":memory:",
 	make_table<SchemaVersion>(
@@ -324,6 +336,7 @@ auto storage = make_storage(
 namespace {
 
 std::recursive_mutex DatabaseMutex;
+std::mutex SnapshotMutex;
 bool DatabaseReady = false;
 std::atomic<int> PurgeDays = 0;
 std::atomic<sqlite3_int64> SavedChanges = 0;
@@ -337,6 +350,7 @@ constexpr auto kSqliteLocked = 6;
 constexpr auto kSqliteCorrupt = 11;
 constexpr auto kSqliteNotADatabase = 26;
 constexpr auto kSaveDelay = crl::time(3000);
+constexpr auto kSnapshotContext = "ayu-snapshot-v1";
 
 [[nodiscard]] QString snapshotPath() {
 	return "./tdata/ayudata.enc";
@@ -412,11 +426,110 @@ void inTransaction(Callback &&callback) {
 	}
 }
 
+// Message content envelope (seal/open/row helpers) lives in
+// ayu/data/ayu_encryption.h, shared with the standalone crypto test
+// harness so there is a single implementation to audit.
+
+// Strict mode (settings): Vault-unavailable or seal failure refuses the
+// write instead of silently falling back to plaintext. Refusals lose the
+// record by design; the default stays compatible (plaintext fallback).
+[[nodiscard]] bool StrictMode() {
+	return AyuSettings::RequireEncryptionForStorage();
+}
+
+
+constexpr auto kBackfillBatch = 500;
+
+template<typename Message>
+void backfillTable(const char *what, bool strict) {
+	auto lastId = ID(0);
+	while (true) {
+		const auto batch = run<std::vector<Message>>(what, {}, [&] {
+			return storage.get_all<Message>(
+				where(column<Message>(&Message::fakeId) > lastId),
+				order_by(column<Message>(&Message::fakeId)),
+				limit(kBackfillBatch));
+		});
+		if (batch.empty()) {
+			break;
+		}
+		// Reads above run under DatabaseMutex via run(); the write
+		// transaction below must take it too: sqlite_orm storage is
+		// not thread-safe against concurrent readers/writers.
+		const auto written = run<bool>(what, false, [&] {
+			inTransaction([&] {
+				for (const auto &row : batch) {
+					if (!RowNeedsSeal(row)) {
+						continue;
+					}
+					if (const auto sealed = SealRowCopy(row, strict)) {
+						try {
+							storage.update(*sealed);
+						} catch (...) {
+							LOG(("[AyuGram] Database: backfill skipped a row."));
+						}
+					} else if (strict) {
+						LOG(("[AyuGram] Database: strict mode refused a legacy row."));
+					}
+				}
+			});
+			return true;
+		});
+		if (!written) {
+			break;
+		}
+		lastId = batch.back().fakeId;
+		if (int(batch.size()) < kBackfillBatch) {
+			break;
+		}
+	}
+}
+
+// One-time (idempotent, resumable) migration of legacy plaintext rows.
+// Runs in the background after startup; rows sealed by newer versions
+// are skipped, so an interrupted run simply continues next time.
+// The strict flag is snapshotted by the caller (main thread): reading
+// the setting from this worker would be a data race.
+void backfillSealedRows(bool strict) {
+	if (!AyuSecret::Vault::Available()) {
+		return;
+	}
+	backfillTable<DeletedMessage>("backfill deleted", strict);
+	backfillTable<EditedMessage>("backfill edited", strict);
+	backfillTable<DeletedMarkup>("backfill markup", strict);
+	backfillTable<DeletedExtra>("backfill extras", strict);
+	backfillTable<KeptDialog>("backfill kept dialogs", strict);
+	backfillTable<KeptTopic>("backfill kept topics", strict);
+	backfillTable<KnownUser>("backfill known users", strict);
+	runVoid("backfill filters", [&] {
+		inTransaction([&] {
+			for (auto row : storage.get_all<RegexFilter>()) {
+				if (!RowNeedsSeal(row)) {
+					continue;
+				}
+				OpenRow(row);
+				if (const auto sealed = SealRowCopy(row, strict)) {
+					try {
+						storage.update(*sealed);
+					} catch (...) {
+						LOG(("[AyuGram] Database: backfill skipped a row."));
+					}
+				} else if (strict) {
+					LOG(("[AyuGram] Database: strict mode refused a legacy row."));
+				}
+			}
+		});
+	});
+}
+
 bool saveSnapshot() {
 	SavePending = false;
 	auto plain = QByteArray();
+	auto changes = sqlite3_int64(0);
+	auto serial = std::unique_lock<std::mutex>();
 	{
 		std::lock_guard lock(DatabaseMutex);
+		serial = std::unique_lock(SnapshotMutex);
 		if (!DatabaseReady || !MemoryHandle) {
 			return false;
 		}
@@ -429,12 +542,13 @@ bool saveSnapshot() {
 			reinterpret_cast<const char*>(data),
 			qsizetype(size));
 		sqlite3_free(data);
-		SavedChanges = sqlite3_total_changes64(MemoryHandle);
+		changes = sqlite3_total_changes64(MemoryHandle);
 	}
-	if (!AyuVault::WriteSealedFile(snapshotPath(), plain)) {
+	if (!AyuArchive::WriteFile(snapshotPath(), plain, kSnapshotContext)) {
 		SavedChanges = -1;
 		return false;
 	}
+	SavedChanges = changes;
 	return true;
 }
 
@@ -442,17 +556,40 @@ void renameDatabaseFiles(const QString &suffix) {
 	for (const auto &extension : {QString(), QString("-shm"), QString("-wal")}) {
 		const auto from = legacyPath() + extension;
 		if (QFile::exists(from)) {
-			QFile::rename(from, QString("./tdata/ayudata_%1.db%2").arg(suffix, extension));
+			const auto to = QString("./tdata/ayudata_%1.db%2").arg(suffix, extension);
+			if (QFile::rename(from, to)) {
+				AyuUtils::RestrictFile(to);
+			}
 		}
 	}
 	if (QFile::exists(snapshotPath())) {
-		QFile::rename(snapshotPath(), QString("./tdata/ayudata_%1.enc").arg(suffix));
+		QFile::rename(snapshotPath(), QString("./tdata/ayudata_%1.corrupt").arg(suffix));
 	}
 }
 
 void copyDatabaseFiles(const QString &suffix) {
-	if (QFile::exists(snapshotPath())) {
-		QFile::copy(snapshotPath(), QString("./tdata/ayudata_%1.enc").arg(suffix));
+	if (!QFile::exists(snapshotPath())) {
+		return;
+	}
+	auto plain = QByteArray();
+	if (!AyuArchive::ReadFile(snapshotPath(), kSnapshotContext, plain)) {
+		return;
+	}
+	if (!QDir().mkpath("./tdata/ayu_backups")) {
+		return;
+	}
+	const auto directory = QString("./tdata/ayu_backups");
+	AyuUtils::RestrictDir(directory);
+	auto target = directory + QString("/ayudata_%1.enc").arg(suffix);
+	for (auto duplicate = 1; QFile::exists(target); ++duplicate) {
+		target = directory + QString("/ayudata_%1_%2.enc")
+			.arg(suffix)
+			.arg(duplicate);
+	}
+	const auto context = std::string("ayu-backup-v1:")
+		+ QFileInfo(target).fileName().toStdString();
+	if (AyuArchive::WriteFile(target, plain, context)) {
+		AyuUtils::RestrictFile(target);
 	}
 }
 
@@ -499,16 +636,23 @@ void importLegacyDatabase() {
 
 void loadSnapshot(bool &imported) {
 	if (QFile::exists(snapshotPath())) {
-		const auto plain = AyuVault::ReadFile(snapshotPath(), true);
-		if (!plain || plain->isEmpty()) {
+		auto plain = QByteArray();
+		auto format = AyuArchive::Format::Plain;
+		if (!AyuArchive::ReadFile(
+				snapshotPath(),
+				kSnapshotContext,
+				plain,
+				&format)
+			|| plain.isEmpty()) {
 			throwSqlite(kSqliteNotADatabase);
 		}
-		const auto size = sqlite3_int64(plain->size());
+		imported = AyuArchive::NeedsMigration(format);
+		const auto size = sqlite3_int64(plain.size());
 		const auto buffer = static_cast<unsigned char*>(sqlite3_malloc64(size));
 		if (!buffer) {
 			throw std::bad_alloc();
 		}
-		memcpy(buffer, plain->constData(), size_t(size));
+		memcpy(buffer, plain.constData(), size_t(size));
 		const auto code = sqlite3_deserialize(
 			MemoryHandle,
 			"main",
@@ -527,10 +671,18 @@ void loadSnapshot(bool &imported) {
 
 void sealLegacyCopies(const QString &directory, const QString &pattern) {
 	for (const auto &info : QDir(directory).entryInfoList(QStringList() << pattern, QDir::Files)) {
-		if (const auto plain = AyuVault::ReadFile(info.absoluteFilePath())) {
+		auto plain = QByteArray();
+		if (AyuArchive::ReadFile(
+				info.absoluteFilePath(),
+				{},
+				plain)) {
 			auto target = info.absoluteFilePath();
 			target.chop(3);
-			if (AyuVault::WriteSealedFile(target + ".enc", *plain)) {
+			target += ".enc";
+			const auto context = std::string("ayu-backup-v1:")
+				+ QFileInfo(target).fileName().toStdString();
+			if (!QFile::exists(target)
+				&& AyuArchive::WriteFile(target, plain, context)) {
 				QFile::remove(info.absoluteFilePath());
 				QFile::remove(info.absoluteFilePath() + "-wal");
 				QFile::remove(info.absoluteFilePath() + "-shm");
@@ -543,6 +695,11 @@ void finishLegacyMigration() {
 	for (const auto &extension : {QString(), QString("-shm"), QString("-wal")}) {
 		QFile::remove(legacyPath() + extension);
 	}
+	sealLegacyCopies("./tdata", "ayudata_*.db");
+	sealLegacyCopies("./tdata/ayu_backups", "ayudata_*.db");
+}
+
+void sealLegacyBackupFiles() {
 	sealLegacyCopies("./tdata", "ayudata_*.db");
 	sealLegacyCopies("./tdata/ayu_backups", "ayudata_*.db");
 }
@@ -657,6 +814,9 @@ bool prepareStorage() {
 	}
 	auto imported = false;
 	loadSnapshot(imported);
+	if (QFile::exists(snapshotPath())) {
+		backupCurrentDatabase();
+	}
 	const auto before = sqlite3_total_changes64(MemoryHandle);
 
 	storage.sync_schema(true);
@@ -684,16 +844,27 @@ void initialize() {
 	const auto &domain = Core::App().domain();
 	const auto key = domain.started() ? domain.local().localKey() : nullptr;
 	if (!key) {
+		DatabaseReady = false;
+		AyuSecret::Vault::SetReady(false);
+		AyuVault::SetKey(nullptr);
 		LOG(("[AyuGram] Database: the local key is unavailable."));
 		return;
 	}
+	AyuSecret::Vault::SetReady(true);
 	AyuVault::SetKey(key);
 	if (DatabaseReady) {
-		crl::async([] {
+		const auto strict = StrictMode();
+		crl::async([=] {
+			try {
+				backfillSealedRows(strict);
+			} catch (...) {
+			}
 			[[maybe_unused]] const auto saved = saveSnapshot();
 		});
 		return;
 	}
+	DatabaseReady = false;
+	AyuDatabaseBackup::recoverStaging();
 
 	auto retriedBusy = false;
 	auto resetCorrupted = false;
@@ -710,15 +881,25 @@ void initialize() {
 			if (FinishLegacyMigrationPending && saved) {
 				FinishLegacyMigrationPending = false;
 				finishLegacyMigration();
+			} else if (saved) {
+				sealLegacyBackupFiles();
 			}
-			crl::async([] {
-				AyuVault::SealFilesIn("./tdata/ayu_media");
+			crl::async([=] {
 				[[maybe_unused]] const auto created = AyuDatabaseBackup::create();
 			});
 			AyuDatabaseBackup::startPeriodic();
 			if (const auto days = PurgeDays.load()) {
 				purgeOlderThan(days);
 			}
+			// Snapshot the strict flag on this (main) thread: the worker
+			// must not read the setting itself (data race).
+			const auto strict = StrictMode();
+			crl::async([=] {
+				try {
+					backfillSealedRows(strict);
+				} catch (...) {
+				}
+			});
 			return;
 		} catch (const std::system_error &ex) {
 			const auto code = ex.code().value() & 0xFF;
@@ -747,6 +928,13 @@ void initialize() {
 	}
 
 	LOG(("[AyuGram] Database is unavailable, messages will not be saved in this session."));
+}
+
+void lock() {
+	std::lock_guard lock(DatabaseMutex);
+	DatabaseReady = false;
+	AyuSecret::Vault::SetReady(false);
+	AyuVault::SetKey(nullptr);
 }
 
 void purgeOlderThan(int days) {
@@ -782,7 +970,14 @@ void addEditedMessage(const EditedMessage &message, int maxRevisions) {
 					column<EditedMessage>(&EditedMessage::messageId) == message.messageId
 				));
 			if (!maxRevisions || saved < maxRevisions) {
-				storage.insert(message);
+				if (const auto sealed = SealRowCopy(
+						"EditedMessage",
+						message,
+						StrictMode())) {
+					storage.insert(*sealed);
+				} else {
+					LOG(("[AyuGram] Database: strict mode refused an edited message."));
+				}
 			}
 		});
 	});
@@ -790,7 +985,7 @@ void addEditedMessage(const EditedMessage &message, int maxRevisions) {
 
 std::vector<EditedMessage> getEditedMessages(ID userId, ID dialogId, ID messageId, ID minId, ID maxId, int totalLimit) {
 	return run<std::vector<EditedMessage>>("load edited messages", {}, [&] {
-		return storage.get_all<EditedMessage>(
+		auto result = storage.get_all<EditedMessage>(
 			where(
 				column<EditedMessage>(&EditedMessage::userId) == userId and
 				column<EditedMessage>(&EditedMessage::dialogId) == dialogId and
@@ -801,6 +996,10 @@ std::vector<EditedMessage> getEditedMessages(ID userId, ID dialogId, ID messageI
 			order_by(column<EditedMessage>(&EditedMessage::fakeId)).desc(),
 			limit(totalLimit)
 		);
+		for (auto &row : result) {
+			OpenRow("EditedMessage", row);
+		}
+		return result;
 	});
 }
 
@@ -833,7 +1032,14 @@ void addDeletedMessages(const std::vector<DeletedMessage> &messages) {
 					)
 				) > 0;
 				if (!exists) {
-					storage.insert(message);
+					if (const auto sealed = SealRowCopy(
+							"DeletedMessage",
+							message,
+							StrictMode())) {
+						storage.insert(*sealed);
+					} else {
+						LOG(("[AyuGram] Database: strict mode refused a deleted message."));
+					}
 				}
 			}
 		});
@@ -846,7 +1052,13 @@ void addDeletedExtras(const std::vector<DeletedExtra> &extras) {
 	}
 	runVoid("save deleted extras", [&] {
 		inTransaction([&] {
+			const auto strict = StrictMode();
 			for (const auto &extra : extras) {
+				const auto sealed = SealRowCopy(extra, strict);
+				if (!sealed) {
+					LOG(("[AyuGram] Database: strict mode refused deleted extras."));
+					continue;
+				}
 				storage.remove_all<DeletedExtra>(
 					where(
 						column<DeletedExtra>(&DeletedExtra::userId) == extra.userId and
@@ -854,7 +1066,7 @@ void addDeletedExtras(const std::vector<DeletedExtra> &extras) {
 						column<DeletedExtra>(&DeletedExtra::messageId) == extra.messageId
 					)
 				);
-				storage.insert(extra);
+				storage.insert(*sealed);
 			}
 		});
 	});
@@ -866,7 +1078,13 @@ void addDeletedMarkups(const std::vector<DeletedMarkup> &markups) {
 	}
 	runVoid("save deleted markups", [&] {
 		inTransaction([&] {
+			const auto strict = StrictMode();
 			for (const auto &markup : markups) {
+				const auto sealed = SealRowCopy(markup, strict);
+				if (!sealed) {
+					LOG(("[AyuGram] Database: strict mode refused deleted markup."));
+					continue;
+				}
 				storage.remove_all<DeletedMarkup>(
 					where(
 						column<DeletedMarkup>(&DeletedMarkup::userId) == markup.userId and
@@ -874,7 +1092,7 @@ void addDeletedMarkups(const std::vector<DeletedMarkup> &markups) {
 						column<DeletedMarkup>(&DeletedMarkup::messageId) == markup.messageId
 					)
 				);
-				storage.insert(markup);
+				storage.insert(*sealed);
 			}
 		});
 	});
@@ -882,21 +1100,29 @@ void addDeletedMarkups(const std::vector<DeletedMarkup> &markups) {
 
 std::vector<DeletedMarkup> getDeletedMarkups(ID userId, ID dialogId) {
 	return run<std::vector<DeletedMarkup>>("load deleted markups", {}, [&] {
-		return storage.get_all<DeletedMarkup>(
+		auto result = storage.get_all<DeletedMarkup>(
 			where(
 				column<DeletedMarkup>(&DeletedMarkup::userId) == userId and
 				column<DeletedMarkup>(&DeletedMarkup::dialogId) == dialogId
 			));
+		for (auto &row : result) {
+			OpenRow(row);
+		}
+		return result;
 	});
 }
 
 std::vector<DeletedExtra> getDeletedExtras(ID userId, ID dialogId) {
 	return run<std::vector<DeletedExtra>>("load deleted extras", {}, [&] {
-		return storage.get_all<DeletedExtra>(
+		auto result = storage.get_all<DeletedExtra>(
 			where(
 				column<DeletedExtra>(&DeletedExtra::userId) == userId and
 				column<DeletedExtra>(&DeletedExtra::dialogId) == dialogId
 			));
+		for (auto &row : result) {
+			OpenRow(row);
+		}
+		return result;
 	});
 }
 
@@ -907,7 +1133,7 @@ void addDeletedMessage(const DeletedMessage &message) {
 std::vector<DeletedMessage> getDeletedMessages(ID userId, ID dialogId, ID topicId, ID minId, ID maxId, int totalLimit, const std::string &searchQuery) {
 	return run<std::vector<DeletedMessage>>("load deleted messages", {}, [&] {
 		if (searchQuery.empty()) {
-			return storage.get_all<DeletedMessage>(
+			auto result = storage.get_all<DeletedMessage>(
 				where(
 					column<DeletedMessage>(&DeletedMessage::userId) == userId and
 					column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId and
@@ -918,59 +1144,115 @@ std::vector<DeletedMessage> getDeletedMessages(ID userId, ID dialogId, ID topicI
 				order_by(column<DeletedMessage>(&DeletedMessage::messageId)).desc(),
 				limit(totalLimit)
 			);
+			for (auto &row : result) {
+				OpenRow("DeletedMessage", row);
+			}
+			return result;
 		}
 
-		std::string escaped;
-		escaped.reserve(searchQuery.size());
-		for (const auto c : searchQuery) {
-			if (c == '%' || c == '_' || c == '\\') {
-				escaped += '\\';
-			}
-			escaped += c;
+		// Text is sealed at rest, so SQL LIKE cannot see it: scan the
+		// indexed id range in pages, decrypt text only, and collect up
+		// to totalLimit matches with the same case-insensitive substring
+		// + sender-id semantics.
+		if (totalLimit == 0) {
+			return std::vector<DeletedMessage>();
 		}
-		const auto pattern = "%" + escaped + "%";
 		const auto idQuery = AyuIdSearch::Parse(
 			QString::fromStdString(searchQuery).trimmed());
 		const auto senderId = idQuery.valid() ? ID(idQuery.id) : ID(-1);
-		return storage.get_all<DeletedMessage>(
-			where(
-				column<DeletedMessage>(&DeletedMessage::userId) == userId and
-				column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId and
-				(column<DeletedMessage>(&DeletedMessage::topicId) == topicId or topicId == 0) and
-				(column<DeletedMessage>(&DeletedMessage::messageId) > minId or minId == 0) and
-				(column<DeletedMessage>(&DeletedMessage::messageId) < maxId or maxId == 0) and
-				(like(column<DeletedMessage>(&DeletedMessage::text), pattern, "\\") or
-				column<DeletedMessage>(&DeletedMessage::fromId) == senderId)
-			),
-			order_by(column<DeletedMessage>(&DeletedMessage::messageId)).desc(),
-			limit(totalLimit)
-		);
+		const auto needle = QString::fromStdString(searchQuery);
+		constexpr auto kSearchPage = 200;
+		auto result = std::vector<DeletedMessage>();
+		auto bound = maxId;
+		while (true) {
+			auto page = storage.get_all<DeletedMessage>(
+				where(
+					column<DeletedMessage>(&DeletedMessage::userId) == userId and
+					column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId and
+					(column<DeletedMessage>(&DeletedMessage::topicId) == topicId or topicId == 0) and
+					(column<DeletedMessage>(&DeletedMessage::messageId) > minId or minId == 0) and
+					(column<DeletedMessage>(&DeletedMessage::messageId) < bound or bound == 0)
+				),
+				order_by(column<DeletedMessage>(&DeletedMessage::messageId)).desc(),
+				limit(kSearchPage)
+			);
+			if (page.empty()) {
+				break;
+			}
+			for (auto &row : page) {
+				const auto text = OpenText(
+					row.text,
+					RowContext("DeletedMessage", row, "text"));
+				if (QString::fromStdString(text).contains(needle, Qt::CaseInsensitive)
+					|| row.fromId == senderId) {
+					OpenRow("DeletedMessage", row);
+					result.push_back(row);
+					if (totalLimit > 0 && int(result.size()) >= totalLimit) {
+						return result;
+					}
+				}
+			}
+			if (int(page.size()) < kSearchPage) {
+				break;
+			}
+			bound = page.back().messageId;
+		}
+		return result;
 	});
 }
 
 std::vector<DeletedMessage> searchDeletedMessages(ID userId, ID dialogId, ID topicId, ID fromId, const std::string &searchQuery, int totalLimit, bool withMedia) {
 	return run<std::vector<DeletedMessage>>("search deleted messages", {}, [&] {
-		std::string escaped;
-		escaped.reserve(searchQuery.size());
-		for (const auto c : searchQuery) {
-			if (c == '%' || c == '_' || c == '\\') {
-				escaped += '\\';
-			}
-			escaped += c;
+		// Text is sealed at rest, so SQL LIKE cannot see it: page the
+		// id-filtered rows by date and match the decrypted text in code
+		// with the same case-insensitive substring semantics.
+		if (totalLimit == 0) {
+			return std::vector<DeletedMessage>();
 		}
-		const auto pattern = "%" + escaped + "%";
-		return storage.get_all<DeletedMessage>(
-			where(
-				column<DeletedMessage>(&DeletedMessage::userId) == userId and
-				(column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId or dialogId == 0) and
-				(column<DeletedMessage>(&DeletedMessage::topicId) == topicId or topicId == 0) and
-				(column<DeletedMessage>(&DeletedMessage::fromId) == fromId or fromId == 0) and
-				(column<DeletedMessage>(&DeletedMessage::documentType) == 1 or !withMedia) and
-				like(column<DeletedMessage>(&DeletedMessage::text), pattern, "\\")
-			),
-			order_by(column<DeletedMessage>(&DeletedMessage::date)).desc(),
-			limit(totalLimit)
-		);
+		const auto needle = QString::fromStdString(searchQuery);
+		constexpr auto kSearchPage = 500;
+		auto result = std::vector<DeletedMessage>();
+		auto lastDate = std::numeric_limits<int>::max();
+		auto lastFake = std::numeric_limits<ID>::max();
+		while (true) {
+			auto page = storage.get_all<DeletedMessage>(
+				where(
+					column<DeletedMessage>(&DeletedMessage::userId) == userId and
+					(column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId or dialogId == 0) and
+					(column<DeletedMessage>(&DeletedMessage::topicId) == topicId or topicId == 0) and
+					(column<DeletedMessage>(&DeletedMessage::fromId) == fromId or fromId == 0) and
+					(column<DeletedMessage>(&DeletedMessage::documentType) == 1 or !withMedia) and
+					(column<DeletedMessage>(&DeletedMessage::date) < lastDate or (
+						column<DeletedMessage>(&DeletedMessage::date) == lastDate and
+						column<DeletedMessage>(&DeletedMessage::fakeId) < lastFake))
+				),
+				multi_order_by(
+					order_by(column<DeletedMessage>(&DeletedMessage::date)).desc(),
+					order_by(column<DeletedMessage>(&DeletedMessage::fakeId)).desc()),
+				limit(kSearchPage)
+			);
+			if (page.empty()) {
+				break;
+			}
+			for (auto &row : page) {
+				const auto text = OpenText(
+					row.text,
+					RowContext("DeletedMessage", row, "text"));
+				if (QString::fromStdString(text).contains(needle, Qt::CaseInsensitive)) {
+					OpenRow("DeletedMessage", row);
+					result.push_back(row);
+					if (totalLimit > 0 && int(result.size()) >= totalLimit) {
+						return result;
+					}
+				}
+			}
+			if (int(page.size()) < kSearchPage) {
+				break;
+			}
+			lastDate = page.back().date;
+			lastFake = page.back().fakeId;
+		}
+		return result;
 	});
 }
 
@@ -1059,7 +1341,6 @@ void clearAllDeleted() {
 			storage.remove_all<KeptDialog>();
 		});
 	});
-	AyuDatabaseBackup::removeAll();
 }
 
 template<typename Callback>
@@ -1093,7 +1374,6 @@ void clearUserData(ID userId) {
 		});
 		storage.vacuum();
 	});
-	AyuDatabaseBackup::purgeUser(userId);
 	flush();
 }
 
@@ -1107,14 +1387,11 @@ void clearEverything() {
 		});
 		storage.vacuum();
 	});
-	AyuDatabaseBackup::removeAll();
 	flush();
+	AyuDatabaseBackup::clear();
 }
 
-bool exportSealed(QByteArray &sealed, qint64 &rows) {
-	if (!AyuVault::HasKey()) {
-		return false;
-	}
+bool exportSnapshot(QByteArray &snapshot, qint64 &rows) {
 	auto plain = QByteArray();
 	{
 		std::lock_guard lock(DatabaseMutex);
@@ -1137,7 +1414,7 @@ bool exportSealed(QByteArray &sealed, qint64 &rows) {
 		} catch (...) {
 		}
 	}
-	sealed = AyuVault::Seal(plain);
+	snapshot = std::move(plain);
 	return true;
 }
 
@@ -1148,18 +1425,24 @@ void flush() {
 void finish() {
 	SaveTimer = nullptr;
 	flush();
+	lock();
 }
 
 void saveKeptDialog(const KeptDialog &dialog) {
 	runVoid("save kept dialog", [&] {
 		inTransaction([&] {
+			const auto sealed = SealRowCopy(dialog, StrictMode());
+			if (!sealed) {
+				LOG(("[AyuGram] Database: strict mode refused a kept dialog."));
+				return;
+			}
 			storage.remove_all<KeptDialog>(
 				where(
 					column<KeptDialog>(&KeptDialog::userId) == dialog.userId and
 					column<KeptDialog>(&KeptDialog::dialogId) == dialog.dialogId
 				)
 			);
-			storage.insert(dialog);
+			storage.insert(*sealed);
 		});
 	});
 }
@@ -1170,7 +1453,13 @@ void saveKeptTopics(const std::vector<KeptTopic> &topics) {
 	}
 	runVoid("save kept topics", [&] {
 		inTransaction([&] {
+			const auto strict = StrictMode();
 			for (const auto &topic : topics) {
+				const auto sealed = SealRowCopy(topic, strict);
+				if (!sealed) {
+					LOG(("[AyuGram] Database: strict mode refused a kept topic."));
+					continue;
+				}
 				storage.remove_all<KeptTopic>(
 					where(
 						column<KeptTopic>(&KeptTopic::userId) == topic.userId and
@@ -1178,7 +1467,7 @@ void saveKeptTopics(const std::vector<KeptTopic> &topics) {
 						column<KeptTopic>(&KeptTopic::rootId) == topic.rootId
 					)
 				);
-				storage.insert(topic);
+				storage.insert(*sealed);
 			}
 		});
 	});
@@ -1186,18 +1475,26 @@ void saveKeptTopics(const std::vector<KeptTopic> &topics) {
 
 std::vector<KeptTopic> getKeptTopics(ID userId, ID dialogId) {
 	return run<std::vector<KeptTopic>>("load kept topics", {}, [&] {
-		return storage.get_all<KeptTopic>(
+		auto result = storage.get_all<KeptTopic>(
 			where(
 				column<KeptTopic>(&KeptTopic::userId) == userId and
 				column<KeptTopic>(&KeptTopic::dialogId) == dialogId
 			));
+		for (auto &row : result) {
+			OpenRow(row);
+		}
+		return result;
 	});
 }
 
 std::vector<KeptTopic> getKeptTopicsFor(ID userId) {
 	return run<std::vector<KeptTopic>>("load all kept topics", {}, [&] {
-		return storage.get_all<KeptTopic>(
+		auto result = storage.get_all<KeptTopic>(
 			where(column<KeptTopic>(&KeptTopic::userId) == userId));
+		for (auto &row : result) {
+			OpenRow(row);
+		}
+		return result;
 	});
 }
 
@@ -1230,6 +1527,7 @@ void syncKeptDialogs(const std::vector<KeptDialog> &dialogs) {
 	}
 	runVoid("sync kept dialogs", [&] {
 		inTransaction([&] {
+			const auto strict = StrictMode();
 			for (const auto &dialog : dialogs) {
 				const auto lost = storage.count<KeptDialog>(
 					where(
@@ -1240,13 +1538,18 @@ void syncKeptDialogs(const std::vector<KeptDialog> &dialogs) {
 				if (lost) {
 					continue;
 				}
+				const auto sealed = SealRowCopy(dialog, strict);
+				if (!sealed) {
+					LOG(("[AyuGram] Database: strict mode refused a synced dialog."));
+					continue;
+				}
 				storage.remove_all<KeptDialog>(
 					where(
 						column<KeptDialog>(&KeptDialog::userId) == dialog.userId and
 						column<KeptDialog>(&KeptDialog::dialogId) == dialog.dialogId
 					)
 				);
-				storage.insert(dialog);
+				storage.insert(*sealed);
 			}
 		});
 	});
@@ -1254,8 +1557,12 @@ void syncKeptDialogs(const std::vector<KeptDialog> &dialogs) {
 
 std::vector<KeptDialog> getKeptDialogs(ID userId) {
 	return run<std::vector<KeptDialog>>("load kept dialogs", {}, [&] {
-		return storage.get_all<KeptDialog>(
+		auto result = storage.get_all<KeptDialog>(
 			where(column<KeptDialog>(&KeptDialog::userId) == userId));
+		for (auto &row : result) {
+			OpenRow(row);
+		}
+		return result;
 	});
 }
 
@@ -1303,6 +1610,7 @@ void saveKnownUsers(const std::vector<KnownUser> &users) {
 	}
 	runVoid("save known users", [&] {
 		inTransaction([&] {
+			const auto strict = StrictMode();
 			for (const auto &user : users) {
 				const auto same = [&](const KnownUser &row) {
 					return row.accessHash == user.accessHash
@@ -1314,11 +1622,20 @@ void saveKnownUsers(const std::vector<KnownUser> &users) {
 					column<KnownUser>(&KnownUser::userId) == user.userId and
 					column<KnownUser>(&KnownUser::peerId) == user.peerId);
 				const auto existing = storage.get_all<KnownUser>(sameUser, limit(1));
-				if (!existing.empty() && same(existing.front())) {
+				if (!existing.empty()) {
+					auto opened = existing.front();
+					OpenRow(opened);
+					if (same(opened)) {
+						continue;
+					}
+				}
+				const auto sealed = SealRowCopy(user, strict);
+				if (!sealed) {
+					LOG(("[AyuGram] Database: strict mode refused a known user."));
 					continue;
 				}
 				storage.remove_all<KnownUser>(sameUser);
-				storage.insert(user);
+				storage.insert(*sealed);
 			}
 		});
 	});
@@ -1332,9 +1649,12 @@ std::optional<KnownUser> getKnownUser(ID userId, ID peerId) {
 				column<KnownUser>(&KnownUser::peerId) == peerId
 			),
 			limit(1));
-		return rows.empty()
-			? std::optional<KnownUser>()
-			: std::optional<KnownUser>(std::move(rows.front()));
+		if (rows.empty()) {
+			return std::optional<KnownUser>();
+		}
+		auto row = std::move(rows.front());
+		OpenRow(row);
+		return std::optional<KnownUser>(std::move(row));
 	});
 }
 
@@ -1525,7 +1845,11 @@ std::vector<T> getAllT() {
 }
 
 std::vector<RegexFilter> getAllRegexFilters() {
-	return getAllT<RegexFilter>();
+	auto result = getAllT<RegexFilter>();
+	for (auto &row : result) {
+		OpenRow(row);
+	}
+	return result;
 }
 
 std::vector<RegexFilterGlobalExclusion> getAllFiltersExclusions() {
@@ -1534,13 +1858,17 @@ std::vector<RegexFilterGlobalExclusion> getAllFiltersExclusions() {
 
 std::vector<RegexFilter> getExcludedByDialogId(ID dialogId) {
 	return run<std::vector<RegexFilter>>("load excluded filters", {}, [&] {
-		return storage.get_all<RegexFilter>(
+		auto result = storage.get_all<RegexFilter>(
 			where(in(&RegexFilter::id,
 					 storage.select(columns(&RegexFilterGlobalExclusion::filterId),
 									where(is_equal(&RegexFilterGlobalExclusion::dialogId, dialogId))
 					 )
 			))
 		);
+		for (auto &row : result) {
+			OpenRow(row);
+		}
+		return result;
 	});
 }
 
@@ -1552,32 +1880,46 @@ int getCount() {
 
 RegexFilter getById(std::vector<char> id) {
 	return run<RegexFilter>("load filter", RegexFilter{}, [&] {
-		return storage.get<RegexFilter>(
+		auto row = storage.get<RegexFilter>(
 			where(column<RegexFilter>(&RegexFilter::id) == std::move(id))
 		);
+		OpenRow(row);
+		return row;
 	});
 }
 
 std::vector<RegexFilter> getShared() {
 	return run<std::vector<RegexFilter>>("load shared filters", {}, [&] {
-		return storage.get_all<RegexFilter>(
+		auto result = storage.get_all<RegexFilter>(
 			where(is_null(column<RegexFilter>(&RegexFilter::dialogId)))
 		);
+		for (auto &row : result) {
+			OpenRow(row);
+		}
+		return result;
 	});
 }
 
 std::vector<RegexFilter> getByDialogId(ID dialogId) {
 	return run<std::vector<RegexFilter>>("load dialog filters", {}, [&] {
-		return storage.get_all<RegexFilter>(
+		auto result = storage.get_all<RegexFilter>(
 			where(column<RegexFilter>(&RegexFilter::dialogId) == dialogId)
 		);
+		for (auto &row : result) {
+			OpenRow(row);
+		}
+		return result;
 	});
 }
 
 void addRegexFilter(const RegexFilter &filter) {
 	runVoid("save regex filter", [&] {
 		inTransaction([&] {
-			storage.replace(filter); // we're using replace as we set std::vector<char> as primary key
+			if (const auto sealed = SealRowCopy(filter, StrictMode())) {
+				storage.replace(*sealed); // we're using replace as we set std::vector<char> as primary key
+			} else {
+				LOG(("[AyuGram] Database: strict mode refused a regex filter."));
+			}
 		});
 	});
 }
@@ -1592,9 +1934,14 @@ void addRegexExclusion(const RegexFilterGlobalExclusion &exclusion) {
 
 void updateRegexFilter(const RegexFilter &filter) {
 	runVoid("update regex filter", [&] {
+		const auto sealed = SealRowCopy(filter, StrictMode());
+		if (!sealed) {
+			LOG(("[AyuGram] Database: strict mode refused a regex filter."));
+			return;
+		}
 		storage.update_all(
 			set(
-				c(&RegexFilter::text) = filter.text,
+				c(&RegexFilter::text) = sealed->text,
 				c(&RegexFilter::enabled) = filter.enabled,
 				c(&RegexFilter::reversed) = filter.reversed,
 				c(&RegexFilter::caseInsensitive) = filter.caseInsensitive,

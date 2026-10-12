@@ -21,9 +21,10 @@ public:
 namespace AyuDatabase {
 
 void initialize();
+void lock();
 void finish();
 void flush();
-bool exportSealed(QByteArray &sealed, qint64 &rows);
+bool exportSnapshot(QByteArray &snapshot, qint64 &rows);
 void clearUserData(ID userId);
 void clearEverything();
 

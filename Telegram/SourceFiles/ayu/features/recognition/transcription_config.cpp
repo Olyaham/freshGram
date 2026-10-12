@@ -6,6 +6,7 @@
 #include <QtCore/QDataStream>
 #include <QtCore/QDir>
 #include <QtCore/QFile>
+#include <QtCore/QtEndian>
 
 #include <atomic>
 #include <algorithm>
@@ -103,7 +104,7 @@ std::string BuildVoiceAsrConfigJson(const TranscriptionConfig &config) {
 	WriteJsonString(json, config.localModel);
 	json += ",\"n_threads\":";
 	json += std::to_string(config.threads);
-	json += ",\"use_gpu\":true}}";
+	json += config.useGpu ? ",\"use_gpu\":true}}" : ",\"use_gpu\":false}}";
 	return json;
 }
 
@@ -147,10 +148,10 @@ bool WriteWavFile(const QString &path, const std::vector<float> &samples) {
 	}
 	auto pcm = QByteArray();
 	pcm.resize(qsizetype(dataSize));
-	const auto channels = reinterpret_cast<qint16*>(pcm.data());
 	for (auto i = size_t(0); i != samples.size(); ++i) {
-		const auto clamped = std::max(-1.f, std::min(1.f, samples[i]));
-		channels[i] = qint16(std::lround(clamped * 32767.f));
+		const auto value = std::isfinite(samples[i]) ? samples[i] : 0.f;
+		const auto clamped = std::clamp(value, -1.f, 1.f);
+		qToLittleEndian(qint16(std::lround(clamped * 32767.f)), pcm.data() + 2 * i);
 	}
 	return file.write(pcm) == qint64(pcm.size());
 }

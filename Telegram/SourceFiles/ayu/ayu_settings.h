@@ -321,9 +321,9 @@ public:
 	[[nodiscard]] int iconSet() const { return _iconSet.current(); }
 	[[nodiscard]] int designStyle() const { return _designStyle.current(); }
 	[[nodiscard]] const QString &whisperModel() const { return _whisperModel.current(); }
-	[[nodiscard]] const QString &transcriptionGroqKey() const { return _transcriptionGroqKey.current(); }
-	[[nodiscard]] const QString &transcriptionGeminiKey() const { return _transcriptionGeminiKey.current(); }
-	[[nodiscard]] const QString &transcriptionCustomKey() const { return _transcriptionCustomKey.current(); }
+	[[nodiscard]] const QString &transcriptionGroqKey() const;
+	[[nodiscard]] const QString &transcriptionGeminiKey() const;
+	[[nodiscard]] const QString &transcriptionCustomKey() const;
 	[[nodiscard]] const QString &transcriptionGroqModel() const { return _transcriptionGroqModel.current(); }
 	[[nodiscard]] const QString &transcriptionGeminiModel() const { return _transcriptionGeminiModel.current(); }
 	[[nodiscard]] const QString &transcriptionCustomBase() const { return _transcriptionCustomBase.current(); }
@@ -331,6 +331,8 @@ public:
 	[[nodiscard]] const QString &transcriptionLanguage() const { return _transcriptionLanguage.current(); }
 	[[nodiscard]] const QString &transcriptionPrompt() const { return _transcriptionPrompt.current(); }
 	[[nodiscard]] const QString &transcriptionEnginePath() const { return _transcriptionEnginePath.current(); }
+	[[nodiscard]] const QString &transcriptionLocalEnginePath() const { return _transcriptionLocalEnginePath.current(); }
+	[[nodiscard]] bool transcriptionLocalUseGpu() const { return _transcriptionLocalUseGpu.current(); }
 	[[nodiscard]] const QString &ocrLanguages() const { return _ocrLanguages.current(); }
 	[[nodiscard]] int maxEditRevisions() const { return _maxEditRevisions.current(); }
 	[[nodiscard]] int deletedRestoreLimit() const { return _deletedRestoreLimit.current(); }
@@ -343,6 +345,8 @@ public:
 	[[nodiscard]] int reactionBackgroundOpacity() const { return _reactionBackgroundOpacity.current(); }
 	[[nodiscard]] bool disableNotificationsDelay() const { return _disableNotificationsDelay.current(); }
 	[[nodiscard]] bool localPremium() const { return _localPremium.current(); }
+	[[nodiscard]] bool requireEncryption() const { return _requireEncryption.current(); }
+	[[nodiscard]] static bool RequireEncryptionForStorage();
 	[[nodiscard]] bool showChannelReactions() const { return _showChannelReactions.current(); }
 	[[nodiscard]] bool showGroupReactions() const { return _showGroupReactions.current(); }
 	[[nodiscard]] bool showPrivateChatReactions() const { return _showPrivateChatReactions.current(); }
@@ -475,6 +479,8 @@ public:
 	void setTranscriptionLanguage(const QString &val);
 	void setTranscriptionPrompt(const QString &val);
 	void setTranscriptionEnginePath(const QString &val);
+	void setTranscriptionLocalEnginePath(const QString &val);
+	void setTranscriptionLocalUseGpu(bool val);
 	void setOcrLanguages(const QString &val);
 	void setMaxEditRevisions(int val);
 	void setDeletedRestoreLimit(int val);
@@ -487,6 +493,7 @@ public:
 	void setReactionBackgroundOpacity(int val);
 	void setDisableNotificationsDelay(bool val);
 	void setLocalPremium(bool val);
+	void setRequireEncryption(bool val);
 	void setShowChannelReactions(bool val);
 	void setShowGroupReactions(bool val);
 	void setShowPrivateChatReactions(bool val);
@@ -624,6 +631,7 @@ public:
 	[[nodiscard]] rpl::producer<bool> disableNotificationsDelayChanges() const { return _disableNotificationsDelay.changes(); }
 	[[nodiscard]] rpl::producer<bool> localPremiumValue() const { return _localPremium.value(); }
 	[[nodiscard]] rpl::producer<bool> localPremiumChanges() const { return _localPremium.changes(); }
+	[[nodiscard]] rpl::producer<bool> requireEncryptionValue() const { return _requireEncryption.value(); }
 	[[nodiscard]] rpl::producer<bool> showChannelReactionsValue() const { return _showChannelReactions.value(); }
 	[[nodiscard]] rpl::producer<bool> showChannelReactionsChanges() const { return _showChannelReactions.changes(); }
 	[[nodiscard]] rpl::producer<bool> showGroupReactionsValue() const { return _showGroupReactions.value(); }
@@ -807,6 +815,7 @@ private:
 	rpl::variable<int> _reactionBackgroundOpacity = 16;
 	rpl::variable<bool> _disableNotificationsDelay = false;
 	rpl::variable<bool> _localPremium = false;
+	rpl::variable<bool> _requireEncryption = false;
 	rpl::variable<bool> _showChannelReactions = true;
 	rpl::variable<bool> _showGroupReactions = true;
 	rpl::variable<bool> _showPrivateChatReactions = true;
@@ -882,9 +891,12 @@ private:
 	rpl::variable<TranscriptionProvider> _transcriptionProviderChats = TranscriptionProvider::Default;
 	rpl::variable<TranscriptionProvider> _transcriptionProviderSecret = TranscriptionProvider::Default;
 	rpl::variable<TranscriptionProvider> _transcriptionProviderPersonal = TranscriptionProvider::Default;
-	rpl::variable<QString> _transcriptionGroqKey;
-	rpl::variable<QString> _transcriptionGeminiKey;
-	rpl::variable<QString> _transcriptionCustomKey;
+	mutable rpl::variable<QString> _transcriptionGroqKey;
+	mutable rpl::variable<QString> _transcriptionGeminiKey;
+	mutable rpl::variable<QString> _transcriptionCustomKey;
+	mutable QString _transcriptionGroqSealed;
+	mutable QString _transcriptionGeminiSealed;
+	mutable QString _transcriptionCustomSealed;
 	rpl::variable<QString> _transcriptionGroqModel = QString(u"whisper-large-v3-turbo"_q);
 	rpl::variable<QString> _transcriptionGeminiModel = QString(u"gemini-3.5-transcribe"_q);
 	rpl::variable<QString> _transcriptionCustomBase;
@@ -892,6 +904,8 @@ private:
 	rpl::variable<QString> _transcriptionLanguage = QString(u"auto"_q);
 	rpl::variable<QString> _transcriptionPrompt;
 	rpl::variable<QString> _transcriptionEnginePath;
+	rpl::variable<QString> _transcriptionLocalEnginePath;
+	rpl::variable<bool> _transcriptionLocalUseGpu = true;
 	rpl::variable<bool> _adaptiveCoverColor = true;
 	rpl::variable<bool> _improveLinkPreviews = false;
 	rpl::variable<bool> _crashReporting = true;
