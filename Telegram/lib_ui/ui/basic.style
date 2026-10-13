@@ -104,8 +104,8 @@ linkCropLimit: 360px;
 linkFont: normalFont;
 linkFontOver: font(fsize underline);
 
-roundRadiusLarge: 10px;
-roundRadiusSmall: 2px;
+roundRadiusLarge: 6px;
+roundRadiusSmall: 3px;
 
 dateRadius: roundRadiusLarge;
 
@@ -113,8 +113,8 @@ noContactsHeight: 100px;
 noContactsFont: font(fsize);
 noContactsColor: windowSubTextFg;
 
-activeFadeInDuration: 400;
-activeFadeOutDuration: 2000;
+activeFadeInDuration: 500;
+activeFadeOutDuration: 3000;
 
 smallCloseIcon: icon {{ "simple_close", smallCloseIconFg }};
 smallCloseIconOver: icon {{ "simple_close", smallCloseIconFgOver }};

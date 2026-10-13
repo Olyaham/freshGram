@@ -232,6 +232,7 @@ struct IconDescriptor {
 	const style::color *background = nullptr;
 	std::optional<QBrush> backgroundBrush; // Can be useful for gradients.
 	bool newBadge = false;
+	const style::color *foreground = nullptr;
 
 	explicit operator bool() const {
 		return (icon != nullptr);
@@ -251,6 +252,7 @@ public:
 
 private:
 	not_null<const style::icon*> _icon;
+	const style::color *_foreground = nullptr;
 	std::optional<Ui::RoundRect> _background;
 	std::optional<std::pair<int, QBrush>> _backgroundBrush;
 

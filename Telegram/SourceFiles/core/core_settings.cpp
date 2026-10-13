@@ -21,6 +21,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/section_widget.h"
 
 #include "ayu/ayu_settings.h"
+#include "core/branding.h"
 
 
 namespace Core {
@@ -1112,6 +1113,10 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	_songVolume = std::clamp(songVolume / 1e6, 0., 1.);
 	_videoVolume = std::clamp(videoVolume / 1e6, 0., 1.);
 	_askDownloadPath = (askDownloadPath == 1);
+	if (Branding::IsLegacyDownloadPath(downloadPath)) {
+		downloadPath.clear();
+		downloadPathBookmark.clear();
+	}
 	_downloadPath = downloadPath;
 	_downloadPathBookmark = downloadPathBookmark;
 	_soundNotify = (soundNotify == 1);

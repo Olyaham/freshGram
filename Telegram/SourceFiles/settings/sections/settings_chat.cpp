@@ -2605,32 +2605,36 @@ void SetupDefaultThemes(
 	}
 	block->resize(block->width(), buttons[0]->height());
 	block->widthValue(
-	) | rpl::on_next([buttons = std::move(buttons)](int width) {
+	) | rpl::on_next([block, buttons = std::move(buttons)](int width) {
 		Expects(!buttons.empty());
 
 		const auto padding = st::settingsButtonNoIcon.padding;
 		width -= padding.left() + padding.right();
 		const auto desired = st::settingsThemePreviewSize.width();
 		const auto count = int(buttons.size());
-		const auto skips = count - 1;
 		const auto minSkip = st::settingsThemeMinSkip;
-		const auto single = [&] {
-			if (width >= skips * minSkip + count * desired) {
-				return desired;
-			}
-			return (width - skips * minSkip) / count;
-		}();
+		const auto columns = std::min(count, std::clamp(
+			(width + minSkip) / (desired + minSkip), 1, 4));
+		const auto skips = columns - 1;
+		const auto single = std::min(
+			desired, (width - skips * minSkip) / columns);
 		if (single <= 0) {
 			return;
 		}
-		const auto fullSkips = width - count * single;
-		const auto skip = fullSkips / float64(skips);
-		auto left = padding.left() + 0.;
+		const auto fullSkips = width - columns * single;
+		const auto skip = skips ? fullSkips / float64(skips) : 0.;
+		auto height = 0;
 		for (const auto button : buttons) {
 			button->resizeToWidth(single);
-			button->moveToLeft(int(base::SafeRound(left)), 0);
-			left += button->width() + skip;
+			height = std::max(height, button->height());
 		}
+		for (auto i = 0; i != count; ++i) {
+			const auto left = padding.left() + (i % columns) * (single + skip);
+			const auto top = (i / columns) * (height + minSkip);
+			buttons[i]->moveToLeft(int(base::SafeRound(left)), top);
+		}
+		const auto rows = (count + columns - 1) / columns;
+		block->resize(block->width(), rows * height + (rows - 1) * minSkip);
 	}, block->lifetime());
 
 	if (AyuFeatures::MessageShot::isChoosingTheme()) {

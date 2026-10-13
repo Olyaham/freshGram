@@ -836,7 +836,7 @@ defaultSolidScroll: ScrollArea(defaultScrollArea) {
 	hiding: 0;
 }
 
-defaultCheckboxIcon: icon {{ "default_checkbox_check", overviewCheckFgActive, point(4px, 6px) }};
+defaultCheckboxIcon: icon {{ "default_checkbox_check", overviewCheckFgActive, point(4px, 7px) }};
 
 defaultCheck: Check {
 	bg: transparent;
@@ -935,7 +935,7 @@ roundShadowRadius8px: Shadow {
 defaultPanelAnimation: PanelAnimation {
 	startWidth: 0.5;
 	widthDuration: 0.6;
-	startHeight: 0.45;
+	startHeight: 0.3;
 	heightDuration: 0.9;
 	startOpacity: 0.2;
 	opacityDuration: 0.3;

@@ -275,6 +275,7 @@ public:
 	static void load();
 	static void save();
 	static void reset();
+	static void migrateLegacyAppearance();
 
 	[[nodiscard]] static GhostModeAccountSettings &ghost(not_null<Main::Session*> session);
 	[[nodiscard]] static GhostModeAccountSettings &ghost(uint64 userId);
@@ -320,6 +321,7 @@ public:
 	[[nodiscard]] bool materialBubbles() const { return _materialBubbles.current(); }
 	[[nodiscard]] int iconSet() const { return _iconSet.current(); }
 	[[nodiscard]] int designStyle() const { return _designStyle.current(); }
+	[[nodiscard]] int appearanceDefaultsVersion() const { return _appearanceDefaultsVersion; }
 	[[nodiscard]] const QString &whisperModel() const { return _whisperModel.current(); }
 	[[nodiscard]] const QString &transcriptionGroqKey() const;
 	[[nodiscard]] const QString &transcriptionGeminiKey() const;
@@ -802,10 +804,11 @@ private:
 	rpl::variable<bool> _spoofWebviewAsAndroid = true;
 	rpl::variable<bool> _increaseWebviewHeight = false;
 	rpl::variable<bool> _increaseWebviewWidth = false;
-	rpl::variable<bool> _materialSwitches = true;
-	rpl::variable<bool> _materialBubbles = true;
-	rpl::variable<int> _iconSet = 1;
-	rpl::variable<int> _designStyle = 1;
+	int _appearanceDefaultsVersion = 1;
+	rpl::variable<bool> _materialSwitches = false;
+	rpl::variable<bool> _materialBubbles = false;
+	rpl::variable<int> _iconSet = 0;
+	rpl::variable<int> _designStyle = 0;
 	rpl::variable<QString> _whisperModel;
 	rpl::variable<QString> _ocrLanguages;
 	rpl::variable<int> _maxEditRevisions = 100;

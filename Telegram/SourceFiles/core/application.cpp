@@ -332,6 +332,7 @@ void Application::run() {
 		AyuCrashTrace::Remove(traceDirectory);
 	}
 
+	AyuInfra::initUiSettings();
 	style::SetCustomFont(settings().customFontFamily());
 	style::internal::StartFonts();
 

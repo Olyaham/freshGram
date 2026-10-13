@@ -27,9 +27,9 @@ namespace Window {
 namespace Theme {
 namespace {
 
-constexpr auto kMaxAccentColors = 3;
-constexpr auto kDayBaseFile = ":/gui/Google Day.tdesktop-theme"_cs;
-constexpr auto kNightBaseFile = ":/gui/Google Dark.tdesktop-theme"_cs;
+constexpr auto kMaxAccentColors = 6;
+constexpr auto kDayBaseFile = ":/gui/day-custom-base.tdesktop-theme"_cs;
+constexpr auto kNightBaseFile = ":/gui/night-custom-base.tdesktop-theme"_cs;
 
 const auto kColorizeIgnoredKeys = base::flat_set<QLatin1String>{ {
 	qstr("boxTextFgGood"),
@@ -140,9 +140,11 @@ style::colorizer ColorizerFrom(
 		result.lightnessMax = 160;
 		break;
 	case EmbeddedType::DayBlue:
+	case EmbeddedType::FreshGramDay:
 		result.lightnessMax = 160;
 		break;
 	case EmbeddedType::Night:
+	case EmbeddedType::FreshGramNight:
 		result.lightnessMin = 115;
 		break;
 	case EmbeddedType::NightGreen:
@@ -231,32 +233,8 @@ std::vector<EmbeddedScheme> EmbeddedThemes() {
 	};
 	const auto name = [](auto key) {
 		return rpl::deferred([=] { return key(); });
-		};
+	};
 	return {
-		EmbeddedScheme{
-			EmbeddedType::DayBlue,
-			qColor("fffcf5"),
-			qColor("dfe6c4"),
-			qColor("f3f3e7"),
-			qColor("f3f3e7"),
-			qColor("b9cf7a"),
-			name(tr::lng_settings_theme_day),
-			":/gui/Google Day.tdesktop-theme",
-			qColor("b9cf7a")
-		},
-		
-		EmbeddedScheme{
-			EmbeddedType::Night,
-			qColor("1b1c17"),
-			qColor("45483d"),
-			qColor("30312b"),
-			qColor("30312b"),
-			qColor("b9cf7a"),
-			name(tr::lng_settings_theme_tinted),
-			":/gui/Google Dark.tdesktop-theme",
-			qColor("b9cf7a")
-		},
-		
 		EmbeddedScheme{
 			EmbeddedType::Default,
 			qColor("9bd494"),
@@ -269,6 +247,28 @@ std::vector<EmbeddedScheme> EmbeddedThemes() {
 			qColor("40a7e3")
 		},
 		EmbeddedScheme{
+			EmbeddedType::DayBlue,
+			qColor("7ec4ea"),
+			qColor("d7f0ff"),
+			qColor("ffffff"),
+			qColor("d7f0ff"),
+			qColor("ffffff"),
+			name(tr::lng_settings_theme_day),
+			":/gui/day-blue.tdesktop-theme",
+			qColor("40a7e3")
+		},
+		EmbeddedScheme{
+			EmbeddedType::Night,
+			qColor("485761"),
+			qColor("5ca7d4"),
+			qColor("6b808d"),
+			qColor("6b808d"),
+			qColor("5ca7d4"),
+			name(tr::lng_settings_theme_tinted),
+			":/gui/night.tdesktop-theme",
+			qColor("5288c1")
+		},
+		EmbeddedScheme{
 			EmbeddedType::NightGreen,
 			qColor("485761"),
 			qColor("6b808d"),
@@ -279,6 +279,28 @@ std::vector<EmbeddedScheme> EmbeddedThemes() {
 			":/gui/night-green.tdesktop-theme",
 			qColor("3fc1b0")
 		},
+		EmbeddedScheme{
+			EmbeddedType::FreshGramDay,
+			qColor("fffcf5"),
+			qColor("dfe6c4"),
+			qColor("f3f3e7"),
+			qColor("f3f3e7"),
+			qColor("b9cf7a"),
+			name(tr::ayu_ThemeFreshGramDay),
+			":/gui/freshgram-day.tdesktop-theme",
+			qColor("b9cf7a")
+		},
+		EmbeddedScheme{
+			EmbeddedType::FreshGramNight,
+			qColor("1b1c17"),
+			qColor("45483d"),
+			qColor("30312b"),
+			qColor("30312b"),
+			qColor("b9cf7a"),
+			name(tr::ayu_ThemeFreshGramNight),
+			":/gui/freshgram-night.tdesktop-theme",
+			qColor("b9cf7a")
+		},
 	};
 }
 
@@ -288,16 +310,6 @@ std::vector<QColor> DefaultAccentColors(EmbeddedType type) {
 	};
 	switch (type) {
 	case EmbeddedType::DayBlue:
-		return {
-			qColor("8ab4f8"),
-			qColor("5ad9d2"),
-			qColor("bec2ff"),
-			qColor("ffaaf3"),
-			qColor("fab983"),
-			qColor("ffb1bf"),
-			qColor("8bd888"),
-			qColor("ffb3a5"),
-		};
 	case EmbeddedType::Default:
 		return {
 			qColor("45bce7"),
@@ -309,7 +321,8 @@ std::vector<QColor> DefaultAccentColors(EmbeddedType type) {
 			qColor("687b98"),
 			qColor("dea922"),
 		};
-	case EmbeddedType::Night:
+	case EmbeddedType::FreshGramDay:
+	case EmbeddedType::FreshGramNight:
 		return {
 			qColor("8ab4f8"),
 			qColor("5ad9d2"),
@@ -319,6 +332,17 @@ std::vector<QColor> DefaultAccentColors(EmbeddedType type) {
 			qColor("ffb1bf"),
 			qColor("8bd888"),
 			qColor("ffb3a5"),
+		};
+	case EmbeddedType::Night:
+		return {
+			qColor("58bfe8"),
+			qColor("466f42"),
+			qColor("aa6084"),
+			qColor("a46d3c"),
+			qColor("917bbd"),
+			qColor("ab5149"),
+			qColor("697b97"),
+			qColor("9b834b"),
 		};
 	case EmbeddedType::NightGreen:
 		return {
@@ -479,6 +503,8 @@ bool AccentColors::setFromSerialized(const QByteArray &serialized) {
 		case EmbeddedType::Night:
 		case EmbeddedType::Default:
 		case EmbeddedType::NightGreen:
+		case EmbeddedType::FreshGramDay:
+		case EmbeddedType::FreshGramNight:
 			data.emplace(uncheckedType, color);
 			break;
 		default:

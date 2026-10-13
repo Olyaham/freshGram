@@ -60,6 +60,15 @@ const QString &SystemFontTag() {
 	return result;
 }
 
+const QString &DefaultFontFamily() {
+	static const auto telegram = u"Open Sans"_q;
+	static const auto material = u"Google Sans"_q;
+	return (AyuUiSettings::designStyle()
+		== AyuUiSettings::DesignStyle::Materialgram)
+		? material
+		: telegram;
+}
+
 void SetCustomFont(const QString &font) {
 	Custom = font;
 }
@@ -212,7 +221,7 @@ struct Metrics {
 	};
 
 	const auto family = font.family();
-	const auto basic = u"Google Sans"_q;
+	const auto &basic = DefaultFontFamily();
 	if (family == basic || !adjust) {
 		return simple();
 	}
@@ -498,7 +507,7 @@ struct BoldFace {
 	} else if (overriden) {
 		font.setFamily(family);
 	} else {
-		font.setFamily("Google Sans"_q);
+		font.setFamily(DefaultFontFamily());
 	}
 	font.setPixelSize(size);
 
@@ -514,14 +523,24 @@ struct BoldFace {
 	if (!monospace) {
 		font.setWeight(QFont::Normal);
 		if (flags & FontFlag::Bold) {
-			const auto face = (overriden || system)
-				? FindBoldFace(font)
-				: std::nullopt;
-			if (face) {
-				font.setFamily(face->family);
-				font.setWeight(QFont::Weight(face->weight));
+			if (!overriden && !system
+				&& DefaultFontFamily() == u"Open Sans"_q) {
+				font.setWeight(QFont::DemiBold);
+				const auto style = QFontInfo(font).styleName();
+				if (!style.isEmpty()
+					&& !style.startsWith(u"Semibold"_q, Qt::CaseInsensitive)) {
+					font.setBold(true);
+				}
 			} else {
-				font.setWeight(QFont::Bold);
+				const auto face = (overriden || system)
+					? FindBoldFace(font)
+					: std::nullopt;
+				if (face) {
+					font.setFamily(face->family);
+					font.setWeight(QFont::Weight(face->weight));
+				} else {
+					font.setWeight(QFont::Bold);
+				}
 			}
 		}
 
@@ -553,7 +572,7 @@ void StartFonts() {
 
 	style_InitFontsResource();
 
-	const auto name = u"Google Sans"_q;
+	const auto &name = DefaultFontFamily();
 
 	for (const auto &file : QDir(u":/gui/fonts/"_q).entryInfoList()) {
 		const auto path = file.canonicalFilePath();

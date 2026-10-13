@@ -29,6 +29,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_account.h"
 #include "main/main_session.h"
 #include "window/themes/window_theme.h"
+#include "window/themes/window_themes_embedded.h"
 #include "lang/lang_instance.h"
 
 #include <QtCore/QDirIterator>
@@ -966,7 +967,27 @@ Window::Theme::Saved readThemeUsingKey(FileKey key) {
 		return {};
 	}
 
-	auto ignoreCache = false;
+	const auto legacyDay = !object.cloud.id
+		&& object.pathAbsolute == u":/gui/Google Day.tdesktop-theme"_q;
+	const auto legacyNight = !object.cloud.id
+		&& object.pathAbsolute == u":/gui/Google Dark.tdesktop-theme"_q;
+	const auto unmigrated = !object.cloud.id
+		&& (AyuSettings::getInstance().appearanceDefaultsVersion() == 0);
+	const auto oliveDay = unmigrated
+		&& object.pathAbsolute == u":/gui/freshgram-day.tdesktop-theme"_q;
+	const auto oliveNight = unmigrated
+		&& object.pathAbsolute == u":/gui/freshgram-night.tdesktop-theme"_q;
+	if (legacyDay || legacyNight || oliveDay || oliveNight) {
+		AyuSettings::migrateLegacyAppearance();
+		const auto night = legacyNight || oliveNight;
+		object.pathRelative = object.pathAbsolute = night
+			? u":/gui/night.tdesktop-theme"_q
+			: u":/gui/day-blue.tdesktop-theme"_q;
+		Core::App().settings().themesAccentColors().clear(night
+			? EmbeddedType::Night
+			: EmbeddedType::DayBlue);
+	}
+	auto ignoreCache = legacyDay || legacyNight;
 	if (!object.cloud.id) {
 		auto file = QFile(object.pathRelative);
 		if (object.pathRelative.isEmpty() || !file.exists()) {

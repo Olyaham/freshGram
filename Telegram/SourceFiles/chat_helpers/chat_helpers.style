@@ -88,6 +88,7 @@ ComposeIcons {
 	menuPrice: icon;
 	menuEditStars: icon;
 
+	stripBubble: icon;
 	stripExpandPanel: icon;
 	stripExpandDropdown: icon;
 }
@@ -759,8 +760,18 @@ defaultComposeIcons: ComposeIcons {
 	menuCoverRemove: menuIconCancel;
 	menuPrice: menuIconEarn;
 
-	stripExpandPanel: icon{{ "chat/reactions_expand_panel", windowSubTextFg }};
-	stripExpandDropdown: icon{{ "chat/reactions_expand_panel", windowSubTextFg }};
+	stripBubble: icon{
+		{ "chat/reactions_bubble_shadow", windowShadowFg },
+		{ "chat/reactions_bubble", emojiPanBg },
+	};
+	stripExpandPanel: icon{
+		{ "chat/reactions_round_big", windowBgRipple },
+		{ "chat/reactions_expand_panel", windowSubTextFg },
+	};
+	stripExpandDropdown: icon{
+		{ "chat/reactions_round_small", windowBgRipple },
+		{ "chat/reactions_expand_panel", windowSubTextFg },
+	};
 }
 defaultEmojiPanAbout: FlatLabel(defaultFlatLabel) {
 	minWidth: 10px;
@@ -945,6 +956,7 @@ reactPanelEmojiPan: EmojiPan(userpicBuilderEmojiPan) {
 emojiScroll: ScrollArea(defaultSolidScroll) {
 	deltat: 3px;
 	deltab: 3px;
+	round: -1px;
 	width: 7px;
 	deltax: 2px;
 	hiding: 0;
@@ -1170,8 +1182,8 @@ historyPinnedBotLabel: FlatLabel(defaultFlatLabel) {
 historyPinnedBotButtonMaxWidth: 120px;
 
 historyToDownPosition: point(12px, 10px);
-historyToDownAbove: icon {{ "history_down_arrow", windowBgActive }};
-historyToDownAboveOver: icon {{ "history_down_arrow", windowBgActive }};
+historyToDownAbove: icon {{ "history_down_arrow", historyToDownFg }};
+historyToDownAboveOver: icon {{ "history_down_arrow", historyToDownFgOver }};
 historyToDownPaddingTop: 10px;
 historyToDownBelow: icon {
 	{ "history_down_shadow", historyToDownShadow },

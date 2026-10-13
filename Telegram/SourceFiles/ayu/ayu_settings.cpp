@@ -22,6 +22,7 @@
 #include "ayu/features/streamer_mode/streamer_mode.h"
 #include "ayu/ui/ayu_logo.h"
 #include "core/application.h"
+#include "core/branding.h"
 #include "features/filters/filters_cache_controller.h"
 #include "features/translator/ayu_translator.h"
 #include "main/main_domain.h"
@@ -30,11 +31,13 @@
 #include "rpl/combine.h"
 #include "ui/style/style_core.h"
 #include "window/window_controller.h"
+#include "window/themes/window_themes_embedded.h"
 
 #include <filesystem>
 #include <atomic>
 #include <fstream>
 #include <QApplication>
+#include <QtCore/QSaveFile>
 
 using json = nlohmann::json;
 
@@ -42,8 +45,10 @@ namespace {
 
 std::atomic<bool> RequireEncryptionForStorage = false;
 
-std::filesystem::path getSettingsPath() {
-	const auto path = cWorkingDir() + u"tdata/ayu_settings.json"_q;
+std::filesystem::path getSettingsPath(bool reading = false) {
+	const auto path = reading
+		? Core::Branding::SettingsPathForRead(cWorkingDir())
+		: Core::Branding::SettingsPath(cWorkingDir());
 #ifdef Q_OS_WIN
 	return std::filesystem::path(path.toStdWString());
 #else // Q_OS_WIN
@@ -410,13 +415,15 @@ void AyuSettings::load() {
 		AyuNetworkPrivacy::SetEnabled(settings.reduceNetworkTracking());
 		AyuDebugLogging::SetEnabled(settings.enableDebugLogging());
 	});
-	std::ifstream file(getSettingsPath());
+	const auto readPath = getSettingsPath(true);
+	std::ifstream file(readPath);
 	if (!file.good()) {
 		return;
 	}
 
 	auto &settings = getInstance();
 
+	auto loaded = false;
 	try {
 		json p;
 		file >> p;
@@ -437,16 +444,17 @@ void AyuSettings::load() {
 			});
 			p["useGlobalGhostMode"] = true;
 
-			LOG(("AyuGramSettings: migrated ghost mode settings to per-account format"));
+			LOG(("freshGramSettings: migrated ghost mode settings to per-account format"));
 		}
 
 		try {
 			from_json(p, settings);
+			loaded = true;
 		} catch (...) {
-			LOG(("AyuGramSettings: failed to parse settings file"));
+			LOG(("freshGramSettings: failed to parse settings file"));
 		}
 	} catch (...) {
-		LOG(("AyuGramSettings: failed to read settings file (not json-like)"));
+		LOG(("freshGramSettings: failed to read settings file (not json-like)"));
 	}
 
 	if (cGhost()) {
@@ -460,22 +468,48 @@ void AyuSettings::load() {
 
 	AyuFeatures::StreamerMode::refresh();
 	settings.validate();
+	if (loaded && readPath != getSettingsPath()) {
+		save();
+	}
 }
 
 void AyuSettings::save() {
 	auto &settings = getInstance();
 	json p = settings;
 
-	std::ofstream file;
-	file.open(getSettingsPath());
-	file << p.dump(4);
-	file.close();
-	AyuUtils::RestrictFile(QString::fromStdString(getSettingsPath().string()));
+	const auto path = Core::Branding::SettingsPath(cWorkingDir());
+	const auto content = QByteArray::fromStdString(p.dump(4));
+	auto file = QSaveFile(path);
+	file.setDirectWriteFallback(false);
+	if (!file.open(QIODevice::WriteOnly)
+		|| !file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner)
+		|| file.write(content) != content.size()
+		|| !file.commit()) {
+		LOG(("freshGramSettings: failed to save settings file"));
+		return;
+	}
+	AyuUtils::RestrictFile(path);
 }
 
 void AyuSettings::reset() {
 	getInstance() = AyuSettings();
 	::RequireEncryptionForStorage.store(false);
+	save();
+}
+
+void AyuSettings::migrateLegacyAppearance() {
+	auto &settings = getInstance();
+	if (settings._appearanceDefaultsVersion >= 1) {
+		return;
+	}
+	settings._appearanceDefaultsVersion = 1;
+	settings._materialSwitches = false;
+	settings._materialBubbles = false;
+	settings._designStyle = int(AyuUiSettings::DesignStyle::Telegram);
+	settings._iconSet = int(AyuUiSettings::IconSet::Telegram);
+	AyuUiSettings::setMaterialSwitches(false);
+	AyuUiSettings::setDesignStyle(settings._designStyle.current());
+	AyuUiSettings::setIconSet(settings._iconSet.current());
 	save();
 }
 
@@ -583,7 +617,9 @@ void AyuSettings::validate() {
 	validateRange(_designStyle, 0, AyuUiSettings::kDesignStyleCount - 1, defaults._designStyle);
 
 	const auto embeddedType = _messageShotSettings._embeddedThemeType.current();
-	auto embeddedTypeValid = (embeddedType == -1) || (embeddedType >= 0 && embeddedType <= 3); // from Window::Theme::EmbeddedType::DayBlue to Window::Theme::EmbeddedType::NightGreen
+	const auto embeddedTypeValid = (embeddedType == -1)
+		|| (embeddedType >= 0
+			&& embeddedType <= int(Window::Theme::EmbeddedType::FreshGramNight));
 	if (!embeddedTypeValid) {
 		_messageShotSettings._embeddedThemeType = defaults._messageShotSettings._embeddedThemeType.current();
 		_messageShotSettings._embeddedThemeAccentColor = defaults._messageShotSettings._embeddedThemeAccentColor.current();
@@ -1516,6 +1552,7 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"increaseWebviewHeight", s._increaseWebviewHeight.current()},
 		{"increaseWebviewWidth", s._increaseWebviewWidth.current()},
 		{"materialSwitches", s._materialSwitches.current()},
+		{"appearanceDefaultsVersion", s._appearanceDefaultsVersion},
 		{"materialBubbles", s._materialBubbles.current()},
 		{"iconSet", s._iconSet.current()},
 		{"designStyle", s._designStyle.current()},
@@ -1669,6 +1706,7 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._increaseWebviewHeight = j.value("increaseWebviewHeight", defaults._increaseWebviewHeight.current());
 	s._increaseWebviewWidth = j.value("increaseWebviewWidth", defaults._increaseWebviewWidth.current());
 	s._materialSwitches = j.value("materialSwitches", defaults._materialSwitches.current());
+	s._appearanceDefaultsVersion = j.value("appearanceDefaultsVersion", 0);
 	s._materialBubbles = j.value("materialBubbles", defaults._materialBubbles.current());
 	s._designStyle = j.value("designStyle", defaults._designStyle.current());
 	s._whisperModel = j.value("whisperModel", defaults._whisperModel.current());
@@ -1690,7 +1728,7 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._ocrLanguages = j.value("ocrLanguages", defaults._ocrLanguages.current());
 	s._iconSet = j.contains("iconSet")
 		? j.value("iconSet", defaults._iconSet.current())
-		: j.value("materialIcons", true)
+		: j.value("materialIcons", false)
 		? int(AyuUiSettings::IconSet::Materialgram)
 		: int(AyuUiSettings::IconSet::Telegram);
 	s._maxEditRevisions = j.value("maxEditRevisions", defaults._maxEditRevisions.current());

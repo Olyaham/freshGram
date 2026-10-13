@@ -24,6 +24,8 @@ enum class EmbeddedType {
 	Default,
 	Night,
 	NightGreen,
+	FreshGramDay,
+	FreshGramNight,
 };
 
 struct EmbeddedScheme {

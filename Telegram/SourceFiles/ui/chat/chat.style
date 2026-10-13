@@ -590,6 +590,7 @@ historyGroupCallBlobMinRadius: 23px;
 historyGroupCallBlobMaxRadius: 25px;
 
 largeEmojiSize: 36px;
+largeEmojiOutline: 1px;
 largeEmojiPadding: margins(0px, 0px, 0px, 0px);
 largeEmojiSkip: 4px;
 
@@ -698,6 +699,8 @@ reactionInlinePadding: margins(5px, 2px, 7px, 2px);
 reactionInlineSize: 18px;
 reactionInlineImage: 32px;
 reactionInlineSkip: 3px;
+reactionInlineChosenMarkSize: 8px;
+reactionInlineChosenStroke: 2px;
 reactionInlineTagSkip: 6px;
 reactionInlineTagLeftRadius: 6px;
 reactionInlineTagRightRadius: 3px;

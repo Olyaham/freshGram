@@ -8,6 +8,7 @@
 
 namespace AyuInfra {
 
+void initUiSettings();
 void init();
 
 }

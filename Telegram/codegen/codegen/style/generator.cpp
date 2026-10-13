@@ -57,6 +57,16 @@ const auto kWideMultiplicable = std::map<QString, QString>{
 // a "variable.field[.field]" path, the value holds the Telegram numbers
 // in pixels: one for pixels, two for point and size, four for margins.
 const auto kDesignVariants = std::map<QString, std::vector<int>>{
+	{ "roundRadiusLarge", { 6 } },
+	{ "roundRadiusSmall", { 3 } },
+	{ "defaultActiveButton.radius", { 0 } },
+	{ "defaultLightButton.radius", { 0 } },
+	{ "defaultScrollArea.width", { 10 } },
+	{ "defaultScrollArea.round", { 2 } },
+	{ "defaultMenu.itemPadding", { 17, 8, 17, 7 } },
+	{ "defaultPopupMenu.radius", { 8 } },
+	{ "defaultInnerDropdown.scroll.width", { 8 } },
+	{ "defaultInnerDropdown.scroll.round", { 1 } },
 	{ "backgroundScroll.width", { 10 } },
 	{ "calendarScroll.width", { 8 } },
 	{ "calendarScroll.round", { 1 } },
@@ -78,6 +88,14 @@ const auto kDesignVariants = std::map<QString, std::vector<int>>{
 	{ "mediaPlayerPlayback.fullWidth", { 6 } },
 	{ "mediaPlayerPlayback.lineWidth", { 2 } },
 	{ "msgPadding", { 11, 8, 11, 8 } },
+	{ "maxVideoMessageSize", { 240 } },
+	{ "stickersTrendingAdd.radius", { 0 } },
+	{ "defaultToggle.animPadding", { 0 } },
+	{ "rightsToggle.xsize", { 8 } },
+	{ "rightsToggle.vsize", { 5 } },
+	{ "infoMusicButtonPadding", { 16, 6, 13, 6 } },
+	{ "defaultMultiSelect.scroll.width", { 8 } },
+	{ "defaultMultiSelect.scroll.round", { 1 } },
 	{ "historyReplyPreview", { 32 } },
 	{ "historyUnreadBarMargin", { 8 } },
 	{ "chatSimilarLockedIconPosition", { 0, 1 } },
@@ -746,10 +764,6 @@ bool Generator::writeIncludesInSource() {
 		source_->include("ui/style/style_core_palette.h");
 		source_->newline();
 	}
-	if (!module_.hasIncludes()) {
-		return true;
-	}
-
 	auto includes = QStringList();
 	std::function<bool(const Module&)> collector = [&](const Module &module) {
 		module.enumIncludes(collector);

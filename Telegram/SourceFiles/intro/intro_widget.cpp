@@ -105,11 +105,6 @@ Widget::Widget(
 
 	getData()->country = ComputeNewAccountCountry();
 
-	if (!Core::App().domain().accountsAuthedCount()) {
-		Window::Theme::Apply(u":/gui/Google Day.tdesktop-theme"_q);
-		Window::Theme::KeepApplied();
-	}
-
 	_account->mtpValue(
 	) | rpl::on_next([=](not_null<MTP::Instance*> instance) {
 		_api.emplace(instance);

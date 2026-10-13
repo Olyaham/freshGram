@@ -364,7 +364,10 @@ QSize InlineList::countOptimalSize() {
 	};
 	const auto height = padding.top() + size + padding.bottom();
 	for (auto &button : _buttons) {
-		const auto width = button.tag
+		const auto markWidth = (button.chosen && !button.tag && !button.paid)
+			? st::reactionInlineChosenMarkSize + st::reactionInlineSkip
+			: 0;
+		const auto width = markWidth + (button.tag
 			? (widthBaseTag
 				+ button.textWidth
 				+ (button.textWidth ? st::reactionInlineSkip : 0))
@@ -372,7 +375,7 @@ QSize InlineList::countOptimalSize() {
 			? (widthBaseUserpics + userpicsWidth(button))
 			: button.count == 0
 			? (rect::m::sum::h(padding) + size - st::reactionInlineEmptySkip)
-			: (widthBaseCount + button.textWidth);
+			: (widthBaseCount + button.textWidth));
 		button.geometry.setSize({ width, height });
 		x += width + between;
 	}
@@ -551,6 +554,22 @@ void InlineList::paint(
 				0,
 			});
 			paintSingleBg(p, fill, color, opacity);
+			if (mine && !tags && !button.paid) {
+				p.setOpacity(bubbleProgress);
+				auto pen = QPen(inbubble
+					? stm->msgServiceFg->c
+					: st->msgServiceFg()->c);
+				pen.setWidthF(st::reactionInlineChosenStroke);
+				p.setPen(pen);
+				p.setBrush(Qt::NoBrush);
+				const auto inset = st::reactionInlineChosenStroke / 2.;
+				const auto outline = QRectF(fill).adjusted(
+					inset, inset, -inset, -inset);
+				const auto radius = std::max(
+					0., AyuUserpic::ComputeRadiusF(fill.height()) - inset);
+				p.drawRoundedRect(
+					outline, radius, radius);
+			}
 			if (inbubble && !chosen) {
 				p.setOpacity(bubbleProgress);
 			}
@@ -620,9 +639,29 @@ void InlineList::paint(
 		}
 		resolveUserpicsImage(button);
 		const auto left = inner.x() + (flipped ? 0 : bubbleSkip);
+		const auto markWidth = (mine && !tags && !button.paid)
+			? st::reactionInlineChosenMarkSize + st::reactionInlineSkip
+			: 0;
+		if (markWidth && bubbleProgress > 0.) {
+			auto hq = PainterHighQualityEnabler(p);
+			const auto markSize = st::reactionInlineChosenMarkSize;
+			const auto x = left + size + st::reactionInlineSkip;
+			const auto y = geometry.y() + (geometry.height() - markSize) / 2.;
+			auto pen = QPen(textFg.color());
+			pen.setWidthF(st::reactionInlineChosenStroke);
+			pen.setCapStyle(Qt::RoundCap);
+			pen.setJoinStyle(Qt::RoundJoin);
+			p.setPen(pen);
+			p.setBrush(Qt::NoBrush);
+			auto path = QPainterPath();
+			path.moveTo(x, y + markSize * 0.5);
+			path.lineTo(x + markSize * 0.35, y + markSize * 0.85);
+			path.lineTo(x + markSize, y + markSize * 0.15);
+			p.drawPath(path);
+		}
 		if (button.userpics) {
 			p.drawImage(
-				left + size + st::reactionInlineUserpicsPadding.left(),
+				left + size + markWidth + st::reactionInlineUserpicsPadding.left(),
 				geometry.y() + st::reactionInlineUserpicsPadding.top(),
 				button.userpics->image);
 		} else {
@@ -631,7 +670,7 @@ void InlineList::paint(
 				? (left
 					- padding.left()
 					+ st::reactionInlineTagNamePosition.x())
-				: (left + size + st::reactionInlineSkip);
+				: (left + size + markWidth + st::reactionInlineSkip);
 			const auto textTop = geometry.y()
 				+ (tags
 					? st::reactionInlineTagNamePosition.y()

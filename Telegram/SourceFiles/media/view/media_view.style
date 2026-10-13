@@ -731,8 +731,18 @@ storiesEmojiPan: EmojiPan(defaultEmojiPan) {
 		menuPrice: icon {{ "menu/earn", storiesComposeWhiteText }};
 		menuEditStars: icon {{ "chat/input_paid", storiesComposeWhiteText, point(-8px, -8px) }};
 
-		stripExpandPanel: icon{{ "chat/reactions_expand_panel", storiesComposeGrayIcon }};
-		stripExpandDropdown: icon{{ "chat/reactions_expand_panel", storiesComposeGrayIcon }};
+		stripBubble: icon{
+			{ "chat/reactions_bubble_shadow", windowShadowFg },
+			{ "chat/reactions_bubble", storiesComposeBg },
+		};
+		stripExpandPanel: icon{
+			{ "chat/reactions_round_big", storiesComposeBgRipple },
+			{ "chat/reactions_expand_panel", storiesComposeGrayIcon },
+		};
+		stripExpandDropdown: icon{
+			{ "chat/reactions_round_small", storiesComposeBgRipple },
+			{ "chat/reactions_expand_panel", storiesComposeGrayIcon },
+		};
 	}
 	autocompleteBottomSkip: 10px;
 }

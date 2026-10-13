@@ -6,6 +6,8 @@
 //
 #include "ui/style/style_core.h"
 
+#include "ui/style/style_core_font.h"
+
 #include "ui/effects/animation_value.h"
 #include "ui/painter.h"
 #include "styles/style_basic.h"
@@ -61,7 +63,7 @@ void StopShortAnimation() {
 } // namespace internal
 
 void StartManager(int scale) {
-	internal::RegisterFontFamily("Google Sans");
+	internal::RegisterFontFamily(DefaultFontFamily());
 	internal::StartModules(scale);
 }
 
