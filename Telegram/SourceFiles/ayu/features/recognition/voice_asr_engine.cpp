@@ -105,8 +105,9 @@ bool EngineLibrary::ResolveAll() {
 }
 
 bool EngineLibrary::Load(const QString &customPath, bool local) {
+	const auto required = local ? VASR_CAP_LOCAL : VASR_CAP_NETWORK;
 	for (const auto &path : SearchPaths(customPath, local)) {
-		if (_loaded && _path == path) {
+		if (_loaded && _path == path && (_capabilities & required)) {
 			return true;
 		}
 		Unload();
@@ -118,7 +119,7 @@ bool EngineLibrary::Load(const QString &customPath, bool local) {
 			Unload();
 			continue;
 		}
-		if (local && !(_capabilities & VASR_CAP_LOCAL)) {
+		if (!(_capabilities & required)) {
 			Unload();
 			continue;
 		}

@@ -120,8 +120,8 @@ generation JSON (content, provider/model and attempt audit). Secrets are
 explicit for both calls; the host adapter does not read environment fallback.
 Free each owned JSON result using `vasr_string_free`. Calls are blocking and
 must run on a worker; their cancellation token may be cancelled from another
-thread. Existing ABI-1 modules remain usable for basic ASR; processing and
-discovery check capability bits before using new entry points.
+thread. Processing and discovery check capability bits before using new entry
+points; the client's cloud loader also requires the network-policy capability.
 
 When cleanup is enabled, processing refreshes its provider catalog automatically
 under the same TTL policy. A listing API or reference-metadata failure does not
@@ -136,6 +136,48 @@ validation failure, including a safe attempt audit. Chapters and summaries are
 available in the client's selectable, scrollable details dialog. Details live
 in the session's transcription entry and are not persisted across restarts.
 Local requests from the client use their separate engine configuration.
+
+## Application privacy and resource policy
+
+The client treats secret-chat `Default` and `Auto` as local Whisper. A cloud
+provider must be chosen explicitly in the secret-chat scope; global cloud
+selection is not inherited. Secret-chat requests disable both shadow and
+cleanup, including when the primary cloud provider is explicitly selected.
+Missing local models/modules produce an error rather than a cloud fallback.
+
+The client captures HTTP/SOCKS5 or system proxy settings for each job. SOCKS5
+uses remote hostname resolution (`socks5h`). ASR, cleanup, provider inventories,
+reference metadata and Gemini file deletion share that proxy policy. An enabled
+MTProto/Web or invalid proxy blocks cloud requests; a failed proxy never causes
+direct retry. Disabled proxies mean direct connections. HTTP clients do not
+inherit proxy environment variables. System proxy selection is resolved for the
+primary endpoint and applied to all related requests in the job.
+
+`AsrConfig`, `vasr_models` and `vasr_generate` accept top-level `proxy_url`
+and `network_error` fields. Empty/null `proxy_url` means direct egress;
+nonempty `network_error` refuses the operation before sending data. Updated
+cloud modules advertise `VASR_CAP_NETWORK = 1024`; the client requires it when
+loading a cloud module so older modules cannot silently ignore proxy settings.
+ABI remains version 1. Existing local-only modules remain supported.
+
+Client `Auto` chooses a provider before recognition; failure fallback is not
+enabled implicitly. The Rust adapter still supports an explicit `fallback` for
+other hosts. Cloud ASR permits are process/module-wide (two), including primary,
+shadow and fallback; Local Whisper permits are limited to one.
+
+The client queues at most 16 message jobs and dispatches one local and two cloud
+workers across accounts. Downloads start on dispatch. Decoding is serialized,
+bounded to one hour of 16 kHz mono samples, and fails on decoder, demuxer,
+resampler or corrupt-packet errors. Reaching the sample budget does not return
+a successful truncated transcript. Decoded C++ samples are freed before Rust
+inference; WAV output is written in 64 KiB blocks.
+
+Temporary audio is stored under the profile's private `tdata/asr-tmp` directory.
+Managed process directories carry a format marker and a `QLockFile` lease.
+Startup removes only marked directories whose process lease can be acquired;
+active directories, symlink targets and unmarked user data are preserved.
+Normal shutdown and per-job RAII also remove temporary files. These temporary
+WAV files remain plaintext while used; this cleanup policy is not disk encryption.
 
 ## Build flavors
 

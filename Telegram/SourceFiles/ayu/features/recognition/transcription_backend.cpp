@@ -7,6 +7,9 @@
 #include "ayu/secret/secret_peer.h"
 #include "ayu/ayu_settings.h"
 #include "base/weak_ptr.h"
+#include "core/application.h"
+#include "core/core_settings.h"
+#include "core/core_settings_proxy.h"
 #include "crl/crl_async.h"
 #include "crl/crl_on_main.h"
 #include "data/data_document.h"
@@ -22,15 +25,21 @@
 #include <QtCore/QFileInfo>
 #include <QtCore/QTemporaryDir>
 #include <QtCore/QThread>
+#include <QtCore/QUrl>
+#include <QtNetwork/QNetworkProxyFactory>
 
 #include <algorithm>
 #include <atomic>
+#include <condition_variable>
 #include <map>
+#include <mutex>
 
 namespace AyuRecognition {
 namespace {
 
 constexpr auto kMaxDocumentSize = int64(200) * 1024 * 1024;
+constexpr auto kMaxBackendJobs = 16;
+constexpr auto kMaxCloudJobs = 2;
 
 struct BackendJob {
 	base::weak_ptr<Main::Session> session;
@@ -45,16 +54,70 @@ struct BackendJob {
 	TranscriptionConfig config;
 	Fn<void(LocalTranscript)> done;
 	rpl::lifetime lifetime;
+	bool ready = false;
+	bool running = false;
+	bool workerStarted = false;
 };
 
 std::map<std::pair<void*, FullMsgId>, std::shared_ptr<BackendJob>> BackendJobs;
 std::atomic<uint64> BackendGeneration = 0;
+int RunningLocalJobs = 0;
+int RunningCloudJobs = 0;
+std::mutex DecoderMutex;
+std::condition_variable DecoderChanged;
+bool DecoderBusy = false;
+
+void StartBackend(const std::shared_ptr<BackendJob> &job);
+
+void PumpBackends() {
+	while (true) {
+		auto next = std::shared_ptr<BackendJob>();
+		for (const auto &[key, job] : BackendJobs) {
+			const auto local = job->engine == EngineProvider::WhisperLocal;
+			if (job->ready && !job->running && !job->cancelled->load()
+				&& (local ? RunningLocalJobs < 1 : RunningCloudJobs < kMaxCloudJobs)
+				&& (!next || job->generation < next->generation)) {
+				next = job;
+			}
+		}
+		if (!next) {
+			return;
+		}
+		next->running = true;
+		++(next->engine == EngineProvider::WhisperLocal
+			? RunningLocalJobs : RunningCloudJobs);
+		StartBackend(next);
+	}
+}
+
+void QueueBackend(const std::shared_ptr<BackendJob> &job) {
+	job->ready = true;
+	PumpBackends();
+}
+
+void ReleaseBackendSlot(const std::shared_ptr<BackendJob> &job) {
+	if (!job->running) {
+		return;
+	}
+	job->running = false;
+	job->ready = false;
+	--(job->engine == EngineProvider::WhisperLocal
+		? RunningLocalJobs : RunningCloudJobs);
+	crl::on_main([] { PumpBackends(); });
+}
 
 void CancelJob(const std::shared_ptr<BackendJob> &job) {
 	job->cancelled->store(true);
+	{
+		const auto lock = std::lock_guard(DecoderMutex);
+		DecoderChanged.notify_all();
+	}
 	job->library->CancelCurrent();
 	job->lifetime.destroy();
 	job->done = nullptr;
+	if (!job->workerStarted) {
+		ReleaseBackendSlot(job);
+	}
 }
 
 [[nodiscard]] LocalTranscript BackendFailure(const QString &error) {
@@ -67,6 +130,7 @@ void CancelJob(const std::shared_ptr<BackendJob> &job) {
 void FinishBackend(
 		const std::shared_ptr<BackendJob> &job,
 		LocalTranscript result) {
+	ReleaseBackendSlot(job);
 	const auto key = std::make_pair(job->address, job->id);
 	const auto i = BackendJobs.find(key);
 	if (i == end(BackendJobs) || i->second->generation != job->generation) {
@@ -107,7 +171,59 @@ TranscriptionConfig CurrentTranscriptionConfig(EngineProvider engine) {
 	config.enginePath = (engine == EngineProvider::WhisperLocal)
 		? settings.transcriptionLocalEnginePath()
 		: settings.transcriptionEnginePath();
+	ApplyTranscriptionNetworkPolicy(config);
 	return config;
+}
+
+void ApplyTranscriptionNetworkPolicy(TranscriptionConfig &config) {
+	config.proxyUrl.clear();
+	config.networkError.clear();
+	const auto engine = config.provider;
+	if (engine != EngineProvider::WhisperLocal) {
+		const auto &policy = Core::App().settings().proxy();
+		auto proxy = QNetworkProxy(QNetworkProxy::NoProxy);
+		if (policy.isEnabled()) {
+			const auto selected = policy.selected();
+			if (!selected.valid()
+				|| (selected.type != MTP::ProxyData::Type::Http
+					&& selected.type != MTP::ProxyData::Type::Socks5)) {
+				config.networkError = u"Cloud transcription requires an HTTP or SOCKS5 proxy. The selected Telegram proxy cannot carry these requests."_q;
+				return;
+			}
+			proxy = MTP::ToNetworkProxy(selected);
+		} else if (policy.isSystem()) {
+			const auto endpoint = (engine == EngineProvider::Custom)
+				? config.customBase : (engine == EngineProvider::Gemini)
+				? u"https://generativelanguage.googleapis.com"_q
+				: u"https://api.groq.com"_q;
+			const auto proxies = QNetworkProxyFactory::systemProxyForQuery(
+				QNetworkProxyQuery(QUrl(endpoint)));
+			if (!proxies.isEmpty()) {
+				proxy = proxies.front();
+			}
+		}
+		if (proxy.type() != QNetworkProxy::NoProxy) {
+			if ((proxy.type() != QNetworkProxy::HttpProxy
+				&& proxy.type() != QNetworkProxy::Socks5Proxy)
+				|| proxy.hostName().isEmpty()
+				|| !proxy.port()) {
+				config.networkError = u"The system proxy is not supported by cloud transcription."_q;
+				return;
+			}
+			auto url = QUrl();
+			url.setScheme(proxy.type() == QNetworkProxy::Socks5Proxy
+				? u"socks5h"_q : u"http"_q);
+			url.setHost(proxy.hostName());
+			url.setPort(proxy.port());
+			url.setUserName(proxy.user());
+			url.setPassword(proxy.password());
+			if (!url.isValid() || url.host().isEmpty()) {
+				config.networkError = u"The transcription proxy address is invalid."_q;
+				return;
+			}
+			config.proxyUrl = url.toString(QUrl::FullyEncoded);
+		}
+	}
 }
 
 namespace {
@@ -118,9 +234,11 @@ void StartBackend(const std::shared_ptr<BackendJob> &job) {
 		FinishBackend(job, BackendFailure(QString()));
 		return;
 	}
-	const auto document = session->data().document(job->documentId);
-	const auto originalPath = document->filepath(true);
-	const auto bytes = job->media->bytes();
+	ApplyTranscriptionNetworkPolicy(job->config);
+	if (!job->config.networkError.isEmpty()) {
+		FinishBackend(job, BackendFailure(job->config.networkError));
+		return;
+	}
 	if (job->engine == EngineProvider::WhisperLocal
 		&& job->config.localModel.isEmpty()) {
 		FinishBackend(job, LocalTranscript{
@@ -128,8 +246,34 @@ void StartBackend(const std::shared_ptr<BackendJob> &job) {
 		});
 		return;
 	}
+	const auto document = session->data().document(job->documentId);
+	if (!job->media->loaded(true)) {
+		session->downloaderTaskFinished(
+		) | rpl::filter([=] {
+			const auto session = job->session.get();
+			return !session
+				|| job->media->loaded()
+				|| !session->data().document(job->documentId)->loading();
+		}) | rpl::take(1) | rpl::on_next([=] {
+			if (!job->session.get() || !job->media->loaded(true)) {
+				FinishBackend(job, BackendFailure(u"Could not download the audio."_q));
+			} else {
+				StartBackend(job);
+			}
+		}, job->lifetime);
+		document->save(::Data::FileOrigin(job->id), QString());
+		return;
+	}
+	const auto originalPath = document->filepath(true);
+	const auto bytes = job->media->bytes();
+	const auto temporaryPath = TranscriptionTemporaryPath();
+	if (temporaryPath.isEmpty()) {
+		FinishBackend(job, BackendFailure(u"Could not create private transcription storage."_q));
+		return;
+	}
+	job->workerStarted = true;
 	crl::async([=] {
-		auto temp = QTemporaryDir(QDir::tempPath() + u"/freshgram-asr-XXXXXX"_q);
+		auto temp = QTemporaryDir(temporaryPath + u"/job-XXXXXX"_q);
 		const auto run = [&]() -> LocalTranscript {
 			if (job->cancelled->load()) {
 				return { .status = LocalTranscribeStatus::Cancelled };
@@ -159,15 +303,30 @@ void StartBackend(const std::shared_ptr<BackendJob> &job) {
 			if (QFileInfo(path).size() > kMaxDocumentSize) {
 				return BackendFailure(u"The audio file is too large."_q);
 			}
-			const auto audio = DecodeAudioFile(path, *job->cancelled);
-			if (job->cancelled->load()) {
-				return { .status = LocalTranscribeStatus::Cancelled };
-			} else if (audio.samples.empty() || !audio.error.isEmpty()) {
-				return BackendFailure(audio.error);
-			}
 			const auto wav = temp.filePath(u"audio.wav"_q);
-			if (!WriteWavFile(wav, audio.samples)) {
-				return BackendFailure(u"Could not save the decoded audio."_q);
+			{
+				auto lock = std::unique_lock(DecoderMutex);
+				DecoderChanged.wait(lock, [&] {
+					return !DecoderBusy || job->cancelled->load();
+				});
+				if (job->cancelled->load()) {
+					return { .status = LocalTranscribeStatus::Cancelled };
+				}
+				DecoderBusy = true;
+				lock.unlock();
+				const auto release = gsl::finally([] {
+					const auto lock = std::lock_guard(DecoderMutex);
+					DecoderBusy = false;
+					DecoderChanged.notify_all();
+				});
+				const auto audio = DecodeAudioFile(path, *job->cancelled);
+				if (job->cancelled->load()) {
+					return { .status = LocalTranscribeStatus::Cancelled };
+				} else if (audio.samples.empty() || !audio.error.isEmpty()) {
+					return BackendFailure(audio.error);
+				} else if (!WriteWavFile(wav, audio.samples)) {
+					return BackendFailure(u"Could not save the decoded audio."_q);
+				}
 			}
 			const auto result = job->library->TranscribeBlocking(
 				BuildVoiceAsrConfigJson(job->config),
@@ -196,6 +355,10 @@ BackendRoute ResolveTranscription(not_null<HistoryItem*> item) {
 	auto provider = TranscriptionProvider::Default;
 	if (AyuSecret::IsSecretPeer(peer)) {
 		provider = settings.transcriptionProviderSecret();
+		if (provider == TranscriptionProvider::Default
+			|| provider == TranscriptionProvider::Auto) {
+			return { BackendDestination::Engine, EngineProvider::WhisperLocal };
+		}
 	} else if (peer->isUser()) {
 		provider = settings.transcriptionProviderPersonal();
 	} else {
@@ -254,6 +417,9 @@ void TranscribeWithBackend(
 		not_null<HistoryItem*> item,
 		EngineProvider engine,
 		Fn<void(LocalTranscript)> done) {
+	if (AyuSecret::IsSecretPeer(item->history()->peer)) {
+		engine = ResolveTranscription(item).engine;
+	}
 	const auto media = item->media();
 	const auto document = media ? media->document() : nullptr;
 	if (!document
@@ -267,6 +433,10 @@ void TranscribeWithBackend(
 		return;
 	}
 	CancelBackendTranscription(item);
+	if (BackendJobs.size() >= kMaxBackendJobs) {
+		done(BackendFailure(u"The transcription queue is full. Try again after another task finishes."_q));
+		return;
+	}
 	const auto session = &item->history()->session();
 	const auto job = std::make_shared<BackendJob>();
 	job->session = base::make_weak(session);
@@ -275,6 +445,10 @@ void TranscribeWithBackend(
 	job->generation = ++BackendGeneration;
 	job->engine = engine;
 	job->config = CurrentTranscriptionConfig(engine);
+	if (AyuSecret::IsSecretPeer(item->history()->peer)) {
+		job->config.shadow = EngineProvider::Telegram;
+		job->config.cleanupProvider = EngineProvider::Telegram;
+	}
 	job->library = std::make_shared<EngineLibrary>();
 	job->documentId = document->id;
 	job->media = document->createMediaView();
@@ -282,20 +456,7 @@ void TranscribeWithBackend(
 	job->done = std::move(done);
 	BackendJobs.emplace(std::make_pair(job->address, job->id), job);
 
-	if (job->media->loaded(true)) {
-		StartBackend(job);
-		return;
-	}
-	session->downloaderTaskFinished(
-	) | rpl::filter([=] {
-		const auto session = job->session.get();
-		return !session
-			|| (job->media->loaded()
-				|| !session->data().document(job->documentId)->loading());
-	}) | rpl::take(1) | rpl::on_next([=] {
-		StartBackend(job);
-	}, job->lifetime);
-	document->save(::Data::FileOrigin(job->id), QString());
+	QueueBackend(job);
 }
 
 void CancelBackendTranscription(not_null<const HistoryItem*> item) {

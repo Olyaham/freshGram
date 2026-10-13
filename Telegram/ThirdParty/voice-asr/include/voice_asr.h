@@ -53,6 +53,7 @@ typedef struct VasrJob VasrJob;
 #define VASR_CAP_MODELS 128
 #define VASR_CAP_LLM 256
 #define VASR_CAP_PROCESSING 512
+#define VASR_CAP_NETWORK 1024
 
 uint32_t vasr_abi_version(void);
 uint32_t vasr_capabilities(void);

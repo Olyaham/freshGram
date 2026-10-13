@@ -3,17 +3,29 @@ name: AiApi adapter checks
 on:
   push:
     paths:
+      - '.gitattributes'
       - 'Telegram/ThirdParty/aiapi/**'
       - 'Telegram/ThirdParty/voice-asr/**'
       - 'tools/*voice_asr.py'
       - 'tools/sync_aiapi.py'
+      - 'tools/tests/**'
+      - 'Telegram/SourceFiles/ayu/features/recognition/**'
+      - 'Telegram/SourceFiles/ayu/secret/secret_manager.cpp'
+      - 'Telegram/SourceFiles/ayu/secret/secret_rekey.h'
+      - 'Telegram/SourceFiles/test/recognition/**'
       - '.github/workflows/aiapi-checks.yml'
   pull_request:
     paths:
+      - '.gitattributes'
       - 'Telegram/ThirdParty/aiapi/**'
       - 'Telegram/ThirdParty/voice-asr/**'
       - 'tools/*voice_asr.py'
       - 'tools/sync_aiapi.py'
+      - 'tools/tests/**'
+      - 'Telegram/SourceFiles/ayu/features/recognition/**'
+      - 'Telegram/SourceFiles/ayu/secret/secret_manager.cpp'
+      - 'Telegram/SourceFiles/ayu/secret/secret_rekey.h'
+      - 'Telegram/SourceFiles/test/recognition/**'
       - '.github/workflows/aiapi-checks.yml'
   workflow_dispatch:
 
@@ -21,6 +33,19 @@ permissions:
   contents: read
 
 jobs:
+  snapshot:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: python tools/sync_aiapi.py --check
+      - run: python -m unittest discover -s tools/tests -p test_aiapi_snapshot.py
+
   rust:
     runs-on: ubuntu-latest
     steps:
@@ -28,7 +53,7 @@ jobs:
       - name: Native dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libclang-dev libssl-dev pkg-config
+          sudo apt-get install -y libclang-dev libssl-dev pkg-config qt6-base-dev ffmpeg libavformat-dev libavcodec-dev libavutil-dev libswresample-dev
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -39,6 +64,10 @@ jobs:
             Telegram/ThirdParty/voice-asr
       - name: Verify source snapshot
         run: python3 tools/sync_aiapi.py --check
+      - name: Native routing and PFS regressions
+        run: python3 -m unittest discover -s tools/tests -p test_native_policies.py
+      - name: Native audio and crash cleanup regressions
+        run: python3 -m unittest discover -s tools/tests -p test_native_audio.py
       - name: Core checks
         working-directory: Telegram/ThirdParty/aiapi
         run: |
@@ -53,4 +82,10 @@ jobs:
           cargo test --all-targets --no-default-features --locked
           cargo clippy --all-targets --no-default-features --locked -- -D warnings
           python3 tests/abi_smoke.py target/debug/deps/libvoice_asr.so
+      - name: Qt loader integration
+        run: |
+          cmake -S Telegram/SourceFiles/test/recognition -B "$RUNNER_TEMP/recognition-checks" \
+            -D VOICE_ASR_TEST_LIBRARY="$GITHUB_WORKSPACE/Telegram/ThirdParty/voice-asr/target/debug/deps/libvoice_asr.so"
+          cmake --build "$RUNNER_TEMP/recognition-checks" --parallel 2
+          ctest --test-dir "$RUNNER_TEMP/recognition-checks" --output-on-failure
           cargo check --all-targets --features local --locked

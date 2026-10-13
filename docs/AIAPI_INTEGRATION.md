@@ -92,3 +92,6 @@ tested dynamic library as the packaging fixture.
 Live authenticated Groq/Gemini transcription and in-client voice/round-video
 checks require real credentials and messages. Native Windows/macOS deployment
 and a full linked client run remain separate runtime verification steps.
+
+The subsequent review fixes and their regression evidence are recorded in
+[the 2026-10-13 follow-up](REVIEW_2026_10_13.md).

@@ -1665,7 +1665,13 @@ void Manager::Impl::handleRequestKey(Chat &chat, const Inbound &inbound) {
 				exchangeId,
 				FromBytesVector(first.modexp),
 				KeyFingerprint(key)));
-	}, [] {
+	}, [=] {
+		const auto chat = find(chatId);
+		if (chat && ReleaseIncomingExchange(chat->pfsExchange, exchangeId)) {
+			chat->pfsPending.clear();
+			chat->pfsAnswerGB.clear();
+			saveChat(*chat);
+		}
 	});
 }
 
@@ -1758,7 +1764,9 @@ void Manager::Impl::handleAbortKey(Chat &chat, const Inbound &inbound) {
 }
 
 void Manager::Impl::maybeStartRekey(Chat &chat) {
-	if (chat.row.state != int(ChatState::Ready) || chat.key.empty()) {
+	if (chat.row.state != int(ChatState::Ready)
+		|| chat.key.empty()
+		|| !SupportsRekey(chat.row.hisLayer)) {
 		return;
 	}
 	if (chat.pfsExchange != 0
@@ -1781,7 +1789,9 @@ void Manager::Impl::maybeStartRekey(Chat &chat) {
 }
 
 void Manager::Impl::startRekey(Chat &chat) {
-	if (chat.row.state != int(ChatState::Ready) || chat.key.empty()) {
+	if (chat.row.state != int(ChatState::Ready)
+		|| chat.key.empty()
+		|| !SupportsRekey(chat.row.hisLayer)) {
 		return;
 	}
 	if (chat.pfsExchange != 0
@@ -1795,7 +1805,8 @@ void Manager::Impl::startRekey(Chat &chat) {
 		const auto chat = find(chatId);
 		if (!chat
 			|| chat->row.state != int(ChatState::Ready)
-			|| chat->key.empty()) {
+			|| chat->key.empty()
+			|| !SupportsRekey(chat->row.hisLayer)) {
 			return;
 		}
 		if (chat->pfsExchange != 0

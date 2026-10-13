@@ -33,6 +33,7 @@ pub fn client_with_proxy(
     }
 
     let mut builder = reqwest::Client::builder()
+        .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(timeout);
     if let Some(proxy_url) = key.proxy_url.as_deref() {

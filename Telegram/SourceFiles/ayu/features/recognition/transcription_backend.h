@@ -26,6 +26,7 @@ struct BackendRoute {
 	not_null<HistoryItem*> item);
 [[nodiscard]] bool UsesExternalTranscription(not_null<HistoryItem*> item);
 [[nodiscard]] TranscriptionConfig CurrentTranscriptionConfig(EngineProvider engine);
+void ApplyTranscriptionNetworkPolicy(TranscriptionConfig &config);
 void TranscribeWithBackend(
 	not_null<HistoryItem*> item,
 	EngineProvider engine,

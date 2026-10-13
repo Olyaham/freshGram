@@ -170,6 +170,10 @@ void AddModelDiscovery(
 			return;
 		}
 		const auto config = readConfig();
+		if (!config.networkError.isEmpty()) {
+			if (show) Ui::Toast::Show(config.networkError);
+			return;
+		}
 		const auto request = AyuRecognition::BuildModelDiscoveryJson(config, false);
 		if (state->active) {
 			if (!force && request == state->request) {
@@ -396,9 +400,14 @@ void FillTranscriptionCredentialsBox(
 		config.language = language->getLastText().trimmed();
 		if (enginePath) config.enginePath = enginePath->getLastText().trimmed();
 		if (gpu) config.useGpu = gpu->checked();
+		AyuRecognition::ApplyTranscriptionNetworkPolicy(config);
 		return config;
 	};
 	const auto validate = [=](const AyuRecognition::TranscriptionConfig &config, bool testing) {
+		if (testing && !config.networkError.isEmpty()) {
+			Ui::Toast::Show(config.networkError);
+			return false;
+		}
 		if (customBase) {
 			const auto url = QUrl(config.customBase);
 			if (!url.isValid() || url.host().isEmpty()
@@ -658,6 +667,9 @@ void BuildTranscription(SectionBuilder &builder) {
 	for (const auto &option : scopeOptions) {
 		scopeLabels.push_back(option.second);
 	}
+	auto secretLabels = scopeLabels;
+	secretLabels[0] = tr::ayu_TranscriptionSecretDefault(tr::now);
+	secretLabels[2] = tr::ayu_TranscriptionSecretAuto(tr::now);
 
 	const auto getIndex = [=](TranscriptionProvider val) {
 		const auto i = ranges::find(
@@ -728,12 +740,12 @@ void BuildTranscription(SectionBuilder &builder) {
 		.st = &st::settingsButtonNoIcon,
 		.label = settings->transcriptionProviderSecretValue()
 			| rpl::map(getScopeIndex)
-			| rpl::map([=](int val) { return scopeOptions[val].second; }),
+			| rpl::map([=](int val) { return secretLabels[val]; }),
 		.onClick = [=] {
 			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
 				SingleChoiceBox(box, {
 					.title = tr::ayu_TranscriptionSecret(),
-					.options = scopeLabels,
+					.options = secretLabels,
 					.initialSelection = getScopeIndex(
 						settings->transcriptionProviderSecret()),
 					.callback = [=](int index) {
@@ -744,6 +756,7 @@ void BuildTranscription(SectionBuilder &builder) {
 			}));
 		},
 	});
+	builder.addDividerText(tr::ayu_TranscriptionSecretPolicy());
 	builder.addButton({
 		.id = u"ayu/transcriptionPersonal"_q,
 		.title = tr::ayu_TranscriptionPersonal(),
@@ -818,6 +831,7 @@ void BuildTranscription(SectionBuilder &builder) {
 			}),
 	});
 	BuildTranscriptProcessing(builder);
+	builder.addDividerText(tr::ayu_TranscriptionNetworkPolicy());
 }
 
 void BuildTextRecognition(SectionBuilder &builder) {

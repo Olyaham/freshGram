@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import tempfile
 import threading
+from urllib.parse import urlsplit
 
 
 class Provider(BaseHTTPRequestHandler):
@@ -26,14 +27,16 @@ class Provider(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
+        self.server.requests.append(self.path)
         self.respond({"data": [{"id": "text-model", "context_window": 2048,
                                  "max_output_tokens": 64}]})
 
     def do_POST(self):
+        self.server.requests.append(self.path)
         try:
             body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
             assert "authorization" not in self.headers
-            if self.path == "/audio/transcriptions":
+            if urlsplit(self.path).path == "/audio/transcriptions":
                 assert b"audio.ogg" in body
                 assert b"FAKEAUDIO" in body
                 self.respond({"text": "hello world", "segments": [
@@ -89,11 +92,12 @@ def main():
         function.restype = result
         function.argtypes = arguments
     assert lib.vasr_abi_version() == 1
-    assert lib.vasr_capabilities() & (128 | 256 | 512) == 128 | 256 | 512
+    assert lib.vasr_capabilities() & (128 | 256 | 512 | 1024) == 128 | 256 | 512 | 1024
     assert not lib.vasr_models(None, b"{}", None)
     assert lib.vasr_last_error_code() == 1
     lib.vasr_string_free(None)
     server = ThreadingHTTPServer(("127.0.0.1", 0), Provider)
+    server.requests = []
     server.daemon_threads = True
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -156,6 +160,22 @@ def main():
             assert len(callbacks) == 1
             assert callbacks[0][0]
             lib.vasr_transcript_free(callbacks[0][0])
+            proxied_config = json.loads(config)
+            proxied_config["custom"]["api_base"] = "http://unresolvable-ffi.invalid"
+            proxied_config["proxy_url"] = base
+            transcript = lib.vasr_transcribe(engine, json.dumps(proxied_config).encode(), str(path).encode(),
+                                             b"audio.ogg", b"audio/ogg", None)
+            assert transcript, lib.vasr_last_error_message()
+            try:
+                assert lib.vasr_transcript_text(transcript) == b"Hello, world!"
+            finally:
+                lib.vasr_transcript_free(transcript)
+            proxied_config["network_error"] = "unsupported Telegram proxy"
+            before = len(server.requests)
+            assert not lib.vasr_transcribe(engine, json.dumps(proxied_config).encode(), str(path).encode(),
+                                           b"audio.ogg", b"audio/ogg", None)
+            assert lib.vasr_last_error_code() == 10
+            assert len(server.requests) == before
         profiles = f'''
 [providers.custom]
 driver = "openai_compatible"
@@ -179,6 +199,18 @@ models = ["text"]
                                              "route": "text", "prompt": "hello world"})
         assert generated["model"] == "text-model"
         assert generated["attempts"][0]["outcome"] == "success"
+        proxied_discovery = {"options": {**discovery["options"], "base_url": "http://unresolvable-ffi.invalid"},
+                             "proxy_url": base, "force": True}
+        assert owned(lib.vasr_models, proxied_discovery)["models"][0]["id"] == "text-model"
+        proxied_generation = {"profiles_toml": profiles.replace(base, "http://unresolvable-ffi.invalid"),
+                              "route": "text", "prompt": "hello world", "proxy_url": base}
+        assert owned(lib.vasr_generate, proxied_generation)["attempts"][0]["outcome"] == "success"
+        for function, request in [(lib.vasr_models, proxied_discovery), (lib.vasr_generate, proxied_generation)]:
+            before = len(server.requests)
+            assert not function(engine, json.dumps({**request, "network_error": "unsupported proxy"}).encode(), None)
+            assert lib.vasr_last_error_code() == 10
+            assert len(server.requests) == before
+        assert any(path.startswith("http://unresolvable-ffi.invalid/") for path in server.requests)
         lib.vasr_cancel(token)
         assert not lib.vasr_models(engine, json.dumps(discovery).encode(), token)
         assert lib.vasr_last_error_code() == 8
@@ -189,7 +221,7 @@ models = ["text"]
         server.shutdown()
         server.server_close()
         thread.join()
-    print("ABI smoke passed: discovery, generation, cleanup, segments, async ownership and cancellation")
+    print("ABI smoke passed: discovery, generation, cleanup, segments, async ownership, proxy policy and cancellation")
 
 
 if __name__ == "__main__":

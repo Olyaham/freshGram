@@ -9379,6 +9379,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_TranscriptionSecret" = "Secret chats";
 "ayu_TranscriptionPersonal" = "Private messages";
 "ayu_TranscriptionUseDefault" = "Use default";
+"ayu_TranscriptionSecretPolicy" = "Secret chats use local Whisper by default. Choosing Groq, Gemini or a custom endpoint here sends audio to that provider. Second-provider transcription and text processing are disabled for secret chats.";
+"ayu_TranscriptionSecretDefault" = "Local only (default)";
+"ayu_TranscriptionSecretAuto" = "Automatic (local only)";
+"ayu_TranscriptionNetworkPolicy" = "Cloud transcription, text processing and model catalogs use the selected HTTP/SOCKS5 proxy or the system proxy. MTProto/Web proxies cannot carry these requests. With proxies disabled, requests connect directly. Automatic mode chooses the primary provider before recognition; failure fallback is not enabled automatically.";
 "ayu_TranscriptionModel" = "Transcription model";
 "ayu_TranscriptionChooseModule" = "Choose installed Whisper module";
 "ayu_TranscriptionModuleFilter" = "Whisper modules (*.so *.dylib *.dll)";

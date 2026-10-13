@@ -87,7 +87,15 @@ pub fn profiles_for(
                     "CLEANUP_KEY".into()
                 },
                 adapter: Some(adapter),
-                egress: Egress::Direct,
+                egress: if cfg
+                    .proxy_url
+                    .as_ref()
+                    .is_some_and(|url| !url.trim().is_empty())
+                {
+                    Egress::Proxy
+                } else {
+                    Egress::Direct
+                },
             },
         )]
         .into(),

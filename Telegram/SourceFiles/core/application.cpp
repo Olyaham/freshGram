@@ -114,6 +114,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ayu/ayu_settings.h"
 #include "ayu/data/ayu_database.h"
 #include "ayu/features/fake_passcode/fake_passcode.h"
+#include "ayu/features/recognition/transcription_config.h"
 #include "ayu/secret/secret_policy.h"
 #include "ayu/utils/crash_trace.h"
 #include "ayu/utils/debug_logging.h"
@@ -967,6 +968,7 @@ void Application::badMtprotoConfigurationError() {
 }
 
 void Application::startLocalStorage() {
+	AyuRecognition::InitializeTranscriptionTemporaryFiles();
 	Ui::GL::DetectLastCheckCrash();
 	Local::start();
 	_saveSettingsTimer.emplace([=] { saveSettings(); });

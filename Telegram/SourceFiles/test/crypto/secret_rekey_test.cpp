@@ -27,6 +27,8 @@ void Check(bool condition, const char *name) {
 using AyuSecret::ConcurrentDecision;
 using AyuSecret::DecideConcurrent;
 using AyuSecret::ShouldRekey;
+using AyuSecret::SupportsRekey;
+using AyuSecret::ReleaseIncomingExchange;
 
 constexpr auto kUses = 100;
 constexpr auto kTime = 7 * 86400;
@@ -84,11 +86,32 @@ void TestTrigger() {
 		"unused key does not trigger");
 }
 
+void TestDhFailure() {
+	auto exchange = int64_t(17);
+	Check(ReleaseIncomingExchange(exchange, 17), "DH failure releases its exchange");
+	Check(exchange == 0, "RequestKey can reserve again after failure");
+	exchange = 17;
+	Check(ReleaseIncomingExchange(exchange, 17), "retried RequestKey can fail and retry again");
+	exchange = 23;
+	Check(!ReleaseIncomingExchange(exchange, 17), "late DH failure ignores a newer exchange");
+	Check(exchange == 23, "newer exchange survives stale failure");
+	Check(!ReleaseIncomingExchange(exchange, 0), "zero exchange cannot release a reservation");
+}
+
+void TestLayers() {
+	Check(!SupportsRekey(0), "unknown peer layer cannot initiate PFS");
+	Check(!SupportsRekey(45), "legacy peer cannot initiate PFS");
+	Check(SupportsRekey(46), "PFS threshold is supported");
+	Check(SupportsRekey(144), "current peer supports PFS");
+}
+
 } // namespace
 
 int main() {
 	TestConcurrent();
 	TestTrigger();
+	TestDhFailure();
+	TestLayers();
 	std::printf("%d checks, %d failures\n", Checks, Failures);
 	return Failures ? 1 : 0;
 }

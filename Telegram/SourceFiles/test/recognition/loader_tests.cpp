@@ -12,6 +12,12 @@
 #include <stdexcept>
 #include <thread>
 
+QString WorkingDirectory;
+
+QString cWorkingDir() {
+	return WorkingDirectory;
+}
+
 namespace {
 
 void Check(bool ok, const char *why) {
@@ -30,13 +36,28 @@ int main(int argc, char *argv[]) {
 		using namespace AyuRecognition;
 		Check(!EngineLibrary::IsAvailable(library + ".missing"), "missing module must stay unavailable");
 		Check(EngineLibrary::IsAvailable(library), "installed library must be discoverable");
+		if (mode == "legacy-cloud" || mode == "legacy-local") {
+			auto engine = EngineLibrary();
+			Check(!engine.Load(library), "legacy module must not ignore cloud network policy");
+			auto local = EngineLibrary();
+			Check(local.Load(library, true) == (mode == "legacy-local"), "legacy local support must follow its capability");
+			Check(!local.Load(library), "cached legacy local module must not bypass the cloud capability check");
+			Check(!local.IsLoaded(), "rejected module must be unloaded");
+			return 0;
+		}
 		{
 			auto local = EngineLibrary();
 			Check(!local.Load(library, true), "cloud build must not masquerade as local");
 		}
 		auto engine = EngineLibrary();
 		Check(engine.Load(library), "real module must load with ABI 1");
-		Check(engine.Capabilities() == 0, "cloud build must not contain ML backends");
+		Check(!(engine.Capabilities() & VASR_CAP_LOCAL), "cloud build must not contain ML backends");
+		Check(engine.Capabilities() & VASR_CAP_NETWORK, "cloud module must implement network policy");
+		auto profile = QTemporaryDir();
+		Check(profile.isValid(), "disposable profile must exist");
+		WorkingDirectory = profile.path() + "/";
+		InitializeTranscriptionTemporaryFiles();
+		Check(!TranscriptionTemporaryPath().isEmpty(), "private audio storage must initialize");
 		auto config = TranscriptionConfig();
 		config.provider = EngineProvider::Groq;
 		config.groqKey = "mock-key";
@@ -53,7 +74,7 @@ int main(int argc, char *argv[]) {
 		groq["api_base"] = base;
 		object["groq"] = groq;
 		json.setObject(object);
-		auto directory = QTemporaryDir();
+		auto directory = QTemporaryDir(TranscriptionTemporaryPath() + "/job-XXXXXX");
 		const auto wav = directory.filePath("audio.wav");
 		Check(WriteWavFile(wav, std::vector<float>(16000, 0.25f)), "WAV must be written");
 		auto cancelling = std::jthread([&] {

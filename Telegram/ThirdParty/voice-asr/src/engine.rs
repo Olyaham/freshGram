@@ -20,10 +20,23 @@ impl Engine {
         // No default timeout: each provider applies its own deadline so a
         // slow Gemini upload cannot inherit a Groq-sized budget and back.
         let client = reqwest::Client::builder()
+            .no_proxy()
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(crate::types::map_http_error)?;
         Ok(Self { client })
+    }
+
+    fn client_for(&self, proxy_url: Option<&str>) -> Result<reqwest::Client, TranscriptError> {
+        let Some(proxy) = proxy_url.map(str::trim).filter(|value| !value.is_empty()) else {
+            return Ok(self.client.clone());
+        };
+        reqwest::Client::builder()
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
+            .proxy(reqwest::Proxy::all(proxy).map_err(crate::types::map_http_error)?)
+            .build()
+            .map_err(crate::types::map_http_error)
     }
 
     /// Blocking transcription for plain threads (FFI, UI workers).
@@ -57,6 +70,9 @@ impl Engine {
         input: &TranscribeInput,
         cancel: &CancelToken,
     ) -> Result<ProcessedTranscript, TranscriptError> {
+        if !cfg.network_error.is_empty() {
+            return Err(TranscriptError::Unsupported(cfg.network_error.clone()));
+        }
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -131,7 +147,13 @@ impl Engine {
             {
                 let discovery = model_discovery();
                 let refreshed = discovery
-                    .discover(&self.client, &secrets, &options, false, cancel)
+                    .discover(
+                        &self.client_for(cfg.proxy_url.as_deref())?,
+                        &secrets,
+                        &options,
+                        false,
+                        cancel,
+                    )
                     .await;
                 cancel.check()?;
                 if let Ok(catalog) = refreshed {
@@ -157,7 +179,10 @@ impl Engine {
                 temperature: 0.0,
                 max_tokens: profiles.models["cleanup"].capabilities.max_output_tokens,
                 short_limit: 400,
-                proxy_url: None,
+                proxy_url: cfg
+                    .proxy_url
+                    .clone()
+                    .filter(|value| !value.trim().is_empty()),
                 thinking_budget: 1024,
             };
             let clean = tokio::select! {
@@ -181,11 +206,23 @@ impl Engine {
         force: bool,
         cancel: &CancelToken,
     ) -> Result<ModelCatalog, TranscriptError> {
+        self.discover_with_proxy(options, secrets, force, cancel, None)
+    }
+
+    pub fn discover_with_proxy(
+        &self,
+        options: &DiscoveryOptions,
+        secrets: &SecretStore,
+        force: bool,
+        cancel: &CancelToken,
+        proxy_url: Option<&str>,
+    ) -> Result<ModelCatalog, TranscriptError> {
+        let client = self.client_for(proxy_url)?;
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .map_err(|error| TranscriptError::Io(error.to_string()))?
-            .block_on(model_discovery().discover(&self.client, secrets, options, force, cancel))
+            .block_on(model_discovery().discover(&client, secrets, options, force, cancel))
             .map_err(crate::types::map_transcript_error)
     }
 
@@ -195,6 +232,10 @@ impl Engine {
         input: &TranscribeInput,
         cancel: &CancelToken,
     ) -> Result<Transcript, TranscriptError> {
+        if !cfg.network_error.is_empty() {
+            return Err(TranscriptError::Unsupported(cfg.network_error.clone()));
+        }
+        let client = self.client_for(cfg.proxy_url.as_deref())?;
         // Gemini audio transcription rejects video notes outright: skip it
         // and go straight to the fallback provider instead of failing.
         let mut order = Vec::with_capacity(2);
@@ -214,7 +255,22 @@ impl Engine {
 
         let mut last = TranscriptError::Unsupported("no provider configured".to_string());
         for provider_id in order {
-            let provider = match provider_for(provider_id, cfg, self.client.clone()) {
+            use std::sync::LazyLock;
+            static CLOUD: LazyLock<tokio::sync::Semaphore> =
+                LazyLock::new(|| tokio::sync::Semaphore::new(2));
+            static LOCAL: LazyLock<tokio::sync::Semaphore> =
+                LazyLock::new(|| tokio::sync::Semaphore::new(1));
+            let semaphore = if provider_id == crate::types::AsrProvider::Local {
+                &LOCAL
+            } else {
+                &CLOUD
+            };
+            let _permit = tokio::select! {
+                biased;
+                _ = cancel.cancelled() => return Err(TranscriptError::Cancelled),
+                permit = semaphore.acquire() => permit.map_err(|_| TranscriptError::Unsupported("ASR queue is closed".into()))?,
+            };
+            let provider = match provider_for(provider_id, cfg, client.clone()) {
                 Ok(provider) => provider,
                 Err(error) => {
                     last = error;

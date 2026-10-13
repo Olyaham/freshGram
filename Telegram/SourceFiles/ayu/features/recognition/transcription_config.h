@@ -34,6 +34,8 @@ struct TranscriptionConfig {
 	EngineProvider shadow = EngineProvider::Telegram;
 	EngineProvider cleanupProvider = EngineProvider::Telegram;
 	QString cleanupModel;
+	QString proxyUrl;
+	QString networkError;
 };
 
 [[nodiscard]] std::string BuildVoiceAsrConfigJson(
@@ -46,5 +48,7 @@ struct TranscriptionConfig {
 	const QString &path,
 	const std::vector<float> &samples);
 [[nodiscard]] QString UniqueTempPath(const QString &suffix);
+void InitializeTranscriptionTemporaryFiles();
+[[nodiscard]] QString TranscriptionTemporaryPath();
 
 } // namespace AyuRecognition

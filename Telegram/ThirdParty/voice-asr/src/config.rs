@@ -27,6 +27,8 @@ pub struct AsrConfig {
     pub local: LocalConfig,
     pub shadow: Option<AsrProvider>,
     pub cleanup: Option<CleanupConfig>,
+    pub proxy_url: Option<String>,
+    pub network_error: String,
 }
 
 impl Default for AsrConfig {
@@ -41,6 +43,8 @@ impl Default for AsrConfig {
             local: LocalConfig::default(),
             shadow: None,
             cleanup: None,
+            proxy_url: None,
+            network_error: String::new(),
         }
     }
 }

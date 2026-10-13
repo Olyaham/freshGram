@@ -1,6 +1,8 @@
 // This is the source code of freshGram.
 #include "ayu/features/recognition/transcription_config.h"
 
+#include "settings.h"
+
 #include <QtCore/QByteArray>
 #include <QtCore/QCoreApplication>
 #include <QtCore/QDataStream>
@@ -8,6 +10,8 @@
 #include <QtCore/QFile>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
+#include <QtCore/QTemporaryDir>
+#include <QtCore/QLockFile>
 #include <QtCore/QtEndian>
 
 #include <atomic>
@@ -15,6 +19,7 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <memory>
 
 namespace AyuRecognition {
 namespace {
@@ -26,6 +31,18 @@ constexpr auto kGeminiTimeout = 180;
 constexpr auto kGeminiTotalTimeout = 420;
 constexpr auto kCustomTimeout = 120;
 constexpr auto kSampleRate = 16000;
+constexpr auto kTemporaryMarker = "FGASR1\n";
+constexpr auto kTemporaryMarkerSize = int(std::char_traits<char>::length(kTemporaryMarker));
+
+struct TemporaryAudioRoot {
+	std::unique_ptr<QTemporaryDir> directory;
+	std::unique_ptr<QLockFile> lock;
+};
+
+TemporaryAudioRoot &AudioRoot() {
+	static auto root = TemporaryAudioRoot();
+	return root;
+}
 
 void EscapeJsonInto(std::string &to, const QString &value) {
 	const auto utf8 = value.toUtf8();
@@ -119,6 +136,10 @@ std::string BuildVoiceAsrConfigJson(const TranscriptionConfig &config) {
 		WriteJsonString(json, config.cleanupModel);
 		json += '}';
 	}
+	json += ",\"proxy_url\":";
+	WriteJsonString(json, config.proxyUrl);
+	json += ",\"network_error\":";
+	WriteJsonString(json, config.networkError);
 	json += '}';
 	return json;
 }
@@ -145,6 +166,8 @@ std::string BuildModelDiscoveryJson(
 		} },
 		{ u"secrets"_q, QJsonObject{ { u"API_KEY"_q, key } } },
 		{ u"force"_q, force },
+		{ u"proxy_url"_q, config.proxyUrl },
+		{ u"network_error"_q, config.networkError },
 	}).toJson(QJsonDocument::Compact).toStdString();
 }
 
@@ -186,14 +209,71 @@ bool WriteWavFile(const QString &path, const std::vector<float> &samples) {
 	if (file.write(header) != 44) {
 		return false;
 	}
-	auto pcm = QByteArray();
-	pcm.resize(qsizetype(dataSize));
-	for (auto i = size_t(0); i != samples.size(); ++i) {
-		const auto value = std::isfinite(samples[i]) ? samples[i] : 0.f;
-		const auto clamped = std::clamp(value, -1.f, 1.f);
-		qToLittleEndian(qint16(std::lround(clamped * 32767.f)), pcm.data() + 2 * i);
+	auto pcm = QByteArray(64 * 1024, 0);
+	for (auto offset = size_t(0); offset < samples.size();) {
+		const auto count = std::min(samples.size() - offset, size_t(pcm.size() / 2));
+		for (auto i = size_t(0); i != count; ++i) {
+			const auto value = std::isfinite(samples[offset + i]) ? samples[offset + i] : 0.f;
+			const auto clamped = std::clamp(value, -1.f, 1.f);
+			qToLittleEndian(qint16(std::lround(clamped * 32767.f)), pcm.data() + 2 * i);
+		}
+		if (file.write(pcm.constData(), qint64(count * 2)) != qint64(count * 2)) {
+			return false;
+		}
+		offset += count;
 	}
-	return file.write(pcm) == qint64(pcm.size());
+	return file.flush();
+}
+
+void InitializeTranscriptionTemporaryFiles() {
+	auto &state = AudioRoot();
+	if (state.directory) {
+		return;
+	}
+	const auto root = QDir(cWorkingDir() + u"tdata/asr-tmp"_q);
+	if (!root.mkpath(u"."_q)
+		|| !QFile::setPermissions(root.path(), QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner)) {
+		return;
+	}
+	for (const auto &entry : root.entryInfoList({ u"session-*"_q }, QDir::Dirs | QDir::NoDotAndDotDot)) {
+		if (entry.isSymLink()) {
+			continue;
+		}
+		auto marker = QFile(entry.filePath() + u"/managed"_q);
+		if (!marker.open(QIODevice::ReadOnly)
+			|| marker.size() != kTemporaryMarkerSize
+			|| marker.readAll() != kTemporaryMarker) {
+			continue;
+		}
+		marker.close();
+		auto lock = QLockFile(entry.filePath() + u"/active.lock"_q);
+		lock.setStaleLockTime(0);
+		if (lock.tryLock()) {
+			QDir(entry.filePath()).removeRecursively();
+		}
+	}
+	auto directory = std::make_unique<QTemporaryDir>(root.filePath(u"session-XXXXXX"_q));
+	if (!directory->isValid()) {
+		return;
+	}
+	auto lock = std::make_unique<QLockFile>(directory->filePath(u"active.lock"_q));
+	lock->setStaleLockTime(0);
+	if (!lock->tryLock()) {
+		return;
+	}
+	auto marker = QFile(directory->filePath(u"managed"_q));
+	if (!marker.open(QIODevice::WriteOnly | QIODevice::NewOnly)
+		|| marker.write(kTemporaryMarker) != kTemporaryMarkerSize
+		|| !marker.flush()) {
+		return;
+	}
+	state.directory = std::move(directory);
+	state.lock = std::move(lock);
+}
+
+QString TranscriptionTemporaryPath() {
+	const auto &root = AudioRoot();
+	return root.directory ? root.directory->path() : QString();
 }
 
 QString UniqueTempPath(const QString &suffix) {

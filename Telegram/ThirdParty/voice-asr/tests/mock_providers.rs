@@ -92,6 +92,201 @@ fn groq_config(addr: SocketAddr) -> AsrConfig {
 }
 
 #[tokio::test]
+async fn proxy_carries_audio_discovery_reference_metadata_and_cleanup() {
+    use std::sync::{Arc, Mutex};
+    let paths = Arc::new(Mutex::new(Vec::new()));
+    let seen = paths.clone();
+    let app = Router::new().fallback(move |uri: axum::http::Uri, body: axum::body::Bytes| {
+        let seen = seen.clone();
+        async move {
+            seen.lock().unwrap().push(uri.path().to_owned());
+            Json(match uri.path() {
+                "/v1/audio/transcriptions" => {
+                    assert!(!body.is_empty());
+                    json!({"text":"Hello, world!", "segments":[]})
+                }
+                "/v1/models" => json!({"data":[{"id":"text-editor"}]}),
+                "/reference" => json!({"custom":{"models":{"text-editor":{"limit":{"output":256}}}}}),
+                "/v1/chat/completions" => {
+                    let request: Value = serde_json::from_slice(&body).unwrap();
+                    assert_eq!(request["model"], "text-editor");
+                    let content = json!({"mode":"short","text":"Hello, world!","chapters":[]}).to_string();
+                    json!({"id":"edit", "object":"chat.completion", "created":1, "model":"text-editor",
+                        "choices":[{"index":0,"message":{"role":"assistant","content":content},"finish_reason":"stop"}]})
+                }
+                path => panic!("unexpected proxied path: {path}"),
+            })
+        }
+    });
+    let (addr, server) = serve(app).await;
+    let proxy = format!("http://{addr}");
+    let config = AsrConfig {
+        provider: AsrProvider::Custom,
+        fallback: None,
+        custom: CustomAsrConfig {
+            api_base: "http://unresolvable-provider.invalid/v1".into(),
+            model: "speech-model".into(),
+            ..Default::default()
+        },
+        cleanup: Some(voice_asr::config::CleanupConfig {
+            provider: AsrProvider::Custom,
+            model: "text-editor".into(),
+        }),
+        proxy_url: Some(proxy.clone()),
+        ..Default::default()
+    };
+    let dir = tempfile::TempDir::new().unwrap();
+    let engine = Engine::new().unwrap();
+    let result = engine
+        .process_async(
+            &config,
+            &test_input(&dir, "a.ogg", None),
+            &CancelToken::new(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(result.cleanup_provider.as_deref(), Some("custom"));
+    assert_eq!(result.text(), "Hello, world!");
+    let options = aiapi_llm::discovery::DiscoveryOptions {
+        provider: "proxy-reference-test".into(),
+        base_url: config.custom.api_base.clone(),
+        metadata_url: Some("http://unresolvable-catalog.invalid/reference".into()),
+        metadata_provider: Some("custom".into()),
+        protocol: aiapi_llm::discovery::DiscoveryProtocol::OpenaiCompatible,
+        secret_name: None,
+        cache_ttl_secs: 300,
+        overrides: Default::default(),
+    };
+    tokio::task::spawn_blocking(move || {
+        engine
+            .discover_with_proxy(
+                &options,
+                &aiapi_config::SecretStore::explicit(),
+                true,
+                &CancelToken::new(),
+                Some(&proxy),
+            )
+            .unwrap()
+    })
+    .await
+    .unwrap();
+    for path in [
+        "/v1/audio/transcriptions",
+        "/v1/models",
+        "/v1/chat/completions",
+        "/reference",
+    ] {
+        assert!(
+            paths.lock().unwrap().iter().any(|seen| seen == path),
+            "missing proxy request: {path}"
+        );
+    }
+    server.abort();
+}
+
+#[tokio::test]
+async fn failed_or_blocked_proxy_does_not_fall_back_to_direct() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let calls = Arc::new(AtomicUsize::new(0));
+    let seen = calls.clone();
+    let (addr, server) = serve(Router::new().fallback(move || {
+        let seen = seen.clone();
+        async move {
+            seen.fetch_add(1, Ordering::SeqCst);
+            Json(json!({"text":"direct leak"}))
+        }
+    }))
+    .await;
+    let unavailable = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let proxy = format!("http://{}", unavailable.local_addr().unwrap());
+    drop(unavailable);
+    let mut config = groq_config(addr);
+    config.proxy_url = Some(proxy);
+    config.fallback = Some(AsrProvider::Custom);
+    config.custom.api_base = format!("http://{addr}/v1");
+    config.custom.model = "speech".into();
+    let dir = tempfile::TempDir::new().unwrap();
+    let input = test_input(&dir, "a.ogg", None);
+    let engine = Engine::new().unwrap();
+    assert!(
+        engine
+            .process_async(&config, &input, &CancelToken::new())
+            .await
+            .is_err()
+    );
+    config.proxy_url = None;
+    config.network_error = "unsupported Telegram proxy".into();
+    assert!(matches!(
+        engine
+            .process_async(&config, &input, &CancelToken::new())
+            .await,
+        Err(TranscriptError::Unsupported(_))
+    ));
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    server.abort();
+}
+
+#[tokio::test]
+async fn cloud_concurrency_is_bounded_and_cancellation_releases_capacity() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let active = Arc::new(AtomicUsize::new(0));
+    let maximum = Arc::new(AtomicUsize::new(0));
+    let seen = active.clone();
+    let peak = maximum.clone();
+    let (addr, server) = serve(Router::new().fallback(move |body: axum::body::Bytes| {
+        let seen = seen.clone();
+        let peak = peak.clone();
+        async move {
+            assert!(!body.is_empty());
+            let running = seen.fetch_add(1, Ordering::SeqCst) + 1;
+            peak.fetch_max(running, Ordering::SeqCst);
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            seen.fetch_sub(1, Ordering::SeqCst);
+            Json(json!({"text":"bounded", "segments":[]}))
+        }
+    }))
+    .await;
+    let dir = tempfile::TempDir::new().unwrap();
+    let input = test_input(&dir, "a.ogg", None);
+    let engine = Arc::new(Engine::new().unwrap());
+    let mut jobs = Vec::new();
+    for index in 0..8 {
+        let token = CancelToken::new();
+        if index == 4 {
+            token.cancel();
+        }
+        let engine = engine.clone();
+        let input = TranscribeInput {
+            audio_path: input.audio_path.clone(),
+            filename: input.filename.clone(),
+            mime: input.mime.clone(),
+        };
+        jobs.push(tokio::spawn(async move {
+            engine
+                .transcribe_async(&groq_config(addr), &input, &token)
+                .await
+        }));
+    }
+    for (index, job) in jobs.into_iter().enumerate() {
+        let result = job.await.unwrap();
+        if index == 4 {
+            assert!(matches!(result, Err(TranscriptError::Cancelled)));
+        } else {
+            assert_eq!(result.unwrap().text, "bounded");
+        }
+    }
+    assert!(maximum.load(Ordering::SeqCst) <= 2);
+    assert_eq!(active.load(Ordering::SeqCst), 0);
+    server.abort();
+}
+
+#[tokio::test]
 async fn groq_multipart_wire_format_and_parsing() {
     let app = Router::new().route("/openai/v1/audio/transcriptions", post(groq_strict));
     let (addr, server) = serve(app).await;
@@ -113,6 +308,133 @@ async fn groq_multipart_wire_format_and_parsing() {
     assert_eq!(transcript.segments.len(), 1);
     assert_eq!(transcript.segments[0].text, "Привет, мир");
     assert!((transcript.segments[0].end_sec - 1.25).abs() < f32::EPSILON);
+}
+
+#[tokio::test]
+async fn waiting_for_cloud_capacity_is_cancellable() {
+    use std::sync::Arc;
+    use std::time::Duration;
+    let release = Arc::new(tokio::sync::Semaphore::new(0));
+    let (entered, mut events) = tokio::sync::mpsc::unbounded_channel();
+    let gate = release.clone();
+    let (addr, server) = serve(Router::new().fallback(move |body: axum::body::Bytes| {
+        let gate = gate.clone();
+        let entered = entered.clone();
+        async move {
+            assert!(!body.is_empty());
+            entered.send(()).unwrap();
+            gate.acquire().await.unwrap().forget();
+            Json(json!({"text":"bounded", "segments":[]}))
+        }
+    }))
+    .await;
+    let dir = tempfile::TempDir::new().unwrap();
+    let input = Arc::new(test_input(&dir, "a.ogg", None));
+    let engine = Arc::new(Engine::new().unwrap());
+    let start = |token: CancelToken| {
+        let engine = engine.clone();
+        let input = input.clone();
+        tokio::spawn(async move {
+            engine
+                .transcribe_async(&groq_config(addr), &input, &token)
+                .await
+        })
+    };
+    let first = start(CancelToken::new());
+    let second = start(CancelToken::new());
+    for _ in 0..2 {
+        tokio::time::timeout(Duration::from_secs(5), events.recv())
+            .await
+            .unwrap()
+            .unwrap();
+    }
+    let token = CancelToken::new();
+    let queued = start(token.clone());
+    tokio::task::yield_now().await;
+    token.cancel();
+    assert!(matches!(
+        tokio::time::timeout(Duration::from_secs(1), queued)
+            .await
+            .unwrap()
+            .unwrap(),
+        Err(TranscriptError::Cancelled)
+    ));
+    assert!(
+        events.try_recv().is_err(),
+        "queued cancellation reached the provider"
+    );
+    release.add_permits(2);
+    first.await.unwrap().unwrap();
+    second.await.unwrap().unwrap();
+    release.add_permits(1);
+    start(CancelToken::new()).await.unwrap().unwrap();
+    server.abort();
+}
+
+#[tokio::test]
+async fn socks5_resolves_provider_hostname_at_the_proxy() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let proxy = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let mut greeting = [0; 2];
+        stream.read_exact(&mut greeting).await.unwrap();
+        assert_eq!(greeting[0], 5);
+        let mut methods = vec![0; greeting[1] as usize];
+        stream.read_exact(&mut methods).await.unwrap();
+        assert!(methods.contains(&0));
+        stream.write_all(&[5, 0]).await.unwrap();
+        let mut connect = [0; 4];
+        stream.read_exact(&mut connect).await.unwrap();
+        assert_eq!(connect, [5, 1, 0, 3]);
+        let length = stream.read_u8().await.unwrap();
+        let mut hostname = vec![0; length as usize];
+        stream.read_exact(&mut hostname).await.unwrap();
+        assert_eq!(hostname, b"unresolvable-speech.invalid");
+        assert_eq!(stream.read_u16().await.unwrap(), 80);
+        stream
+            .write_all(&[5, 0, 0, 1, 127, 0, 0, 1, 0, 80])
+            .await
+            .unwrap();
+        let mut request = Vec::new();
+        while !request.windows(9).any(|bytes| bytes == b"FAKEAUDIO") {
+            let mut buffer = [0; 4096];
+            let count = stream.read(&mut buffer).await.unwrap();
+            assert!(count > 0);
+            request.extend_from_slice(&buffer[..count]);
+        }
+        assert!(request.starts_with(b"POST /v1/audio/transcriptions HTTP/1.1"));
+        let body = r#"{"text":"proxied speech","segments":[]}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        stream.write_all(response.as_bytes()).await.unwrap();
+    });
+    let config = AsrConfig {
+        provider: AsrProvider::Custom,
+        fallback: None,
+        custom: CustomAsrConfig {
+            api_base: "http://unresolvable-speech.invalid/v1".into(),
+            model: "speech".into(),
+            ..Default::default()
+        },
+        proxy_url: Some(format!("socks5h://{address}")),
+        ..Default::default()
+    };
+    let dir = tempfile::TempDir::new().unwrap();
+    let transcript = Engine::new()
+        .unwrap()
+        .transcribe_async(
+            &config,
+            &test_input(&dir, "a.ogg", None),
+            &CancelToken::new(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(transcript.text, "proxied speech");
+    proxy.await.unwrap();
 }
 
 #[tokio::test]

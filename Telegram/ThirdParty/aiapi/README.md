@@ -32,6 +32,12 @@ product wiring lives here — hosts plug their own config, secrets and UI.
 Transcript cleanup, product prompts, chapters, rendering, no-speech policies
 and local Whisper inference belong to application adapters.
 
+HTTP egress is explicit: `aiapi-http::client` connects directly, and
+`client_with_proxy` uses the supplied HTTP/SOCKS proxy. Environment proxy
+variables are not inherited. Hosts own proxy selection and must pass the same
+policy to ASR, discovery/reference metadata and LLM requests. A configured proxy
+failure does not switch to direct egress.
+
 ## Discovery
 
 `ModelDiscovery::discover` accepts a configured endpoint, protocol, secret
@@ -69,6 +75,8 @@ The client vendors a reproducible source snapshot under
 Use `--check` to verify the snapshot before packaging. Cargo dependencies
 stay inside the client checkout; no adjacent clone or unpublished Git revision
 is required to build the adapter.
+`SOURCE.json` records per-file SHA-256 digests and a content-addressed snapshot
+identity. The client pins these files to LF on every checkout platform.
 
 ## Checks
 

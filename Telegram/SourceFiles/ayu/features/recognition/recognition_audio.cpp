@@ -12,6 +12,7 @@ namespace {
 
 constexpr auto kSampleRate = 16000;
 constexpr auto kMaxSeconds = 60 * 60;
+constexpr auto kMaxSamples = size_t(kSampleRate) * kMaxSeconds;
 
 struct PacketDeleter {
 	void operator()(AVPacket *value) const {
@@ -48,11 +49,20 @@ bool AppendFrame(
 		std::vector<float> &samples) {
 	const auto inSamples = frame ? frame->nb_samples : 0;
 	const auto capacity = swr_get_out_samples(resampler, inSamples);
-	if (capacity <= 0) {
+	if (capacity < 0) {
+		return false;
+	} else if (capacity == 0) {
 		return true;
 	}
 	const auto was = samples.size();
-	samples.resize(was + capacity);
+	if (size_t(capacity) > kMaxSamples - was) {
+		return false;
+	}
+	const auto required = was + size_t(capacity);
+	if (required > samples.capacity()) {
+		samples.reserve(std::min(kMaxSamples, std::max(required, samples.capacity() * 2)));
+	}
+	samples.resize(required);
 	auto out = reinterpret_cast<uint8_t*>(samples.data() + was);
 	const auto converted = swr_convert(
 		resampler,
@@ -74,6 +84,10 @@ DecodedAudio DecodeAudioFile(
 		const QString &path,
 		const std::atomic<bool> &cancelled) {
 	auto result = DecodedAudio();
+	if (cancelled.load()) {
+		result.error = u"Cancelled."_q;
+		return result;
+	}
 	auto file = QFile(path);
 	if (!file.open(QIODevice::ReadOnly)) {
 		result.error = u"Could not open the file."_q;
@@ -112,20 +126,26 @@ DecodedAudio DecodeAudioFile(
 		result.error = u"Unsupported audio codec."_q;
 		return result;
 	}
+	codec->err_recognition |= AV_EF_CRCCHECK | AV_EF_BITSTREAM | AV_EF_BUFFER | AV_EF_EXPLODE;
 
 	auto packet = PacketPointer(av_packet_alloc());
 	auto frame = FFmpeg::MakeFramePointer();
 	auto resampler = FFmpeg::SwresamplePointer();
 	auto mono = AVChannelLayout();
 	av_channel_layout_default(&mono, 1);
-	const auto limit = size_t(kSampleRate) * kMaxSeconds;
 
 	const auto drain = [&]() -> bool {
 		while (true) {
+			if (cancelled.load()) {
+				return false;
+			}
 			const auto code = avcodec_receive_frame(codec.get(), frame.get());
 			if (code == AVERROR(EAGAIN) || code == AVERROR_EOF) {
 				return true;
 			} else if (code < 0) {
+				return false;
+			}
+			if (frame->decode_error_flags) {
 				return false;
 			}
 			if (!resampler) {
@@ -150,37 +170,34 @@ DecodedAudio DecodeAudioFile(
 			if (!AppendFrame(resampler.get(), frame.get(), result.samples)) {
 				return false;
 			}
-			if (result.samples.size() > limit) {
-				result.samples.resize(limit);
-				return true;
-			}
 		}
 	};
 
 	auto decoded = true;
-	while (decoded && av_read_frame(format.get(), packet.get()) >= 0) {
+	auto readCode = 0;
+	while (decoded && (readCode = av_read_frame(format.get(), packet.get())) >= 0) {
 		if (cancelled.load()) {
+			result.samples.clear();
 			result.error = u"Cancelled."_q;
 			return result;
 		}
 		const auto good = (packet->stream_index == index);
 		if (good) {
-			decoded = (avcodec_send_packet(codec.get(), packet.get()) >= 0)
+			decoded = !(packet->flags & AV_PKT_FLAG_CORRUPT)
+				&& (avcodec_send_packet(codec.get(), packet.get()) >= 0)
 				&& drain();
 		}
 		av_packet_unref(packet.get());
-		if (result.samples.size() >= limit) {
-			break;
-		}
 	}
-	if (decoded && result.samples.size() < limit) {
-		avcodec_send_packet(codec.get(), nullptr);
-		decoded = drain();
+	decoded = decoded && readCode == AVERROR_EOF;
+	if (decoded) {
+		decoded = (avcodec_send_packet(codec.get(), nullptr) >= 0) && drain();
 		if (decoded && resampler) {
 			decoded = AppendFrame(resampler.get(), nullptr, result.samples);
 		}
 	}
-	if (result.samples.empty()) {
+	if (!decoded || result.samples.empty()) {
+		result.samples.clear();
 		result.error = u"Could not decode the audio."_q;
 	}
 	return result;

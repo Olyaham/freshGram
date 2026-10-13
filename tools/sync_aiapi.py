@@ -6,6 +6,25 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import shutil
+import subprocess
+
+
+def snapshot_digest(files):
+    content = json.dumps(files, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(content).hexdigest()
+
+
+def source_revision(source):
+    if not (source / ".git").exists():
+        return None
+    try:
+        revision = subprocess.run(["git", "-C", str(source), "rev-parse", "--verify", "HEAD"],
+                                  capture_output=True, text=True, check=False)
+        status = subprocess.run(["git", "-C", str(source), "status", "--porcelain"],
+                                capture_output=True, text=True, check=False)
+    except OSError:
+        return None
+    return revision.stdout.strip() if revision.returncode == 0 and status.returncode == 0 and not status.stdout else None
 
 
 def main():
@@ -16,6 +35,8 @@ def main():
     destination = Path(__file__).resolve().parents[1] / "Telegram/ThirdParty/aiapi"
     marker = destination / "SOURCE.json"
     previous = json.loads(marker.read_text()) if marker.exists() else {"files": {}}
+    if args.check and previous.get("content_sha256") != snapshot_digest(previous["files"]):
+        parser.error("snapshot content identity is missing or inconsistent")
     for name in previous["files"]:
         path = PurePosixPath(name)
         if path.is_absolute() or ".." in path.parts or "\\" in name:
@@ -66,7 +87,9 @@ def main():
         (destination / name).unlink(missing_ok=True)
     destination.mkdir(parents=True, exist_ok=True)
     marker.write_text(json.dumps({"project": "AiApi-rs", "source": "https://github.com/Olyaham/AiApi-rs",
-                                  "files": files}, indent=2, sort_keys=True) + "\n")
+                                  "source_revision": source_revision(source),
+                                  "content_sha256": snapshot_digest(files), "files": files},
+                                 indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
     print(f"AiApi snapshot: {len(files)} files, {len(changed)} updated")
 
 

@@ -22,6 +22,20 @@ enum class ConcurrentDecision {
 	AbortBoth,
 };
 
+[[nodiscard]] inline bool SupportsRekey(int peerLayer) {
+	return peerLayer >= 46;
+}
+
+[[nodiscard]] inline bool ReleaseIncomingExchange(
+		int64_t &active,
+		int64_t failed) {
+	if (!failed || active != failed) {
+		return false;
+	}
+	active = 0;
+	return true;
+}
+
 [[nodiscard]] inline ConcurrentDecision DecideConcurrent(
 		int64_t ours,
 		int64_t incoming) {

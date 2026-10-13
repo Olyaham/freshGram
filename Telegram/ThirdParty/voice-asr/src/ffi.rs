@@ -259,6 +259,7 @@ pub extern "C" fn vasr_capabilities() -> u32 {
         | 128
         | 256
         | 512
+        | 1024
 }
 
 #[unsafe(no_mangle)]
@@ -357,6 +358,9 @@ struct DiscoveryRequest {
     secrets: std::collections::BTreeMap<String, String>,
     #[serde(default)]
     force: bool,
+    proxy_url: Option<String>,
+    #[serde(default)]
+    network_error: String,
 }
 
 #[derive(serde::Deserialize)]
@@ -368,6 +372,9 @@ struct GenerationRequest {
     max_tokens: Option<u32>,
     #[serde(default)]
     secrets: std::collections::BTreeMap<String, String>,
+    proxy_url: Option<String>,
+    #[serde(default)]
+    network_error: String,
 }
 
 fn explicit_secrets(
@@ -390,6 +397,9 @@ pub extern "C" fn vasr_models(
             let handle = engine_of(engine)?;
             let request: DiscoveryRequest = serde_json::from_str(arg_str(request_json)?)
                 .map_err(|_| (VASR_JSON, "invalid model discovery request".into()))?;
+            if !request.network_error.is_empty() {
+                return Err((VASR_UNSUPPORTED, request.network_error));
+            }
             let token = if cancel.is_null() {
                 CancelToken::new()
             } else {
@@ -397,11 +407,12 @@ pub extern "C" fn vasr_models(
             };
             let catalog = handle
                 .inner
-                .discover(
+                .discover_with_proxy(
                     &request.options,
                     &explicit_secrets(&request.secrets),
                     request.force,
                     &token,
+                    request.proxy_url.as_deref(),
                 )
                 .map_err(error_of)?;
             CString::new(
@@ -431,8 +442,17 @@ pub extern "C" fn vasr_generate(
             engine_of(engine)?;
             let request: GenerationRequest = serde_json::from_str(arg_str(request_json)?)
                 .map_err(|_| (VASR_JSON, "invalid generation request".into()))?;
-            let profiles = aiapi_llm::profiles::LlmProfiles::from_toml(&request.profiles_toml)
+            if !request.network_error.is_empty() {
+                return Err((VASR_UNSUPPORTED, request.network_error));
+            }
+            let mut profiles = aiapi_llm::profiles::LlmProfiles::from_toml(&request.profiles_toml)
                 .map_err(|_| (VASR_JSON, "invalid LLM profiles".into()))?;
+            let proxy = request.proxy_url.filter(|value| !value.trim().is_empty());
+            if proxy.is_some() {
+                for provider in profiles.providers.values_mut() {
+                    provider.egress = aiapi_llm::profiles::Egress::Proxy;
+                }
+            }
             let max_tokens = match request.max_tokens {
                 Some(0) => return Err((VASR_RANGE, "max_tokens must be greater than zero".into())),
                 Some(tokens) => tokens,
@@ -451,7 +471,8 @@ pub extern "C" fn vasr_generate(
             } else {
                 cancel_of(cancel)?.inner.clone()
             };
-            let core = aiapi_config::CoreConfig::new(explicit_secrets(&request.secrets));
+            let mut core = aiapi_config::CoreConfig::new(explicit_secrets(&request.secrets));
+            core.llm_proxy_url = proxy;
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
