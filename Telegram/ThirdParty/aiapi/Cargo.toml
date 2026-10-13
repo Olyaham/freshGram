@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/aiapi-types",
+    "crates/aiapi-config",
+    "crates/aiapi-asr",
+    "crates/aiapi-http",
+    "crates/aiapi-llm",
+]
+
+[workspace.package]
+authors = ["Mar2ianen", "Olyaham"]
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/Olyaham/AiApi-rs"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"

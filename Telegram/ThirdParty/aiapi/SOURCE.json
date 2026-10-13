@@ -1,0 +1,32 @@
+{
+  "files": {
+    ".gitignore": "9cc2c8cc102e0b2a0a177c8f594abc9b9776300a04473c24b45d52c1007a4119",
+    "ATTRIBUTION.md": "d3942f9bdf3c833a3ac1eb19d986242802a9d808d67b03f4495433ac31c37974",
+    "Cargo.toml": "fec098458f9bc5b94d986f43fe9b3feb7f0e6d776b1cfafc43c686382cbc014d",
+    "LICENSE-MIT": "0aad8888a4b061954d18eebdbf22ac1e4d5f73edc5db50c9c63bf69dbfb159ab",
+    "README.md": "3b568588682715651b89782f44ad5b3bb7e70aab6764fbf751a379f6bdc1d0a8",
+    "crates/aiapi-asr/Cargo.toml": "774f01200bbd31369457144882e9af781fdd18d059dae48bdf8dca7f84ca288f",
+    "crates/aiapi-asr/src/asr.rs": "c0a267ff1de1dbb3f7b36f9a8444944bd44474cc486a10682b65a879d31f011d",
+    "crates/aiapi-asr/src/custom.rs": "a37038e621449b2fef6da285147a0888b22e1d5235428b761b1a3c0ba481341c",
+    "crates/aiapi-asr/src/gemini.rs": "cec10ff063c4f0a453b7690d56b5fe4f50ddf5f0f293df8a1c734d1a55d3a654",
+    "crates/aiapi-asr/src/lang.rs": "a7ff45c9852037d0d7254c005074ff7ce28397386c0cfe99401699b0614590c7",
+    "crates/aiapi-asr/src/lib.rs": "cad88220fb6c0d814f73a103fd516c25af5940a3e600e500950b19f3c02ba974",
+    "crates/aiapi-asr/src/mime.rs": "1bc141fa8a8ceaf0e4b32eab192f61666e595526c35889b1e63195f43436dbcb",
+    "crates/aiapi-config/Cargo.toml": "673fcb883a27107e25cc124d25f37a739182ce2a2aa28f04f670cc74ae52eb64",
+    "crates/aiapi-config/src/lib.rs": "14bca96f3f24f05de06bdf5eb2eb66b8db0e568c78bbaa8f47be0be189bdf84b",
+    "crates/aiapi-http/Cargo.toml": "a4c60ec791007f00a3755d3cc0d8c154656513cedf62dfe4b772288d3fb5862b",
+    "crates/aiapi-http/src/lib.rs": "ffc20be47e296992e571093b9d5f94e64d0f59c3a72a04902235f057e08e49ac",
+    "crates/aiapi-llm/Cargo.toml": "75a639b3be3b89f9d66dba8296c28ab7d27b1fe729c7ab8b9e7969b7fc591a26",
+    "crates/aiapi-llm/src/discovery.rs": "e8fed488540244a6c6a395d0403d3c30841d97aa2475c6165e1ce1f68cb2e121",
+    "crates/aiapi-llm/src/genai_transport.rs": "1d7b59aaf25d1c6810d7fc364cea1a7da62c849efe4e135cd6a0c89942df4096",
+    "crates/aiapi-llm/src/lib.rs": "9d01c0f0acf6e04aec7a9b9b74643751de7787675d66c1c787ab62b7fdd41d70",
+    "crates/aiapi-llm/src/profiles.rs": "607f3d6936afafc050c1d5cfdb7ddfcf0a211f5b25ccba216aa222cae589aaa4",
+    "crates/aiapi-llm/src/service.rs": "d49ebc640fb7466422da9e96cbd2389ed6221c380d3e030604950293e5b3c3b2",
+    "crates/aiapi-llm/src/types.rs": "27626b92a2f03c8166712758d66ba8dec94fd321aec00ac0e4fb2b22a06f890f",
+    "crates/aiapi-types/Cargo.toml": "62b265a98bca2ff237429551d23f4cce1258e0971481ed20f305a5db873fdbc3",
+    "crates/aiapi-types/src/lib.rs": "d182c43658499acd7dc2b0ddc7edf788f63c1e58a2332b1543915e424952092f",
+    "profiles/llm_profiles.toml.example": "2a0167cbc00438472fbda6667d430a53b9fbcff028c314aac63b5bf358479267"
+  },
+  "project": "AiApi-rs",
+  "source": "https://github.com/Olyaham/AiApi-rs"
+}

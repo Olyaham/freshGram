@@ -18,6 +18,7 @@ struct EngineResult {
 	QString text;
 	QString error;
 	int code = 0;
+	QString details;
 };
 
 class EngineLibrary {
@@ -42,6 +43,8 @@ public:
 		const QString &filename,
 		const QString &mime);
 	void CancelCurrent();
+	[[nodiscard]] EngineResult DiscoverModelsBlocking(const std::string &requestJson);
+	[[nodiscard]] EngineResult GenerateBlocking(const std::string &requestJson);
 
 private:
 	using EngineNew = decltype(&vasr_engine_new);
@@ -52,6 +55,9 @@ private:
 	using Transcribe = decltype(&vasr_transcribe);
 	using TranscriptFree = decltype(&vasr_transcript_free);
 	using TranscriptText = decltype(&vasr_transcript_text);
+	using TranscriptDetails = decltype(&vasr_transcript_details);
+	using JsonCall = decltype(&vasr_models);
+	using StringFree = decltype(&vasr_string_free);
 	using LastCode = decltype(&vasr_last_error_code);
 	using LastMessage = decltype(&vasr_last_error_message);
 
@@ -71,11 +77,18 @@ private:
 	Transcribe _transcribe = nullptr;
 	TranscriptFree _transcriptFree = nullptr;
 	TranscriptText _transcriptText = nullptr;
+	TranscriptDetails _transcriptDetails = nullptr;
+	JsonCall _models = nullptr;
+	JsonCall _generate = nullptr;
+	StringFree _stringFree = nullptr;
 	LastCode _lastCode = nullptr;
 	LastMessage _lastMessage = nullptr;
 
 	void Unload();
 	[[nodiscard]] bool ResolveAll();
+	[[nodiscard]] EngineResult CallJsonBlocking(
+		JsonCall call,
+		const std::string &requestJson);
 
 };
 

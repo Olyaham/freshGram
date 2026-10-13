@@ -16,6 +16,7 @@ struct LocalTranscript {
 	LocalTranscribeStatus status = LocalTranscribeStatus::Failed;
 	QString text; // Empty if there was no speech.
 	QString error;
+	QString details;
 };
 
 } // namespace AyuRecognition

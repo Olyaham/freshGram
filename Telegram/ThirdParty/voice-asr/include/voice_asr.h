@@ -50,6 +50,9 @@ typedef struct VasrJob VasrJob;
 #define VASR_CAP_HIPBLAS 16
 #define VASR_CAP_COREML 32
 #define VASR_CAP_SYCL 64
+#define VASR_CAP_MODELS 128
+#define VASR_CAP_LLM 256
+#define VASR_CAP_PROCESSING 512
 
 uint32_t vasr_abi_version(void);
 uint32_t vasr_capabilities(void);
@@ -103,6 +106,7 @@ const char *vasr_job_error_message(VasrJob *job);
  * may be NULL. Times are milliseconds; -1/NULL on out-of-range index. */
 void vasr_transcript_free(VasrTranscript *transcript);
 const char *vasr_transcript_text(VasrTranscript *transcript);
+const char *vasr_transcript_details(VasrTranscript *transcript);
 const char *vasr_transcript_provider(VasrTranscript *transcript);
 const char *vasr_transcript_model(VasrTranscript *transcript);
 const char *vasr_transcript_request_id(VasrTranscript *transcript);
@@ -110,6 +114,14 @@ int32_t vasr_transcript_segment_count(VasrTranscript *transcript);
 const char *vasr_transcript_segment_text(VasrTranscript *transcript, int32_t index);
 int64_t vasr_transcript_segment_start_ms(VasrTranscript *transcript, int32_t index);
 int64_t vasr_transcript_segment_end_ms(VasrTranscript *transcript, int32_t index);
+
+/* Optional ABI-1 extensions, gated by VASR_CAP_MODELS / VASR_CAP_LLM.
+ * Requests and owned results are JSON; see README for schemas.
+ * Blocking calls; cancellation is nullable. Free each returned string exactly
+ * once with vasr_string_free (NULL is allowed). Engine must remain alive. */
+char *vasr_models(VasrEngine *engine, const char *request_json, VasrCancel *cancel);
+char *vasr_generate(VasrEngine *engine, const char *request_json, VasrCancel *cancel);
+void vasr_string_free(char *value);
 
 /* Sync last-error access (calling thread only). */
 int32_t vasr_last_error_code(void);

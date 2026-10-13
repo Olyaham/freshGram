@@ -9364,6 +9364,17 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_TranscriptionNoEngine" = "Engine library not found.";
 "ayu_TranscriptionCredentials" = "Configure";
 "ayu_TranscriptionSaved" = "Saved.";
+"ayu_TranscriptionFetchModels" = "Refresh models from API";
+"ayu_TranscriptionNoModels" = "The API returned no models. You can enter a model manually.";
+"ayu_TranscriptionModelsCached" = "Refresh failed. Showing the cached model list.";
+"ayu_TranscriptionShadow" = "Second transcription provider";
+"ayu_TranscriptionCleanup" = "Transcript text processing";
+"ayu_TranscriptionCleanupModel" = "Text processing model";
+"ayu_TranscriptionDetails" = "Transcript details";
+"ayu_TranscriptionProcessingSubtitle" = "Cloud transcript processing";
+"ayu_TranscriptionChooseApiModel" = "Choose a model from API";
+"ayu_TranscriptionModelsLoading" = "Loading the model catalog…";
+"ayu_TranscriptionModelLimits" = "Context: {context}; output: {output} tokens";
 "ayu_TranscriptionChats" = "Chats";
 "ayu_TranscriptionSecret" = "Secret chats";
 "ayu_TranscriptionPersonal" = "Private messages";

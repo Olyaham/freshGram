@@ -38,6 +38,7 @@ public:
 
 	struct Entry {
 		QString result;
+		QString backendDetails;
 		bool shown = false;
 		bool failed = false;
 		bool toolong = false;

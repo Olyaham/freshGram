@@ -213,6 +213,7 @@ void Transcribes::loadBackend(
 	entry.local = true;
 	entry.backend = true;
 	entry.result = QString();
+	entry.backendDetails = QString();
 	if (const auto media = item->media()) {
 		if (const auto document = media->document()) {
 			if (document->isVideoMessage()) {
@@ -231,6 +232,7 @@ void Transcribes::loadBackend(
 		auto &entry = i->second;
 		entry.pending = false;
 		if (transcript.status == Status::Done) {
+			entry.backendDetails = transcript.details;
 			entry.result = transcript.text.isEmpty()
 				? tr::ayu_TranscribeNoSpeech(tr::now)
 				: transcript.text;

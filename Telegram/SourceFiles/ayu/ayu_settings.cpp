@@ -814,6 +814,26 @@ void AyuSettings::setTranscriptionCustomKey(const QString &val) {
 	save();
 }
 
+void AyuSettings::setTranscriptionShadowProvider(int val) {
+	if (val != 0 && val != 2 && val != 3 && val != 4) return;
+	if (_transcriptionShadowProvider.current() == val) return;
+	_transcriptionShadowProvider = val;
+	save();
+}
+
+void AyuSettings::setTranscriptionCleanupProvider(int val) {
+	if (val != 0 && val != 2 && val != 3 && val != 4) return;
+	if (_transcriptionCleanupProvider.current() == val) return;
+	_transcriptionCleanupProvider = val;
+	save();
+}
+
+void AyuSettings::setTranscriptionCleanupModel(const QString &val) {
+	if (_transcriptionCleanupModel.current() == val) return;
+	_transcriptionCleanupModel = val;
+	save();
+}
+
 void AyuSettings::setTranscriptionGroqModel(const QString &val) {
 	if (_transcriptionGroqModel.current() == val) return;
 	_transcriptionGroqModel = val;
@@ -1561,6 +1581,9 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"transcriptionGeminiKey", AyuRecognition::SealTranscriptionSecret(s._transcriptionGeminiKey.current(), s._transcriptionGeminiSealed, "freshgram/asr/gemini-key/v1")},
 		{"transcriptionCustomKey", AyuRecognition::SealTranscriptionSecret(s._transcriptionCustomKey.current(), s._transcriptionCustomSealed, "freshgram/asr/custom-key/v1")},
 		{"transcriptionGroqModel", s._transcriptionGroqModel.current()},
+		{"transcriptionShadowProvider", s._transcriptionShadowProvider.current()},
+		{"transcriptionCleanupProvider", s._transcriptionCleanupProvider.current()},
+		{"transcriptionCleanupModel", s._transcriptionCleanupModel.current()},
 		{"transcriptionGeminiModel", s._transcriptionGeminiModel.current()},
 		{"transcriptionCustomBase", s._transcriptionCustomBase.current()},
 		{"transcriptionCustomModel", s._transcriptionCustomModel.current()},
@@ -1717,6 +1740,12 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._transcriptionGeminiKey = QString();
 	s._transcriptionCustomKey = QString();
 	s._transcriptionGroqModel = j.value("transcriptionGroqModel", defaults._transcriptionGroqModel.current());
+	const auto pipelineProvider = [](int value) {
+		return (value == 2 || value == 3 || value == 4) ? value : 0;
+	};
+	s._transcriptionShadowProvider = pipelineProvider(j.value("transcriptionShadowProvider", 0));
+	s._transcriptionCleanupProvider = pipelineProvider(j.value("transcriptionCleanupProvider", 0));
+	s._transcriptionCleanupModel = j.value("transcriptionCleanupModel", defaults._transcriptionCleanupModel.current());
 	s._transcriptionGeminiModel = j.value("transcriptionGeminiModel", defaults._transcriptionGeminiModel.current());
 	s._transcriptionCustomBase = j.value("transcriptionCustomBase", defaults._transcriptionCustomBase.current());
 	s._transcriptionCustomModel = j.value("transcriptionCustomModel", defaults._transcriptionCustomModel.current());

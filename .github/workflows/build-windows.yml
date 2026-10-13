@@ -198,6 +198,10 @@ jobs:
           if (-not (Test-Path $asr)) { throw "Cloud ASR component was not built" }
           New-Item -ItemType Directory -Force portable/voice-asr/cloud | Out-Null
           Copy-Item $asr portable/voice-asr/cloud/voice_asr.dll
+          Copy-Item (Join-Path (Split-Path $asr) 'LICENSE-MIT') portable/voice-asr/cloud/
+          Copy-Item (Join-Path (Split-Path $asr) 'ATTRIBUTION.md') portable/voice-asr/cloud/
+          Copy-Item (Join-Path (Split-Path $asr) 'AiApi-LICENSE-MIT') portable/voice-asr/cloud/
+          Copy-Item (Join-Path (Split-Path $asr) 'AiApi-ATTRIBUTION.md') portable/voice-asr/cloud/
           Compress-Archive -Path portable/* -DestinationPath dist/freshGram-windows-portable.zip -Force
           $hashes = Get-ChildItem dist -File | Where-Object { $_.Name -ne 'SHA256SUMS-windows' } | ForEach-Object {
             "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"

@@ -500,6 +500,66 @@ async fn gemini_custom_prompt_leads_the_input_parts() {
 }
 
 #[tokio::test]
+async fn gemini_incomplete_upload_reference_still_deletes_known_file() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+    let deleted = Arc::new(AtomicBool::new(false));
+    let flag = deleted.clone();
+    let app = Router::new()
+        .route("/upload/v1beta/files", post(gemini_start))
+        .route(
+            "/upload/session",
+            post(|_: axum::body::Bytes| async { Json(json!({"file":{"name":"files/abc"}})) }),
+        )
+        .route(
+            "/v1beta/files/abc",
+            delete(move || {
+                flag.store(true, Ordering::SeqCst);
+                async { StatusCode::OK }
+            }),
+        );
+    let (addr, server) = serve(app).await;
+    let dir = tempfile::TempDir::new().unwrap();
+    let error = Engine::new()
+        .unwrap()
+        .transcribe_async(
+            &gemini_config(addr, AsrProvider::Gemini, None),
+            &test_input(&dir, "a.ogg", None),
+            &CancelToken::new(),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, TranscriptError::Parse(_)));
+    assert!(deleted.load(Ordering::SeqCst));
+    server.abort();
+}
+
+#[tokio::test]
+async fn malformed_segment_timeline_fails_instead_of_becoming_silence() {
+    let (addr, server) = serve(Router::new().route(
+        "/openai/v1/audio/transcriptions",
+        post(|_: axum::body::Bytes| async {
+            Json(json!({"text":"hello","segments":[{"start":4,"end":2,"text":"hello"}]}))
+        }),
+    ))
+    .await;
+    let dir = tempfile::TempDir::new().unwrap();
+    let error = Engine::new()
+        .unwrap()
+        .transcribe_async(
+            &groq_config(addr),
+            &test_input(&dir, "a.ogg", None),
+            &CancelToken::new(),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, TranscriptError::Parse(_)));
+    server.abort();
+}
+
+#[tokio::test]
 async fn gemini_video_note_routes_to_groq_fallback() {
     let groq = Router::new().route("/openai/v1/audio/transcriptions", post(groq_loose));
     let (addr, server) = serve(groq).await;
@@ -577,4 +637,376 @@ async fn local_provider_without_model_path_is_unsupported() {
         .await
         .unwrap_err();
     assert!(matches!(error, TranscriptError::Unsupported(_)));
+}
+
+#[tokio::test]
+async fn shadow_failure_keeps_primary_and_success_preserves_both() {
+    let app = Router::new()
+        .route("/openai/v1/audio/transcriptions", post(groq_loose))
+        .route(
+            "/compat/audio/transcriptions",
+            post(|_: axum::body::Bytes| async { Json(json!({"text":"second transcript"})) }),
+        );
+    let (addr, server) = serve(app).await;
+    let dir = tempfile::TempDir::new().unwrap();
+    let mut config = groq_config(addr);
+    config.shadow = Some(AsrProvider::Custom);
+    let engine = Engine::new().unwrap();
+    let first = engine
+        .process_async(
+            &config,
+            &test_input(&dir, "a.ogg", None),
+            &CancelToken::new(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(first.raw.text, "fallback ok");
+    assert!(first.alternatives.is_empty());
+    config.custom.api_base = format!("http://{addr}/compat");
+    config.custom.model = "custom-asr".into();
+    let both = engine
+        .process_async(
+            &config,
+            &test_input(&dir, "a.ogg", None),
+            &CancelToken::new(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(both.raw.provider, "groq");
+    assert_eq!(both.alternatives[0].text, "second transcript");
+    config.groq.api_key.clear();
+    let salvaged = engine
+        .process_async(
+            &config,
+            &test_input(&dir, "a.ogg", None),
+            &CancelToken::new(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(salvaged.raw.provider, "custom");
+    server.abort();
+}
+
+#[tokio::test]
+async fn cleanup_uses_text_model_and_keeps_raw_and_chapters() {
+    let raw = "hello world ".repeat(40).trim().to_string();
+    let clean = "Hello, world! ".repeat(40).trim().to_string();
+    let asr_text = raw.clone();
+    let clean_text = clean.clone();
+    let app = Router::new()
+        .route("/audio/transcriptions", post(move |_: axum::body::Bytes| {
+            let text = asr_text.clone();
+            async move { Json(json!({"text":text,"segments":[{"start":0,"end":60,"text":text}]})) }
+        }))
+        .route("/chat/completions", post(move |headers: HeaderMap, Json(request): Json<Value>| {
+            let text = clean_text.clone();
+            async move {
+            assert!(!headers.contains_key("authorization"));
+            assert_eq!(request["model"], "text-editor");
+            let content = json!({"mode":"chapters","text":text,"chapters":[{"title":"Speech","start":"0:00","end":"1:00","text":text}],"short_summary":"Hello, world!"}).to_string();
+            Json(json!({"id":"edit-1", "object":"chat.completion", "created":1, "model":"text-editor", "choices":[{"index":0,"message":{"role":"assistant","content":content},"finish_reason":"stop"}]}))
+            }
+        }));
+    let (addr, server) = serve(app).await;
+    let dir = tempfile::TempDir::new().unwrap();
+    let mut config = groq_config(addr);
+    config.provider = AsrProvider::Custom;
+    config.custom.api_base = format!("http://{addr}");
+    config.custom.model = "asr-model".into();
+    config.cleanup = Some(voice_asr::config::CleanupConfig {
+        provider: AsrProvider::Custom,
+        model: "text-editor".into(),
+    });
+    let edited = Engine::new()
+        .unwrap()
+        .process_async(
+            &config,
+            &test_input(&dir, "a.ogg", None),
+            &CancelToken::new(),
+        )
+        .await
+        .unwrap();
+    server.abort();
+    assert_eq!(edited.raw.text, raw);
+    assert_eq!(edited.text(), clean);
+    let structured = edited.clean.as_ref().unwrap();
+    assert_eq!(
+        structured.mode,
+        voice_asr::types::TranscriptRenderMode::Chapters
+    );
+    assert_eq!(structured.chapters.len(), 1);
+    assert_eq!(structured.chapters[0].text, clean);
+    assert_eq!(structured.chapters[0].end_sec, Some(60.0));
+    assert_eq!(structured.short_summary.as_deref(), Some("Hello, world!"));
+    assert_eq!(edited.cleanup_model.as_deref(), Some("text-editor"));
+    assert_eq!(edited.cleanup_provider.as_deref(), Some("custom"));
+    assert_eq!(edited.cleanup_attempts.len(), 1);
+}
+
+#[tokio::test]
+async fn discovered_output_budget_and_validation_retry_reach_cleanup() {
+    use axum::routing::get;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let calls = Arc::new(AtomicUsize::new(0));
+    let count = calls.clone();
+    let app = Router::new()
+        .route("/models", get(|| async { Json(json!({"data":[{"id":"text-editor","context_window":2048,"max_output_tokens":64,"supports_system_prompt":false}]})) }))
+        .route("/audio/transcriptions", post(|_: axum::body::Bytes| async { Json(json!({"text":"hello world"})) }))
+        .route("/chat/completions", post(move |Json(request): Json<Value>| {
+            let attempt = count.fetch_add(1, Ordering::SeqCst);
+            async move {
+                assert_eq!(request["max_tokens"], 64);
+                assert_eq!(request["messages"][0]["role"], "user");
+                let content = if attempt == 0 { "not JSON" } else { "{\"mode\":\"short\",\"text\":\"Hello, world!\",\"chapters\":[]}" };
+                Json(json!({"id":"edit-1", "object":"chat.completion", "created":1, "model":"text-editor", "choices":[{"index":0,"message":{"role":"assistant","content":content},"finish_reason":"stop"}]}))
+            }
+        }));
+    let (addr, server) = serve(app).await;
+    let dir = tempfile::TempDir::new().unwrap();
+    let mut config = groq_config(addr);
+    config.provider = AsrProvider::Custom;
+    config.custom.api_base = format!("http://{addr}");
+    config.custom.model = "asr-model".into();
+    config.cleanup = Some(voice_asr::config::CleanupConfig {
+        provider: AsrProvider::Custom,
+        model: "text-editor".into(),
+    });
+    let edited = Engine::new()
+        .unwrap()
+        .process_async(
+            &config,
+            &test_input(&dir, "a.ogg", None),
+            &CancelToken::new(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(edited.text(), "Hello, world!");
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    assert_eq!(edited.cleanup_attempts[0].outcome, "validation_failed");
+    assert_eq!(edited.cleanup_attempts[1].outcome, "success");
+    server.abort();
+}
+
+#[tokio::test]
+async fn non_speech_marker_keeps_raw_and_skips_text_generation() {
+    let (addr, server) = serve(Router::new().route(
+        "/openai/v1/audio/transcriptions",
+        post(|_: axum::body::Bytes| async { Json(json!({"text":"[silence]"})) }),
+    ))
+    .await;
+    let dir = tempfile::TempDir::new().unwrap();
+    let mut config = groq_config(addr);
+    config.cleanup = Some(voice_asr::config::CleanupConfig {
+        provider: AsrProvider::Groq,
+        model: "text-editor".into(),
+    });
+    let result = Engine::new()
+        .unwrap()
+        .process_async(
+            &config,
+            &test_input(&dir, "a.ogg", None),
+            &CancelToken::new(),
+        )
+        .await
+        .unwrap();
+    assert!(result.no_speech);
+    assert_eq!(result.text(), "");
+    assert_eq!(result.raw.text, "[silence]");
+    assert!(result.cleanup_attempts.is_empty());
+    server.abort();
+}
+
+#[tokio::test]
+async fn failed_cleanup_preserves_raw_text_and_failed_attempt_audit() {
+    let app = Router::new()
+        .route(
+            "/audio/transcriptions",
+            post(|_: axum::body::Bytes| async { Json(json!({"text":"keep this raw text"})) }),
+        )
+        .route(
+            "/chat/completions",
+            post(|| async { (StatusCode::UNAUTHORIZED, "private API failure") }),
+        );
+    let (addr, server) = serve(app).await;
+    let dir = tempfile::TempDir::new().unwrap();
+    let config = AsrConfig {
+        provider: AsrProvider::Custom,
+        fallback: None,
+        custom: CustomAsrConfig {
+            api_base: format!("http://{addr}"),
+            model: "asr-model".into(),
+            ..Default::default()
+        },
+        cleanup: Some(voice_asr::config::CleanupConfig {
+            provider: AsrProvider::Custom,
+            model: "text-editor".into(),
+        }),
+        ..Default::default()
+    };
+    let result = Engine::new()
+        .unwrap()
+        .process_async(
+            &config,
+            &test_input(&dir, "a.ogg", None),
+            &CancelToken::new(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(result.text(), "keep this raw text");
+    assert_eq!(result.cleanup_provider.as_deref(), Some("raw_asr_fallback"));
+    assert_eq!(result.cleanup_attempts.len(), 1);
+    assert_eq!(result.cleanup_attempts[0].outcome, "http_401");
+    assert!(
+        !serde_json::to_string(&result)
+            .unwrap()
+            .contains("private API failure")
+    );
+    server.abort();
+}
+
+#[tokio::test]
+async fn explicitly_incompatible_cleanup_model_does_not_receive_transcript() {
+    use axum::routing::get;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+    let generated = Arc::new(AtomicBool::new(false));
+    let flag = generated.clone();
+    let app = Router::new()
+        .route(
+            "/models",
+            get(|| async {
+                Json(
+                    json!({"data":[{"id":"embedding-model","supports_text_generation":false},
+                    {"id":"speech-model","modalities":{"input":["audio"],"output":["text"]}}]}),
+                )
+            }),
+        )
+        .route(
+            "/audio/transcriptions",
+            post(|_: axum::body::Bytes| async { Json(json!({"text":"keep this raw text"})) }),
+        )
+        .route(
+            "/chat/completions",
+            post(move || {
+                flag.store(true, Ordering::SeqCst);
+                async { StatusCode::INTERNAL_SERVER_ERROR }
+            }),
+        );
+    let (addr, server) = serve(app).await;
+    let dir = tempfile::TempDir::new().unwrap();
+    let mut config = AsrConfig {
+        provider: AsrProvider::Custom,
+        fallback: None,
+        custom: CustomAsrConfig {
+            api_base: format!("http://{addr}"),
+            model: "asr-model".into(),
+            ..Default::default()
+        },
+        cleanup: Some(voice_asr::config::CleanupConfig {
+            provider: AsrProvider::Custom,
+            model: "embedding-model".into(),
+        }),
+        ..Default::default()
+    };
+    for model in ["embedding-model", "speech-model"] {
+        config.cleanup.as_mut().unwrap().model = model.into();
+        let result = Engine::new()
+            .unwrap()
+            .process_async(
+                &config,
+                &test_input(&dir, "a.ogg", None),
+                &CancelToken::new(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.text(), "keep this raw text");
+        assert_eq!(result.cleanup_provider.as_deref(), Some("raw_asr_fallback"));
+        assert!(!generated.load(Ordering::SeqCst));
+    }
+    server.abort();
+}
+
+#[tokio::test]
+async fn cancellation_interrupts_automatic_cleanup_discovery() {
+    use axum::routing::get;
+    use std::sync::Arc;
+    let started = Arc::new(tokio::sync::Notify::new());
+    let signal = started.clone();
+    let app = Router::new()
+        .route(
+            "/models",
+            get(move || {
+                signal.notify_one();
+                async { std::future::pending::<StatusCode>().await }
+            }),
+        )
+        .route(
+            "/audio/transcriptions",
+            post(|_: axum::body::Bytes| async { Json(json!({"text":"hello world"})) }),
+        );
+    let (addr, server) = serve(app).await;
+    let dir = tempfile::TempDir::new().unwrap();
+    let config = AsrConfig {
+        provider: AsrProvider::Custom,
+        fallback: None,
+        custom: CustomAsrConfig {
+            api_base: format!("http://{addr}"),
+            model: "asr-model".into(),
+            ..Default::default()
+        },
+        cleanup: Some(voice_asr::config::CleanupConfig {
+            provider: AsrProvider::Custom,
+            model: "text-editor".into(),
+        }),
+        ..Default::default()
+    };
+    let cancel = CancelToken::new();
+    let token = cancel.clone();
+    let task = tokio::spawn(async move {
+        Engine::new()
+            .unwrap()
+            .process_async(&config, &test_input(&dir, "a.ogg", None), &token)
+            .await
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(2), started.notified())
+        .await
+        .unwrap();
+    cancel.cancel();
+    let error = tokio::time::timeout(std::time::Duration::from_secs(1), task)
+        .await
+        .unwrap()
+        .unwrap()
+        .err()
+        .expect("cancelled processing must return an error");
+    assert!(matches!(error, TranscriptError::Cancelled));
+    server.abort();
+}
+
+#[tokio::test]
+async fn invalid_cleanup_configuration_does_not_lose_recognition() {
+    let (addr, server) =
+        serve(Router::new().route("/openai/v1/audio/transcriptions", post(groq_loose))).await;
+    let dir = tempfile::TempDir::new().unwrap();
+    let mut config = groq_config(addr);
+    config.cleanup = Some(voice_asr::config::CleanupConfig {
+        provider: AsrProvider::Groq,
+        model: String::new(),
+    });
+    let result = Engine::new()
+        .unwrap()
+        .process_async(
+            &config,
+            &test_input(&dir, "a.ogg", None),
+            &CancelToken::new(),
+        )
+        .await
+        .unwrap();
+    server.abort();
+    assert_eq!(result.text(), "fallback ok");
+    assert!(result.clean.is_none());
 }

@@ -1,0 +1,50 @@
+# Minimal LLM topology example for AiApi-rs hosts.
+# No API keys here: api_key_env names the required environment variable
+# (or a SecretStore override). Hosts keep their own full files.
+# Limits below are sample configuration, not discovered model metadata.
+
+[providers.groq]
+driver = "openai_compatible"
+adapter = "groq"
+egress = "direct"
+base_url = "https://api.groq.com/openai/v1"
+api_key_env = "GROQ_API_KEY"
+
+[providers.gemini]
+driver = "gemini"
+adapter = "gemini"
+egress = "direct"
+base_url = "https://generativelanguage.googleapis.com/v1beta"
+api_key_env = "GEMINI_API_KEY"
+
+[models.gemini_flash]
+provider = "gemini"
+model = "gemini-3.5-flash"
+
+[models.gemini_flash.capabilities]
+supports_images = false
+supports_tools = false
+supports_system_prompt = true
+structured_output = "prompt_only"
+context_window_tokens = 1000000
+max_output_tokens = 8192
+request_timeout_sec = 60
+thinking = "level_low"
+
+[models.groq_clean]
+provider = "groq"
+model = "llama-3.3-70b-versatile"
+
+[models.groq_clean.capabilities]
+supports_images = false
+supports_tools = false
+supports_system_prompt = true
+structured_output = "json_object"
+context_window_tokens = 32768
+max_output_tokens = 4096
+request_timeout_sec = 60
+thinking = "none"
+
+[routes.text]
+models = ["gemini_flash", "groq_clean"]
+fallback_on_validation_failure = true

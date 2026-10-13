@@ -96,6 +96,11 @@ TranscriptionConfig CurrentTranscriptionConfig(EngineProvider engine) {
 	config.customKey = settings.transcriptionCustomKey();
 	config.language = settings.transcriptionLanguage();
 	config.prompt = settings.transcriptionPrompt();
+	if (engine != EngineProvider::WhisperLocal) {
+		config.shadow = static_cast<EngineProvider>(settings.transcriptionShadowProvider());
+		config.cleanupProvider = static_cast<EngineProvider>(settings.transcriptionCleanupProvider());
+		config.cleanupModel = settings.transcriptionCleanupModel();
+	}
 	config.localModel = SelectedWhisperModelPath();
 	config.threads = std::clamp(QThread::idealThreadCount() / 2, 1, 8);
 	config.useGpu = settings.transcriptionLocalUseGpu();
@@ -138,6 +143,11 @@ void StartBackend(const std::shared_ptr<BackendJob> &job) {
 				return BackendFailure(u"Install or select a compatible ASR module in Settings."_q);
 			}
 			auto path = originalPath;
+			if ((job->config.shadow != EngineProvider::Telegram
+				|| job->config.cleanupProvider != EngineProvider::Telegram)
+				&& !(job->library->Capabilities() & VASR_CAP_PROCESSING)) {
+				return BackendFailure(u"Update the ASR module to use transcript processing."_q);
+			}
 			if (path.isEmpty() || !QFileInfo::exists(path)) {
 				path = temp.filePath(u"input"_q);
 				auto input = QFile(path);
@@ -169,7 +179,7 @@ void StartBackend(const std::shared_ptr<BackendJob> &job) {
 			} else if (!result.ok) {
 				return BackendFailure(DescribeEngineError(result.code, result.error));
 			}
-			return { .status = LocalTranscribeStatus::Done, .text = result.text };
+			return { .status = LocalTranscribeStatus::Done, .text = result.text, .details = result.details };
 		};
 		const auto transcript = run();
 		crl::on_main([=] {

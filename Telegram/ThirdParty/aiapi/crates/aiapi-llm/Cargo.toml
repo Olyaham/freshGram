@@ -1,0 +1,27 @@
+[package]
+name = "aiapi-llm"
+authors.workspace = true
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+aiapi-types = { path = "../aiapi-types" }
+aiapi-config = { path = "../aiapi-config" }
+aiapi-http = { path = "../aiapi-http" }
+anyhow = "1"
+genai = { version = "=0.6.5", default-features = false, features = ["native-tls"] }
+reqwest = "0.13"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+toml = "0.8"
+tracing = "0.1"
+
+[dev-dependencies]
+axum = "0.8"
+tempfile = "3"

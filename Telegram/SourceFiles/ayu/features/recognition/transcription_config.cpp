@@ -6,6 +6,8 @@
 #include <QtCore/QDataStream>
 #include <QtCore/QDir>
 #include <QtCore/QFile>
+#include <QtCore/QJsonDocument>
+#include <QtCore/QJsonObject>
 #include <QtCore/QtEndian>
 
 #include <atomic>
@@ -104,8 +106,46 @@ std::string BuildVoiceAsrConfigJson(const TranscriptionConfig &config) {
 	WriteJsonString(json, config.localModel);
 	json += ",\"n_threads\":";
 	json += std::to_string(config.threads);
-	json += config.useGpu ? ",\"use_gpu\":true}}" : ",\"use_gpu\":false}}";
+	json += config.useGpu ? ",\"use_gpu\":true}" : ",\"use_gpu\":false}";
+	if (config.shadow != EngineProvider::Telegram) {
+		json += ",\"shadow\":\"";
+		json += ProviderName(config.shadow);
+		json += '"';
+	}
+	if (config.cleanupProvider != EngineProvider::Telegram) {
+		json += ",\"cleanup\":{\"provider\":\"";
+		json += ProviderName(config.cleanupProvider);
+		json += "\",\"model\":";
+		WriteJsonString(json, config.cleanupModel);
+		json += '}';
+	}
+	json += '}';
 	return json;
+}
+
+std::string BuildModelDiscoveryJson(
+		const TranscriptionConfig &config,
+		bool force) {
+	const auto gemini = config.provider == EngineProvider::Gemini;
+	const auto custom = config.provider == EngineProvider::Custom;
+	const auto key = gemini ? config.geminiKey
+		: custom ? config.customKey : config.groqKey;
+	const auto base = gemini ? QString::fromUtf8(kGeminiBase)
+		: custom ? config.customBase : QString::fromUtf8(kGroqBase);
+	return QJsonDocument(QJsonObject{
+		{ u"options"_q, QJsonObject{
+			{ u"provider"_q, QString::fromUtf8(ProviderName(config.provider)) },
+			{ u"protocol"_q, gemini ? u"gemini"_q : u"openai_compatible"_q },
+			{ u"base_url"_q, base },
+			{ u"secret_name"_q, key.isEmpty() ? QJsonValue() : QJsonValue(u"API_KEY"_q) },
+			{ u"metadata_url"_q, custom ? QJsonValue()
+				: QJsonValue(u"https://models.dev/api.json"_q) },
+			{ u"metadata_provider"_q, custom ? QJsonValue()
+				: QJsonValue(gemini ? u"google"_q : u"groq"_q) },
+		} },
+		{ u"secrets"_q, QJsonObject{ { u"API_KEY"_q, key } } },
+		{ u"force"_q, force },
+	}).toJson(QJsonDocument::Compact).toStdString();
 }
 
 QString DescribeEngineError(int code, const QString &detail) {

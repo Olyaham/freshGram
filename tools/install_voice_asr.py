@@ -19,6 +19,7 @@ def main():
     parser.add_argument("--cargo", default="cargo")
     parser.add_argument("--profile", choices=("dev", "release"), default="dev")
     args = parser.parse_args()
+    subprocess.run([sys.executable, str(Path(__file__).with_name("sync_aiapi.py")), "--check"], check=True)
     crate = Path(__file__).resolve().parents[1] / "Telegram/ThirdParty/voice-asr"
     feature = "local" if args.flavor == "local" else f"local-{args.flavor}"
     targets = list(dict.fromkeys(args.target)) or [None]
@@ -47,6 +48,9 @@ def main():
         os.replace(temporary, output)
     finally:
         Path(temporary).unlink(missing_ok=True)
+    for root, prefix in ((crate, ""), (crate.parent / "aiapi", "AiApi-")):
+        for notice in ("LICENSE-MIT", "ATTRIBUTION.md"):
+            shutil.copy2(root / notice, args.destination / (prefix + notice))
     print(output)
 
 

@@ -172,6 +172,17 @@
 "ayu_TranscriptionNoEngine" = "Библиотека движка не найдена.";
 "ayu_TranscriptionCredentials" = "Настроить";
 "ayu_TranscriptionSaved" = "Сохранено.";
+"ayu_TranscriptionFetchModels" = "Обновить модели с API";
+"ayu_TranscriptionNoModels" = "API не вернул моделей. Можно ввести модель вручную.";
+"ayu_TranscriptionModelsCached" = "Обновить список не удалось. Показаны модели из кэша.";
+"ayu_TranscriptionShadow" = "Второй провайдер распознавания";
+"ayu_TranscriptionCleanup" = "Обработка текста расшифровки";
+"ayu_TranscriptionCleanupModel" = "Модель обработки текста";
+"ayu_TranscriptionDetails" = "Подробности расшифровки";
+"ayu_TranscriptionProcessingSubtitle" = "Обработка облачных расшифровок";
+"ayu_TranscriptionChooseApiModel" = "Выбрать модель из API";
+"ayu_TranscriptionModelsLoading" = "Загрузка каталога моделей…";
+"ayu_TranscriptionModelLimits" = "Контекст: {context}; ответ: {output} токенов";
 "ayu_TranscriptionChats" = "Чаты";
 "ayu_TranscriptionSecret" = "Секретные чаты";
 "ayu_TranscriptionPersonal" = "Личные сообщения";

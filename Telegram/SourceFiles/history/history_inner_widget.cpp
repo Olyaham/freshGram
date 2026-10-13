@@ -3770,6 +3770,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 				}
 			}
 		}
+		if (item) HistoryView::AddTranscriptDetailsAction(_menu, item, controller);
 		if (!actionText.isEmpty()) {
 			_menu->addAction(
 				actionText,

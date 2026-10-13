@@ -1,30 +1,19 @@
-//! Groq preset profile of the shared OpenAI-compatible transport.
-//!
-//! Flow adapted from NedoBot (`Mar2ianen/NedoBot`, MIT):
-//! `verbose_json` + `timestamp_granularities[]=segment`, request id kept for
-//! diagnostics.
-
-use crate::config::AsrConfig;
-use crate::types::{CancelToken, Transcript, TranscriptError};
-
-use super::{TranscribeInput, TranscriptionProvider, openai_compat::OpenAiCompatTranscriber};
+use super::{TranscribeInput, TranscriptionProvider};
+use crate::config::{AsrConfig, GroqConfig};
+use crate::types::{CancelToken, Transcript, TranscriptError, map_transcript_error};
 
 pub struct GroqProvider {
-    inner: OpenAiCompatTranscriber,
+    cfg: GroqConfig,
+    language: String,
+    client: reqwest::Client,
 }
 
 impl GroqProvider {
     pub fn new(cfg: &AsrConfig, client: reqwest::Client) -> Self {
         Self {
-            inner: OpenAiCompatTranscriber {
-                api_base: cfg.groq.api_base.clone(),
-                api_key: cfg.groq.api_key.clone(),
-                model: cfg.groq.model.clone(),
-                temperature: cfg.groq.temperature,
-                language: cfg.language.clone(),
-                timeout_secs: cfg.groq.timeout_secs,
-                client,
-            },
+            cfg: cfg.groq.clone(),
+            language: cfg.language.clone(),
+            client,
         }
     }
 }
@@ -40,17 +29,25 @@ impl TranscriptionProvider for GroqProvider {
         cancel: &CancelToken,
     ) -> Result<Transcript, TranscriptError> {
         cancel.check()?;
-        if self.inner.api_key.trim().is_empty() {
+        if self.cfg.api_key.trim().is_empty() {
             return Err(TranscriptError::Unsupported("groq api key is empty".into()));
         }
-        let out = self.inner.transcribe(input, cancel).await?;
-        Ok(Transcript {
-            // Labeled by `Engine` from the registry; see `Provider::name`.
-            provider: String::new(),
-            model: out.model,
-            request_id: out.request_id,
-            text: out.text,
-            segments: out.segments,
-        })
+        aiapi_asr::custom::transcribe_custom_audio(
+            &self.client,
+            aiapi_asr::custom::CustomRequest {
+                api_base: &self.cfg.api_base,
+                api_key: &self.cfg.api_key,
+                model: &self.cfg.model,
+                temperature: self.cfg.temperature,
+                language: &self.language,
+                timeout_secs: self.cfg.timeout_secs,
+                path: &input.audio_path,
+                filename: &input.filename,
+                mime_type: input.mime.as_deref(),
+            },
+            cancel,
+        )
+        .await
+        .map_err(map_transcript_error)
     }
 }

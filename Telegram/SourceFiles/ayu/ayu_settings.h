@@ -335,6 +335,12 @@ public:
 	[[nodiscard]] const QString &transcriptionEnginePath() const { return _transcriptionEnginePath.current(); }
 	[[nodiscard]] const QString &transcriptionLocalEnginePath() const { return _transcriptionLocalEnginePath.current(); }
 	[[nodiscard]] bool transcriptionLocalUseGpu() const { return _transcriptionLocalUseGpu.current(); }
+	[[nodiscard]] int transcriptionShadowProvider() const { return _transcriptionShadowProvider.current(); }
+	[[nodiscard]] int transcriptionCleanupProvider() const { return _transcriptionCleanupProvider.current(); }
+	[[nodiscard]] const QString &transcriptionCleanupModel() const { return _transcriptionCleanupModel.current(); }
+	[[nodiscard]] rpl::producer<QString> transcriptionCleanupModelValue() const { return _transcriptionCleanupModel.value(); }
+	[[nodiscard]] rpl::producer<int> transcriptionShadowProviderValue() const { return _transcriptionShadowProvider.value(); }
+	[[nodiscard]] rpl::producer<int> transcriptionCleanupProviderValue() const { return _transcriptionCleanupProvider.value(); }
 	[[nodiscard]] const QString &ocrLanguages() const { return _ocrLanguages.current(); }
 	[[nodiscard]] int maxEditRevisions() const { return _maxEditRevisions.current(); }
 	[[nodiscard]] int deletedRestoreLimit() const { return _deletedRestoreLimit.current(); }
@@ -484,6 +490,9 @@ public:
 	void setTranscriptionEnginePath(const QString &val);
 	void setTranscriptionLocalEnginePath(const QString &val);
 	void setTranscriptionLocalUseGpu(bool val);
+	void setTranscriptionShadowProvider(int val);
+	void setTranscriptionCleanupProvider(int val);
+	void setTranscriptionCleanupModel(const QString &val);
 	void setOcrLanguages(const QString &val);
 	void setMaxEditRevisions(int val);
 	void setDeletedRestoreLimit(int val);
@@ -914,6 +923,9 @@ private:
 	rpl::variable<QString> _transcriptionEnginePath;
 	rpl::variable<QString> _transcriptionLocalEnginePath;
 	rpl::variable<bool> _transcriptionLocalUseGpu = true;
+	rpl::variable<int> _transcriptionShadowProvider = 0;
+	rpl::variable<int> _transcriptionCleanupProvider = 0;
+	rpl::variable<QString> _transcriptionCleanupModel;
 	rpl::variable<bool> _adaptiveCoverColor = true;
 	rpl::variable<bool> _improveLinkPreviews = false;
 	rpl::variable<bool> _crashReporting = true;

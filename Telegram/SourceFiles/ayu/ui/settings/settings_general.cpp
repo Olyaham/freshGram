@@ -44,6 +44,9 @@
 #include "window/window_session_controller.h"
 
 #include <QtCore/QRegularExpression>
+#include <QtCore/QJsonArray>
+#include <QtCore/QJsonDocument>
+#include <QtCore/QJsonObject>
 
 #include <QtCore/QFile>
 #include <QtCore/QDir>
@@ -141,6 +144,147 @@ void BuildTranslator(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	if (button) {
 		ayu.addBetaBadge(button);
 	}
+}
+
+void AddModelDiscovery(
+		not_null<Ui::GenericBox*> box,
+		not_null<Ui::InputField*> field,
+		Fn<AyuRecognition::TranscriptionConfig()> readConfig,
+		bool textGeneration = false) {
+	struct State {
+		std::shared_ptr<AyuRecognition::EngineLibrary> active;
+		std::string request;
+		bool showWhenReady = false;
+		bool closed = false;
+	};
+	const auto state = std::make_shared<State>();
+	const auto weak = base::make_weak(box.get());
+	const auto cancel = [=] {
+		state->closed = true;
+		if (state->active) state->active->CancelCurrent();
+	};
+	box->lifetime().add(cancel);
+	box->boxClosing() | rpl::on_next(cancel, box->lifetime());
+	const auto load = [=](bool force, bool show) {
+		if (state->closed) {
+			return;
+		}
+		const auto config = readConfig();
+		const auto request = AyuRecognition::BuildModelDiscoveryJson(config, false);
+		if (state->active) {
+			if (!force && request == state->request) {
+				state->showWhenReady = state->showWhenReady || show;
+			} else {
+				state->active->CancelCurrent();
+			}
+			return;
+		}
+		const auto engine = std::make_shared<AyuRecognition::EngineLibrary>();
+		state->active = engine;
+		state->request = request;
+		state->showWhenReady = show;
+		if (show) {
+			Ui::Toast::Show(tr::ayu_TranscriptionModelsLoading(tr::now));
+		}
+		crl::async([=] {
+			auto result = AyuRecognition::EngineResult();
+			if (engine->Load(config.enginePath)) {
+				result = engine->DiscoverModelsBlocking(
+					AyuRecognition::BuildModelDiscoveryJson(config, force));
+			} else {
+				result.code = -1;
+			}
+			crl::on_main([=] {
+				if (!weak || state->closed) {
+					return;
+				}
+				state->active.reset();
+				const auto show = base::take(state->showWhenReady);
+				if (!show || request != AyuRecognition::BuildModelDiscoveryJson(readConfig(), false)) {
+					return;
+				}
+				if (!result.ok) {
+					Ui::Toast::Show(result.code == -1
+						? tr::ayu_TranscriptionNoEngine(tr::now)
+						: AyuRecognition::DescribeEngineError(result.code, result.error));
+					return;
+				}
+				const auto catalog = QJsonDocument::fromJson(result.text.toUtf8()).object();
+				auto models = std::vector<QString>();
+				auto labels = std::vector<QString>();
+				for (const auto model : catalog.value(u"models"_q).toArray()) {
+					const auto object = model.toObject();
+					const auto id = object.value(u"id"_q).toString();
+					const auto metadata = object.value(u"metadata"_q).toObject();
+					const auto supports = metadata.value(textGeneration
+						? u"supports_text_generation"_q : u"supports_transcription"_q);
+					const auto input = metadata.value(u"input"_q);
+					const auto output = metadata.value(u"output"_q);
+					if (id.isEmpty() || (supports.isBool() && !supports.toBool())
+						|| (output.isArray() && !output.toArray().contains(u"text"_q))
+						|| (input.isArray() && !input.toArray().contains(textGeneration
+							? u"text"_q : u"audio"_q))) {
+						continue;
+					}
+					models.push_back(id);
+					auto label = id;
+					const auto context = metadata.value(u"context_tokens"_q).toInteger();
+					const auto limit = metadata.value(u"output_tokens"_q).toInteger();
+					if (context > 0 || limit > 0) {
+						label += u"\n"_q + tr::ayu_TranscriptionModelLimits(
+							tr::now,
+							lt_context,
+							context > 0 ? QString::number(context) : u"?"_q,
+							lt_output,
+							limit > 0 ? QString::number(limit) : u"?"_q);
+					}
+					labels.push_back(std::move(label));
+				}
+				if (models.empty()) {
+					Ui::Toast::Show(tr::ayu_TranscriptionNoModels(tr::now));
+					return;
+				}
+				if (catalog.value(u"stale"_q).toBool()) {
+					Ui::Toast::Show(tr::ayu_TranscriptionModelsCached(tr::now));
+				}
+				const auto selected = ranges::find(models, field->getLastText().trimmed());
+				const auto index = selected == end(models) ? -1 : int(selected - begin(models));
+				box->getDelegate()->show(Box([=](not_null<Ui::GenericBox*> choose) {
+					SingleChoiceBox(choose, {
+						.title = tr::ayu_TranscriptionModel(),
+						.options = labels,
+						.initialSelection = index,
+						.callback = crl::guard(box, [=](int chosen) {
+							if (!state->closed) {
+								field->setTextWithTags({ .text = models[chosen] });
+							}
+						}),
+					});
+				}));
+			});
+		});
+	};
+	const auto choose = box->addRow(object_ptr<Ui::RoundButton>(
+		box->verticalLayout(),
+		tr::ayu_TranscriptionChooseApiModel(),
+		st::defaultLightButton), st::boxRowPadding);
+	choose->addClickHandler([=] { load(false, true); });
+	const auto refresh = box->addRow(object_ptr<Ui::RoundButton>(
+		box->verticalLayout(),
+		tr::ayu_TranscriptionFetchModels(),
+		st::defaultLightButton), st::boxRowPadding);
+	refresh->addClickHandler([=] { load(true, true); });
+	crl::on_main(crl::guard(box, [=] {
+		const auto config = readConfig();
+		const auto ready = config.provider == AyuRecognition::EngineProvider::Custom
+			? !config.customBase.trimmed().isEmpty()
+			: config.provider == AyuRecognition::EngineProvider::Gemini
+			? !config.geminiKey.trimmed().isEmpty()
+			: !config.groqKey.trimmed().isEmpty();
+		if (ready) {
+			load(false, false);
+		}
+	}));
 }
 
 void FillTranscriptionCredentialsBox(
@@ -275,6 +419,9 @@ void FillTranscriptionCredentialsBox(
 		}
 		return true;
 	};
+	if (!local) {
+		AddModelDiscovery(box, groqModel ? groqModel : geminiModel ? geminiModel : customModel, readConfig);
+	}
 	const auto save = [=] {
 		if (!validate(readConfig(), false)) {
 			return false;
@@ -339,8 +486,10 @@ void FillTranscriptionCredentialsBox(
 				testing->active->CancelCurrent();
 				return;
 			}
-			const auto config = readConfig();
+			auto config = readConfig();
 			if (!validate(config, true)) return;
+			config.shadow = AyuRecognition::EngineProvider::Telegram;
+			config.cleanupProvider = AyuRecognition::EngineProvider::Telegram;
 			const auto engine = std::make_shared<AyuRecognition::EngineLibrary>();
 			testing->active = engine;
 			Ui::Toast::Show(tr::ayu_TranscriptionTesting(tr::now));
@@ -395,6 +544,79 @@ void FillTranscriptionCredentialsBox(
 		if (save()) box->closeBox();
 	});
 	box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });
+}
+
+void BuildTranscriptProcessing(SectionBuilder &builder) {
+	builder.addSubsectionTitle(tr::ayu_TranscriptionProcessingSubtitle());
+	const auto controller = builder.controller();
+	auto *settings = &AyuSettings::getInstance();
+	const auto values = std::vector<int>{ 0, 2, 3, 4 };
+	const auto labels = std::vector<QString>{
+		tr::ayu_RecognitionOff(tr::now), u"Groq"_q, u"Gemini"_q,
+		tr::ayu_TranscriptionCustom(tr::now),
+	};
+	const auto index = [=](int value) {
+		const auto found = ranges::find(values, value);
+		return found == end(values) ? 0 : int(found - begin(values));
+	};
+	for (const auto cleanup : { false, true }) {
+		builder.addButton({
+			.id = cleanup ? u"ayu/transcriptionCleanup"_q : u"ayu/transcriptionShadow"_q,
+			.title = cleanup ? tr::ayu_TranscriptionCleanup() : tr::ayu_TranscriptionShadow(),
+			.st = &st::settingsButtonNoIcon,
+			.label = (cleanup ? settings->transcriptionCleanupProviderValue()
+				: settings->transcriptionShadowProviderValue())
+				| rpl::map([=](int value) { return labels[index(value)]; }),
+			.onClick = [=] {
+				controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+					SingleChoiceBox(box, {
+						.title = cleanup ? tr::ayu_TranscriptionCleanup() : tr::ayu_TranscriptionShadow(),
+						.options = labels,
+						.initialSelection = index(cleanup ? settings->transcriptionCleanupProvider()
+							: settings->transcriptionShadowProvider()),
+						.callback = [=](int selected) {
+							if (cleanup) settings->setTranscriptionCleanupProvider(values[selected]);
+							else settings->setTranscriptionShadowProvider(values[selected]);
+						},
+					});
+				}));
+			},
+		});
+	}
+	builder.addButton({
+		.id = u"ayu/transcriptionCleanupModel"_q,
+		.title = tr::ayu_TranscriptionCleanupModel(),
+		.st = &st::settingsButtonNoIcon,
+		.label = settings->transcriptionCleanupModelValue(),
+		.onClick = [=] {
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(tr::ayu_TranscriptionCleanupModel());
+				const auto field = box->addRow(object_ptr<Ui::InputField>(
+					box->verticalLayout(), st::defaultInputField,
+					tr::ayu_TranscriptionModel(), settings->transcriptionCleanupModel()),
+					st::boxRowPadding);
+				const auto provider = static_cast<AyuRecognition::EngineProvider>(
+					settings->transcriptionCleanupProvider());
+				if (provider != AyuRecognition::EngineProvider::Telegram) {
+					AddModelDiscovery(box, field, [=] {
+						return AyuRecognition::CurrentTranscriptionConfig(provider);
+					}, true);
+				}
+				box->addButton(tr::lng_settings_save(), [=] {
+					const auto model = field->getLastText().trimmed();
+					if (model.isEmpty()) {
+						field->showError();
+						return;
+					}
+					settings->setTranscriptionCleanupModel(model);
+					box->closeBox();
+				});
+				box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });
+			}));
+		},
+		.shown = settings->transcriptionCleanupProviderValue()
+			| rpl::map([](int value) { return value != 0; }),
+	});
 }
 
 void BuildTranscription(SectionBuilder &builder) {
@@ -595,6 +817,7 @@ void BuildTranscription(SectionBuilder &builder) {
 					});
 			}),
 	});
+	BuildTranscriptProcessing(builder);
 }
 
 void BuildTextRecognition(SectionBuilder &builder) {

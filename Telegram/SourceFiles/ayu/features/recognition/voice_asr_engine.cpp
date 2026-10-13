@@ -77,6 +77,19 @@ bool EngineLibrary::ResolveAll() {
 	_transcribe = reinterpret_cast<Transcribe>(_library.resolve("vasr_transcribe"));
 	_transcriptFree = reinterpret_cast<TranscriptFree>(_library.resolve("vasr_transcript_free"));
 	_transcriptText = reinterpret_cast<TranscriptText>(_library.resolve("vasr_transcript_text"));
+	_transcriptDetails = reinterpret_cast<TranscriptDetails>(_library.resolve("vasr_transcript_details"));
+	_models = reinterpret_cast<JsonCall>(_library.resolve("vasr_models"));
+	_generate = reinterpret_cast<JsonCall>(_library.resolve("vasr_generate"));
+	_stringFree = reinterpret_cast<StringFree>(_library.resolve("vasr_string_free"));
+	if ((_capabilities & VASR_CAP_MODELS) && (!_models || !_stringFree)) {
+		return false;
+	}
+	if ((_capabilities & VASR_CAP_LLM) && (!_generate || !_stringFree)) {
+		return false;
+	}
+	if ((_capabilities & VASR_CAP_PROCESSING) && !_transcriptDetails) {
+		return false;
+	}
 	_lastCode = reinterpret_cast<LastCode>(_library.resolve("vasr_last_error_code"));
 	_lastMessage = reinterpret_cast<LastMessage>(_library.resolve("vasr_last_error_message"));
 	return _engineNew
@@ -97,7 +110,9 @@ bool EngineLibrary::Load(const QString &customPath, bool local) {
 			return true;
 		}
 		Unload();
-		_library.setLoadHints(QLibrary::LoadHints());
+		_library.setLoadHints(local
+			? QLibrary::LoadHints()
+			: QLibrary::LoadHints(QLibrary::PreventUnloadHint));
 		_library.setFileName(path);
 		if (!_library.load() || !ResolveAll()) {
 			Unload();
@@ -174,7 +189,53 @@ EngineResult EngineLibrary::TranscribeBlocking(
 	} else {
 		result.ok = true;
 		result.text = QString::fromUtf8(_transcriptText(transcript));
+		if ((_capabilities & VASR_CAP_PROCESSING) && _transcriptDetails) {
+			result.details = QString::fromUtf8(_transcriptDetails(transcript));
+		}
 		_transcriptFree(transcript);
+	}
+	{
+		const auto lock = std::lock_guard(_cancelMutex);
+		_cancelFree(_cancel);
+		_cancel = nullptr;
+	}
+	return result;
+}
+
+EngineResult EngineLibrary::DiscoverModelsBlocking(const std::string &requestJson) {
+	return CallJsonBlocking((_capabilities & VASR_CAP_MODELS) ? _models : nullptr, requestJson);
+}
+
+EngineResult EngineLibrary::GenerateBlocking(const std::string &requestJson) {
+	return CallJsonBlocking((_capabilities & VASR_CAP_LLM) ? _generate : nullptr, requestJson);
+}
+
+EngineResult EngineLibrary::CallJsonBlocking(
+		JsonCall call,
+		const std::string &requestJson) {
+	auto result = EngineResult();
+	if (!IsLoaded() || !call || !_stringFree) {
+		result.code = VASR_UNSUPPORTED;
+		result.error = u"The AI module does not support this operation."_q;
+		return result;
+	}
+	{
+		const auto lock = std::lock_guard(_cancelMutex);
+		_cancel = _cancelNew();
+		if (!_cancel) {
+			result.code = VASR_INTERNAL;
+			return result;
+		}
+		if (_cancelled.load()) _cancelCall(_cancel);
+	}
+	const auto value = call(_engine, requestJson.c_str(), _cancel);
+	if (value) {
+		result.ok = true;
+		result.text = QString::fromUtf8(value);
+		_stringFree(value);
+	} else {
+		result.code = _lastCode();
+		result.error = QString::fromUtf8(_lastMessage());
 	}
 	{
 		const auto lock = std::lock_guard(_cancelMutex);

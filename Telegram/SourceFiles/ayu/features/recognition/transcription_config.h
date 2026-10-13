@@ -31,10 +31,16 @@ struct TranscriptionConfig {
 	QString localModel;
 	int threads = 4;
 	bool useGpu = true;
+	EngineProvider shadow = EngineProvider::Telegram;
+	EngineProvider cleanupProvider = EngineProvider::Telegram;
+	QString cleanupModel;
 };
 
 [[nodiscard]] std::string BuildVoiceAsrConfigJson(
 	const TranscriptionConfig &config);
+[[nodiscard]] std::string BuildModelDiscoveryJson(
+	const TranscriptionConfig &config,
+	bool force);
 [[nodiscard]] QString DescribeEngineError(int code, const QString &detail);
 [[nodiscard]] bool WriteWavFile(
 	const QString &path,

@@ -21,6 +21,11 @@ only — no code was copied from them**, so this crate stays MIT-licensed.
   (transcript/segment shapes), `src/features/voice/download.rs`
   (temp-file + duration/size limit discipline), and the axum mock-server
   test patterns.
+- **AiApi-rs** — Olyaham and Mar2ianen, **MIT**. Safe ASR transports,
+  model inventories, shared types and LLM routing are vendored under
+  `../aiapi`. Preserve its license and `ATTRIBUTION.md` when redistributing.
+  Cleanup logic and its prompt were copied from NedoBot and adapted here,
+  including JSON parsing, length/number checks and chapter timestamps.
 
 ## Ideas only (no code copied; their licenses do not touch this crate)
 

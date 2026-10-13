@@ -25,7 +25,7 @@ use std::sync::{
 use crate::config::AsrConfig;
 use crate::engine::Engine;
 use crate::providers::TranscribeInput;
-use crate::types::{CancelToken, Transcript, TranscriptError};
+use crate::types::{CancelToken, ProcessedTranscript, Transcript, TranscriptError};
 
 // ---------------------------------------------------------------------------
 // Stable error codes (mirrored in voice_asr.h; never renumber).
@@ -68,6 +68,7 @@ pub struct VasrTranscript {
     model: CString,
     request_id: Option<CString>,
     seg_texts: Vec<CString>,
+    details: CString,
 }
 
 /// In-flight async job. The worker thread is joined by `vasr_job_free`.
@@ -104,8 +105,11 @@ pub(crate) fn decode_local(
 }
 
 impl VasrTranscript {
-    fn wrap(transcript: Transcript) -> Self {
-        let text = CString::new(transcript.text.clone()).unwrap_or_default();
+    fn wrap(processed: ProcessedTranscript) -> Self {
+        let text = CString::new(processed.text().replace('\0', "�")).unwrap_or_default();
+        let details =
+            CString::new(serde_json::to_string(&processed).unwrap_or_default()).unwrap_or_default();
+        let transcript = processed.raw;
         let provider = CString::new(transcript.provider.clone()).unwrap_or_default();
         let model = CString::new(transcript.model.clone()).unwrap_or_default();
         let request_id = transcript
@@ -124,6 +128,7 @@ impl VasrTranscript {
             model,
             request_id,
             seg_texts,
+            details,
         }
     }
 }
@@ -251,6 +256,9 @@ pub extern "C" fn vasr_capabilities() -> u32 {
         | (u32::from(cfg!(feature = "local-hipblas")) << 4)
         | (u32::from(cfg!(feature = "local-coreml")) << 5)
         | (u32::from(cfg!(feature = "local-sycl")) << 6)
+        | 128
+        | 256
+        | 512
 }
 
 #[unsafe(no_mangle)]
@@ -342,6 +350,162 @@ pub extern "C" fn vasr_cancel_is_cancelled(token: *mut VasrCancel) -> bool {
 // Synchronous transcription.
 // ---------------------------------------------------------------------------
 
+#[derive(serde::Deserialize)]
+struct DiscoveryRequest {
+    options: aiapi_llm::discovery::DiscoveryOptions,
+    #[serde(default)]
+    secrets: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    force: bool,
+}
+
+#[derive(serde::Deserialize)]
+struct GenerationRequest {
+    profiles_toml: String,
+    route: String,
+    prompt: String,
+    system_prompt: Option<String>,
+    max_tokens: Option<u32>,
+    #[serde(default)]
+    secrets: std::collections::BTreeMap<String, String>,
+}
+
+fn explicit_secrets(
+    values: &std::collections::BTreeMap<String, String>,
+) -> aiapi_config::SecretStore {
+    values.iter().fold(
+        aiapi_config::SecretStore::explicit(),
+        |store, (name, value)| store.with_override(name, value),
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn vasr_models(
+    engine: *mut VasrEngine,
+    request_json: *const c_char,
+    cancel: *mut VasrCancel,
+) -> *mut c_char {
+    guard(ptr::null_mut(), || {
+        let run = || -> Result<CString, (i32, String)> {
+            let handle = engine_of(engine)?;
+            let request: DiscoveryRequest = serde_json::from_str(arg_str(request_json)?)
+                .map_err(|_| (VASR_JSON, "invalid model discovery request".into()))?;
+            let token = if cancel.is_null() {
+                CancelToken::new()
+            } else {
+                cancel_of(cancel)?.inner.clone()
+            };
+            let catalog = handle
+                .inner
+                .discover(
+                    &request.options,
+                    &explicit_secrets(&request.secrets),
+                    request.force,
+                    &token,
+                )
+                .map_err(error_of)?;
+            CString::new(
+                serde_json::to_string(&catalog)
+                    .map_err(|_| (VASR_JSON, "could not serialize model catalog".into()))?,
+            )
+            .map_err(|_| (VASR_JSON, "invalid model catalog".into()))
+        };
+        match run() {
+            Ok(value) => value.into_raw(),
+            Err((code, message)) => {
+                set_error(code, message);
+                ptr::null_mut()
+            }
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn vasr_generate(
+    engine: *mut VasrEngine,
+    request_json: *const c_char,
+    cancel: *mut VasrCancel,
+) -> *mut c_char {
+    guard(ptr::null_mut(), || {
+        let run = || -> Result<CString, (i32, String)> {
+            engine_of(engine)?;
+            let request: GenerationRequest = serde_json::from_str(arg_str(request_json)?)
+                .map_err(|_| (VASR_JSON, "invalid generation request".into()))?;
+            let profiles = aiapi_llm::profiles::LlmProfiles::from_toml(&request.profiles_toml)
+                .map_err(|_| (VASR_JSON, "invalid LLM profiles".into()))?;
+            let max_tokens = match request.max_tokens {
+                Some(0) => return Err((VASR_RANGE, "max_tokens must be greater than zero".into())),
+                Some(tokens) => tokens,
+                None => profiles
+                    .resolve_route(&request.route, &Default::default())
+                    .map_err(|_| (VASR_UNSUPPORTED, "generation route is unavailable".into()))?
+                    .selections
+                    .iter()
+                    .map(|selection| selection.capabilities.max_output_tokens)
+                    .min()
+                    .unwrap_or(4096)
+                    .min(4096),
+            };
+            let token = if cancel.is_null() {
+                CancelToken::new()
+            } else {
+                cancel_of(cancel)?.inner.clone()
+            };
+            let core = aiapi_config::CoreConfig::new(explicit_secrets(&request.secrets));
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|_| (VASR_INTERNAL, "could not create generation runtime".into()))?;
+            let generated = runtime.block_on(async {
+                tokio::select! {
+                    biased;
+                    _ = token.cancelled() => Err(aiapi_types::Cancelled.into()),
+                    generated = aiapi_llm::service::generate_text_checked(&core, &profiles, aiapi_llm::service::GenerateTextOptions {
+                        route: &request.route, system_prompt: request.system_prompt.as_deref(),
+                        prompt: &request.prompt, image_base64: None, temperature: 0.0,
+                        num_predict: max_tokens, output_validator: None, structured_output: None,
+                    }) => generated,
+                }
+            }).map_err(|error| error_of(crate::types::map_transcript_error(error)))?;
+            CString::new(
+                serde_json::to_string(&generated)
+                    .map_err(|_| (VASR_JSON, "could not serialize generation".into()))?,
+            )
+            .map_err(|_| (VASR_JSON, "invalid generation".into()))
+        };
+        match run() {
+            Ok(value) => value.into_raw(),
+            Err((code, message)) => {
+                set_error(code, message);
+                ptr::null_mut()
+            }
+        }
+    })
+}
+
+/// # Safety
+/// Non-null values must be live results from vasr_models or vasr_generate.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn vasr_string_free(value: *mut c_char) {
+    guard((), || {
+        if !value.is_null() {
+            // SAFETY: the header requires the original live owning string pointer.
+            drop(unsafe { CString::from_raw(value) });
+        }
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn vasr_transcript_details(transcript: *mut VasrTranscript) -> *const c_char {
+    guard(ptr::null(), || match transcript_of(transcript) {
+        Ok(value) => value.details.as_ptr(),
+        Err((code, message)) => {
+            set_error(code, message);
+            ptr::null()
+        }
+    })
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn vasr_transcribe(
     engine: *mut VasrEngine,
@@ -356,7 +520,7 @@ pub extern "C" fn vasr_transcribe(
             let handle = engine_of(engine)?;
             let config_text = arg_str(config_json)?;
             let config: AsrConfig = serde_json::from_str(config_text)
-                .map_err(|e| (VASR_JSON, format!("config: {e}")))?;
+                .map_err(|_| (VASR_JSON, "invalid transcription configuration".into()))?;
             let input = TranscribeInput {
                 audio_path: arg_str(audio_path)?.into(),
                 filename: arg_str(filename)?.to_string(),
@@ -367,7 +531,7 @@ pub extern "C" fn vasr_transcribe(
             } else {
                 cancel_of(cancel)?.inner.clone()
             };
-            match handle.inner.transcribe(&config, &input, &token) {
+            match handle.inner.process(&config, &input, &token) {
                 Ok(transcript) => Ok(Box::into_raw(Box::new(VasrTranscript::wrap(transcript)))),
                 Err(error) => Err(error_of(error)),
             }
@@ -553,7 +717,7 @@ pub extern "C" fn vasr_transcribe_async(
             }
             let config_text = arg_str(config_json)?;
             let config: AsrConfig = serde_json::from_str(config_text)
-                .map_err(|e| (VASR_JSON, format!("config: {e}")))?;
+                .map_err(|_| (VASR_JSON, "invalid transcription configuration".into()))?;
             let input = TranscribeInput {
                 audio_path: arg_str(audio_path)?.into(),
                 filename: arg_str(filename)?.to_string(),
@@ -591,7 +755,7 @@ pub extern "C" fn vasr_transcribe_async(
                 // SAFETY: the header contract keeps `engine` alive until the
                 // job is freed; the pointer was validated non-null at spawn.
                 let handle = unsafe { &*target.get() };
-                match handle.inner.transcribe(&config, &input, &token) {
+                match handle.inner.process(&config, &input, &token) {
                     Ok(transcript) => {
                         Some(Box::into_raw(Box::new(VasrTranscript::wrap(transcript))))
                     }

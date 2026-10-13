@@ -8,8 +8,6 @@ mod gemini;
 mod groq;
 #[cfg(feature = "local")]
 mod local;
-mod openai_compat;
-mod transport;
 
 use std::path::PathBuf;
 

@@ -6,6 +6,9 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/history_view_context_menu.h"
+#include <QtCore/QJsonArray>
+#include <QtCore/QJsonDocument>
+#include <QtCore/QJsonObject>
 
 #include "api/api_attached_stickers.h"
 #include "api/api_editing.h"
@@ -69,6 +72,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/boxes/confirm_box.h"
 #include "ui/boxes/show_or_premium_box.h"
 #include "ui/widgets/fields/input_field.h"
+#include "ui/widgets/labels.h"
 #include "ui/power_saving.h"
 #include "boxes/delete_messages_box.h"
 #include "boxes/moderate_messages_box.h"
@@ -1943,6 +1947,7 @@ void FillContextMenuItems(
 
 	AddCopyLinkAction(result, link);
 	AddMessageActions(result, request, list);
+	if (item) AddTranscriptDetailsAction(result, item, list->controller());
 
 	const auto wasAmount = result->actions().size();
 	if (const auto textItem = view ? view->textItem() : item) {
@@ -3090,10 +3095,62 @@ void AddEphemeralAboutAction(
 	menu->addAction(std::move(label));
 }
 
+void AddTranscriptDetailsAction(
+		not_null<Ui::PopupMenu*> menu,
+		not_null<HistoryItem*> item,
+		not_null<Window::SessionController*> controller) {
+	const auto &entry = item->history()->session().api().transcribes().entry(item);
+	if (entry.backendDetails.isEmpty() || entry.pending || entry.failed
+		|| item->forbidsForward()) {
+		return;
+	}
+	const auto json = QJsonDocument::fromJson(entry.backendDetails.toUtf8()).object();
+	const auto describe = [](const QJsonObject &transcript) {
+		return transcript.value(u"provider"_q).toString() + u" / "_q
+			+ transcript.value(u"model"_q).toString() + u"\n\n"_q
+			+ transcript.value(u"text"_q).toString();
+	};
+	auto text = describe(json.value(u"raw"_q).toObject());
+	for (const auto alternative : json.value(u"alternatives"_q).toArray()) {
+		text += u"\n\n───\n\n"_q + describe(alternative.toObject());
+	}
+	const auto clean = json.value(u"clean"_q).toObject();
+	if (!clean.isEmpty()) {
+		text += u"\n\n───\n\n"_q + json.value(u"cleanup_provider"_q).toString()
+			+ u" / "_q + json.value(u"cleanup_model"_q).toString()
+			+ u"\n\n"_q + clean.value(u"text"_q).toString();
+		for (const auto chapter : clean.value(u"chapters"_q).toArray()) {
+			const auto object = chapter.toObject();
+			const auto seconds = std::max(0, int(object.value(u"start_sec"_q).toDouble()));
+			text += u"\n\n%1:%2 — %3\n%4"_q
+				.arg(seconds / 60)
+				.arg(seconds % 60, 2, 10, QChar('0'))
+				.arg(object.value(u"title"_q).toString())
+				.arg(object.value(u"text"_q).toString());
+		}
+		const auto summary = clean.value(u"short_summary"_q).toString();
+		if (!summary.isEmpty()) text += u"\n\n"_q + summary;
+	}
+	const auto id = item->fullId();
+	menu->addAction(tr::ayu_TranscriptionDetails(tr::now), crl::guard(controller, [=] {
+		const auto item = controller->session().data().message(id);
+		if (!item || item->forbidsForward()) return;
+		controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+			box->setTitle(tr::ayu_TranscriptionDetails());
+			const auto label = box->addRow(object_ptr<Ui::FlatLabel>(
+				box->verticalLayout(),
+				text,
+				st::boxLabel), st::boxRowPadding);
+			label->setSelectable(true);
+			box->addButton(tr::lng_close(), [=] { box->closeBox(); });
+		}));
+	}), &st::menuIconInfo);
+}
+
 TextWithEntities TransribedText(not_null<HistoryItem*> item) {
 	const auto media = item->media();
 	const auto document = media ? media->document() : nullptr;
-	if (!document || !document->isVoiceMessage()) {
+	if (!document || (!document->isVoiceMessage() && !document->isVideoMessage())) {
 		return {};
 	}
 	const auto &entry = document->session().api().transcribes().entry(item);

@@ -25,6 +25,8 @@ pub struct AsrConfig {
     pub gemini: GeminiConfig,
     pub custom: CustomAsrConfig,
     pub local: LocalConfig,
+    pub shadow: Option<AsrProvider>,
+    pub cleanup: Option<CleanupConfig>,
 }
 
 impl Default for AsrConfig {
@@ -37,8 +39,60 @@ impl Default for AsrConfig {
             gemini: GeminiConfig::default(),
             custom: CustomAsrConfig::default(),
             local: LocalConfig::default(),
+            shadow: None,
+            cleanup: None,
         }
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CleanupConfig {
+    pub provider: AsrProvider,
+    pub model: String,
+}
+
+pub fn discovery_for(
+    cfg: &AsrConfig,
+    provider: AsrProvider,
+) -> Option<(
+    aiapi_llm::discovery::DiscoveryOptions,
+    aiapi_config::SecretStore,
+)> {
+    use aiapi_llm::discovery::{DiscoveryOptions, DiscoveryProtocol};
+    let (base, key, protocol, metadata_provider) = match provider {
+        AsrProvider::Groq => (
+            &cfg.groq.api_base,
+            &cfg.groq.api_key,
+            DiscoveryProtocol::OpenaiCompatible,
+            (cfg.groq.api_base.trim_end_matches('/') == DEFAULT_GROQ_BASE).then_some("groq"),
+        ),
+        AsrProvider::Gemini => (
+            &cfg.gemini.api_base,
+            &cfg.gemini.api_key,
+            DiscoveryProtocol::Gemini,
+            (cfg.gemini.api_base.trim_end_matches('/') == DEFAULT_GEMINI_BASE).then_some("google"),
+        ),
+        AsrProvider::Custom => (
+            &cfg.custom.api_base,
+            &cfg.custom.api_key,
+            DiscoveryProtocol::OpenaiCompatible,
+            None,
+        ),
+        AsrProvider::Local => return None,
+    };
+    Some((
+        DiscoveryOptions {
+            provider: provider.name().into(),
+            protocol,
+            base_url: base.clone(),
+            secret_name: (!key.trim().is_empty()).then(|| "API_KEY".into()),
+            cache_ttl_secs: 300,
+            overrides: Default::default(),
+            metadata_url: metadata_provider.map(|_| "https://models.dev/api.json".into()),
+            metadata_provider: metadata_provider.map(str::to_string),
+        },
+        aiapi_config::SecretStore::explicit().with_override("API_KEY", key),
+    ))
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

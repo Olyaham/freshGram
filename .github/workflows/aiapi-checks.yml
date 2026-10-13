@@ -1,0 +1,56 @@
+name: AiApi adapter checks
+
+on:
+  push:
+    paths:
+      - 'Telegram/ThirdParty/aiapi/**'
+      - 'Telegram/ThirdParty/voice-asr/**'
+      - 'tools/*voice_asr.py'
+      - 'tools/sync_aiapi.py'
+      - '.github/workflows/aiapi-checks.yml'
+  pull_request:
+    paths:
+      - 'Telegram/ThirdParty/aiapi/**'
+      - 'Telegram/ThirdParty/voice-asr/**'
+      - 'tools/*voice_asr.py'
+      - 'tools/sync_aiapi.py'
+      - '.github/workflows/aiapi-checks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libclang-dev libssl-dev pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            Telegram/ThirdParty/aiapi
+            Telegram/ThirdParty/voice-asr
+      - name: Verify source snapshot
+        run: python3 tools/sync_aiapi.py --check
+      - name: Core checks
+        working-directory: Telegram/ThirdParty/aiapi
+        run: |
+          cargo fmt --all --check
+          cargo test --workspace --all-targets
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo doc --workspace --no-deps
+      - name: Adapter checks
+        working-directory: Telegram/ThirdParty/voice-asr
+        run: |
+          cargo fmt --all --check
+          cargo test --all-targets --no-default-features --locked
+          cargo clippy --all-targets --no-default-features --locked -- -D warnings
+          python3 tests/abi_smoke.py target/debug/deps/libvoice_asr.so
+          cargo check --all-targets --features local --locked
