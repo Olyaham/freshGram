@@ -380,8 +380,6 @@ void BuildWindowTitleSection(SectionBuilder &builder) {
 	// The two frame modes are mutually exclusive: enabling one turns
 	// the other off (setting + silent visual update; each handler's
 	// filter blocks the echoed change, so no loops).
-	const auto framelessWidget = std::make_shared<Ui::Checkbox*>(nullptr);
-	const auto nativeWidget = std::make_shared<Ui::Checkbox*>(nullptr);
 	if (Ui::Platform::NativeWindowFrameSupported()) {
 		const auto nativeFrame = builder.addCheckbox({
 			.id = u"advanced/native_frame"_q,
@@ -392,7 +390,6 @@ void BuildWindowTitleSection(SectionBuilder &builder) {
 			.keywords = { u"frame"_q, u"native"_q, u"window"_q, u"border"_q },
 		});
 		if (nativeFrame) {
-			*nativeWidget = nativeFrame;
 			nativeFrame->checkedChanges(
 			) | rpl::filter([](bool checked) {
 				return (checked != Core::App().settings().nativeWindowFrame());
@@ -401,12 +398,13 @@ void BuildWindowTitleSection(SectionBuilder &builder) {
 				Core::App().saveSettingsDelayed();
 				if (checked) {
 					AyuSettings::getInstance().setFramelessWindow(false);
-					if (*framelessWidget) {
-						(*framelessWidget)->setChecked(
-							false,
-							Ui::Checkbox::NotifyAboutChange::DontNotify);
-					}
 				}
+			}, nativeFrame->lifetime());
+			AyuSettings::getInstance().framelessWindowChanges(
+			) | rpl::on_next([=](bool) {
+				nativeFrame->setChecked(
+					Core::App().settings().nativeWindowFrame(),
+					Ui::Checkbox::NotifyAboutChange::DontNotify);
 			}, nativeFrame->lifetime());
 		}
 	}
@@ -422,7 +420,6 @@ void BuildWindowTitleSection(SectionBuilder &builder) {
 			.keywords = { u"frameless"_q, u"tiling"_q, u"window"_q, u"border"_q },
 		});
 		if (frameless) {
-			*framelessWidget = frameless;
 			frameless->checkedChanges(
 			) | rpl::filter([](bool checked) {
 				return (checked != AyuSettings::getInstance().framelessWindow());
@@ -431,12 +428,13 @@ void BuildWindowTitleSection(SectionBuilder &builder) {
 				if (checked) {
 					Core::App().settings().setNativeWindowFrame(false);
 					Core::App().saveSettingsDelayed();
-					if (*nativeWidget) {
-						(*nativeWidget)->setChecked(
-							false,
-							Ui::Checkbox::NotifyAboutChange::DontNotify);
-					}
 				}
+			}, frameless->lifetime());
+			Core::App().settings().nativeWindowFrameChanges(
+			) | rpl::on_next([=](bool) {
+				frameless->setChecked(
+					AyuSettings::getInstance().framelessWindow(),
+					Ui::Checkbox::NotifyAboutChange::DontNotify);
 			}, frameless->lifetime());
 		}
 	}

@@ -28,31 +28,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 namespace Ui {
 namespace {
 
-[[nodiscard]] QColor UserpicBgColor() {
-	auto bg = QColor(st::sideBarBg->c);
-	const style::color *references[] = {
-		&st::windowBg,
-		&st::dialogsBgOver,
-		&st::dialogsBgActive,
-	};
-	auto highest = 0.f;
-	auto closest = 1.f;
-	for (const auto reference : references) {
-		const auto lightness = float(QColor((*reference)->c).lightnessF());
-		highest = std::max(highest, lightness);
-		closest = std::min(closest, std::abs(lightness - float(bg.lightnessF())));
-	}
-	if (highest >= 0.5f || closest >= 0.05f) {
-		return bg;
-	}
-	bg.setHslF(
-		std::max(float(bg.hslHueF()), 0.f),
-		bg.hslSaturationF(),
-		std::min(highest + 0.13f, 1.f));
-	return bg;
-}
-
-
 [[nodiscard]] bool IsExternal(const QString &name) {
 	return !name.isEmpty()
 		&& (name.front() == QChar(0))
@@ -84,7 +59,7 @@ void PaintSavedMessagesInner(
 	// X XX          XX X   |      |
 	// XX              XX  ---    ---
 
-	const auto thinkness = base::SafeRound(size * 0.045);
+	const auto thinkness = base::SafeRound(size * 0.055);
 	const auto increment = int(thinkness) % 2 + (size % 2);
 	const auto width = base::SafeRound(size * 0.15) * 2 + increment;
 	const auto height = base::SafeRound(size * 0.19) * 2 + increment;
@@ -332,25 +307,29 @@ void EmptyUserpic::paint(
 
 	PainterHighQualityEnabler hq(p);
 	{
-		auto bg = UserpicBgColor();
-		p.setBrush(bg);
+		auto gradient = QLinearGradient(x, y, x, y + size);
+		gradient.setStops({
+			{ 0., _colors.color1->c },
+			{ 1., _colors.color2->c }
+		});
+		p.setBrush(gradient);
 	}
 	p.setPen(Qt::NoPen);
 	paintBackground();
 
 	if (IsExternal(_string)) {
-		PaintExternalMessagesInner(p, x, y, size, st::windowBgActive);
+		PaintExternalMessagesInner(p, x, y, size, st::historyPeerUserpicFg);
 	} else if (IsInaccessible(_string)) {
 		PaintInaccessibleAccountInner(
 			p,
 			x,
 			y,
 			size,
-			st::windowBgActive);
+			st::historyPeerUserpicFg);
 	} else {
 		p.setFont(font);
 		p.setBrush(Qt::NoBrush);
-		p.setPen(st::windowBgActive);
+		p.setPen(st::historyPeerUserpicFg);
 		p.drawText(
 			QRect(x, y, size, size),
 			_string,
@@ -417,8 +396,12 @@ void EmptyUserpic::PaintSavedMessages(
 		int y,
 		int outerWidth,
 		int size) {
-	auto bg = UserpicBgColor();
-	const auto &fg = st::windowBgActive;
+	auto bg = QLinearGradient(x, y, x, y + size);
+	bg.setStops({
+		{ 0., st::historyPeerSavedMessagesBg->c },
+		{ 1., st::historyPeerSavedMessagesBg2->c }
+	});
+	const auto &fg = st::historyPeerUserpicFg;
 	PaintSavedMessages(p, x, y, outerWidth, size, QBrush(bg), fg);
 }
 
@@ -452,8 +435,12 @@ void EmptyUserpic::PaintRepliesMessages(
 		int y,
 		int outerWidth,
 		int size) {
-	auto bg = UserpicBgColor();
-	const auto &fg = st::windowBgActive;
+	auto bg = QLinearGradient(x, y, x, y + size);
+	bg.setStops({
+		{ 0., st::historyPeerSavedMessagesBg->c },
+		{ 1., st::historyPeerSavedMessagesBg2->c }
+	});
+	const auto &fg = st::historyPeerUserpicFg;
 	PaintRepliesMessages(p, x, y, outerWidth, size, QBrush(bg), fg);
 }
 
@@ -487,8 +474,12 @@ void EmptyUserpic::PaintHiddenAuthor(
 		int y,
 		int outerWidth,
 		int size) {
-	auto bg = UserpicBgColor();
-	const auto &fg = st::windowBgActive;
+	auto bg = QLinearGradient(x, y, x, y + size);
+	bg.setStops({
+		{ 0., st::premiumButtonBg2->c },
+		{ 1., st::premiumButtonBg3->c },
+	});
+	const auto &fg = st::premiumButtonFg;
 	PaintHiddenAuthor(p, x, y, outerWidth, size, QBrush(bg), fg);
 }
 
@@ -522,8 +513,12 @@ void EmptyUserpic::PaintMyNotes(
 		int y,
 		int outerWidth,
 		int size) {
-	auto bg = UserpicBgColor();
-	const auto &fg = st::windowBgActive;
+	auto bg = QLinearGradient(x, y, x, y + size);
+	bg.setStops({
+		{ 0., st::historyPeerSavedMessagesBg->c },
+		{ 1., st::historyPeerSavedMessagesBg2->c }
+	});
+	const auto &fg = st::historyPeerUserpicFg;
 	PaintMyNotes(p, x, y, outerWidth, size, QBrush(bg), fg);
 }
 

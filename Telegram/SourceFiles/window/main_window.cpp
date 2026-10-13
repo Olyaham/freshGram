@@ -596,7 +596,6 @@ void MainWindow::init() {
 void MainWindow::handleStateChanged(Qt::WindowState state) {
 	stateChangedHook(state);
 	updateControlsGeometry();
-	reassertFramelessHint();
 	if (state == Qt::WindowMinimized) {
 		controller().updateIsActiveBlur();
 	} else {
@@ -698,17 +697,6 @@ int MainWindow::computeMinHeight() const {
 }
 
 void MainWindow::refreshTitleWidget() {
-	// Sync the xdg-decoration hint with the title visibility, mirroring
-	// what the platform helper does on its own events. This keeps the
-	// state deterministic without hide/show round-trips (those race the
-	// compositor on Wayland and get undone by the helper anyway).
-	const auto syncHint = [&](bool titleShown) {
-#if !defined Q_OS_WIN && !defined Q_OS_MAC
-		if (const auto handle = windowHandle()) {
-			handle->setFlag(Qt::FramelessWindowHint, titleShown);
-		}
-#endif
-	};
 #if !defined Q_OS_WIN && !defined Q_OS_MAC
 	if (AyuSettings::getInstance().framelessWindow()) {
 		// Dedicated tiling-WM mode: no native frame and no custom
@@ -719,7 +707,9 @@ void MainWindow::refreshTitleWidget() {
 		if (const auto title = titleWidget()) {
 			title->hide();
 		}
-		syncHint(true);
+		if (const auto handle = windowHandle()) {
+			handle->setFlag(Qt::FramelessWindowHint, true);
+		}
 		return;
 	}
 #endif
@@ -735,7 +725,7 @@ void MainWindow::refreshTitleWidget() {
 		_titleShadow.destroy();
 	}
 	if (const auto title = titleWidget()) {
-		syncHint(!title->isHidden());
+		title->show();
 	}
 }
 
