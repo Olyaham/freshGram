@@ -23,7 +23,8 @@ class SnapshotCheckoutTest(unittest.TestCase):
             snapshot = "Telegram/ThirdParty/aiapi"
             shutil.copytree(ROOT / snapshot, repository / snapshot,
                             ignore=shutil.ignore_patterns("target", ".git", "Cargo.lock"))
-            (repository / ".gitattributes").write_bytes((ROOT / ".gitattributes").read_bytes())
+            attributes_text = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+            (repository / ".gitattributes").write_bytes(attributes_text.replace("\n", "\r\n").encode("utf-8"))
             subprocess.run(["git", "init", "--quiet", str(repository)], check=True)
             def git(*args):
                 subprocess.run(["git", "-C", str(repository), *args], check=True,
@@ -45,7 +46,10 @@ class SnapshotCheckoutTest(unittest.TestCase):
             self.assertNotEqual(rejected.returncode, 0)
             self.assertIn("crates/aiapi-http/src/lib.rs", rejected.stderr)
             attributes = repository / ".gitattributes"
-            attributes.write_bytes(attributes.read_bytes().replace(b"Telegram/ThirdParty/aiapi/** text eol=lf\n", b""))
+            rule = "Telegram/ThirdParty/aiapi/** text eol=lf\n"
+            text = attributes.read_text(encoding="utf-8")
+            self.assertIn(rule, text)
+            attributes.write_text(text.replace(rule, ""), encoding="utf-8", newline="\n")
             git("add", ".gitattributes")
             git("checkout-index", "--all", "--prefix=" + baseline.as_posix() + "/")
             (baseline / "tools").mkdir()

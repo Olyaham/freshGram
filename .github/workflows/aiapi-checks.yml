@@ -82,10 +82,10 @@ jobs:
           cargo test --all-targets --no-default-features --locked
           cargo clippy --all-targets --no-default-features --locked -- -D warnings
           python3 tests/abi_smoke.py target/debug/deps/libvoice_asr.so
+          cargo check --all-targets --features local --locked
       - name: Qt loader integration
         run: |
           cmake -S Telegram/SourceFiles/test/recognition -B "$RUNNER_TEMP/recognition-checks" \
             -D VOICE_ASR_TEST_LIBRARY="$GITHUB_WORKSPACE/Telegram/ThirdParty/voice-asr/target/debug/deps/libvoice_asr.so"
           cmake --build "$RUNNER_TEMP/recognition-checks" --parallel 2
           ctest --test-dir "$RUNNER_TEMP/recognition-checks" --output-on-failure
-          cargo check --all-targets --features local --locked
