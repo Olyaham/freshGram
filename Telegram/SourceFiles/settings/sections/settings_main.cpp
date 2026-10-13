@@ -378,7 +378,11 @@ void BuildSectionButtons(SectionBuilder &builder) {
 	builder.addSectionButton({
 		.title = tr::ayu_AyuPreferences(),
 		.targetSection = AyuMain::Id(),
-		.icon = { &st::menuIconPremium },
+		.icon = {
+			.icon = &st::menuIconPremium,
+			.background = &st::settingsIconBg6,
+			.foreground = &st::settingsIconFg,
+		},
 		.keywords = { u"ayu"_q },
 	});
 	builder.addSkip();
@@ -388,7 +392,11 @@ void BuildSectionButtons(SectionBuilder &builder) {
 	if (!session->supportMode()) {
 		builder.addButton({
 			.title = tr::lng_settings_my_account(),
-			.icon = { &st::menuIconProfile },
+			.icon = {
+				.icon = &st::menuIconProfile,
+				.background = &st::settingsIconBg4,
+				.foreground = &st::settingsIconFg,
+			},
 			.onClick = [=] {
 				controller->showSection(
 					Info::Stories::MakeMyProfile(session->user()));
@@ -400,21 +408,33 @@ void BuildSectionButtons(SectionBuilder &builder) {
 	builder.addSectionButton({
 		.title = tr::lng_settings_section_notify(),
 		.targetSection = NotificationsId(),
-		.icon = { &st::menuIconNotifications },
+		.icon = {
+			.icon = &st::menuIconNotifications,
+			.background = &st::settingsIconBg1,
+			.foreground = &st::settingsIconFg,
+		},
 		.keywords = { u"alerts"_q, u"sounds"_q, u"badge"_q },
 	});
 
 	builder.addSectionButton({
 		.title = tr::lng_settings_section_privacy(),
 		.targetSection = PrivacySecurityId(),
-		.icon = { &st::menuIconLock },
+		.icon = {
+			.icon = &st::menuIconLock,
+			.background = &st::settingsIconBg2,
+			.foreground = &st::settingsIconFg,
+		},
 		.keywords = { u"security"_q, u"passcode"_q, u"password"_q, u"2fa"_q },
 	});
 
 	builder.addSectionButton({
 		.title = tr::lng_settings_section_chat_settings(),
 		.targetSection = ChatId(),
-		.icon = { &st::menuIconChatBubble },
+		.icon = {
+			.icon = &st::menuIconChatBubble,
+			.background = &st::settingsIconBg3,
+			.foreground = &st::settingsIconFg,
+		},
 		.keywords = { u"themes"_q, u"appearance"_q, u"stickers"_q },
 	});
 
@@ -445,7 +465,11 @@ void BuildSectionButtons(SectionBuilder &builder) {
 
 		builder.addButton({
 			.title = tr::lng_settings_section_filters(),
-			.icon = { &st::menuIconShowInFolder },
+			.icon = {
+				.icon = &st::menuIconShowInFolder,
+				.background = &st::settingsIconBg6,
+				.foreground = &st::settingsIconFg,
+			},
 			.onClick = [=] { showOther(FoldersId()); },
 			.keywords = { u"filters"_q, u"tabs"_q },
 			.shown = std::move(shownProducer),
@@ -455,21 +479,33 @@ void BuildSectionButtons(SectionBuilder &builder) {
 	builder.addSectionButton({
 		.title = tr::lng_settings_advanced(),
 		.targetSection = AdvancedId(),
-		.icon = { &st::menuIconManage },
+		.icon = {
+			.icon = &st::menuIconManage,
+			.background = &st::settingsIconBg4,
+			.foreground = &st::settingsIconFg,
+		},
 		.keywords = { u"performance"_q, u"proxy"_q, u"experimental"_q },
 	});
 
 	builder.addSectionButton({
 		.title = tr::lng_settings_section_devices(),
 		.targetSection = CallsId(),
-		.icon = { &st::menuIconUnmute },
+		.icon = {
+			.icon = &st::menuIconUnmute,
+			.background = &st::settingsIconBg5,
+			.foreground = &st::settingsIconFg,
+		},
 		.keywords = { u"sessions"_q, u"calls"_q },
 	});
 
 	builder.addButton({
 		.id = u"main/power"_q,
 		.title = tr::lng_settings_power_menu(),
-		.icon = { &st::menuIconPowerUsage },
+		.icon = {
+			.icon = &st::menuIconPowerUsage,
+			.background = &st::settingsIconBg2,
+			.foreground = &st::settingsIconFg,
+		},
 		.onClick = [=] {
 			controller->show(Box(PowerSavingBox, PowerSaving::Flags()));
 		},
@@ -479,7 +515,11 @@ void BuildSectionButtons(SectionBuilder &builder) {
 	builder.addButton({
 		.id = u"main/language"_q,
 		.title = tr::lng_settings_language(),
-		.icon = { &st::menuIconTranslate },
+		.icon = {
+			.icon = &st::menuIconTranslate,
+			.background = &st::settingsIconBg8,
+			.foreground = &st::settingsIconFg,
+		},
 		.label = rpl::single(
 			Lang::GetInstance().id()
 		) | rpl::then(

@@ -7,7 +7,7 @@
 Name:           freshgram
 Version:        %{freshgram_version}
 Release:        1
-Summary:        Telegram Desktop fork with the AyuGram features and a Material look
+Summary:        Telegram Desktop client with customization and message history
 License:        GPL-3.0-or-later
 URL:            https://github.com/Snowy-Fluffy/freshGram
 BuildArch:      x86_64

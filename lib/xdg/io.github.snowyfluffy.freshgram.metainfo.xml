@@ -4,9 +4,9 @@
     <metadata_license>CC0-1.0</metadata_license>
     <project_license>GPL-3.0</project_license>
     <name>freshGram</name>
-    <summary>Telegram Desktop client with Material Design look and AyuGram features</summary>
+    <summary>Telegram Desktop client with customization and message history</summary>
     <description>
-        <p>Telegram Desktop based messenger that combines the Material Design look and customization of materialgram with the features of AyuGram Desktop: ghost mode, message history, anti-recall and more.</p>
+        <p>A customizable Telegram Desktop client with ghost mode, message history, anti-recall, transcription providers and optional themes.</p>
     </description>
     <categories>
         <category>Network</category>

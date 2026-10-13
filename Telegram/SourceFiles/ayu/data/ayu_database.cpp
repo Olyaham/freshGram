@@ -396,9 +396,9 @@ Result run(const char *what, Result fallback, Callback &&callback) {
 		noteChanges();
 		return result;
 	} catch (const std::exception &ex) {
-		LOG(("[AyuGram] Database: failed to %1: %2").arg(QString::fromUtf8(what), QString::fromUtf8(ex.what())));
+		LOG(("[freshGram] Database: failed to %1: %2").arg(QString::fromUtf8(what), QString::fromUtf8(ex.what())));
 	} catch (...) {
-		LOG(("[AyuGram] Database: failed to %1.").arg(QString::fromUtf8(what)));
+		LOG(("[freshGram] Database: failed to %1.").arg(QString::fromUtf8(what)));
 	}
 	return fallback;
 }
@@ -466,10 +466,10 @@ void backfillTable(const char *what, bool strict) {
 						try {
 							storage.update(*sealed);
 						} catch (...) {
-							LOG(("[AyuGram] Database: backfill skipped a row."));
+							LOG(("[freshGram] Database: backfill skipped a row."));
 						}
 					} else if (strict) {
-						LOG(("[AyuGram] Database: strict mode refused a legacy row."));
+							LOG(("[freshGram] Database: strict mode refused a legacy row."));
 					}
 				}
 			});
@@ -512,10 +512,10 @@ void backfillSealedRows(bool strict) {
 					try {
 						storage.update(*sealed);
 					} catch (...) {
-						LOG(("[AyuGram] Database: backfill skipped a row."));
+						LOG(("[freshGram] Database: backfill skipped a row."));
 					}
 				} else if (strict) {
-					LOG(("[AyuGram] Database: strict mode refused a legacy row."));
+						LOG(("[freshGram] Database: strict mode refused a legacy row."));
 				}
 			}
 		});
@@ -829,7 +829,7 @@ bool prepareStorage() {
 	try {
 		storage.busy_timeout(kBusyTimeoutMs);
 	} catch (const std::exception &ex) {
-		LOG(("[AyuGram] Database: failed to apply pragmas: %1").arg(ex.what()));
+		LOG(("[freshGram] Database: failed to apply pragmas: %1").arg(ex.what()));
 	}
 	if (imported) {
 		FinishLegacyMigrationPending = true;
@@ -847,7 +847,7 @@ void initialize() {
 		DatabaseReady = false;
 		AyuSecret::Vault::SetReady(false);
 		AyuVault::SetKey(nullptr);
-		LOG(("[AyuGram] Database: the local key is unavailable."));
+		LOG(("[freshGram] Database: the local key is unavailable."));
 		return;
 	}
 	AyuSecret::Vault::SetReady(true);
@@ -904,7 +904,7 @@ void initialize() {
 		} catch (const std::system_error &ex) {
 			const auto code = ex.code().value() & 0xFF;
 			const auto sqliteError = (ex.code().category() == sqlite_orm::get_sqlite_error_category());
-			LOG(("[AyuGram] Database initialization failed (%1): %2").arg(code).arg(ex.what()));
+			LOG(("[freshGram] Database initialization failed (%1): %2").arg(code).arg(ex.what()));
 			if (sqliteError && (code == kSqliteBusy || code == kSqliteLocked) && !retriedBusy) {
 				retriedBusy = true;
 				std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -922,12 +922,12 @@ void initialize() {
 			}
 			break;
 		} catch (const std::exception &ex) {
-			LOG(("[AyuGram] Database initialization failed: %1").arg(ex.what()));
+			LOG(("[freshGram] Database initialization failed: %1").arg(ex.what()));
 			break;
 		}
 	}
 
-	LOG(("[AyuGram] Database is unavailable, messages will not be saved in this session."));
+	LOG(("[freshGram] Database is unavailable, messages will not be saved in this session."));
 }
 
 void lock() {
@@ -976,7 +976,7 @@ void addEditedMessage(const EditedMessage &message, int maxRevisions) {
 						StrictMode())) {
 					storage.insert(*sealed);
 				} else {
-					LOG(("[AyuGram] Database: strict mode refused an edited message."));
+					LOG(("[freshGram] Database: strict mode refused an edited message."));
 				}
 			}
 		});
@@ -1038,7 +1038,7 @@ void addDeletedMessages(const std::vector<DeletedMessage> &messages) {
 							StrictMode())) {
 						storage.insert(*sealed);
 					} else {
-						LOG(("[AyuGram] Database: strict mode refused a deleted message."));
+						LOG(("[freshGram] Database: strict mode refused a deleted message."));
 					}
 				}
 			}
@@ -1056,7 +1056,7 @@ void addDeletedExtras(const std::vector<DeletedExtra> &extras) {
 			for (const auto &extra : extras) {
 				const auto sealed = SealRowCopy(extra, strict);
 				if (!sealed) {
-					LOG(("[AyuGram] Database: strict mode refused deleted extras."));
+					LOG(("[freshGram] Database: strict mode refused deleted extras."));
 					continue;
 				}
 				storage.remove_all<DeletedExtra>(
@@ -1082,7 +1082,7 @@ void addDeletedMarkups(const std::vector<DeletedMarkup> &markups) {
 			for (const auto &markup : markups) {
 				const auto sealed = SealRowCopy(markup, strict);
 				if (!sealed) {
-					LOG(("[AyuGram] Database: strict mode refused deleted markup."));
+					LOG(("[freshGram] Database: strict mode refused deleted markup."));
 					continue;
 				}
 				storage.remove_all<DeletedMarkup>(
@@ -1433,7 +1433,7 @@ void saveKeptDialog(const KeptDialog &dialog) {
 		inTransaction([&] {
 			const auto sealed = SealRowCopy(dialog, StrictMode());
 			if (!sealed) {
-				LOG(("[AyuGram] Database: strict mode refused a kept dialog."));
+				LOG(("[freshGram] Database: strict mode refused a kept dialog."));
 				return;
 			}
 			storage.remove_all<KeptDialog>(
@@ -1457,7 +1457,7 @@ void saveKeptTopics(const std::vector<KeptTopic> &topics) {
 			for (const auto &topic : topics) {
 				const auto sealed = SealRowCopy(topic, strict);
 				if (!sealed) {
-					LOG(("[AyuGram] Database: strict mode refused a kept topic."));
+					LOG(("[freshGram] Database: strict mode refused a kept topic."));
 					continue;
 				}
 				storage.remove_all<KeptTopic>(
@@ -1540,7 +1540,7 @@ void syncKeptDialogs(const std::vector<KeptDialog> &dialogs) {
 				}
 				const auto sealed = SealRowCopy(dialog, strict);
 				if (!sealed) {
-					LOG(("[AyuGram] Database: strict mode refused a synced dialog."));
+					LOG(("[freshGram] Database: strict mode refused a synced dialog."));
 					continue;
 				}
 				storage.remove_all<KeptDialog>(
@@ -1631,7 +1631,7 @@ void saveKnownUsers(const std::vector<KnownUser> &users) {
 				}
 				const auto sealed = SealRowCopy(user, strict);
 				if (!sealed) {
-					LOG(("[AyuGram] Database: strict mode refused a known user."));
+					LOG(("[freshGram] Database: strict mode refused a known user."));
 					continue;
 				}
 				storage.remove_all<KnownUser>(sameUser);
@@ -1918,7 +1918,7 @@ void addRegexFilter(const RegexFilter &filter) {
 			if (const auto sealed = SealRowCopy(filter, StrictMode())) {
 				storage.replace(*sealed); // we're using replace as we set std::vector<char> as primary key
 			} else {
-				LOG(("[AyuGram] Database: strict mode refused a regex filter."));
+				LOG(("[freshGram] Database: strict mode refused a regex filter."));
 			}
 		});
 	});
@@ -1936,7 +1936,7 @@ void updateRegexFilter(const RegexFilter &filter) {
 	runVoid("update regex filter", [&] {
 		const auto sealed = SealRowCopy(filter, StrictMode());
 		if (!sealed) {
-			LOG(("[AyuGram] Database: strict mode refused a regex filter."));
+			LOG(("[freshGram] Database: strict mode refused a regex filter."));
 			return;
 		}
 		storage.update_all(

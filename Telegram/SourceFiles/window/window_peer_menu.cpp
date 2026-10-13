@@ -2076,7 +2076,7 @@ void Filler::fillContextMenuActions() {
 
 void Filler::fillHistoryActions() {
 	addToggleMuteSubmenu(true);
-	AyuUi::AddAyuGramActions(_peer, _thread, _controller, _addAction);
+	AyuUi::AddFreshGramActions(_peer, _thread, _controller, _addAction);
 	addCreateTopic();
 	addInfo();
 	addPeekLastSeen();
@@ -2138,7 +2138,7 @@ void Filler::fillProfileActions() {
 }
 
 void Filler::fillRepliesActions() {
-	AyuUi::AddAyuGramActions(_peer, _thread, _controller, _addAction);
+	AyuUi::AddFreshGramActions(_peer, _thread, _controller, _addAction);
 	if (_topic) {
 		addInfo();
 		AyuUi::AddJumpToBeginningAction(_peer, _thread, _controller, _addAction);

@@ -255,7 +255,7 @@ bool needToShowItem(ContextMenuVisibility state) {
 		|| (state == ContextMenuVisibility::VisibleWithModifier && base::IsExtendedContextMenuModifierPressed());
 }
 
-void AddAyuGramActions(PeerData *peerData,
+void AddFreshGramActions(PeerData *peerData,
 							   Data::Thread *thread,
 							   not_null<Window::SessionController*> sessionController,
 							   const Window::PeerMenuCallback &addCallback) {

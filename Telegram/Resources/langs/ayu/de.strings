@@ -508,7 +508,7 @@
 "ayu_ConfirmationRound" = "Möchtest du diese Videonachricht senden?";
 "ayu_IntroAbout" = "Willkommen bei freshGram.\nMach Telegram zu deinem eigenen.";
 "ayu_AboutText1" = "Telegram-Client, der gegen die Nutzungsbedingungen verstößt, basierend auf {api_link}.";
-"ayu_UpdateAyuGram" = "freshGram aktualisieren";
+"ayu_UpdateFreshGram" = "freshGram aktualisieren";
 "ayu_UtilityRestartRequired" = "Die App wird in 5 Sekunden geschlossen.";
 "ayu_DeletedChatsHeader" = "Gelöschte Chats";
 "ayu_KeepRemovedDialogs" = "Chats behalten, aus denen du entfernt wurdest oder die du gelöscht hast";

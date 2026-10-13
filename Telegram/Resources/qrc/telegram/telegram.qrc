@@ -8,8 +8,10 @@
     <file alias="art/logo_256.png">../../art/logo_256.png</file>
     <file alias="art/logo_256_no_margin.png">../../art/logo_256_no_margin.png</file>
     <file alias="art/themeimage.jpg">../../art/themeimage.jpg</file>
-    <file alias="Google Day.tdesktop-theme">../../Google Day.tdesktop-theme</file>
-    <file alias="Google Dark.tdesktop-theme">../../Google Dark.tdesktop-theme</file>
+    <file alias="freshgram-day.tdesktop-theme">../../Google Day.tdesktop-theme</file>
+    <file alias="freshgram-night.tdesktop-theme">../../Google Dark.tdesktop-theme</file>
+    <file alias="day-blue.tdesktop-theme">../../day-blue.tdesktop-theme</file>
+    <file alias="night.tdesktop-theme">../../night.tdesktop-theme</file>
     <file alias="art/cocoon.webp">../../art/cocoon.webp</file>
     <file alias="art/premium/flecks.png">../../art/premium/flecks.png</file>
     <file alias="art/premium/star_texture.svg">../../art/premium/star_texture.svg</file>

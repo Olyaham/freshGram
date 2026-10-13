@@ -100,7 +100,7 @@ constexpr auto kSealedTextWritePrefix = "ayu2:";
 			// Cannot authenticate without the key: refuse in strict
 			// mode, preserve bytes otherwise.
 			if (strict) {
-				LOG(("[AyuGram] Database: refusing unverified envelope."));
+				LOG(("[freshGram] Database: refusing unverified envelope."));
 				return std::nullopt;
 			}
 			return plain;
@@ -114,7 +114,7 @@ constexpr auto kSealedTextWritePrefix = "ayu2:";
 	}
 	if (!AyuSecret::Vault::Available()) {
 		if (strict) {
-			LOG(("[AyuGram] Database: refusing plaintext text field."));
+			LOG(("[freshGram] Database: refusing plaintext text field."));
 			return std::nullopt;
 		}
 		return plain;
@@ -124,7 +124,7 @@ constexpr auto kSealedTextWritePrefix = "ayu2:";
 		context);
 	if (sealed.empty()) {
 		if (strict) {
-			LOG(("[AyuGram] Database: refusing plaintext text field."));
+			LOG(("[freshGram] Database: refusing plaintext text field."));
 			return std::nullopt;
 		}
 		return plain;
@@ -146,7 +146,7 @@ constexpr auto kSealedTextWritePrefix = "ayu2:";
 	}
 	auto plain = AyuSecret::Bytes();
 	if (!AyuSecret::Vault::Open(sealed, plain, context)) {
-		LOG(("[AyuGram] Database: cannot open sealed text field (%1)."
+		LOG(("[freshGram] Database: cannot open sealed text field (%1)."
 			).arg(QString::fromStdString(context)));
 		return std::string();
 	}
@@ -166,7 +166,7 @@ constexpr auto kSealedTextWritePrefix = "ayu2:";
 		// key is available, refuse unverified in strict mode.
 		if (!AyuSecret::Vault::Available()) {
 			if (strict) {
-				LOG(("[AyuGram] Database: refusing unverified envelope."));
+				LOG(("[freshGram] Database: refusing unverified envelope."));
 				return std::nullopt;
 			}
 			return plain;
@@ -180,7 +180,7 @@ constexpr auto kSealedTextWritePrefix = "ayu2:";
 	}
 	if (!AyuSecret::Vault::Available()) {
 		if (strict) {
-			LOG(("[AyuGram] Database: refusing plaintext blob field."));
+			LOG(("[freshGram] Database: refusing plaintext blob field."));
 			return std::nullopt;
 		}
 		return plain;
@@ -188,7 +188,7 @@ constexpr auto kSealedTextWritePrefix = "ayu2:";
 	const auto sealed = AyuSecret::Vault::Seal(asBytes, context);
 	if (sealed.empty()) {
 		if (strict) {
-			LOG(("[AyuGram] Database: refusing plaintext blob field."));
+			LOG(("[freshGram] Database: refusing plaintext blob field."));
 			return std::nullopt;
 		}
 		return plain;
@@ -205,7 +205,7 @@ constexpr auto kSealedTextWritePrefix = "ayu2:";
 	}
 	auto plain = AyuSecret::Bytes();
 	if (!AyuSecret::Vault::Open(sealed, plain, context)) {
-		LOG(("[AyuGram] Database: cannot open sealed blob field (%1)."
+		LOG(("[freshGram] Database: cannot open sealed blob field (%1)."
 			).arg(QString::fromStdString(context)));
 		return std::vector<char>();
 	}

@@ -6,6 +6,8 @@
 // Copyright @Radolyn, 2026
 #include "ayu/utils/debug_logging.h"
 
+#include "core/branding.h"
+
 #include <QtCore/QFile>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
@@ -20,7 +22,7 @@ std::atomic<bool> Value = false;
 } // namespace
 
 void Init(const QString &workingDir) {
-	auto file = QFile(workingDir + u"tdata/ayu_settings.json"_q);
+	auto file = QFile(Core::Branding::SettingsPathForRead(workingDir));
 	if (!file.open(QIODevice::ReadOnly)) {
 		return;
 	}

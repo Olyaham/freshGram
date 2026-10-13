@@ -115,10 +115,10 @@ PRIVATE
     desktop-app::external_wallet_engine
     desktop-app::external_xxhash
 
-    ayugram::lib_icu
+    freshgram::lib_icu
 )
 
-set(ayugram_files
+set(freshgram_files
         ayu/ayu_worker.cpp
         ayu/ayu_worker.h
         ayu/ayu_url_handlers.cpp
@@ -356,7 +356,7 @@ target_precompile_headers(Telegram PRIVATE $<$<COMPILE_LANGUAGE:CXX,OBJCXX>:${sr
 nice_target_sources(Telegram ${src_loc}
 PRIVATE
     ${style_files}
-    ${ayugram_files}
+    ${freshgram_files}
 
     api/api_attached_stickers.cpp
     api/api_attached_stickers.h
@@ -800,6 +800,7 @@ PRIVATE
     core/bank_card_click_handler.h
     core/base_integration.cpp
     core/base_integration.h
+    core/branding.h
     core/changelogs.cpp
     core/changelogs.h
     core/click_handler_types.cpp
@@ -2684,7 +2685,7 @@ elseif (APPLE)
 
     set(icons_path ${CMAKE_CURRENT_SOURCE_DIR}/Telegram/Images.xcassets)
     if (CMAKE_GENERATOR STREQUAL Xcode)
-        set(ayugram_icons
+        set(freshgram_icons
             Default
             Alt
             Discord
@@ -2699,7 +2700,7 @@ elseif (APPLE)
             Extera2
         )
 
-        foreach (icon ${ayugram_icons})
+        foreach (icon ${freshgram_icons})
             target_add_resource(Telegram "${CMAKE_CURRENT_SOURCE_DIR}/Telegram/AppIcon-${icon}.icon")
             set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/Telegram/AppIcon-${icon}.icon" PROPERTIES
                     XCODE_EXPLICIT_FILE_TYPE "folder.iconcomposer.icon"

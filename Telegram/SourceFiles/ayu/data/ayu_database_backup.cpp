@@ -261,7 +261,7 @@ void ScrubSecrets(const QString &path) {
 			qsizetype(size));
 		sqlite3_free(data);
 		if (!AyuArchive::WriteFile(path, scrubbed, BackupContext(path))) {
-			LOG(("[AyuGram] Database: failed to publish a scrubbed backup."));
+			LOG(("[freshGram] Database: failed to publish a scrubbed backup."));
 		}
 	}
 }
@@ -364,7 +364,7 @@ bool create() {
 		name,
 		BackupContext(name));
 	if (!written) {
-		LOG(("[AyuGram] Database: backup publication failed."));
+		LOG(("[freshGram] Database: backup publication failed."));
 		return false;
 	}
 	AyuUtils::RestrictFile(name);
@@ -411,7 +411,7 @@ void recoverStaging() {
 		&& (format == AyuArchive::Format::Fgv2
 			|| AyuArchive::WriteFile(staging, plain, "ayu-snapshot-v1"))
 		&& AyuSecret::Vault::PublishFile(staging, MainPath())) {
-		LOG(("[AyuGram] Database restored from staging copy."));
+		LOG(("[freshGram] Database restored from staging copy."));
 	} else if (QFile::exists(MainPath())) {
 		QFile::remove(staging);
 	} else if (!valid) {
@@ -434,7 +434,7 @@ bool restore(int &index) {
 			continue;
 		}
 		if (strict && format == AyuArchive::Format::Plain) {
-			LOG(("[AyuGram] Database: strict mode skips a plaintext backup."));
+			LOG(("[freshGram] Database: strict mode skips a plaintext backup."));
 			continue;
 		}
 		const auto staging = MainPath() + ".restoring";
@@ -458,7 +458,7 @@ bool restore(int &index) {
 		}
 		QFile::remove(staging);
 		index = i + 1;
-		LOG(("[AyuGram] Database restored from '%1'.").arg(list[i].path));
+		LOG(("[freshGram] Database restored from '%1'.").arg(list[i].path));
 		return true;
 	}
 	index = int(list.size());

@@ -7,7 +7,7 @@
 
 add_library(icu_regex_minimal STATIC)
 
-add_library(ayugram::lib_icu ALIAS icu_regex_minimal)
+add_library(freshgram::lib_icu ALIAS icu_regex_minimal)
 
 set_property(TARGET icu_regex_minimal PROPERTY CXX_STANDARD 17)
 set_property(TARGET icu_regex_minimal PROPERTY CXX_STANDARD_REQUIRED ON)

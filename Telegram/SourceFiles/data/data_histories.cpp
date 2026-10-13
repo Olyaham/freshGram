@@ -759,7 +759,7 @@ void Histories::sendReadRequests() {
 
 	const auto &ghost = AyuSettings::ghost(&_owner->session());
 	if (!ghost.sendReadMessages()) {
-		DEBUG_LOG(("[AyuGram] Don't read messages"));
+		DEBUG_LOG(("[freshGram] Don't read messages"));
 		_readRequestsTimer.cancel();
 		auto histories = std::vector<not_null<History*>>();
 		histories.reserve(_states.size());

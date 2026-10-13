@@ -9189,7 +9189,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 // Keys finished
 
 
-// AyuGram keys generated
+// freshGram keys generated
 
 "ayu_AyuPreferences" = "freshGram Preferences";
 "ayu_DocsText" = "Documentation";
@@ -9342,7 +9342,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_RecognizeNoLanguages" = "Choose the text recognition languages in Settings → General first.";
 "ayu_RecognizeNotLoaded" = "The photo is not loaded yet.";
 "ayu_RecognizeHint" = "Drag the corners to select the area";
-"ayu_TranscribeNoModel" = "Choose a Whisper model in Settings → General first.";
+"ayu_TranscribeNoModel" = "Choose a Whisper model in Settings → freshGram → General → Voice transcription first.";
 "ayu_TranscribeNoSpeech" = "No speech found.";
 "ayu_TranscribeFailed" = "Could not recognize the speech: {error}";
 "ayu_TranscribeTooBig" = "The file is too large.";
@@ -9360,16 +9360,18 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_TranscriptionTest" = "Test connection";
 "ayu_TranscriptionTestOk" = "Connection works.";
 "ayu_TranscriptionTestFailed" = "Connection failed: {error}";
-"ayu_TranscriptionNoKey" = "Enter the API key in Settings → General first.";
+"ayu_TranscriptionNoKey" = "Enter the API key in Settings → freshGram → General → Voice transcription first.";
 "ayu_TranscriptionNoEngine" = "Engine library not found.";
-"ayu_TranscriptionCredentials" = "Provider settings";
+"ayu_TranscriptionCredentials" = "Configure";
 "ayu_TranscriptionSaved" = "Saved.";
 "ayu_TranscriptionChats" = "Chats";
 "ayu_TranscriptionSecret" = "Secret chats";
 "ayu_TranscriptionPersonal" = "Private messages";
 "ayu_TranscriptionUseDefault" = "Use default";
 "ayu_TranscriptionModel" = "Transcription model";
-"ayu_TranscriptionChooseModule" = "Choose installed ASR module";
+"ayu_TranscriptionChooseModule" = "Choose installed Whisper module";
+"ayu_TranscriptionModuleFilter" = "Whisper modules (*.so *.dylib *.dll)";
+"ayu_TranscriptionLocalTest" = "Test local recognition";
 "ayu_RequireEncryption" = "Require encryption for archived message content";
 "ayu_TranscriptionLanguage" = "Language for all providers (auto, en, ru, …)";
 "ayu_TranscriptionAllowGpu" = "Allow GPU acceleration";
@@ -9590,6 +9592,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_MessageShotTopBarText" = "Shot";
 "ayu_MessageShotPreview" = "Preview";
 "ayu_FramelessWindow" = "Frameless window (tiling WMs)";
+"ayu_ThemeFreshGramDay" = "freshGram Light";
+"ayu_ThemeFreshGramNight" = "freshGram Dark";
 "ayu_PeekButton" = "Peek last seen";
 "ayu_PeekLabel" = "Last seen (peeked)";
 "ayu_PeekChecking" = "Checking the last seen...";
@@ -9715,7 +9719,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_ConfirmationRound" = "Do you want to send this round video?";
 "ayu_IntroAbout" = "Welcome to freshGram.\nMake Telegram your own.";
 "ayu_AboutText1" = "ToS breaking Telegram client based on {api_link}.";
-"ayu_UpdateAyuGram" = "Update freshGram";
+"ayu_UpdateFreshGram" = "Update freshGram";
 "ayu_UtilityRestartRequired" = "The app will close in 5 seconds.";
 "ayu_ProductName" = "freshGram";
 "ayu_DeletedChatsHeader" = "Deleted chats";

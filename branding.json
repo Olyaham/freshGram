@@ -1,0 +1,26 @@
+{
+  "name": "freshGram",
+  "aliases": ["AyuGram"],
+  "paths": [
+    "Telegram/CMakeLists.txt",
+    "Telegram/SourceFiles",
+    "Telegram/Resources",
+    "Telegram/cmake",
+    "Telegram/lib_icu",
+    "Telegram/lib_ui/ayu",
+    "Telegram/build",
+    "lib/xdg"
+  ],
+  "preserve_lines": [
+    "source code of AyuGram",
+    "ayu_SettingsWatermark",
+    "Copyright"
+  ],
+  "preserve_files": {
+    "Telegram/SourceFiles/core/branding.h": [
+      "u\"AyuGram Desktop\"_q",
+      "u\"AyuGramDesktop\"_q",
+      "u\"AyuGram\"_q"
+    ]
+  }
+}

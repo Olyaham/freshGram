@@ -516,7 +516,7 @@
 "ayu_ConfirmationRound" = "Vuoi inviare questo videomessaggio?";
 "ayu_IntroAbout" = "Benvenuto in freshGram.\nRendi Telegram tuo.";
 "ayu_AboutText1" = "Client Telegram che viola i ToS, basato su {api_link}.";
-"ayu_UpdateAyuGram" = "Aggiorna freshGram";
+"ayu_UpdateFreshGram" = "Aggiorna freshGram";
 "ayu_UtilityRestartRequired" = "L'app si chiuderà tra 5 secondi.";
 "ayu_DeletedChatsHeader" = "Chat eliminate";
 "ayu_KeepRemovedDialogs" = "Mantieni le chat da cui sei stato rimosso o che hai eliminato";

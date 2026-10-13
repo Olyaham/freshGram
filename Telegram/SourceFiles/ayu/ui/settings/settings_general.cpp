@@ -50,6 +50,7 @@
 #include <QtCore/QTemporaryDir>
 #include <QtCore/QUrl>
 
+#include <array>
 #include <memory>
 #include <vector>
 
@@ -146,8 +147,20 @@ void FillTranscriptionCredentialsBox(
 		not_null<Ui::GenericBox*> box,
 		TranscriptionProvider provider) {
 	auto *settings = &AyuSettings::getInstance();
-	box->setTitle(tr::ayu_TranscriptionCredentials());
+	box->setTitle(provider == TranscriptionProvider::Gemini
+		? tr::ayu_TranscriptionGemini()
+		: provider == TranscriptionProvider::Groq
+		? tr::ayu_TranscriptionGroq()
+		: provider == TranscriptionProvider::Custom
+		? tr::ayu_TranscriptionCustom()
+		: tr::ayu_TranscriptionWhisper());
 	const auto layout = box->verticalLayout();
+	const auto rowPadding = style::margins(
+		st::boxRowPadding.left(),
+		st::boxLittleSkip / 2,
+		st::boxRowPadding.right(),
+		st::boxLittleSkip / 2);
+	box->addSkip(st::boxLittleSkip);
 	Ui::PasswordInput *groqKey = nullptr;
 	Ui::PasswordInput *geminiKey = nullptr;
 	Ui::InputField *groqModel = nullptr;
@@ -156,8 +169,16 @@ void FillTranscriptionCredentialsBox(
 	Ui::InputField *customBase = nullptr;
 	Ui::InputField *customModel = nullptr;
 	Ui::PasswordInput *customKey = nullptr;
+	const auto addField = [=](
+			rpl::producer<QString> placeholder,
+			const QString &value) {
+		return box->addRow(object_ptr<Ui::InputField>(
+			layout, st::defaultInputField, std::move(placeholder), value),
+			rowPadding);
+	};
 	const auto addKey = [=](rpl::producer<QString> placeholder, const QString &value) {
-		const auto row = layout->add(object_ptr<Ui::RpWidget>(layout));
+		const auto row = box->addRow(
+			object_ptr<Ui::RpWidget>(layout), rowPadding);
 		row->resize(row->width(), st::defaultInputField.heightMin);
 		const auto field = Ui::CreateChild<Ui::PasswordInput>(
 			row, st::defaultInputField, std::move(placeholder), value);
@@ -168,60 +189,50 @@ void FillTranscriptionCredentialsBox(
 	};
 	if (provider == TranscriptionProvider::Groq) {
 		groqKey = addKey(tr::ayu_TranscriptionGroqKey(), settings->transcriptionGroqKey());
-		groqModel = layout->add(object_ptr<Ui::InputField>(
-			layout, st::defaultInputField,
-			tr::ayu_TranscriptionModel(), settings->transcriptionGroqModel()));
+		groqModel = addField(
+			tr::ayu_TranscriptionModel(), settings->transcriptionGroqModel());
 	} else if (provider == TranscriptionProvider::Gemini) {
 		geminiKey = addKey(tr::ayu_TranscriptionGeminiKey(), settings->transcriptionGeminiKey());
-		geminiModel = layout->add(object_ptr<Ui::InputField>(
-			layout, st::defaultInputField,
-			tr::ayu_TranscriptionModel(), settings->transcriptionGeminiModel()));
-		geminiPrompt = layout->add(object_ptr<Ui::InputField>(
-			layout,
-			st::defaultInputField,
-			rpl::single(tr::ayu_TranscriptionPrompt(tr::now)),
-			settings->transcriptionPrompt()));
+		geminiModel = addField(
+			tr::ayu_TranscriptionModel(), settings->transcriptionGeminiModel());
+		geminiPrompt = addField(
+			tr::ayu_TranscriptionPrompt(), settings->transcriptionPrompt());
 	} else if (provider == TranscriptionProvider::Custom) {
-		customBase = layout->add(object_ptr<Ui::InputField>(
-			layout,
-			st::defaultInputField,
-			rpl::single(tr::ayu_TranscriptionCustomBase(tr::now)),
-			settings->transcriptionCustomBase()));
-		customModel = layout->add(object_ptr<Ui::InputField>(
-			layout,
-			st::defaultInputField,
-			rpl::single(tr::ayu_TranscriptionCustomModel(tr::now)),
-			settings->transcriptionCustomModel()));
+		customBase = addField(
+			tr::ayu_TranscriptionCustomBase(), settings->transcriptionCustomBase());
+		customModel = addField(
+			tr::ayu_TranscriptionCustomModel(), settings->transcriptionCustomModel());
 		customKey = addKey(tr::ayu_TranscriptionCustomKey(), settings->transcriptionCustomKey());
 	}
 	const auto local = (provider == TranscriptionProvider::WhisperLocal);
-	const auto language = layout->add(object_ptr<Ui::InputField>(
-		layout, st::defaultInputField,
-		tr::ayu_TranscriptionLanguage(), settings->transcriptionLanguage()));
+	const auto language = addField(
+		tr::ayu_TranscriptionLanguage(), settings->transcriptionLanguage());
 	Ui::Checkbox *gpu = nullptr;
 	if (local) {
-		gpu = layout->add(object_ptr<Ui::Checkbox>(
+		gpu = box->addRow(object_ptr<Ui::Checkbox>(
 			layout, tr::ayu_TranscriptionAllowGpu(tr::now),
-			settings->transcriptionLocalUseGpu()));
+			settings->transcriptionLocalUseGpu()), rowPadding);
 	}
-	const auto enginePath = layout->add(object_ptr<Ui::InputField>(
-		layout,
-		st::defaultInputField,
-		rpl::single(tr::ayu_TranscriptionEnginePath(tr::now)),
-		local ? settings->transcriptionLocalEnginePath()
-			: settings->transcriptionEnginePath()));
-	const auto chooseModule = layout->add(object_ptr<Ui::RoundButton>(
-		layout, tr::ayu_TranscriptionChooseModule(), st::defaultBoxButton));
-	chooseModule->addClickHandler([=] {
-		FileDialog::GetOpenPath(box.get(),
-			tr::ayu_TranscriptionChooseModule(tr::now),
-			u"ASR modules (*.so *.dylib *.dll)"_q,
-			crl::guard(box, [=](FileDialog::OpenResult &&result) {
-				if (!result.paths.isEmpty()) {
-					enginePath->setTextWithTags({ .text = result.paths.front() });
-				}
-			}));
-	});
+	auto enginePath = static_cast<Ui::InputField*>(nullptr);
+	if (local) {
+		enginePath = addField(
+			tr::ayu_TranscriptionEnginePath(),
+			settings->transcriptionLocalEnginePath());
+		const auto chooseModule = box->addRow(object_ptr<Ui::RoundButton>(
+			layout, tr::ayu_TranscriptionChooseModule(), st::defaultLightButton),
+			rowPadding);
+		chooseModule->addClickHandler([=] {
+			FileDialog::GetOpenPath(
+				box.get(),
+				tr::ayu_TranscriptionChooseModule(tr::now),
+				tr::ayu_TranscriptionModuleFilter(tr::now),
+				crl::guard(box, [=](FileDialog::OpenResult &&result) {
+					if (!result.paths.isEmpty()) {
+						enginePath->setTextWithTags({ .text = result.paths.front() });
+					}
+				}));
+		});
+	}
 	const auto readConfig = [=] {
 		const auto engine = local ? AyuRecognition::EngineProvider::WhisperLocal
 			: provider == TranscriptionProvider::Gemini
@@ -239,7 +250,7 @@ void FillTranscriptionCredentialsBox(
 		if (customModel) config.customModel = customModel->getLastText().trimmed();
 		if (customKey) config.customKey = customKey->getLastText().trimmed();
 		config.language = language->getLastText().trimmed();
-		config.enginePath = enginePath->getLastText().trimmed();
+		if (enginePath) config.enginePath = enginePath->getLastText().trimmed();
 		if (gpu) config.useGpu = gpu->checked();
 		return config;
 	};
@@ -297,8 +308,6 @@ void FillTranscriptionCredentialsBox(
 		if (local) {
 			settings->setTranscriptionLocalEnginePath(enginePath->getLastText().trimmed());
 			settings->setTranscriptionLocalUseGpu(gpu->checked());
-		} else {
-			settings->setTranscriptionEnginePath(enginePath->getLastText().trimmed());
 		}
 		Ui::Toast::Show(tr::ayu_TranscriptionSaved(tr::now));
 		return true;
@@ -320,7 +329,12 @@ void FillTranscriptionCredentialsBox(
 			testing->closed = true;
 			if (testing->active) testing->active->CancelCurrent();
 		}, box->lifetime());
-		box->addButton(tr::ayu_TranscriptionTest(), [=] {
+		const auto test = box->addRow(object_ptr<Ui::RoundButton>(
+			layout,
+			local ? tr::ayu_TranscriptionLocalTest() : tr::ayu_TranscriptionTest(),
+			st::defaultLightButton),
+			rowPadding);
+		test->addClickHandler([=] {
 			if (testing->active) {
 				testing->active->CancelCurrent();
 				return;
@@ -376,13 +390,14 @@ void FillTranscriptionCredentialsBox(
 			});
 		});
 	}
+	box->addSkip(st::boxLittleSkip);
 	box->addButton(tr::lng_settings_save(), [=] {
 		if (save()) box->closeBox();
 	});
 	box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });
 }
 
-void BuildTranscription(SectionBuilder &builder, AyuSectionBuilder &ayu) {
+void BuildTranscription(SectionBuilder &builder) {
 	const auto controller = builder.controller();
 	auto *settings = &AyuSettings::getInstance();
 
@@ -562,9 +577,22 @@ void BuildTranscription(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 				&controller->session(),
 				AyuRecognition::ModelKind::Whisper));
 		},
-		.shown = settings->transcriptionProviderValue()
-			| rpl::map([](TranscriptionProvider value) {
-				return value == TranscriptionProvider::WhisperLocal;
+		.shown = rpl::combine(
+			settings->transcriptionProviderValue(),
+			settings->transcriptionProviderChatsValue(),
+			settings->transcriptionProviderSecretValue(),
+			settings->transcriptionProviderPersonalValue()
+		) | rpl::map([](
+				TranscriptionProvider global,
+				TranscriptionProvider chats,
+				TranscriptionProvider secret,
+				TranscriptionProvider personal) {
+				return ranges::any_of(
+					std::array{ global, chats, secret, personal },
+					[](TranscriptionProvider value) {
+						return value == TranscriptionProvider::WhisperLocal
+							|| value == TranscriptionProvider::Auto;
+					});
 			}),
 	});
 }
@@ -644,7 +672,7 @@ void BuildQoLToggles(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	BuildTranslator(builder, ayu);
 	ayu.addSectionDivider();
 
-	BuildTranscription(builder, ayu);
+	BuildTranscription(builder);
 	ayu.addSectionDivider();
 
 	if (AyuRecognition::TextRecognitionAvailable()) {

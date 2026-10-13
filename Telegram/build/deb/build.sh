@@ -25,7 +25,7 @@ Maintainer: freshGram <noreply@users.noreply.github.com>
 Depends: libc6, libstdc++6, hicolor-icon-theme
 Recommends: xdg-desktop-portal
 Homepage: https://github.com/Snowy-Fluffy/freshGram
-Description: Telegram Desktop fork with the AyuGram features and a Material look
+Description: Telegram Desktop client with customization and message history
  freshGram is a Telegram Desktop client that keeps deleted and edited
  messages, adds a ghost mode and secret chats, and restyles the interface.
 CONTROL

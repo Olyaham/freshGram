@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=freshGram
-Comment=Telegram Desktop client with Material Design look and AyuGram features
+Comment=Telegram Desktop client with customization and message history
 TryExec=freshGram
 Exec=env DESKTOPINTEGRATION=1 freshGram -- %U
 Icon=io.github.snowyfluffy.freshgram

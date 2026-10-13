@@ -1,6 +1,6 @@
 # Transcription providers
 
-Settings → General → Voice transcription controls the default provider and
+Settings → freshGram → General → Voice transcription controls the default provider and
 independent overrides for chats, secret chats and private messages. **Use
 default** inherits the global choice. Secret peers are classified before private
 users. Telegram's server transcription is unavailable for secret/local messages;
@@ -13,6 +13,10 @@ also exposes its transcription prompt. Custom exposes an OpenAI-compatible base
 URL, model and optional masked key. Language is shared across providers (`auto`
 selects detection). Local settings expose the component path and GPU permission;
 models are managed through the existing Whisper model picker.
+Cloud dialogs contain only provider credentials, model, prompt (Gemini), shared
+language and connection testing. Local module selection and GPU controls belong
+to Local Whisper. The model picker is visible when Local or Automatic is selected
+globally or in any scope.
 
 **Test connection** sends one second of generated silent WAV through the selected
 provider, using unsaved field values. A second press cancels it. Closing the box
@@ -60,8 +64,10 @@ include the cloud DLL; macOS bundles include the cloud dylib before signing.
 
 Default search locations are `voice-asr/{cloud,local}` beside the executable and
 `tdata/voice-asr/{cloud,local}` in the working directory. The exact library filename
-is `libvoice_asr.so`, `libvoice_asr.dylib` or `voice_asr.dll`. Each provider's settings
-can specify an absolute component path. Cloud and local paths are independent.
+is `libvoice_asr.so`, `libvoice_asr.dylib` or `voice_asr.dll`. Local settings can
+specify an absolute component path. The bundled cloud component is discovered
+automatically; an existing `transcriptionEnginePath` override in the settings
+file remains supported. Cloud and local paths are independent.
 Discovery checks file existence without loading a library. Local loading requires
 ABI 1 and the local capability; a cloud-only build cannot act as a local engine.
 
@@ -115,6 +121,12 @@ startup screen, persisted their disposable-profile local key and exited normally
 The installed cloud library matched the bundled artifact, exposed ABI 1 with
 zero Local capabilities and had resolvable runtime dependencies. The executable
 contained no native Whisper/ggml engine definitions.
+
+The subsequent UI correction returned transcription to freshGram → General,
+removed local module/GPU controls from cloud dialogs and completed Russian
+transcription labels. Generated localization, placeholder validation and C++
+syntax checks passed for these changes. The runtime checks above describe the
+preceding build; a rebuilt-client UI check for this correction is pending.
 
 The same client run checked worker-based passcode creation and change, fake
 unlock recovery, removal, and injected disk-write failures. The standalone

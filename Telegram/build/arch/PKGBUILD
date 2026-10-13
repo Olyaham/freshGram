@@ -1,7 +1,7 @@
 pkgname=freshgram
 pkgver=${FRESHGRAM_VERSION:?FRESHGRAM_VERSION is not set}
 pkgrel=1
-pkgdesc='Telegram Desktop fork with the AyuGram features and a Material look'
+pkgdesc='Telegram Desktop client with customization and message history'
 arch=('x86_64')
 url='https://github.com/Snowy-Fluffy/freshGram'
 license=('GPL-3.0-or-later')

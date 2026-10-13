@@ -500,7 +500,7 @@
 "ayu_ConfirmationRound" = "要发送这个圆形视频吗？";
 "ayu_IntroAbout" = "欢迎使用 freshGram。\n打造属于你自己的 Telegram。";
 "ayu_AboutText1" = "违反服务条款的 Telegram 客户端，基于 {api_link}。";
-"ayu_UpdateAyuGram" = "更新 freshGram";
+"ayu_UpdateFreshGram" = "更新 freshGram";
 "ayu_UtilityRestartRequired" = "应用将在 5 秒后关闭。";
 "ayu_DeletedChatsHeader" = "已删除的聊天";
 "ayu_KeepRemovedDialogs" = "保留你被移出或已删除的聊天";
