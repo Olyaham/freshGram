@@ -1,0 +1,24 @@
+name: Translation consent checks
+
+on:
+  push:
+    branches: [main, fix/translator-secret-guard]
+  pull_request:
+    paths:
+      - 'Telegram/SourceFiles/boxes/translate_box*'
+      - 'Telegram/SourceFiles/lang/translate_provider*'
+      - 'Telegram/SourceFiles/ayu/features/translator/**'
+      - 'Telegram/SourceFiles/history/**'
+      - 'tools/tests/test_secret_translation.py'
+      - '.github/workflows/translation-consent-checks.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  consent:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y g++ pkg-config qt6-base-dev
+      - run: python3 -m unittest tools.tests.test_secret_translation -v
