@@ -4304,6 +4304,17 @@ ClickHandlerPtr Message::createGoToCommentsLink() const {
 					return;
 				}
 			}
+			// A deleted post does not exist on the server anymore, but its
+			// comments live in the discussion group: open them from there.
+			const auto comments = item->commentsItemId();
+			if ((item->isDeleted() || item->isLocal())
+				&& comments.peer
+				&& comments.msg) {
+				controller->showRepliesForMessage(
+					history->owner().history(comments.peer),
+					comments.msg);
+				return;
+			}
 			controller->showRepliesForMessage(history, item->id);
 		}
 	});
@@ -6658,8 +6669,10 @@ QRect Message::countGeometry() const {
 }
 
 Ui::BubbleRounding Message::countMessageRounding() const {
-	const auto smallTop = isBubbleAttachedToPrevious();
-	const auto smallBottom = isBubbleAttachedToNext();
+	// A media without a bubble has nothing to join with the neighbours.
+	const auto joins = !Ui::MaterialBubbles() || hasBubble();
+	const auto smallTop = joins && isBubbleAttachedToPrevious();
+	const auto smallBottom = joins && isBubbleAttachedToNext();
 	const auto media = smallBottom ? nullptr : this->media();
 	const auto item = data();
 	const auto keyboard = item->inlineReplyKeyboard();

@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "storage/storage_domain.h"
 
+#include "ayu/features/fake_passcode/fake_passcode.h"
 #include "core/version.h"
 #include "storage/details/storage_file_utilities.h"
 #include "storage/serialize_common.h"
@@ -14,6 +15,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_domain.h"
 #include "main/main_account.h"
 #include "base/random.h"
+#include "ayu/ayu_settings.h"
+#include "ayu/data/ayu_vault.h"
 
 namespace Storage {
 namespace {
@@ -83,6 +86,8 @@ void Domain::startWithSingleAccount(
 
 	if (auto localKey = account->local().peekLegacyLocalKey()) {
 		_localKey = std::move(localKey);
+		AyuVault::SetKey(_localKey);
+		AyuSettings::attachVault();
 		encryptLocalKey(passcode);
 		account->start(nullptr);
 	} else {
@@ -105,6 +110,8 @@ void Domain::generateLocalKey() {
 	base::RandomFill(pass.data(), pass.size());
 	base::RandomFill(salt.data(), salt.size());
 	_localKey = CreateLocalKey(pass, salt);
+	AyuVault::SetKey(_localKey);
+	AyuSettings::attachVault();
 
 	encryptLocalKey(QByteArray());
 }
@@ -155,6 +162,8 @@ Domain::StartModernResult Domain::startModern(
 		return StartModernResult::Failed;
 	}
 	_localKey = std::make_shared<MTP::AuthKey>(key);
+	AyuVault::SetKey(_localKey);
+	AyuSettings::attachVault();
 
 	_passcodeKeyEncrypted = keyEncrypted;
 	_passcodeKeySalt = salt;
@@ -263,6 +272,7 @@ void Domain::setPasscode(const QByteArray &passcode) {
 
 	encryptLocalKey(passcode);
 	writeAccounts();
+	AyuFakePasscode::RealPasscodeChanged(passcode);
 
 	_passcodeKeyChanged.fire({});
 }

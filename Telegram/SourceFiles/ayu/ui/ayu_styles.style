@@ -12,6 +12,7 @@ using "ui/colors.palette";
 using "ui/widgets/widgets.style";
 using "info/info.style";
 using "settings/settings.style";
+using "chat_helpers/chat_helpers.style";
 
 iconPickerSelectedPadding: 2px;
 iconPickerSelectedRounding: 12px;
@@ -128,3 +129,34 @@ ayuServiceTimeBadgeVerticalPadding: 2px;
 ayuServiceTimeBadgeGap: 8px;
 ayuServiceTimeBadgeTrailingInset: 3px;
 ayuServiceTimeBadgeLastLineWidthAdd: 9px;
+
+recognitionHandleRadius: 7px;
+recognitionHandleTolerance: 16px;
+recognitionBorder: 2px;
+recognitionMinSide: 32px;
+recognitionButtonsSkip: 12px;
+recognitionButtonsBottom: 28px;
+recognitionHintTop: 24px;
+recognitionPanelRadius: 14px;
+recognitionPanelPadding: margins(18px, 14px, 18px, 14px);
+recognitionPanelMaxWidth: 640px;
+recognitionPanelMaxHeight: 440px;
+recognitionPanelMinWidth: 240px;
+recognitionPanelMinHeight: 160px;
+recognitionPanelMargin: 24px;
+recognitionPanelButtonsTop: 12px;
+
+historyStash: TwoIconButton(historyToDown) {
+	iconAbove: icon {{ "history_stash_bubble-40x40", historyToDownFg, point(6px, 6px) }};
+	iconAboveOver: icon {{ "history_stash_bubble-40x40", historyToDownFgOver, point(6px, 6px) }};
+}
+historyStashArrow: icon {{ "history_stash_arrow-40x40", historyToDownFg, point(6px, 6px) }};
+historyStashArrowOver: icon {{ "history_stash_arrow-40x40", historyToDownFgOver, point(6px, 6px) }};
+historyStashArrowClipPosition: point(18px, 28px);
+historyStashArrowClipSize: size(16px, 12px);
+historyStashArrowTravel: 12px;
+historyStashBubbleTravel: 4px;
+
+deleteOwnRowPadding: margins(22px, 4px, 22px, 4px);
+deleteOwnNestedSkip: 36px;
+deleteOwnFieldWidth: 120px;

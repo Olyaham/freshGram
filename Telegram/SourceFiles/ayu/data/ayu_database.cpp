@@ -7,11 +7,18 @@
 #include "ayu/data/ayu_database.h"
 
 #include "ayu/data/ayu_database_backup.h"
+#include "ayu/data/ayu_vault.h"
 #include "ayu/data/entities.h"
+#include "ayu/libs/sqlite/sqlite3.h"
 #include "ayu/libs/sqlite/sqlite_orm.h"
 #include "ayu/utils/id_search.h"
+#include "base/timer.h"
 #include "base/unixtime.h"
+#include "core/application.h"
 #include "crl/crl_async.h"
+#include "crl/crl_on_main.h"
+#include "main/main_domain.h"
+#include "storage/storage_domain.h"
 
 #include <atomic>
 #include <chrono>
@@ -19,9 +26,30 @@
 #include <system_error>
 #include <thread>
 
+struct sqlite3_api_routines;
+
+namespace {
+
+sqlite3 *MemoryHandle = nullptr;
+
+int captureMemoryHandle(sqlite3 *db, char **, const sqlite3_api_routines *) {
+	if (!MemoryHandle) {
+		MemoryHandle = db;
+	}
+	return SQLITE_OK;
+}
+
+const auto kMemoryHandleCapture = [] {
+	sqlite3_auto_extension(
+		reinterpret_cast<void(*)(void)>(&captureMemoryHandle));
+	return true;
+}();
+
+} // namespace
+
 using namespace sqlite_orm;
 auto storage = make_storage(
-	"./tdata/ayudata.db",
+	":memory:",
 	make_table<SchemaVersion>(
 		"SchemaVersion",
 		make_column("id", &SchemaVersion::id, primary_key()),
@@ -137,6 +165,49 @@ auto storage = make_storage(
 		make_column("lastMessageDate", &KeptDialog::lastMessageDate),
 		make_column("lost", &KeptDialog::lost)
 	),
+	make_table<DeletedMarkup>(
+		"DeletedMarkup",
+		make_column("fakeId", &DeletedMarkup::fakeId, primary_key().autoincrement()),
+		make_column("userId", &DeletedMarkup::userId),
+		make_column("dialogId", &DeletedMarkup::dialogId),
+		make_column("messageId", &DeletedMarkup::messageId),
+		make_column("markup", &DeletedMarkup::markup),
+		make_column("entityCreateDate", &DeletedMarkup::entityCreateDate)
+	),
+	make_table<DeletedRank>(
+		"DeletedRank",
+		make_column("fakeId", &DeletedRank::fakeId, primary_key().autoincrement()),
+		make_column("userId", &DeletedRank::userId),
+		make_column("dialogId", &DeletedRank::dialogId),
+		make_column("messageId", &DeletedRank::messageId),
+		make_column("rank", &DeletedRank::rank),
+		make_column("entityCreateDate", &DeletedRank::entityCreateDate)
+	),
+	make_table<ComposeStashRow>(
+		"ComposeStash",
+		make_column("fakeId", &ComposeStashRow::fakeId, primary_key().autoincrement()),
+		make_column("userId", &ComposeStashRow::userId),
+		make_column("dialogId", &ComposeStashRow::dialogId),
+		make_column("topicRootId", &ComposeStashRow::topicRootId),
+		make_column("monoforumPeerId", &ComposeStashRow::monoforumPeerId),
+		make_column("payload", &ComposeStashRow::payload),
+		make_column("entityCreateDate", &ComposeStashRow::entityCreateDate)
+	),
+	make_table<DeletedExtra>(
+		"DeletedExtra",
+		make_column("fakeId", &DeletedExtra::fakeId, primary_key().autoincrement()),
+		make_column("userId", &DeletedExtra::userId),
+		make_column("dialogId", &DeletedExtra::dialogId),
+		make_column("messageId", &DeletedExtra::messageId),
+		make_column("reactions", &DeletedExtra::reactions),
+		make_column("repliesCount", &DeletedExtra::repliesCount),
+		make_column("commentsChannelId", &DeletedExtra::commentsChannelId),
+		make_column("commentsRootId", &DeletedExtra::commentsRootId),
+		make_column("commentsReadTill", &DeletedExtra::commentsReadTill),
+		make_column("commentsMaxId", &DeletedExtra::commentsMaxId),
+		make_column("repliers", &DeletedExtra::repliers),
+		make_column("entityCreateDate", &DeletedExtra::entityCreateDate)
+	),
 	make_table<KeptTopic>(
 		"KeptTopic",
 		make_column("fakeId", &KeptTopic::fakeId, primary_key().autoincrement()),
@@ -160,6 +231,13 @@ auto storage = make_storage(
 			   column<SecretMessageRow>(&SecretMessageRow::userId),
 			   column<SecretMessageRow>(&SecretMessageRow::chatId),
 			   column<SecretMessageRow>(&SecretMessageRow::randomId)),
+	make_table<LocalPin>(
+		"LocalPin",
+		make_column("fakeId", &LocalPin::fakeId, primary_key().autoincrement()),
+		make_column("userId", &LocalPin::userId),
+		make_column("peerId", &LocalPin::peerId),
+		make_column("position", &LocalPin::position)
+	),
 	make_table<KnownUser>(
 		"KnownUser",
 		make_column("fakeId", &KnownUser::fakeId, primary_key().autoincrement()),
@@ -267,12 +345,50 @@ namespace {
 std::recursive_mutex DatabaseMutex;
 bool DatabaseReady = false;
 std::atomic<int> PurgeDays = 0;
+std::atomic<sqlite3_int64> SavedChanges = 0;
+std::atomic<bool> SavePending = false;
+std::unique_ptr<base::Timer> SaveTimer;
+bool FinishLegacyMigrationPending = false;
 
 constexpr auto kBusyTimeoutMs = 5000;
 constexpr auto kSqliteBusy = 5;
 constexpr auto kSqliteLocked = 6;
 constexpr auto kSqliteCorrupt = 11;
 constexpr auto kSqliteNotADatabase = 26;
+constexpr auto kSaveDelay = crl::time(3000);
+
+[[nodiscard]] QString snapshotPath() {
+	return "./tdata/ayudata.enc";
+}
+
+[[nodiscard]] QString legacyPath() {
+	return "./tdata/ayudata.db";
+}
+
+bool saveSnapshot();
+
+void scheduleSave() {
+	if (SavePending.exchange(true)) {
+		return;
+	}
+	crl::on_main([] {
+		if (!SaveTimer) {
+			SaveTimer = std::make_unique<base::Timer>([] {
+				crl::async([] {
+					[[maybe_unused]] const auto saved = saveSnapshot();
+				});
+			});
+		}
+		SaveTimer->callOnce(kSaveDelay);
+	});
+}
+
+void noteChanges() {
+	if (MemoryHandle
+		&& sqlite3_total_changes64(MemoryHandle) != SavedChanges.load()) {
+		scheduleSave();
+	}
+}
 
 template<typename Result, typename Callback>
 Result run(const char *what, Result fallback, Callback &&callback) {
@@ -281,7 +397,9 @@ Result run(const char *what, Result fallback, Callback &&callback) {
 		return fallback;
 	}
 	try {
-		return callback();
+		Result result = callback();
+		noteChanges();
+		return result;
 	} catch (const std::exception &ex) {
 		LOG(("[AyuGram] Database: failed to %1: %2").arg(QString::fromUtf8(what), QString::fromUtf8(ex.what())));
 	} catch (...) {
@@ -313,26 +431,139 @@ void inTransaction(Callback &&callback) {
 	}
 }
 
-QString databasePath() {
-	return "./tdata/ayudata.db";
+bool saveSnapshot() {
+	SavePending = false;
+	auto plain = QByteArray();
+	{
+		std::lock_guard lock(DatabaseMutex);
+		if (!DatabaseReady || !MemoryHandle) {
+			return false;
+		}
+		auto size = sqlite3_int64();
+		const auto data = sqlite3_serialize(MemoryHandle, "main", &size, 0);
+		if (!data) {
+			return false;
+		}
+		plain = QByteArray(
+			reinterpret_cast<const char*>(data),
+			qsizetype(size));
+		sqlite3_free(data);
+		SavedChanges = sqlite3_total_changes64(MemoryHandle);
+	}
+	if (!AyuVault::WriteSealedFile(snapshotPath(), plain)) {
+		SavedChanges = -1;
+		return false;
+	}
+	return true;
 }
 
 void renameDatabaseFiles(const QString &suffix) {
 	for (const auto &extension : {QString(), QString("-shm"), QString("-wal")}) {
-		const auto from = databasePath() + extension;
+		const auto from = legacyPath() + extension;
 		if (QFile::exists(from)) {
 			QFile::rename(from, QString("./tdata/ayudata_%1.db%2").arg(suffix, extension));
 		}
 	}
+	if (QFile::exists(snapshotPath())) {
+		QFile::rename(snapshotPath(), QString("./tdata/ayudata_%1.enc").arg(suffix));
+	}
 }
 
 void copyDatabaseFiles(const QString &suffix) {
-	for (const auto &extension : {QString(), QString("-shm"), QString("-wal")}) {
-		const auto from = databasePath() + extension;
-		if (QFile::exists(from)) {
-			QFile::copy(from, QString("./tdata/ayudata_%1.db%2").arg(suffix, extension));
+	if (QFile::exists(snapshotPath())) {
+		QFile::copy(snapshotPath(), QString("./tdata/ayudata_%1.enc").arg(suffix));
+	}
+}
+
+[[noreturn]] void throwSqlite(int code) {
+	throw std::system_error(
+		std::error_code(code, sqlite_orm::get_sqlite_error_category()));
+}
+
+void resetMemoryDatabase() {
+	sqlite3 *empty = nullptr;
+	if (sqlite3_open_v2(":memory:", &empty, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr) != SQLITE_OK) {
+		sqlite3_close(empty);
+		return;
+	}
+	if (const auto backup = sqlite3_backup_init(MemoryHandle, "main", empty, "main")) {
+		sqlite3_backup_step(backup, -1);
+		sqlite3_backup_finish(backup);
+	}
+	sqlite3_close(empty);
+}
+
+void importLegacyDatabase() {
+	sqlite3 *legacy = nullptr;
+	const auto path = legacyPath().toUtf8();
+	if (sqlite3_open_v2(path.constData(), &legacy, SQLITE_OPEN_READWRITE, nullptr) != SQLITE_OK) {
+		const auto code = legacy ? sqlite3_extended_errcode(legacy) : SQLITE_CANTOPEN;
+		sqlite3_close(legacy);
+		throwSqlite(code);
+	}
+	sqlite3_busy_timeout(legacy, kBusyTimeoutMs);
+	sqlite3_exec(legacy, "PRAGMA journal_mode = DELETE", nullptr, nullptr, nullptr);
+	auto code = SQLITE_ERROR;
+	if (const auto backup = sqlite3_backup_init(MemoryHandle, "main", legacy, "main")) {
+		sqlite3_backup_step(backup, -1);
+		code = sqlite3_backup_finish(backup);
+	} else {
+		code = sqlite3_errcode(MemoryHandle);
+	}
+	sqlite3_close(legacy);
+	if (code != SQLITE_OK) {
+		throwSqlite(code);
+	}
+}
+
+void loadSnapshot(bool &imported) {
+	if (QFile::exists(snapshotPath())) {
+		const auto plain = AyuVault::ReadFile(snapshotPath(), true);
+		if (!plain || plain->isEmpty()) {
+			throwSqlite(kSqliteNotADatabase);
+		}
+		const auto size = sqlite3_int64(plain->size());
+		const auto buffer = static_cast<unsigned char*>(sqlite3_malloc64(size));
+		if (!buffer) {
+			throw std::bad_alloc();
+		}
+		memcpy(buffer, plain->constData(), size_t(size));
+		const auto code = sqlite3_deserialize(
+			MemoryHandle,
+			"main",
+			buffer,
+			size,
+			size,
+			SQLITE_DESERIALIZE_FREEONCLOSE | SQLITE_DESERIALIZE_RESIZEABLE);
+		if (code != SQLITE_OK) {
+			throwSqlite(code);
+		}
+	} else if (QFile::exists(legacyPath())) {
+		importLegacyDatabase();
+		imported = true;
+	}
+}
+
+void sealLegacyCopies(const QString &directory, const QString &pattern) {
+	for (const auto &info : QDir(directory).entryInfoList(QStringList() << pattern, QDir::Files)) {
+		if (const auto plain = AyuVault::ReadFile(info.absoluteFilePath())) {
+			auto target = info.absoluteFilePath();
+			target.chop(3);
+			if (AyuVault::WriteSealedFile(target + ".enc", *plain)) {
+				QFile::remove(info.absoluteFilePath());
+				QFile::remove(info.absoluteFilePath() + "-wal");
+				QFile::remove(info.absoluteFilePath() + "-shm");
+			}
 		}
 	}
+}
+
+void finishLegacyMigration() {
+	for (const auto &extension : {QString(), QString("-shm"), QString("-wal")}) {
+		QFile::remove(legacyPath() + extension);
+	}
+	sealLegacyCopies("./tdata", "ayudata_*.db");
+	sealLegacyCopies("./tdata/ayu_backups", "ayudata_*.db");
 }
 
 }
@@ -439,41 +670,70 @@ void backupCurrentDatabase() {
 
 namespace {
 
-void prepareStorage() {
+bool prepareStorage() {
+	if (!MemoryHandle) {
+		throw std::runtime_error("The database handle is missing.");
+	}
+	auto imported = false;
+	loadSnapshot(imported);
+	const auto before = sqlite3_total_changes64(MemoryHandle);
+
 	storage.sync_schema(true);
 
 	runMigrations(storage);
 
 	storage.sync_schema(true);
 
-	storage.on_open = [](sqlite3 *db) {
-		sqlite3_exec(db, "PRAGMA secure_delete = ON", nullptr, nullptr, nullptr);
-	};
-	storage.open_forever();
+	sqlite3_exec(MemoryHandle, "PRAGMA secure_delete = ON", nullptr, nullptr, nullptr);
 	try {
-		storage.pragma.journal_mode(sqlite_orm::journal_mode::WAL);
-		storage.pragma.synchronous(1);
 		storage.busy_timeout(kBusyTimeoutMs);
 	} catch (const std::exception &ex) {
 		LOG(("[AyuGram] Database: failed to apply pragmas: %1").arg(ex.what()));
 	}
+	if (imported) {
+		FinishLegacyMigrationPending = true;
+	}
+	return imported || (sqlite3_total_changes64(MemoryHandle) != before);
 }
 
 }
 
 void initialize() {
 	std::lock_guard lock(DatabaseMutex);
-	DatabaseReady = false;
-
-	[[maybe_unused]] const auto backedUp = AyuDatabaseBackup::create();
+	const auto &domain = Core::App().domain();
+	const auto key = domain.started() ? domain.local().localKey() : nullptr;
+	if (!key) {
+		LOG(("[AyuGram] Database: the local key is unavailable."));
+		return;
+	}
+	AyuVault::SetKey(key);
+	if (DatabaseReady) {
+		crl::async([] {
+			[[maybe_unused]] const auto saved = saveSnapshot();
+		});
+		return;
+	}
 
 	auto retriedBusy = false;
 	auto resetCorrupted = false;
 	auto restoreIndex = 0;
 	while (true) {
 		try {
-			prepareStorage();
+			const auto changed = prepareStorage();
 			DatabaseReady = true;
+			SavedChanges = sqlite3_total_changes64(MemoryHandle);
+			auto saved = QFile::exists(snapshotPath());
+			if (changed || !saved) {
+				saved = saveSnapshot();
+			}
+			if (FinishLegacyMigrationPending && saved) {
+				FinishLegacyMigrationPending = false;
+				finishLegacyMigration();
+			}
+			crl::async([] {
+				AyuVault::SealFilesIn("./tdata/ayu_media");
+				[[maybe_unused]] const auto created = AyuDatabaseBackup::create();
+			});
 			AyuDatabaseBackup::startPeriodic();
 			if (const auto days = PurgeDays.load()) {
 				purgeOlderThan(days);
@@ -490,6 +750,7 @@ void initialize() {
 			}
 			if (sqliteError && (code == kSqliteCorrupt || code == kSqliteNotADatabase)) {
 				moveCurrentDatabase();
+				resetMemoryDatabase();
 				if (AyuDatabaseBackup::restore(restoreIndex)) {
 					continue;
 				} else if (!resetCorrupted) {
@@ -521,6 +782,12 @@ void purgeOlderThan(int days) {
 					where(column<DeletedMessage>(&DeletedMessage::entityCreateDate) < cutoff));
 				storage.remove_all<EditedMessage>(
 					where(column<EditedMessage>(&EditedMessage::entityCreateDate) < cutoff));
+				storage.remove_all<DeletedExtra>(
+					where(column<DeletedExtra>(&DeletedExtra::entityCreateDate) < cutoff));
+				storage.remove_all<DeletedMarkup>(
+					where(column<DeletedMarkup>(&DeletedMarkup::entityCreateDate) < cutoff));
+				storage.remove_all<DeletedRank>(
+					where(column<DeletedRank>(&DeletedRank::entityCreateDate) < cutoff));
 			});
 		});
 	});
@@ -594,6 +861,96 @@ void addDeletedMessages(const std::vector<DeletedMessage> &messages) {
 	});
 }
 
+void addDeletedExtras(const std::vector<DeletedExtra> &extras) {
+	if (extras.empty()) {
+		return;
+	}
+	runVoid("save deleted extras", [&] {
+		inTransaction([&] {
+			for (const auto &extra : extras) {
+				storage.remove_all<DeletedExtra>(
+					where(
+						column<DeletedExtra>(&DeletedExtra::userId) == extra.userId and
+						column<DeletedExtra>(&DeletedExtra::dialogId) == extra.dialogId and
+						column<DeletedExtra>(&DeletedExtra::messageId) == extra.messageId
+					)
+				);
+				storage.insert(extra);
+			}
+		});
+	});
+}
+
+void addDeletedMarkups(const std::vector<DeletedMarkup> &markups) {
+	if (markups.empty()) {
+		return;
+	}
+	runVoid("save deleted markups", [&] {
+		inTransaction([&] {
+			for (const auto &markup : markups) {
+				storage.remove_all<DeletedMarkup>(
+					where(
+						column<DeletedMarkup>(&DeletedMarkup::userId) == markup.userId and
+						column<DeletedMarkup>(&DeletedMarkup::dialogId) == markup.dialogId and
+						column<DeletedMarkup>(&DeletedMarkup::messageId) == markup.messageId
+					)
+				);
+				storage.insert(markup);
+			}
+		});
+	});
+}
+
+void addDeletedRanks(const std::vector<DeletedRank> &ranks) {
+	if (ranks.empty()) {
+		return;
+	}
+	runVoid("save deleted ranks", [&] {
+		inTransaction([&] {
+			for (const auto &rank : ranks) {
+				storage.remove_all<DeletedRank>(
+					where(
+						column<DeletedRank>(&DeletedRank::userId) == rank.userId and
+						column<DeletedRank>(&DeletedRank::dialogId) == rank.dialogId and
+						column<DeletedRank>(&DeletedRank::messageId) == rank.messageId
+					)
+				);
+				storage.insert(rank);
+			}
+		});
+	});
+}
+
+std::vector<DeletedRank> getDeletedRanks(ID userId, ID dialogId) {
+	return run<std::vector<DeletedRank>>("load deleted ranks", {}, [&] {
+		return storage.get_all<DeletedRank>(
+			where(
+				column<DeletedRank>(&DeletedRank::userId) == userId and
+				column<DeletedRank>(&DeletedRank::dialogId) == dialogId
+			));
+	});
+}
+
+std::vector<DeletedMarkup> getDeletedMarkups(ID userId, ID dialogId) {
+	return run<std::vector<DeletedMarkup>>("load deleted markups", {}, [&] {
+		return storage.get_all<DeletedMarkup>(
+			where(
+				column<DeletedMarkup>(&DeletedMarkup::userId) == userId and
+				column<DeletedMarkup>(&DeletedMarkup::dialogId) == dialogId
+			));
+	});
+}
+
+std::vector<DeletedExtra> getDeletedExtras(ID userId, ID dialogId) {
+	return run<std::vector<DeletedExtra>>("load deleted extras", {}, [&] {
+		return storage.get_all<DeletedExtra>(
+			where(
+				column<DeletedExtra>(&DeletedExtra::userId) == userId and
+				column<DeletedExtra>(&DeletedExtra::dialogId) == dialogId
+			));
+	});
+}
+
 void addDeletedMessage(const DeletedMessage &message) {
 	addDeletedMessages({message});
 }
@@ -642,6 +999,32 @@ std::vector<DeletedMessage> getDeletedMessages(ID userId, ID dialogId, ID topicI
 	});
 }
 
+std::vector<DeletedMessage> searchDeletedMessages(ID userId, ID dialogId, ID topicId, ID fromId, const std::string &searchQuery, int totalLimit, bool withMedia) {
+	return run<std::vector<DeletedMessage>>("search deleted messages", {}, [&] {
+		std::string escaped;
+		escaped.reserve(searchQuery.size());
+		for (const auto c : searchQuery) {
+			if (c == '%' || c == '_' || c == '\\') {
+				escaped += '\\';
+			}
+			escaped += c;
+		}
+		const auto pattern = "%" + escaped + "%";
+		return storage.get_all<DeletedMessage>(
+			where(
+				column<DeletedMessage>(&DeletedMessage::userId) == userId and
+				(column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId or dialogId == 0) and
+				(column<DeletedMessage>(&DeletedMessage::topicId) == topicId or topicId == 0) and
+				(column<DeletedMessage>(&DeletedMessage::fromId) == fromId or fromId == 0) and
+				(column<DeletedMessage>(&DeletedMessage::documentType) == 1 or !withMedia) and
+				like(column<DeletedMessage>(&DeletedMessage::text), pattern, "\\")
+			),
+			order_by(column<DeletedMessage>(&DeletedMessage::date)).desc(),
+			limit(totalLimit)
+		);
+	});
+}
+
 bool hasDeletedMessages(ID userId, ID dialogId, ID topicId) {
 	return run<bool>("check deleted messages", false, [&] {
 		return !storage.select(
@@ -666,6 +1049,27 @@ std::vector<ID> getDeletedDialogIds(ID userId) {
 
 void removeDeletedMessage(ID userId, ID dialogId, ID messageId) {
 	runVoid("remove deleted message", [&] {
+		storage.remove_all<DeletedExtra>(
+			where(
+				column<DeletedExtra>(&DeletedExtra::userId) == userId and
+				column<DeletedExtra>(&DeletedExtra::dialogId) == dialogId and
+				column<DeletedExtra>(&DeletedExtra::messageId) == messageId
+			)
+		);
+		storage.remove_all<DeletedMarkup>(
+			where(
+				column<DeletedMarkup>(&DeletedMarkup::userId) == userId and
+				column<DeletedMarkup>(&DeletedMarkup::dialogId) == dialogId and
+				column<DeletedMarkup>(&DeletedMarkup::messageId) == messageId
+			)
+		);
+		storage.remove_all<DeletedRank>(
+			where(
+				column<DeletedRank>(&DeletedRank::userId) == userId and
+				column<DeletedRank>(&DeletedRank::dialogId) == dialogId and
+				column<DeletedRank>(&DeletedRank::messageId) == messageId
+			)
+		);
 		storage.remove_all<DeletedMessage>(
 			where(
 				column<DeletedMessage>(&DeletedMessage::userId) == userId and
@@ -678,6 +1082,26 @@ void removeDeletedMessage(ID userId, ID dialogId, ID messageId) {
 
 void clearDeletedMessages(ID userId, ID dialogId, ID topicId) {
 	runVoid("clear deleted messages", [&] {
+		if (!topicId) {
+			storage.remove_all<DeletedExtra>(
+				where(
+					column<DeletedExtra>(&DeletedExtra::userId) == userId and
+					column<DeletedExtra>(&DeletedExtra::dialogId) == dialogId
+				)
+			);
+			storage.remove_all<DeletedMarkup>(
+				where(
+					column<DeletedMarkup>(&DeletedMarkup::userId) == userId and
+					column<DeletedMarkup>(&DeletedMarkup::dialogId) == dialogId
+				)
+			);
+			storage.remove_all<DeletedRank>(
+				where(
+					column<DeletedRank>(&DeletedRank::userId) == userId and
+					column<DeletedRank>(&DeletedRank::dialogId) == dialogId
+				)
+			);
+		}
 		storage.remove_all<DeletedMessage>(
 			where(
 				column<DeletedMessage>(&DeletedMessage::userId) == userId and
@@ -686,6 +1110,111 @@ void clearDeletedMessages(ID userId, ID dialogId, ID topicId) {
 			)
 		);
 	});
+}
+
+void clearAllDeleted() {
+	runVoid("clear all deleted", [&] {
+		inTransaction([&] {
+			storage.remove_all<DeletedExtra>();
+			storage.remove_all<DeletedMarkup>();
+			storage.remove_all<DeletedRank>();
+			storage.remove_all<DeletedMessage>();
+			storage.remove_all<DeletedDialog>();
+			storage.remove_all<KeptTopic>();
+			storage.remove_all<KeptDialog>();
+		});
+	});
+	AyuDatabaseBackup::removeAll();
+}
+
+template<typename Callback>
+void forEachUserTable(Callback &&callback) {
+	callback(std::type_identity<DeletedExtra>());
+	callback(std::type_identity<DeletedMarkup>());
+	callback(std::type_identity<DeletedRank>());
+	callback(std::type_identity<DeletedMessage>());
+	callback(std::type_identity<EditedMessage>());
+	callback(std::type_identity<DeletedDialog>());
+	callback(std::type_identity<KeptTopic>());
+	callback(std::type_identity<KeptDialog>());
+	callback(std::type_identity<KnownUser>());
+	callback(std::type_identity<LocalPin>());
+	callback(std::type_identity<ComposeStashRow>());
+	callback(std::type_identity<SecretMessageRow>());
+	callback(std::type_identity<SecretChatRow>());
+	callback(std::type_identity<SecretStateRow>());
+	callback(std::type_identity<PeekedStatusRow>());
+	callback(std::type_identity<PeekRestoreRow>());
+	callback(std::type_identity<SpyMessageRead>());
+	callback(std::type_identity<SpyMessageContentsRead>());
+}
+
+void clearUserData(ID userId) {
+	runVoid("clear user data", [&] {
+		inTransaction([&] {
+			forEachUserTable([&](auto tag) {
+				using Row = typename decltype(tag)::type;
+				storage.remove_all<Row>(
+					where(column<Row>(&Row::userId) == userId));
+			});
+		});
+		storage.vacuum();
+	});
+	AyuDatabaseBackup::purgeUser(userId);
+	flush();
+}
+
+void clearEverything() {
+	runVoid("clear everything", [&] {
+		inTransaction([&] {
+			forEachUserTable([&](auto tag) {
+				using Row = typename decltype(tag)::type;
+				storage.remove_all<Row>();
+			});
+		});
+		storage.vacuum();
+	});
+	AyuDatabaseBackup::removeAll();
+	flush();
+}
+
+bool exportSealed(QByteArray &sealed, qint64 &rows) {
+	if (!AyuVault::HasKey()) {
+		return false;
+	}
+	auto plain = QByteArray();
+	{
+		std::lock_guard lock(DatabaseMutex);
+		if (!DatabaseReady || !MemoryHandle) {
+			return false;
+		}
+		auto size = sqlite3_int64();
+		const auto data = sqlite3_serialize(MemoryHandle, "main", &size, 0);
+		if (!data) {
+			return false;
+		}
+		plain = QByteArray(
+			reinterpret_cast<const char*>(data),
+			qsizetype(size));
+		sqlite3_free(data);
+		rows = 0;
+		try {
+			rows = storage.count<DeletedMessage>()
+				+ storage.count<EditedMessage>();
+		} catch (...) {
+		}
+	}
+	sealed = AyuVault::Seal(plain);
+	return true;
+}
+
+void flush() {
+	[[maybe_unused]] const auto saved = saveSnapshot();
+}
+
+void finish() {
+	SaveTimer = nullptr;
+	flush();
 }
 
 void saveKeptDialog(const KeptDialog &dialog) {
@@ -803,6 +1332,86 @@ void removeKeptDialog(ID userId, ID dialogId) {
 			where(
 				column<KeptDialog>(&KeptDialog::userId) == userId and
 				column<KeptDialog>(&KeptDialog::dialogId) == dialogId
+			)
+		);
+	});
+}
+
+std::vector<ID> getLocalPins(ID userId) {
+	return run<std::vector<ID>>("load local pins", {}, [&] {
+		auto result = std::vector<ID>();
+		const auto rows = storage.get_all<LocalPin>(
+			where(column<LocalPin>(&LocalPin::userId) == userId),
+			order_by(column<LocalPin>(&LocalPin::position)));
+		result.reserve(rows.size());
+		for (const auto &row : rows) {
+			result.push_back(row.peerId);
+		}
+		return result;
+	});
+}
+
+void saveLocalPins(ID userId, const std::vector<ID> &peers) {
+	runVoid("save local pins", [&] {
+		inTransaction([&] {
+			storage.remove_all<LocalPin>(
+				where(column<LocalPin>(&LocalPin::userId) == userId));
+			auto position = 0;
+			for (const auto peerId : peers) {
+				storage.insert(LocalPin{ 0, userId, peerId, position++ });
+			}
+		});
+	});
+}
+
+void saveComposeStash(const ComposeStashRow &row) {
+	runVoid("save compose stash", [&] {
+		inTransaction([&] {
+			storage.remove_all<ComposeStashRow>(
+				where(
+					column<ComposeStashRow>(&ComposeStashRow::userId) == row.userId and
+					column<ComposeStashRow>(&ComposeStashRow::dialogId) == row.dialogId and
+					column<ComposeStashRow>(&ComposeStashRow::topicRootId) == row.topicRootId and
+					column<ComposeStashRow>(&ComposeStashRow::monoforumPeerId) == row.monoforumPeerId
+				)
+			);
+			storage.insert(row);
+		});
+	});
+}
+
+std::optional<ComposeStashRow> getComposeStash(
+		ID userId,
+		ID dialogId,
+		ID topicRootId,
+		ID monoforumPeerId) {
+	return run<std::optional<ComposeStashRow>>("load compose stash", std::nullopt, [&] {
+		const auto rows = storage.get_all<ComposeStashRow>(
+			where(
+				column<ComposeStashRow>(&ComposeStashRow::userId) == userId and
+				column<ComposeStashRow>(&ComposeStashRow::dialogId) == dialogId and
+				column<ComposeStashRow>(&ComposeStashRow::topicRootId) == topicRootId and
+				column<ComposeStashRow>(&ComposeStashRow::monoforumPeerId) == monoforumPeerId
+			),
+			limit(1));
+		return rows.empty()
+			? std::optional<ComposeStashRow>()
+			: std::optional<ComposeStashRow>(rows.front());
+	});
+}
+
+void removeComposeStash(
+		ID userId,
+		ID dialogId,
+		ID topicRootId,
+		ID monoforumPeerId) {
+	runVoid("remove compose stash", [&] {
+		storage.remove_all<ComposeStashRow>(
+			where(
+				column<ComposeStashRow>(&ComposeStashRow::userId) == userId and
+				column<ComposeStashRow>(&ComposeStashRow::dialogId) == dialogId and
+				column<ComposeStashRow>(&ComposeStashRow::topicRootId) == topicRootId and
+				column<ComposeStashRow>(&ComposeStashRow::monoforumPeerId) == monoforumPeerId
 			)
 		);
 	});

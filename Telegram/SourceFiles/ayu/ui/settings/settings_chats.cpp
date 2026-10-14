@@ -191,7 +191,7 @@ void BuildMarks(
 	}, AyuSettings::getInstance().replaceBottomInfoWithIconsValue()
 		| rpl::map([](bool v) { return !v; }));
 
-	ayu.addSettingToggle({
+	ayu.addChooseButton({
 		.id = u"ayu/materialBubbles"_q,
 		.altIds = {
 			u"ayu/removeMessageTail"_q,
@@ -199,8 +199,15 @@ void BuildMarks(
 			u"ayu/messageTail"_q,
 		},
 		.title = tr::ayu_MaterialBubbles(),
-		.getter = &AyuSettings::materialBubbles,
-		.setter = &AyuSettings::setMaterialBubbles,
+		.boxTitle = tr::ayu_MaterialBubbles(),
+		.initialSelection = settings->materialBubbles() ? 1 : 0,
+		.options = {
+			tr::ayu_StyleTelegram(tr::now),
+			tr::ayu_StyleMaterialgram(tr::now),
+		},
+		.setter = [](int i) {
+			AyuSettings::getInstance().setMaterialBubbles(i == 1);
+		},
 	});
 
 	ayu.addSettingToggle({
@@ -462,10 +469,11 @@ void BuildMessageFieldElements(SectionBuilder &builder, AyuSectionBuilder &ayu) 
 	});
 	ayu.addSettingToggle({
 		.id = u"ayu/showAiEditorButtonInMessageField"_q,
-		.title = tr::lng_ai_compose_title(),
+		.altIds = { u"ayu/showArticleButtonInMessageField"_q },
+		.title = tr::ayu_AiAndArticlePopups(),
 		.getter = &AyuSettings::showAiEditorButtonInMessageField,
 		.setter = &AyuSettings::setShowAiEditorButtonInMessageField,
-		.icon = { &st::messageFieldCocoonAiIcon },
+		.icon = { &st::messageFieldAiArticleIcon },
 	});
 
 	ayu.addSectionDivider();

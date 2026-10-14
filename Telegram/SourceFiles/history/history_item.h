@@ -283,6 +283,7 @@ public:
 	bool markEmojiInteractionWatched();
 	[[nodiscard]] bool isUnreadMedia() const;
 	[[nodiscard]] bool isIncomingUnreadMedia() const;
+	[[nodiscard]] bool keepsUnburnt() const;
 	[[nodiscard]] bool hasUnreadMediaFlag() const;
 	[[nodiscard]] bool isTtlCoveredMedia() const;
 	[[nodiscard]] TimeId mediaDestroyAt() const;
@@ -355,6 +356,7 @@ public:
 	void ayuSetDeletedAt(TimeId date) {
 		_ayuDeletedAt = date;
 	}
+	void ayuSetFromRank(const QString &rank);
 	[[nodiscard]] bool hideDisplayDate() const {
 		return isEmpty() || (_flags & MessageFlag::HideDisplayDate);
 	}

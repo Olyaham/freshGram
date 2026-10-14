@@ -140,6 +140,9 @@ public:
 		not_null<Window::SessionController*> controller,
 		rpl::producer<ChildListShown> childListShown);
 
+	void addDeletedSearchResults(
+		std::vector<not_null<HistoryItem*>> messages);
+	[[nodiscard]] TimeId oldestSearchDate() const;
 	void searchReceived(
 		std::vector<not_null<HistoryItem*>> result,
 		HistoryItem *inject,
@@ -589,6 +592,7 @@ private:
 
 	void announceSelectedFocus();
 	void refreshFilterResults();
+	void addDeletedChatsToFilter(const QStringList &words);
 	void clearSearchResults(bool alsoPeerSearchResults = true);
 	void clearPeerSearchResults();
 	void clearPreviewResults();

@@ -21,6 +21,11 @@ public:
 namespace AyuDatabase {
 
 void initialize();
+void finish();
+void flush();
+bool exportSealed(QByteArray &sealed, qint64 &rows);
+void clearUserData(ID userId);
+void clearEverything();
 
 void addEditedMessage(const EditedMessage &message, int maxRevisions);
 void purgeOlderThan(int days);
@@ -29,11 +34,19 @@ bool hasRevisions(ID userId, ID dialogId, ID messageId);
 
 void addDeletedMessage(const DeletedMessage &message);
 void addDeletedMessages(const std::vector<DeletedMessage> &messages);
+void addDeletedExtras(const std::vector<DeletedExtra> &extras);
+std::vector<DeletedExtra> getDeletedExtras(ID userId, ID dialogId);
+void addDeletedMarkups(const std::vector<DeletedMarkup> &markups);
+std::vector<DeletedMarkup> getDeletedMarkups(ID userId, ID dialogId);
+void addDeletedRanks(const std::vector<DeletedRank> &ranks);
+std::vector<DeletedRank> getDeletedRanks(ID userId, ID dialogId);
+std::vector<DeletedMessage> searchDeletedMessages(ID userId, ID dialogId, ID topicId, ID fromId, const std::string &searchQuery, int totalLimit, bool withMedia = false);
 std::vector<DeletedMessage> getDeletedMessages(ID userId, ID dialogId, ID topicId, ID minId, ID maxId, int totalLimit, const std::string &searchQuery = "");
 bool hasDeletedMessages(ID userId, ID dialogId, ID topicId);
 std::vector<ID> getDeletedDialogIds(ID userId);
 void removeDeletedMessage(ID userId, ID dialogId, ID messageId);
 void clearDeletedMessages(ID userId, ID dialogId, ID topicId);
+void clearAllDeleted();
 
 void saveSecretChat(const SecretChatRow &chat);
 std::vector<SecretChatRow> getSecretChats(ID userId);
@@ -61,6 +74,21 @@ void removeKeptTopics(ID userId, ID dialogId);
 void removeKeptTopic(ID userId, ID dialogId, ID rootId);
 std::vector<KeptDialog> getKeptDialogs(ID userId);
 void removeKeptDialog(ID userId, ID dialogId);
+
+std::vector<ID> getLocalPins(ID userId);
+void saveLocalPins(ID userId, const std::vector<ID> &peers);
+
+void saveComposeStash(const ComposeStashRow &row);
+std::optional<ComposeStashRow> getComposeStash(
+	ID userId,
+	ID dialogId,
+	ID topicRootId,
+	ID monoforumPeerId);
+void removeComposeStash(
+	ID userId,
+	ID dialogId,
+	ID topicRootId,
+	ID monoforumPeerId);
 
 void saveKnownUsers(const std::vector<KnownUser> &users);
 std::optional<KnownUser> getKnownUser(ID userId, ID peerId);

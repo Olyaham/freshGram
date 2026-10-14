@@ -1860,6 +1860,15 @@ bool HistoryItem::isIncomingUnreadMedia() const {
 	return !out() && isUnreadMedia();
 }
 
+bool HistoryItem::keepsUnburnt() const {
+	const auto media = _media.get();
+	return AyuSettings::getInstance().saveDeletedMessages()
+		&& !out()
+		&& isRegular()
+		&& media
+		&& (media->ttlSeconds() > 0);
+}
+
 bool HistoryItem::isTtlCoveredMedia() const {
 	const auto media = _media.get();
 	if (!media || !media->ttlSeconds()) {
@@ -2954,6 +2963,11 @@ void HistoryItem::clearMediaAsExpired() {
 
 	const auto &settings = AyuSettings::getInstance();
 	if (settings.saveDeletedMessages()) {
+		if (!_deleted) {
+			RemoveComponents(HistoryServiceSelfDestruct::Bit());
+			_ayuExpired = true;
+			setDeleted();
+		}
 		return;
 	}
 
@@ -4041,6 +4055,16 @@ QString HistoryItem::originalPostAuthor() const {
 	return QString();
 }
 
+void HistoryItem::ayuSetFromRank(const QString &rank) {
+	if (rank.isEmpty()) {
+		return;
+	}
+	if (!Has<HistoryMessageFromRank>()) {
+		AddComponents(HistoryMessageFromRank::Bit());
+	}
+	Get<HistoryMessageFromRank>()->rank = rank;
+}
+
 QString HistoryItem::fromRank() const {
 	if (const auto component = Get<HistoryMessageFromRank>()) {
 		return component->rank;
@@ -4207,6 +4231,9 @@ void HistoryItem::setDeleted() {
 	if (!_ayuDeletedAt) {
 		_ayuDeletedAt = base::unixtime::now();
 	}
+	history()->session().changes().messageUpdated(
+		this,
+		Data::MessageUpdate::Flag::Deleted);
 
 	// cleanup reactions as they tend to bug with deleted messages
 	if (hasUnreadReaction()) {

@@ -16,6 +16,7 @@
 #include "ayu/features/filters/filters_controller.h"
 #include "ayu/features/forward/ayu_forward.h"
 #include "ayu/features/forward/ayu_forward_rich.h"
+#include "ayu/ui/boxes/delete_own_messages_box.h"
 #include "ayu/ui/context_menu/menu_item_subtext.h"
 #include "ayu/ui/message_history/history_section.h"
 #include "ayu/ui/settings/filters/edit_filter.h"
@@ -46,6 +47,8 @@
 #include "ui/widgets/menu/menu_add_action_callback_factory.h"
 #include "window/window_peer_menu.h"
 #include "window/window_session_controller.h"
+
+#include <algorithm>
 
 namespace AyuUi {
 
@@ -80,11 +83,13 @@ Fn<void()> ClearDeletedMessagesHandler(not_null<Window::SessionController*> cont
 
 void DeleteMyMessagesAfterConfirm(
 		not_null<PeerData*> peer,
-		MsgId topicRootId) {
+		MsgId topicRootId,
+		DeleteOwnRange range) {
 	const auto session = &peer->session();
 
 	if (const auto channel = peer->asChannel()) {
 		if (!topicRootId
+			&& range.empty()
 			&& channel->isMegagroup()
 			&& channel->canDeleteMessages()) {
 			session->api().deleteAllFromParticipant(channel, session->user());
@@ -93,6 +98,12 @@ void DeleteMyMessagesAfterConfirm(
 	}
 
 	auto collected = std::make_shared<std::vector<MsgId>>();
+	const auto roots = std::make_shared<std::vector<MsgId>>(
+		range.topics.empty()
+			? std::vector<MsgId>{ topicRootId }
+			: range.topics);
+	const auto rootIndex = std::make_shared<int>(0);
+	const auto rootStart = std::make_shared<int>(0);
 
 	const auto removeNext = std::make_shared<Fn<void(int)>>();
 	const auto requestNext = std::make_shared<Fn<void(MsgId)>>();
@@ -172,21 +183,22 @@ void DeleteMyMessagesAfterConfirm(
 
 	*requestNext = [=](MsgId from)
 	{
+		const auto topic = (*roots)[*rootIndex];
 		using Flag = MTPmessages_Search::Flag;
 		auto request = MTPmessages_Search(
 			MTP_flags(Flag::f_from_id
-				| (topicRootId ? Flag::f_top_msg_id : Flag())),
+				| (topic ? Flag::f_top_msg_id : Flag())),
 			peer->input(),
 			MTP_string(),
 			MTP_inputPeerSelf(),
 			MTPInputPeer(),
 			MTPVector<MTPReaction>(),
-			MTP_int(int32(topicRootId.bare)),
+			MTP_int(int32(topic.bare)),
 			// top_msg_id
 			MTP_inputMessagesFilterEmpty(),
-			MTP_int(0),
+			MTP_int(range.minDate),
 			// min_date
-			MTP_int(0),
+			MTP_int(range.maxDate),
 			// max_date
 			MTP_int(from.bare),
 			MTP_int(0),
@@ -211,9 +223,27 @@ void DeleteMyMessagesAfterConfirm(
 					++batchCount;
 				}
 				DEBUG_LOG(("Batch found %1 my messages, total %2").arg(batchCount).arg(collected->size()));
-				if (parsed.messageIds.size() == 100 && minId) {
+				const auto topicDone = range.limit
+					&& int(collected->size()) - *rootStart >= range.limit;
+				if (topicDone) {
+					collected->resize(*rootStart + range.limit);
+				}
+				if (!topicDone && parsed.messageIds.size() == 100 && minId) {
 					(*requestNext)(minId - MsgId(1));
+				} else if (*rootIndex + 1 < int(roots->size())) {
+					++*rootIndex;
+					*rootStart = int(collected->size());
+					(*requestNext)(MsgId(0));
 				} else {
+					if (roots->size() > 1) {
+						std::sort(
+							collected->begin(),
+							collected->end(),
+							[](MsgId a, MsgId b) { return a > b; });
+						if (range.limit && int(collected->size()) > range.limit) {
+							collected->resize(range.limit);
+						}
+					}
 					DEBUG_LOG(("Found %1 my messages in this chat (SEARCH)").arg(collected->size()));
 					(*removeNext)(0);
 				}
@@ -231,20 +261,29 @@ Fn<void()> DeleteMyMessagesHandler(
 		MsgId topicRootId) {
 	return [=]
 	{
-		if (!controller->showFrozenError()) {
+		if (controller->showFrozenError()) {
+			return;
+		}
+		const auto forum = topicRootId ? nullptr : peer->forum();
+		controller->show(Box(FillDeleteOwnMessagesBox, forum, [=](
+				DeleteOwnRange range,
+				Fn<void()> closeBox) {
 			controller->show(Ui::MakeConfirmBox({
-				.text = tr::ayu_DeleteOwnMessagesConfirmation(tr::now),
+				.text = range.empty()
+					? tr::ayu_DeleteOwnMessagesConfirmation(tr::now)
+					: tr::ayu_DeleteOwnMessagesConfirmationFiltered(tr::now),
 				.confirmed =
 				[=](Fn<void()> &&close)
 				{
-					DeleteMyMessagesAfterConfirm(peer, topicRootId);
+					DeleteMyMessagesAfterConfirm(peer, topicRootId, range);
 					close();
+					closeBox();
 				},
 				.confirmText = tr::lng_box_delete(),
 				.cancelText = tr::lng_cancel(),
 				.confirmStyle = &st::attentionBoxButton,
 			}));
-		}
+		}));
 	};
 }
 
@@ -956,8 +995,15 @@ void AddReadUntilAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
 }
 
 void AddBurnAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
-	if (!item->media() || (item->media()->ttlSeconds() <= 0 && item->unsupportedTTL() <= 0) || item->out() ||
-		!item->hasUnreadMediaFlag()) {
+	// An unsupported disappearing message (a photo or a video that the
+	// desktop shows as a service text) has no media, only the TTL mark.
+	// The unread mark is not checked: it is cleared locally when the message
+	// is viewed, while the server may still not know about it. Once the
+	// server burns the message, it loses the TTL mark and the item is hidden.
+	const auto media = item->media();
+	const auto ttl = (media && media->ttlSeconds() > 0)
+		|| (item->unsupportedTTL() > 0);
+	if (!ttl || item->out() || item->isDeleted()) {
 		return;
 	}
 
@@ -966,15 +1012,22 @@ void AddBurnAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
 		[=]
 		{
 			const auto ids = MTP_vector<MTPint>(1, MTP_int(item->id));
+			const auto fullId = item->fullId();
+			const auto session = &item->history()->session();
 
-			item->history()->session().api().request(MTPmessages_ReadMessageContents(
+			session->api().request(MTPmessages_ReadMessageContents(
 					ids
 				)).done([=](const MTPmessages_AffectedMessages &result)
 				{
-					item->history()->session().api().applyAffectedMessages(
-						item->history()->peer,
+					const auto burnt = session->data().message(fullId);
+					if (!burnt) {
+						return;
+					}
+					session->api().applyAffectedMessages(
+						burnt->history()->peer,
 						result);
-					item->markContentsRead();
+					burnt->markContentsRead();
+					burnt->clearMediaAsExpired();
 				}).send();
 		},
 		&st::menuIconTTLAny);

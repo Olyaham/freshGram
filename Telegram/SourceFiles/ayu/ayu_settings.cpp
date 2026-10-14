@@ -4,6 +4,10 @@
 // but be respectful and credit the original author.
 //
 // Copyright @Radolyn, 2026
+#include "ayu/data/ayu_vault.h"
+#include "ayu/utils/crash_trace.h"
+#include "ayu/utils/debug_logging.h"
+#include "ayu/utils/network_privacy.h"
 #include "ayu/ayu_settings.h"
 
 #include "lang_auto.h"
@@ -28,10 +32,19 @@
 #include <filesystem>
 #include <fstream>
 #include <QApplication>
+#include <QFile>
 
 using json = nlohmann::json;
 
 namespace {
+
+constexpr auto kMaxSettingsSize = std::uintmax_t(2) * 1024 * 1024;
+
+bool AccountsAttached = false;
+
+QString getAccountsPath() {
+	return cWorkingDir() + u"tdata/ayu_accounts.enc"_q;
+}
 
 std::filesystem::path getSettingsPath() {
 	const auto path = cWorkingDir() + u"tdata/ayu_settings.json"_q;
@@ -397,7 +410,15 @@ void AyuSettings::load() {
 			settings.backupKeepCount(),
 			settings.backupIntervalHours());
 		AyuDatabase::purgeOlderThan(settings.keepDeletedDays());
+		AyuNetworkPrivacy::SetEnabled(settings.reduceNetworkTracking());
+		AyuDebugLogging::SetEnabled(settings.enableDebugLogging());
 	});
+	auto sizeError = std::error_code();
+	const auto size = std::filesystem::file_size(getSettingsPath(), sizeError);
+	if (!sizeError && size > kMaxSettingsSize) {
+		LOG(("AyuGramSettings: the settings file is too big, ignoring it"));
+		return;
+	}
 	std::ifstream file(getSettingsPath());
 	if (!file.good()) {
 		return;
@@ -410,7 +431,8 @@ void AyuSettings::load() {
 		file >> p;
 		file.close();
 
-		if (!p.contains("ghostModeSettings")) {
+		if (!p.contains("ghostModeSettings")
+			&& !p.value("accountsVaulted", false)) {
 			p["ghostModeSettings"] = nlohmann::json::object({
 				{"0", {
 					{"sendReadMessages", p.value("sendReadMessages", true)},
@@ -437,22 +459,80 @@ void AyuSettings::load() {
 		LOG(("AyuGramSettings: failed to read settings file (not json-like)"));
 	}
 
-	if (cGhost()) {
-		auto &ghost = AyuSettings::ghost();
-		ghost._sendReadMessages = false;
-		ghost._sendReadStories = false;
-		ghost._sendOnlinePackets = false;
-		ghost._sendUploadProgress = false;
-		ghost._sendOfflinePacketAfterOnline = true;
-	}
+	applyForcedGhost();
 
 	AyuFeatures::StreamerMode::refresh();
 	settings.validate();
 }
 
+void AyuSettings::applyForcedGhost() {
+	if (!cGhost()) {
+		return;
+	}
+	auto &ghost = AyuSettings::ghost();
+	ghost._sendReadMessages = false;
+	ghost._sendReadStories = false;
+	ghost._sendOnlinePackets = false;
+	ghost._sendUploadProgress = false;
+	ghost._sendOfflinePacketAfterOnline = true;
+}
+
+void AyuSettings::attachVault() {
+	if (!AyuVault::HasKey()) {
+		return;
+	}
+	auto &settings = getInstance();
+	AccountsAttached = true;
+	const auto path = getAccountsPath();
+	if (const auto bytes = AyuVault::ReadFile(path, true)) {
+		try {
+			const auto p = json::parse(bytes->constBegin(), bytes->constEnd());
+			if (p.contains("ghostModeSettings")
+				&& p["ghostModeSettings"].is_object()) {
+				for (auto &[key, value] : p["ghostModeSettings"].items()) {
+					auto &slot = settings._ghostAccounts[std::stoull(key)];
+					if (!slot) {
+						slot = std::make_unique<GhostModeAccountSettings>();
+					}
+					value.get_to(*slot);
+				}
+			}
+			if (p.contains("shadowBanIds")) {
+				settings._shadowBanIds = p["shadowBanIds"].get<
+					std::unordered_set<int64>>();
+			}
+		} catch (...) {
+			LOG(("AyuGramSettings: failed to parse the sealed accounts data"));
+		}
+	} else if (QFile::exists(path)) {
+		LOG(("AyuGramSettings: could not read the sealed accounts data"));
+	}
+	applyForcedGhost();
+	save();
+}
+
 void AyuSettings::save() {
 	auto &settings = getInstance();
 	json p = settings;
+
+	auto strip = settings._accountsVaulted;
+	if (AccountsAttached) {
+		const auto sealed = json{
+			{ "ghostModeSettings", p["ghostModeSettings"] },
+			{ "shadowBanIds", p["shadowBanIds"] },
+		};
+		strip = AyuVault::WriteSealedFile(
+			getAccountsPath(),
+			QByteArray::fromStdString(sealed.dump()));
+		if (strip) {
+			settings._accountsVaulted = true;
+		}
+	}
+	if (strip) {
+		p.erase("ghostModeSettings");
+		p.erase("shadowBanIds");
+	}
+	p["accountsVaulted"] = settings._accountsVaulted;
 
 	std::ofstream file;
 	file.open(getSettingsPath());
@@ -461,7 +541,9 @@ void AyuSettings::save() {
 }
 
 void AyuSettings::reset() {
+	const auto vaulted = getInstance()._accountsVaulted;
 	getInstance() = AyuSettings();
+	getInstance()._accountsVaulted = vaulted;
 	save();
 }
 
@@ -543,6 +625,7 @@ void AyuSettings::validate() {
 	validateEnum(_showAddFilterInContextMenu, defaults._showAddFilterInContextMenu);
 
 	validateEnum(_translationProvider, defaults._translationProvider, 3);
+	validateEnum(_transcriptionProvider, defaults._transcriptionProvider, 1);
 	if ((_translationProvider.current() == TranslationProvider::Native)
 		&& !Platform::IsTranslateProviderAvailable()) {
 		_translationProvider = defaults._translationProvider.current();
@@ -561,6 +644,8 @@ void AyuSettings::validate() {
 	validateRange(_reactionBackgroundOpacity, 0, 50, defaults._reactionBackgroundOpacity);
 	validateRange(_wideMultiplier, 0.5, 4.0, defaults._wideMultiplier);
 	validateRange(_avatarCorners, 0, AyuUiSettings::kMaxAvatarCorners, defaults._avatarCorners);
+	validateRange(_iconSet, 0, AyuUiSettings::kIconSetCount - 1, defaults._iconSet);
+	validateRange(_designStyle, 0, AyuUiSettings::kDesignStyleCount - 1, defaults._designStyle);
 
 	const auto embeddedType = _messageShotSettings._embeddedThemeType.current();
 	auto embeddedTypeValid = (embeddedType == -1) || (embeddedType >= 0 && embeddedType <= 3); // from Window::Theme::EmbeddedType::DayBlue to Window::Theme::EmbeddedType::NightGreen
@@ -578,6 +663,12 @@ void AyuSettings::validate() {
 void AyuSettings::setSaveDeletedMessages(bool val) {
 	if (_saveDeletedMessages.current() == val) return;
 	_saveDeletedMessages = val;
+	save();
+}
+
+void AyuSettings::setSaveLocallyDeletedMessages(bool val) {
+	if (_saveLocallyDeletedMessages.current() == val) return;
+	_saveLocallyDeletedMessages = val;
 	save();
 }
 
@@ -725,9 +816,27 @@ void AyuSettings::setMaterialBubbles(bool val) {
 	save();
 }
 
-void AyuSettings::setMaterialIcons(bool val) {
-	if (_materialIcons.current() == val) return;
-	_materialIcons = val;
+void AyuSettings::setIconSet(int val) {
+	if (_iconSet.current() == val) return;
+	_iconSet = val;
+	save();
+}
+
+void AyuSettings::setWhisperModel(const QString &val) {
+	if (_whisperModel.current() == val) return;
+	_whisperModel = val;
+	save();
+}
+
+void AyuSettings::setOcrLanguages(const QString &val) {
+	if (_ocrLanguages.current() == val) return;
+	_ocrLanguages = val;
+	save();
+}
+
+void AyuSettings::setDesignStyle(int val) {
+	if (_designStyle.current() == val) return;
+	_designStyle = val;
 	save();
 }
 
@@ -1146,6 +1255,51 @@ void AyuSettings::setShowDeletedChatIcon(bool val) {
 	save();
 }
 
+void AyuSettings::setLocalPinnedChats(bool val) {
+	if (_localPinnedChats.current() == val) return;
+	_localPinnedChats = val;
+	save();
+}
+
+void AyuSettings::setKeepDraftsLocal(bool val) {
+	if (_keepDraftsLocal.current() == val) return;
+	_keepDraftsLocal = val;
+	save();
+}
+
+void AyuSettings::setStashHintShown(int val) {
+	if (_stashHintShown.current() == val) return;
+	_stashHintShown = val;
+	save();
+}
+
+void AyuSettings::setStashHintUsed(bool val) {
+	if (_stashHintUsed.current() == val) return;
+	_stashHintUsed = val;
+	save();
+}
+
+void AyuSettings::setReduceNetworkTracking(bool val) {
+	if (_reduceNetworkTracking.current() == val) return;
+	_reduceNetworkTracking = val;
+	AyuNetworkPrivacy::SetEnabled(val);
+	save();
+}
+
+void AyuSettings::setEnableDebugLogging(bool val) {
+	if (_enableDebugLogging.current() == val) return;
+	_enableDebugLogging = val;
+	AyuDebugLogging::SetEnabled(val);
+	const auto directory = cWorkingDir() + u"tdata"_q;
+	if (val) {
+		AyuCrashTrace::Install(directory);
+	} else {
+		Logs::removeFiles();
+		AyuCrashTrace::Remove(directory);
+	}
+	save();
+}
+
 void AyuSettings::setMarkOldMessagesDeleted(bool val) {
 	if (_markOldMessagesDeleted.current() == val) return;
 	_markOldMessagesDeleted = val;
@@ -1197,6 +1351,12 @@ void AyuSettings::setVoiceConfirmation(bool val) {
 void AyuSettings::setRoundConfirmation(bool val) {
 	if (_roundConfirmation.current() == val) return;
 	_roundConfirmation = val;
+	save();
+}
+
+void AyuSettings::setTranscriptionProvider(TranscriptionProvider val) {
+	if (_transcriptionProvider.current() == val) return;
+	_transcriptionProvider = val;
 	save();
 }
 
@@ -1279,6 +1439,7 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"ghostModeSettings", ghostAccounts},
 		{"useGlobalGhostMode", s._useGlobalGhostMode.current()},
 		{"saveDeletedMessages", s._saveDeletedMessages.current()},
+		{"saveLocallyDeletedMessages", s._saveLocallyDeletedMessages.current()},
 		{"secretChatsEnabled", s._secretChatsEnabled.current()},
 		{"saveMessagesHistory", s._saveMessagesHistory.current()},
 		{"saveForBots", s._saveForBots.current()},
@@ -1303,7 +1464,10 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"increaseWebviewWidth", s._increaseWebviewWidth.current()},
 		{"materialSwitches", s._materialSwitches.current()},
 		{"materialBubbles", s._materialBubbles.current()},
-		{"materialIcons", s._materialIcons.current()},
+		{"iconSet", s._iconSet.current()},
+		{"designStyle", s._designStyle.current()},
+		{"whisperModel", s._whisperModel.current()},
+		{"ocrLanguages", s._ocrLanguages.current()},
 		{"maxEditRevisions", s._maxEditRevisions.current()},
 		{"deletedRestoreLimit", s._deletedRestoreLimit.current()},
 		{"keptSnapshotLimit", s._keptSnapshotLimit.current()},
@@ -1372,6 +1536,12 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"keepDeletedTopics", s._keepDeletedTopics.current()},
 		{"restoreDeletedInChats", s._restoreDeletedInChats.current()},
 		{"showDeletedChatIcon", s._showDeletedChatIcon.current()},
+		{"localPinnedChats", s._localPinnedChats.current()},
+		{"keepDraftsLocal", s._keepDraftsLocal.current()},
+		{"stashHintShown", s._stashHintShown.current()},
+		{"stashHintUsed", s._stashHintUsed.current()},
+		{"reduceNetworkTracking", s._reduceNetworkTracking.current()},
+		{"enableDebugLogging", s._enableDebugLogging.current()},
 		{"markOldMessagesDeleted", s._markOldMessagesDeleted.current()},
 		{"showTimeZone", s._showTimeZone.current()},
 		{"showMessageShot", s._showMessageShot.current()},
@@ -1381,6 +1551,7 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"voiceConfirmation", s._voiceConfirmation.current()},
 		{"roundConfirmation", s._roundConfirmation.current()},
 		{"translationProvider", s._translationProvider.current()},
+		{"transcriptionProvider", s._transcriptionProvider.current()},
 		{"adaptiveCoverColor", s._adaptiveCoverColor.current()},
 		{"improveLinkPreviews", s._improveLinkPreviews.current()},
 		{"crashReporting", s._crashReporting.current()},
@@ -1405,8 +1576,10 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 		}
 	}
 
+	s._accountsVaulted = j.value("accountsVaulted", false);
 	s._useGlobalGhostMode = j.value("useGlobalGhostMode", defaults._useGlobalGhostMode.current());
 	s._saveDeletedMessages = j.value("saveDeletedMessages", defaults._saveDeletedMessages.current());
+	s._saveLocallyDeletedMessages = j.value("saveLocallyDeletedMessages", defaults._saveLocallyDeletedMessages.current());
 	s._secretChatsEnabled = j.value("secretChatsEnabled", defaults._secretChatsEnabled.current());
 	s._saveMessagesHistory = j.value("saveMessagesHistory", defaults._saveMessagesHistory.current());
 	s._saveForBots = j.value("saveForBots", defaults._saveForBots.current());
@@ -1431,7 +1604,14 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._increaseWebviewWidth = j.value("increaseWebviewWidth", defaults._increaseWebviewWidth.current());
 	s._materialSwitches = j.value("materialSwitches", defaults._materialSwitches.current());
 	s._materialBubbles = j.value("materialBubbles", defaults._materialBubbles.current());
-	s._materialIcons = j.value("materialIcons", defaults._materialIcons.current());
+	s._designStyle = j.value("designStyle", defaults._designStyle.current());
+	s._whisperModel = j.value("whisperModel", defaults._whisperModel.current());
+	s._ocrLanguages = j.value("ocrLanguages", defaults._ocrLanguages.current());
+	s._iconSet = j.contains("iconSet")
+		? j.value("iconSet", defaults._iconSet.current())
+		: j.value("materialIcons", true)
+		? int(AyuUiSettings::IconSet::Materialgram)
+		: int(AyuUiSettings::IconSet::Telegram);
 	s._maxEditRevisions = j.value("maxEditRevisions", defaults._maxEditRevisions.current());
 	s._deletedRestoreLimit = j.value("deletedRestoreLimit", defaults._deletedRestoreLimit.current());
 	s._keptSnapshotLimit = j.value("keptSnapshotLimit", defaults._keptSnapshotLimit.current());
@@ -1500,6 +1680,12 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._keepDeletedTopics = j.value("keepDeletedTopics", defaults._keepDeletedTopics.current());
 	s._restoreDeletedInChats = j.value("restoreDeletedInChats", defaults._restoreDeletedInChats.current());
 	s._showDeletedChatIcon = j.value("showDeletedChatIcon", defaults._showDeletedChatIcon.current());
+	s._localPinnedChats = j.value("localPinnedChats", defaults._localPinnedChats.current());
+	s._keepDraftsLocal = j.value("keepDraftsLocal", defaults._keepDraftsLocal.current());
+	s._stashHintShown = j.value("stashHintShown", defaults._stashHintShown.current());
+	s._stashHintUsed = j.value("stashHintUsed", defaults._stashHintUsed.current());
+	s._reduceNetworkTracking = j.value("reduceNetworkTracking", defaults._reduceNetworkTracking.current());
+	s._enableDebugLogging = j.value("enableDebugLogging", defaults._enableDebugLogging.current());
 	s._markOldMessagesDeleted = j.value("markOldMessagesDeleted", defaults._markOldMessagesDeleted.current());
 	s._showTimeZone = j.value("showTimeZone", defaults._showTimeZone.current());
 	s._showMessageShot = j.value("showMessageShot", defaults._showMessageShot.current());
@@ -1509,6 +1695,7 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._voiceConfirmation = j.value("voiceConfirmation", defaults._voiceConfirmation.current());
 	s._roundConfirmation = j.value("roundConfirmation", defaults._roundConfirmation.current());
 	s._translationProvider = j.value("translationProvider", defaults._translationProvider.current());
+	s._transcriptionProvider = j.value("transcriptionProvider", defaults._transcriptionProvider.current());
 	s._adaptiveCoverColor = j.value("adaptiveCoverColor", defaults._adaptiveCoverColor.current());
 	s._improveLinkPreviews = j.value("improveLinkPreviews", defaults._improveLinkPreviews.current());
 	s._crashReporting = j.value("crashReporting", defaults._crashReporting.current());
