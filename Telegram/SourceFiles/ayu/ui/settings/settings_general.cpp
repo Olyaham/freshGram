@@ -47,6 +47,7 @@
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
+#include <QtCore/QVariant>
 
 #include <QtCore/QFile>
 #include <QtCore/QDir>
@@ -232,8 +233,8 @@ void AddModelDiscovery(
 					}
 					models.push_back(id);
 					auto label = id;
-					const auto context = metadata.value(u"context_tokens"_q).toInteger();
-					const auto limit = metadata.value(u"output_tokens"_q).toInteger();
+					const auto context = metadata.value(u"context_tokens"_q).toVariant().toLongLong();
+					const auto limit = metadata.value(u"output_tokens"_q).toVariant().toLongLong();
 					if (context > 0 || limit > 0) {
 						label += u"\n"_q + tr::ayu_TranscriptionModelLimits(
 							tr::now,
