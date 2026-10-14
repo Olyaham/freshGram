@@ -4590,6 +4590,8 @@ std::vector<MsgId> History::collectMessagesFromParticipantToDelete(
 }
 
 void History::clear(ClearType type, bool markEmpty) {
+	const auto unload = (type == ClearType::Unload)
+		|| (type == ClearType::UnloadForSession);
 	if (type == ClearType::Unload && AyuSecret::IsSecretPeer(peer)) {
 		return;
 	}
@@ -4605,7 +4607,7 @@ void History::clear(ClearType type, bool markEmpty) {
 	blocks.clear();
 	owner().notifyHistoryUnloaded(this);
 	lastKeyboardInited = false;
-	if (type == ClearType::Unload) {
+	if (unload) {
 		_loadedAtTop = _loadedAtBottom = markEmpty;
 	} else {
 		// Leave the 'sending' messages in local messages.

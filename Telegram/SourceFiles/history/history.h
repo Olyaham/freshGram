@@ -140,6 +140,7 @@ public:
 		Unload,
 		DeleteChat,
 		ClearHistory,
+		UnloadForSession,
 	};
 	void clear(ClearType type, bool markEmpty = false);
 	void clearUpTill(MsgId availableMinId);

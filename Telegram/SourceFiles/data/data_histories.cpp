@@ -174,7 +174,7 @@ not_null<History*> Histories::findOrCreate(PeerId peerId) {
 
 void Histories::unloadAll() {
 	for (const auto &[peerId, history] : _map) {
-		history->clear(History::ClearType::Unload);
+		history->clear(History::ClearType::UnloadForSession);
 	}
 }
 
