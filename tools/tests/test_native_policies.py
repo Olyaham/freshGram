@@ -426,12 +426,13 @@ constexpr auto kKeySize = 256;
 constexpr auto kRekeyAfterUsesOut = 100;
 constexpr auto kRekeyAfterUsesIn = 120;
 constexpr auto kRekeyAfterTime = 500;
+constexpr auto kPfsOurTimeout = 3600;
 namespace base::unixtime { int now() { return 1000; } }
 struct DhConfig { int g = 3; Bytes p{1}, random{2}; };
 struct Inbound { int64_t exchangeId = 17; Bytes value{3}; };
 struct Chat {
     struct Row { int chatId = 1; int state = 2; int hisLayer = 144; } row;
-    int64_t pfsExchange = 0, pfsOurExchange = 0;
+    int64_t pfsExchange = 0, pfsOurExchange = 0, pfsOurStartedAt = 0;
     Bytes key{1}, pfsPending, pfsAnswerGB, pfsOurSecret, pfsOurP;
     int keyUsesOut = 101, keyUsesIn = 0, keyInstalledAt = 900;
 };
