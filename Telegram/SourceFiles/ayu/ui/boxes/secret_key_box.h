@@ -8,6 +8,7 @@ class GenericBox;
 
 void FillSecretKeyBox(
 	not_null<Ui::GenericBox*> box,
-	std::vector<uint8_t> keyHash);
+	std::vector<uint8_t> keyHash,
+	int64 fingerprint);
 
 } // namespace Ui

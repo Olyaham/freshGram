@@ -89,7 +89,8 @@ void ShowSecretKey(
 	}
 	controller->show(Box(
 		FillSecretKeyBox,
-		info->keyHash));
+		info->keyHash,
+		info->fingerprint));
 }
 
 void ConfirmSecretClear(

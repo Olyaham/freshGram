@@ -63,7 +63,8 @@ constexpr auto kMaxEarly = 500;
 // https://core.telegram.org/api/end-to-end/pfs : replace the key once it
 // has been used to encrypt and decrypt more than 100 messages, or once it
 // is older than a week provided it encrypted at least one message.
-constexpr auto kRekeyAfterUses = 100;
+constexpr auto kRekeyAfterUsesOut = 100;
+constexpr auto kRekeyAfterUsesIn = 120;
 constexpr auto kRekeyAfterTime = 7 * 86400;
 constexpr auto kSpecialNote = 1;
 constexpr auto kSpecialHidden = 2;
@@ -1780,7 +1781,8 @@ void Manager::Impl::maybeStartRekey(Chat &chat) {
 		chat.keyUsesIn,
 		chat.keyInstalledAt,
 		base::unixtime::now(),
-		kRekeyAfterUses,
+		kRekeyAfterUsesOut,
+		kRekeyAfterUsesIn,
 		kRekeyAfterTime);
 	if (!due) {
 		return;

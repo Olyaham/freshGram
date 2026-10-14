@@ -1,13 +1,18 @@
 #include "ayu/ui/boxes/secret_key_box.h"
 
+#include "ayu/ui/boxes/secret_key_emoji.h"
 #include "lang/lang_keys.h"
-#include "styles/style_boxes.h"
-#include "styles/style_layers.h"
 #include "ui/layers/generic_box.h"
 #include "ui/painter.h"
 #include "ui/rp_widget.h"
 #include "ui/widgets/labels.h"
 #include "ui/wrap/vertical_layout.h"
+
+#include <QtGui/QClipboard>
+#include <QtGui/QGuiApplication>
+
+#include "styles/style_boxes.h"
+#include "styles/style_layers.h"
 
 namespace Ui {
 namespace {
@@ -43,12 +48,34 @@ constexpr auto kPixel = 14;
 	auto result = QString();
 	const auto count = std::min<int>(32, int(hash.size()));
 	for (auto i = 0; i != count; ++i) {
+		if (i != 0) {
+			if (i % 8 == 0) {
+				result += '\n';
+			} else if (i % 4 == 0) {
+				result += ' ';
+			}
+		}
 		result += QString("%1").arg(hash[i], 2, 16, QChar('0')).toUpper();
-		if (i % 4 == 3 && i + 1 != count) {
-			result += (i % 16 == 15) ? '\n' : ' ';
-		} else if (i + 1 != count) {
+		result += ' ';
+	}
+	return result.trimmed();
+}
+
+[[nodiscard]] QString EmojiText(const std::vector<uint8_t> &hash) {
+	if (hash.size() < 36) {
+		return QString();
+	}
+	const auto count = int(sizeof(kSecretEmojis) / sizeof(kSecretEmojis[0]));
+	auto result = QString();
+	for (auto a = 0; a != 5; ++a) {
+		const auto num = ((int(hash[16 + a * 4]) & 0x7f) << 24)
+			| ((int(hash[16 + a * 4 + 1]) & 0xff) << 16)
+			| ((int(hash[16 + a * 4 + 2]) & 0xff) << 8)
+			| (int(hash[16 + a * 4 + 3]) & 0xff);
+		if (a != 0) {
 			result += ' ';
 		}
+		result += QString::fromUtf8(kSecretEmojis[num % count]);
 	}
 	return result;
 }
@@ -77,8 +104,17 @@ private:
 
 void FillSecretKeyBox(
 		not_null<Ui::GenericBox*> box,
-		std::vector<uint8_t> keyHash) {
+		std::vector<uint8_t> keyHash,
+		int64 fingerprint) {
+	const auto hex = HexText(keyHash);
+	const auto emoji = EmojiText(keyHash);
 	box->setTitle(tr::ayu_SecretKey());
+	box->addButton(tr::lng_group_invite_context_copy(), [=] {
+		QGuiApplication::clipboard()->setText(emoji.isEmpty()
+			? hex
+			: (hex + "\n" + emoji));
+		box->closeBox();
+	});
 	box->addButton(tr::lng_close(), [=] { box->closeBox(); });
 
 	box->addRow(
@@ -100,13 +136,32 @@ void FillSecretKeyBox(
 		identicon->move((width - identicon->width()) / 2, 0);
 	}, identicon->lifetime());
 
-	const auto hex = box->addRow(
+	const auto hexLabel = box->addRow(
 		object_ptr<Ui::FlatLabel>(
 			box,
-			HexText(keyHash),
+			hex,
 			st::boxLabel),
 		st::boxPadding);
-	hex->setSelectable(true);
+	hexLabel->setSelectable(true);
+	if (!emoji.isEmpty()) {
+		const auto emojiLabel = box->addRow(
+			object_ptr<Ui::FlatLabel>(
+				box,
+				emoji,
+				st::boxLabel),
+			st::boxPadding);
+		emojiLabel->setSelectable(true);
+	}
+	const auto idLabel = box->addRow(
+		object_ptr<Ui::FlatLabel>(
+			box,
+			tr::ayu_SecretKeyText(
+				tr::now,
+				lt_id,
+				QString::number(fingerprint)),
+			st::boxLabel),
+		st::boxPadding);
+	idLabel->setSelectable(true);
 }
 
 } // namespace Ui

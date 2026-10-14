@@ -30,7 +30,8 @@ using AyuSecret::ShouldRekey;
 using AyuSecret::SupportsRekey;
 using AyuSecret::ReleaseIncomingExchange;
 
-constexpr auto kUses = 100;
+constexpr auto kUsesOut = 100;
+constexpr auto kUsesIn = 120;
 constexpr auto kTime = 7 * 86400;
 
 void TestConcurrent() {
@@ -64,25 +65,28 @@ void TestConcurrent() {
 void TestTrigger() {
 	const auto now = 1'800'000'000;
 	Check(
-		!ShouldRekey(50, 50, now - 10, now, kUses, kTime),
-		"100 uses is not over the limit");
+		!ShouldRekey(99, 119, now - 10, now, kUsesOut, kUsesIn, kTime),
+		"99 out and 119 in is under both limits");
 	Check(
-		ShouldRekey(51, 50, now - 10, now, kUses, kTime),
-		"101 uses triggers");
+		ShouldRekey(100, 0, now - 10, now, kUsesOut, kUsesIn, kTime),
+		"100 encryptions trigger");
 	Check(
-		ShouldRekey(1, 0, now - kTime - 1, now, kUses, kTime),
+		ShouldRekey(0, 120, now - 10, now, kUsesOut, kUsesIn, kTime),
+		"120 decryptions trigger");
+	Check(
+		ShouldRekey(1, 0, now - kTime - 1, now, kUsesOut, kUsesIn, kTime),
 		"old key with one encryption triggers");
 	Check(
-		ShouldRekey(0, 200, now - kTime - 1, now, kUses, kTime),
+		ShouldRekey(0, 200, now - kTime - 1, now, kUsesOut, kUsesIn, kTime),
 		"200 decryptions trigger even without encryptions");
 	Check(
-		!ShouldRekey(0, 50, now - kTime - 1, now, kUses, kTime),
+		!ShouldRekey(0, 50, now - kTime - 1, now, kUsesOut, kUsesIn, kTime),
 		"old key without encryptions and under count does not trigger");
 	Check(
-		!ShouldRekey(1, 0, now - 10, now, kUses, kTime),
+		!ShouldRekey(1, 0, now - 10, now, kUsesOut, kUsesIn, kTime),
 		"fresh key does not trigger");
 	Check(
-		!ShouldRekey(0, 0, now - 10, now, kUses, kTime),
+		!ShouldRekey(0, 0, now - 10, now, kUsesOut, kUsesIn, kTime),
 		"unused key does not trigger");
 }
 

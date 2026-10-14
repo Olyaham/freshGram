@@ -47,17 +47,19 @@ enum class ConcurrentDecision {
 		: ConcurrentDecision::AnswerIncoming;
 }
 
-// Rotation trigger predicate: replace the key once it has been used to
-// encrypt and decrypt more than afterUses messages, or once it is older
-// than afterTime provided it encrypted at least one message.
+// Rotation trigger predicate: replace the key once it encrypted
+// at least afterOut messages or decrypted at least afterIn, or once
+// it is older than afterTime provided it encrypted at least one.
 [[nodiscard]] inline bool ShouldRekey(
 		int usesOut,
 		int usesIn,
 		int installedAt,
 		int now,
-		int afterUses,
+		int afterOut,
+		int afterIn,
 		int afterTime) {
-	const auto overused = (usesOut + usesIn) > afterUses;
+	const auto overused = (usesOut >= afterOut)
+		|| (usesIn >= afterIn);
 	const auto aged = (usesOut > 0) && ((now - installedAt) > afterTime);
 	return overused || aged;
 }
