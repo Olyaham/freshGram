@@ -44,42 +44,6 @@ constexpr auto kPixel = 14;
 	return image;
 }
 
-[[nodiscard]] QString HexText(const std::vector<uint8_t> &hash) {
-	auto result = QString();
-	const auto count = std::min<int>(32, int(hash.size()));
-	for (auto i = 0; i != count; ++i) {
-		if (i != 0) {
-			if (i % 8 == 0) {
-				result += '\n';
-			} else if (i % 4 == 0) {
-				result += ' ';
-			}
-		}
-		result += QString("%1").arg(hash[i], 2, 16, QChar('0')).toUpper();
-		result += ' ';
-	}
-	return result.trimmed();
-}
-
-[[nodiscard]] QString EmojiText(const std::vector<uint8_t> &hash) {
-	if (hash.size() < 36) {
-		return QString();
-	}
-	const auto count = int(sizeof(kSecretEmojis) / sizeof(kSecretEmojis[0]));
-	auto result = QString();
-	for (auto a = 0; a != 5; ++a) {
-		const auto num = ((int(hash[16 + a * 4]) & 0x7f) << 24)
-			| ((int(hash[16 + a * 4 + 1]) & 0xff) << 16)
-			| ((int(hash[16 + a * 4 + 2]) & 0xff) << 8)
-			| (int(hash[16 + a * 4 + 3]) & 0xff);
-		if (a != 0) {
-			result += ' ';
-		}
-		result += QString::fromUtf8(kSecretEmojis[num % count]);
-	}
-	return result;
-}
-
 class IdenticonWidget final : public Ui::RpWidget {
 public:
 	IdenticonWidget(QWidget *parent, QImage image)
@@ -102,12 +66,48 @@ private:
 
 } // namespace
 
+QString SecretKeyHexText(const std::vector<uint8_t> &hash) {
+	auto result = QString();
+	const auto count = std::min<int>(32, int(hash.size()));
+	for (auto i = 0; i != count; ++i) {
+		if (i != 0) {
+			if (i % 8 == 0) {
+				result += '\n';
+			} else if (i % 4 == 0) {
+				result += ' ';
+			}
+		}
+		result += QString("%1").arg(hash[i], 2, 16, QChar('0')).toUpper();
+		result += ' ';
+	}
+	return result.trimmed();
+}
+
+QString SecretKeyEmojiText(const std::vector<uint8_t> &hash) {
+	if (hash.size() < 36) {
+		return QString();
+	}
+	const auto count = int(sizeof(kSecretEmojis) / sizeof(kSecretEmojis[0]));
+	auto result = QString();
+	for (auto a = 0; a != 5; ++a) {
+		const auto num = ((int(hash[16 + a * 4]) & 0x7f) << 24)
+			| ((int(hash[16 + a * 4 + 1]) & 0xff) << 16)
+			| ((int(hash[16 + a * 4 + 2]) & 0xff) << 8)
+			| (int(hash[16 + a * 4 + 3]) & 0xff);
+		if (a != 0) {
+			result += ' ';
+		}
+		result += QString::fromUtf8(kSecretEmojis[num % count]);
+	}
+	return result;
+}
+
 void FillSecretKeyBox(
 		not_null<Ui::GenericBox*> box,
 		std::vector<uint8_t> keyHash,
 		int64 fingerprint) {
-	const auto hex = HexText(keyHash);
-	const auto emoji = EmojiText(keyHash);
+	const auto hex = SecretKeyHexText(keyHash);
+	const auto emoji = SecretKeyEmojiText(keyHash);
 	box->setTitle(tr::ayu_SecretKey());
 	box->addButton(tr::lng_group_invite_context_copy(), [=] {
 		QGuiApplication::clipboard()->setText(emoji.isEmpty()
