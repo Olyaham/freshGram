@@ -101,9 +101,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <QtWidgets/QApplication>
 #include <QtCore/QMimeData>
+#include <limits>
 #include <unordered_map>
 
 #include "ayu/ui/ayu_userpic.h"
+#include "ayu/data/messages_storage.h"
+#include "ayu/data/deleted_restore.h"
+#include "ayu/ayu_settings.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "styles/style_ayu_icons.h"
 
@@ -3816,7 +3820,7 @@ void InnerWidget::paintCachedRowOverlays(
 		not_null<Row*> row,
 		uint64 rowId,
 		const Ui::PaintContext &context) {
-	const auto i = _cachedRows.find(rowId);
+	auto i = _cachedRows.find(rowId);
 	if (i == end(_cachedRows)) {
 		return;
 	}
@@ -3830,6 +3834,12 @@ void InnerWidget::paintCachedRowOverlays(
 				videoUserpic,
 				context,
 				false);
+
+			// Starting the video may synchronously erase the cached row.
+			i = _cachedRows.find(rowId);
+			if (i == end(_cachedRows)) {
+				return;
+			}
 		}
 	}
 	if (!i->second.badge.isEmpty()) {
@@ -4497,6 +4507,61 @@ void InnerWidget::refreshFilterResults() {
 			_filterResults.back().row->recountHeight(_narrowRatio, _filterId);
 		}
 	}
+	if (_searchState.filterChatsList()
+		&& !words.isEmpty()
+		&& !mentionsSearch
+		&& !_savedSublists
+		&& !_openedForum) {
+		addDeletedChatsToFilter(words);
+	}
+}
+
+void InnerWidget::addDeletedChatsToFilter(const QStringList &words) {
+	if (!AyuSettings::getInstance().saveDeletedMessages()) {
+		return;
+	}
+	const auto filter = _filter;
+	AyuRestore::withDeletedDialogs(
+		AyuMessages::storageUserId(session().user()),
+		crl::guard(this, [=](const base::flat_set<ID> &ids) {
+			if (_filter != filter || _state != WidgetState::Filtered) {
+				return;
+			}
+			auto &owner = session().data();
+			auto added = false;
+			for (const auto id : ids) {
+				const auto peerId = (id > 0)
+					? peerFromUser(UserId(uint64(id)))
+					: PeerId();
+				auto peer = (id > 0) ? owner.peerLoaded(peerId) : nullptr;
+				if (id < 0) {
+					const auto bare = uint64(-id);
+					peer = owner.peerLoaded(peerFromChannel(ChannelId(bare)));
+					if (!peer) {
+						peer = owner.peerLoaded(peerFromChat(ChatId(bare)));
+					}
+				}
+				if (!peer) {
+					continue;
+				}
+				const auto &names = peer->nameWords();
+				const auto matches = ranges::all_of(words, [&](
+						const QString &word) {
+					return ranges::any_of(names, [&](const QString &name) {
+						return name.startsWith(word);
+					});
+				});
+				if (!matches) {
+					continue;
+				}
+				const auto count = _filterResults.size();
+				appendToFiltered(Key(owner.history(peer)));
+				added = added || (_filterResults.size() != count);
+			}
+			if (added) {
+				refresh();
+			}
+		}));
 }
 
 void InnerWidget::appendToFiltered(Key key) {
@@ -4769,6 +4834,40 @@ void InnerWidget::visibleTopBottomUpdated(
 }
 
 void InnerWidget::itemRemoved(not_null<const HistoryItem*> item) {
+	const auto previewRow = [&](int index) {
+		return base::in_range(index, 0, _previewResults.size())
+			? _previewResults[index].get()
+			: nullptr;
+	};
+	const auto previewSelected = previewRow(_previewSelected);
+	const auto previewPressed = previewRow(_previewPressed);
+	const auto wasPreviewCount = _previewResults.size();
+	_previewResults.erase(
+		ranges::remove(_previewResults, item, [](const auto &row) {
+			return row->item().get();
+		}),
+		end(_previewResults));
+	if (wasPreviewCount != _previewResults.size()) {
+		const auto previewIndex = [&](FakeRow *row) {
+			const auto i = ranges::find(
+				_previewResults,
+				row,
+				&std::unique_ptr<FakeRow>::get);
+			return (row && i != end(_previewResults))
+				? int(i - begin(_previewResults))
+				: -1;
+		};
+		_previewSelected = previewIndex(previewSelected);
+
+		// Don't let a press on a shifted row open a different post.
+		const auto pressed = previewIndex(previewPressed);
+		if (pressed != _previewPressed) {
+			if (pressed >= 0) {
+				_previewResults[pressed]->stopLastRipple();
+			}
+			_previewPressed = -1;
+		}
+	}
 	int wasCount = _searchResults.size();
 	for (auto i = _searchResults.begin(); i != _searchResults.end();) {
 		if ((*i)->item() == item) {
@@ -4782,7 +4881,8 @@ void InnerWidget::itemRemoved(not_null<const HistoryItem*> item) {
 			++i;
 		}
 	}
-	if (wasCount != _searchResults.size()) {
+	if (wasCount != _searchResults.size()
+		|| wasPreviewCount != _previewResults.size()) {
 		refresh();
 	}
 }
@@ -4889,6 +4989,50 @@ void InnerWidget::searchReceived(
 	}
 
 	refresh();
+}
+
+void InnerWidget::addDeletedSearchResults(
+		std::vector<not_null<HistoryItem*>> messages) {
+	const auto globalSearch = (_searchState.tab == ChatSearchTab::MyMessages)
+		|| (_searchState.tab == ChatSearchTab::PublicPosts)
+		|| (_searchState.tab == ChatSearchTab::Archive)
+		|| (_searchState.tab == ChatSearchTab::ThisCommunity);
+	const auto key = globalSearch
+		? Key()
+		: (!_openedForum || _searchState.inChat.topic())
+		? _searchState.inChat
+		: Key(_openedForum->history());
+	auto added = 0;
+	for (const auto &item : messages) {
+		const auto known = ranges::any_of(_searchResults, [&](
+				const std::unique_ptr<FakeRow> &row) {
+			return row->item() == item;
+		});
+		if (known) {
+			continue;
+		}
+		const auto after = ranges::find_if(_searchResults, [&](
+				const std::unique_ptr<FakeRow> &row) {
+			return row->item()->date() < item->date();
+		});
+		_searchResults.insert(
+			after,
+			std::make_unique<FakeRow>(key, item, [=] { update(); }));
+		trackResultsHistory(item->history());
+		++added;
+	}
+	if (!added) {
+		return;
+	}
+	_searchedCount += added;
+	clearMouseSelection(true);
+	refresh();
+}
+
+TimeId InnerWidget::oldestSearchDate() const {
+	return _searchResults.empty()
+		? std::numeric_limits<TimeId>::max()
+		: _searchResults.back()->item()->date();
 }
 
 void InnerWidget::peerSearchReceived(Api::PeerSearchResult result) {
@@ -5403,6 +5547,23 @@ void InnerWidget::updateSearchIn() {
 		&& !sublist
 		&& ((_searchState.tab == ChatSearchTab::ThisPeer)
 			|| (_searchState.tab == ChatSearchTab::ThisTopic));
+	auto mediaIcons = base::flat_map<
+		SearchMediaFilter,
+		std::shared_ptr<Ui::DynamicImage>>();
+	if (showMedia) {
+		const auto add = [&](SearchMediaFilter media, const style::icon &icon) {
+			mediaIcons.emplace(media, Ui::MakeIconThumbnail(icon));
+		};
+		add(SearchMediaFilter::All, st::menuIconShowAll);
+		add(SearchMediaFilter::Photos, st::ayuSearchMediaPhoto);
+		add(SearchMediaFilter::Videos, st::ayuSearchMediaVideo);
+		add(SearchMediaFilter::Files, st::ayuSearchMediaFile);
+		add(SearchMediaFilter::Music, st::ayuSearchMediaMusic);
+		add(SearchMediaFilter::Voice, st::ayuSearchMediaVoice);
+		add(SearchMediaFilter::RoundVideo, st::ayuSearchMediaRound);
+		add(SearchMediaFilter::Links, st::ayuSearchMediaLink);
+		add(SearchMediaFilter::Gifs, st::ayuSearchMediaGif);
+	}
 	_searchIn->apply({
 		{ ChatSearchTab::ThisTopic, topicIcon },
 		{ ChatSearchTab::ThisPeer, peerIcon },
@@ -5410,9 +5571,7 @@ void InnerWidget::updateSearchIn() {
 		{ ChatSearchTab::Archive, archiveIcon },
 		{ ChatSearchTab::MyMessages, myIcon },
 		{ ChatSearchTab::PublicPosts, publicIcon },
-	}, _searchState.tab, peerTabType, fromImage, fromName, _searchState.media, showMedia
-		? Ui::MakeIconThumbnail(st::menuIconShowAll)
-		: std::shared_ptr<Ui::DynamicImage>());
+	}, _searchState.tab, peerTabType, fromImage, fromName, _searchState.media, mediaIcons);
 }
 
 void InnerWidget::repaintSearchResult(int index) {

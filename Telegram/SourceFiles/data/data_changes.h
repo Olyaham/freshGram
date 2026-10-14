@@ -158,8 +158,9 @@ struct HistoryUpdate {
 		TranslatedTo       = (1U << 14),
 		UnreadPollVotes    = (1U << 15),
 		StreamedDrafts     = (1U << 16),
+		ComposeStash       = (1U << 17),
 
-		LastUsedBit        = (1U << 16),
+		LastUsedBit        = (1U << 17),
 	};
 	using Flags = base::flags<Flag>;
 	friend inline constexpr auto is_flag_type(Flag) { return true; }
@@ -230,8 +231,9 @@ struct MessageUpdate {
 		NewMaybeAdded      = (1U << 7),
 		ReplyToTopAdded    = (1U << 8),
 		NewUnreadReaction  = (1U << 9),
+		Deleted            = (1U << 10),
 
-		LastUsedBit        = (1U << 9),
+		LastUsedBit        = (1U << 10),
 	};
 	using Flags = base::flags<Flag>;
 	friend inline constexpr auto is_flag_type(Flag) { return true; }

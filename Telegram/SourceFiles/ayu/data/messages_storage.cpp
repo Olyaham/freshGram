@@ -10,12 +10,15 @@
 
 #include "ayu/ayu_settings.h"
 #include "ayu/data/ayu_database.h"
+#include "ayu/data/ayu_vault.h"
 #include "ayu/utils/ayu_mapper.h"
 #include "ayu/utils/telegram_helpers.h"
+#include "base/flat_set.h"
 #include "base/timer.h"
 #include "base/unixtime.h"
 #include "core/file_location.h"
 #include "logs.h"
+#include "crl/crl_async.h"
 #include "crl/crl_on_main.h"
 #include "data/data_cloud_file.h"
 #include "data/data_document.h"
@@ -29,12 +32,20 @@
 #include "history/history.h"
 #include "history/history_item.h"
 #include "history/history_item_components.h"
+#include "history/history_item_reply_markup.h"
+#include "lang/lang_keys.h"
 #include "main/main_session.h"
 #include "storage/cache/storage_cache_database.h"
+#include "storage/file_download.h"
+#include "ui/toast/toast.h"
 
 #include <QtCore/QDir>
 #include <QtCore/QFile>
 #include <QtCore/QFileInfo>
+#include <QtCore/QSaveFile>
+
+#include <cstdlib>
+#include <optional>
 
 namespace AyuMessages {
 
@@ -65,15 +76,23 @@ struct DocumentSaveTask {
 };
 
 std::vector<DeletedMessage> PendingDeleted;
+std::vector<DeletedExtra> PendingExtras;
+std::vector<DeletedMarkup> PendingMarkups;
+std::vector<DeletedRank> PendingRanks;
 bool FlushScheduled = false;
 std::vector<std::unique_ptr<PhotoSaveTask>> PhotoSaveTasks;
 std::vector<std::unique_ptr<DocumentSaveTask>> DocumentSaveTasks;
+
+[[nodiscard]] QString SavedMediaDirectory() {
+	return QStringLiteral("./tdata/ayu_media");
+}
 
 [[nodiscard]] QString SavedMediaPath(
 		ID userId,
 		ID dialogId,
 		int messageId) {
-	return QString("./tdata/ayu_media/%1_%2_%3.bin")
+	return QString("%1/%2_%3_%4.bin")
+		.arg(SavedMediaDirectory())
 		.arg(userId)
 		.arg(dialogId)
 		.arg(messageId);
@@ -100,10 +119,7 @@ bool WritePhotoBytes(
 	const auto bytes = media->imageBytes(Data::PhotoSize::Large);
 	if (!bytes.isEmpty()) {
 		QDir().mkpath(QFileInfo(path).absolutePath());
-		auto file = QFile(path);
-		if (file.open(QIODevice::WriteOnly)) {
-			file.write(bytes);
-		}
+		AyuVault::WriteFile(path, bytes);
 	}
 	return true;
 }
@@ -172,10 +188,7 @@ bool WriteDocumentBytes(
 	const auto bytes = DocumentBytes(media);
 	if (!bytes.isEmpty()) {
 		QDir().mkpath(QFileInfo(path).absolutePath());
-		auto file = QFile(path);
-		if (file.open(QIODevice::WriteOnly)) {
-			file.write(bytes);
-		}
+		AyuVault::WriteFile(path, bytes);
 	}
 	return true;
 }
@@ -226,7 +239,16 @@ void flushPendingDeleted() {
 	}
 	auto batch = std::move(PendingDeleted);
 	PendingDeleted.clear();
+	auto extras = std::move(PendingExtras);
+	PendingExtras.clear();
 	AyuDatabase::addDeletedMessages(batch);
+	AyuDatabase::addDeletedExtras(extras);
+	auto markups = std::move(PendingMarkups);
+	PendingMarkups.clear();
+	AyuDatabase::addDeletedMarkups(markups);
+	auto ranks = std::move(PendingRanks);
+	PendingRanks.clear();
+	AyuDatabase::addDeletedRanks(ranks);
 }
 
 }
@@ -372,14 +394,14 @@ void cacheDeletedMedia(not_null<HistoryItem*> item) {
 void PutPhotoBytesIntoCache(
 		not_null<PhotoData*> photo,
 		const QString &path) {
-	auto file = QFile(path);
-	if (!file.open(QIODevice::ReadOnly)) {
+	const auto read = AyuVault::ReadFile(path);
+	if (!read) {
 		return;
 	}
-	const auto bytes = file.readAll();
+	const auto &bytes = *read;
 	const auto cacheKey = photo->location(
 		Data::PhotoSize::Large).file().cacheKey();
-	if (bytes.isEmpty() || !cacheKey) {
+	if (bytes.isEmpty() || !cacheKey || bytes.size() > Storage::kMaxFileInMemory) {
 		return;
 	}
 	photo->owner().cache().putIfEmpty(
@@ -389,17 +411,34 @@ void PutPhotoBytesIntoCache(
 			Data::kImageCacheTag));
 }
 
+namespace {
+
+struct LargeDocument {
+	DocumentId id = 0;
+	QString path;
+};
+
+base::flat_map<not_null<DocumentData*>, LargeDocument> LargeDocuments;
+base::flat_set<QString> PendingCopies;
+
+[[nodiscard]] QString OpenedMediaDirectory() {
+	return QStringLiteral("./tdata/ayu_media_tmp");
+}
+
+} // namespace
+
 void PutDocumentBytesIntoCache(
 		not_null<DocumentData*> document,
 		const QString &path) {
-	auto file = QFile(path);
-	if (!file.open(QIODevice::ReadOnly)) {
+	if (QFileInfo(path).size() > Storage::kMaxFileInMemory) {
+		LargeDocuments[document] = { document->id, path };
 		return;
 	}
-	const auto bytes = file.readAll();
-	if (bytes.isEmpty()) {
+	const auto read = AyuVault::ReadFile(path);
+	if (!read || read->isEmpty()) {
 		return;
 	}
+	const auto &bytes = *read;
 	document->owner().cache().putIfEmpty(
 		document->cacheKey(),
 		Storage::Cache::Database::TaggedValue(
@@ -443,42 +482,41 @@ void saveTtlMedia(not_null<HistoryItem*> item) {
 		return;
 	}
 	QDir().mkpath(QFileInfo(path).absolutePath());
-	auto file = QFile(path);
-	if (file.open(QIODevice::WriteOnly)) {
-		file.write(saved.data(), qint64(saved.size()));
+	if (AyuVault::WriteFile(path, QByteArray(saved.data(), qsizetype(saved.size())))) {
 		LOG(("Ayu: saved self-destructing media of %1").arg(item->id.bare));
 	} else {
 		LOG(("Ayu: could not save self-destructing media of %1").arg(item->id.bare));
 	}
 }
 
-static MTPMessageMedia WithSpoiler(const MTPMessageMedia &media) {
+static MTPMessageMedia WithTtl(const MTPMessageMedia &media) {
+	const auto seconds = MTP_int(int(Data::kTimeToLiveSingleView));
 	return media.match([&](const MTPDmessageMediaPhoto &data) {
 		const auto photo = data.vphoto();
-		if (!photo || (data.vflags().v & MTPDmessageMediaPhoto::Flag::f_spoiler)) {
+		if (!photo) {
 			return media;
 		}
 		const auto video = data.vvideo();
 		return MTPMessageMedia(MTP_messageMediaPhoto(
-			MTP_flags(data.vflags().v | MTPDmessageMediaPhoto::Flag::f_spoiler),
+			MTP_flags(data.vflags().v | MTPDmessageMediaPhoto::Flag::f_ttl_seconds),
 			*photo,
-			MTP_int(0),
+			seconds,
 			video ? MTPDocument(*video) : MTPDocument()));
 	}, [&](const MTPDmessageMediaDocument &data) {
 		const auto document = data.vdocument();
-		if (!document || (data.vflags().v & MTPDmessageMediaDocument::Flag::f_spoiler)) {
+		if (!document) {
 			return media;
 		}
 		const auto alt = data.valt_documents();
 		const auto cover = data.vvideo_cover();
 		const auto timestamp = data.vvideo_timestamp();
 		return MTPMessageMedia(MTP_messageMediaDocument(
-			MTP_flags(data.vflags().v | MTPDmessageMediaDocument::Flag::f_spoiler),
+			MTP_flags(data.vflags().v | MTPDmessageMediaDocument::Flag::f_ttl_seconds),
 			*document,
 			alt ? MTPVector<MTPDocument>(*alt) : MTPVector<MTPDocument>(),
 			cover ? MTPPhoto(*cover) : MTPPhoto(),
 			timestamp ? MTP_int(timestamp->v) : MTP_int(0),
-			MTP_int(0)));
+			seconds));
 	}, [&](const auto &) {
 		return media;
 	});
@@ -491,12 +529,12 @@ std::optional<MTPMessageMedia> savedTtlMedia(
 		storageUserId(history->peer),
 		getDialogIdFromPeer(history->peer),
 		id.bare));
-	auto file = QFile(path);
-	if (!file.open(QIODevice::ReadOnly)) {
+	const auto read = AyuVault::ReadFile(path);
+	if (!read) {
 		LOG(("Ayu: no saved self-destructing media for %1").arg(id.bare));
 		return std::nullopt;
 	}
-	const auto bytes = file.readAll();
+	const auto &bytes = *read;
 	if (bytes.isEmpty()) {
 		return std::nullopt;
 	}
@@ -507,7 +545,7 @@ std::optional<MTPMessageMedia> savedTtlMedia(
 	if (media.type() == mtpc_messageMediaEmpty) {
 		return std::nullopt;
 	}
-	return WithSpoiler(media);
+	return WithTtl(media);
 }
 
 MTPMessageMedia restoredMedia(const AyuMessageBase &message) {
@@ -516,7 +554,7 @@ MTPMessageMedia restoredMedia(const AyuMessageBase &message) {
 		message.userId,
 		message.dialogId,
 		message.messageId));
-	return QFile::exists(path) ? WithSpoiler(media) : media;
+	return QFile::exists(path) ? WithTtl(media) : media;
 }
 
 void restoreTtlBytes(not_null<HistoryItem*> item) {
@@ -525,6 +563,41 @@ void restoreTtlBytes(not_null<HistoryItem*> item) {
 
 std::vector<ID> loadDeletedDialogIds(ID userId) {
 	return AyuDatabase::getDeletedDialogIds(userId);
+}
+
+std::optional<DeletedExtra> MakeExtra(
+		not_null<HistoryItem*> item,
+		const AyuMessageBase &message) {
+	auto extra = DeletedExtra();
+	extra.fakeId = 0;
+	extra.userId = message.userId;
+	extra.dialogId = message.dialogId;
+	extra.messageId = message.messageId;
+	extra.reactions = AyuMapper::serializeReactions(item);
+	extra.repliesCount = 0;
+	extra.commentsChannelId = 0;
+	extra.commentsRootId = 0;
+	extra.commentsReadTill = 0;
+	extra.commentsMaxId = 0;
+	extra.entityCreateDate = base::unixtime::now();
+	if (const auto views = item->Get<HistoryMessageViews>();
+		views && views->commentsMegagroupId) {
+		extra.repliesCount = std::max(views->replies.count, 0);
+		extra.commentsChannelId = ID(views->commentsMegagroupId.bare);
+		extra.commentsRootId = int(views->commentsRootId.bare);
+		extra.commentsReadTill = int(views->commentsInboxReadTillId.bare);
+		extra.commentsMaxId = int(views->commentsMaxId.bare);
+		for (const auto &replier : views->recentRepliers) {
+			if (!extra.repliers.empty()) {
+				extra.repliers += ',';
+			}
+			extra.repliers += std::to_string(replier.value);
+		}
+	}
+	if (extra.reactions.empty() && !extra.commentsChannelId) {
+		return std::nullopt;
+	}
+	return extra;
 }
 
 void addDeletedMessage(not_null<HistoryItem*> item) {
@@ -556,6 +629,30 @@ void addDeletedMessage(not_null<HistoryItem*> item) {
 		return;
 	}
 
+	if (const auto extra = MakeExtra(item, message)) {
+		PendingExtras.push_back(*extra);
+	}
+	auto markup = AyuMapper::serializeReplyMarkup(item);
+	if (!markup.empty()) {
+		PendingMarkups.push_back({
+			.fakeId = 0,
+			.userId = message.userId,
+			.dialogId = message.dialogId,
+			.messageId = message.messageId,
+			.markup = std::move(markup),
+			.entityCreateDate = base::unixtime::now(),
+		});
+	}
+	if (const auto rank = item->fromRank(); !rank.isEmpty()) {
+		PendingRanks.push_back({
+			.fakeId = 0,
+			.userId = message.userId,
+			.dialogId = message.dialogId,
+			.messageId = message.messageId,
+			.rank = rank.toStdString(),
+			.entityCreateDate = base::unixtime::now(),
+		});
+	}
 	PendingDeleted.push_back(std::move(message));
 	AyuRestore::noteDeleted(item->history());
 	if (!FlushScheduled) {
@@ -579,6 +676,75 @@ void flushPending() {
 	flushPendingDeleted();
 }
 
+std::vector<AyuMessageBase> searchDeletedMessages(
+		ID userId,
+		ID dialogId,
+		ID topicId,
+		ID fromId,
+		const std::string &query,
+		int limit,
+		bool withMedia) {
+	return convertToBase(AyuDatabase::searchDeletedMessages(
+		userId,
+		dialogId,
+		topicId,
+		fromId,
+		query,
+		limit,
+		withMedia));
+}
+
+std::vector<DeletedExtra> loadDeletedExtras(ID userId, ID dialogId) {
+	return AyuDatabase::getDeletedExtras(userId, dialogId);
+}
+
+std::vector<DeletedMarkup> loadDeletedMarkups(ID userId, ID dialogId) {
+	return AyuDatabase::getDeletedMarkups(userId, dialogId);
+}
+
+std::vector<DeletedRank> loadDeletedRanks(ID userId, ID dialogId) {
+	return AyuDatabase::getDeletedRanks(userId, dialogId);
+}
+
+void restoreExtra(not_null<HistoryItem*> item, const DeletedExtra &extra) {
+	if (!extra.reactions.empty()) {
+		const auto reactions = AyuMapper::deserializeReactions(
+			extra.reactions);
+		item->updateReactions(&reactions);
+	}
+	if (!extra.commentsChannelId) {
+		return;
+	}
+	const auto channelId = ChannelId(uint64(extra.commentsChannelId));
+	auto data = HistoryMessageRepliesData();
+	data.isNull = false;
+	data.repliesCount = extra.repliesCount;
+	data.channelId = channelId;
+	data.readMaxId = MsgId(extra.commentsReadTill);
+	data.maxId = MsgId(extra.commentsMaxId);
+	auto start = size_t(0);
+	while (start < extra.repliers.size()) {
+		auto end = extra.repliers.find(',', start);
+		if (end == std::string::npos) {
+			end = extra.repliers.size();
+		}
+		const auto value = std::strtoull(
+			extra.repliers.substr(start, end - start).c_str(),
+			nullptr,
+			10);
+		if (value) {
+			data.recentRepliers.push_back(PeerId(value));
+		}
+		start = end + 1;
+	}
+	item->setReplies(std::move(data));
+	if (extra.commentsRootId) {
+		item->setCommentsItemId(FullMsgId(
+			peerFromChannel(channelId),
+			MsgId(extra.commentsRootId)));
+	}
+}
+
 bool hasDeletedMessages(not_null<PeerData*> peer, ID topicId) {
 	flushPendingDeleted();
 	return AyuDatabase::hasDeletedMessages(storageUserId(peer), getDialogIdFromPeer(peer), topicId);
@@ -589,6 +755,101 @@ void removeDeletedMessage(not_null<HistoryItem*> item) {
 	const auto peer = item->history()->peer;
 	const ID userId = peer->session().userId().bare & PeerId::kChatTypeMask;
 	AyuDatabase::removeDeletedMessage(userId, getDialogIdFromPeer(peer), item->id.bare);
+}
+
+void clearAllDeleted() {
+	flushPendingDeleted();
+	AyuDatabase::clearAllDeleted();
+	QDir(SavedMediaDirectory()).removeRecursively();
+}
+
+void clearDeletedDatabase() {
+	flushPendingDeleted();
+	AyuDatabase::clearAllDeleted();
+	AyuDatabase::flush();
+}
+
+void clearSavedMedia() {
+	QDir(SavedMediaDirectory()).removeRecursively();
+}
+
+void clearUserDatabase(ID userId) {
+	flushPendingDeleted();
+	AyuDatabase::clearUserData(userId);
+}
+
+void clearUserMedia(ID userId) {
+	const auto dir = QDir(SavedMediaDirectory());
+	for (const auto &name : dir.entryList(
+			QStringList() << (QString::number(userId) + "_*"),
+			QDir::Files)) {
+		QFile::remove(dir.absoluteFilePath(name));
+	}
+}
+
+void clearOpenedMedia() {
+	QDir(OpenedMediaDirectory()).removeRecursively();
+	LargeDocuments.clear();
+}
+
+// WHY: the cache takes up to 10 MB per value, so a bigger file is
+// decrypted on the click into a copy that is removed on exit.
+bool prepareLargeMedia(not_null<DocumentData*> document) {
+	const auto i = LargeDocuments.find(document);
+	if (i == LargeDocuments.end() || i->second.id != document->id) {
+		return false;
+	}
+	[[maybe_unused]] static const auto cleaned = [] {
+		QDir(OpenedMediaDirectory()).removeRecursively();
+		return true;
+	}();
+	const auto path = i->second.path;
+	const auto target = QDir(OpenedMediaDirectory()).absoluteFilePath(
+		QFileInfo(path).completeBaseName()
+		+ '.'
+		+ QFileInfo(document->filename()).suffix());
+	if (QFile::exists(target)) {
+		if (document->filepath().isEmpty()) {
+			document->setLocation(Core::FileLocation(target));
+			document->session().data().requestDocumentViewRepaint(document);
+			return true;
+		}
+		return false;
+	}
+	if (!PendingCopies.emplace(target).second) {
+		return true;
+	}
+	Ui::Toast::Show(tr::ayu_DeletedMediaDecrypting(tr::now));
+	crl::async([=, session = &document->session()] {
+		const auto read = AyuVault::ReadFile(path);
+		auto done = false;
+		if (read && !read->isEmpty()) {
+			QDir().mkpath(QFileInfo(target).absolutePath());
+			auto file = QSaveFile(target);
+			done = file.open(QIODevice::WriteOnly)
+				&& file.write(*read) == read->size()
+				&& file.commit();
+		}
+		crl::on_main([=] { PendingCopies.remove(target); });
+		crl::on_main(session, [=] {
+			if (!done) {
+				Ui::Toast::Show(tr::ayu_DeletedMediaDecryptFailed(tr::now));
+				return;
+			}
+			document->setLocation(Core::FileLocation(target));
+			session->data().requestDocumentViewRepaint(document);
+		});
+	});
+	return true;
+}
+
+void clearEverything() {
+	clearOpenedMedia();
+	flushPendingDeleted();
+	AyuDatabase::clearEverything();
+	clearSavedMedia();
+	QDir(u"./tdata/ayu_secret"_q).removeRecursively();
+	QDir(u"./tdata/ayu_secret_tmp"_q).removeRecursively();
 }
 
 void clearDeletedMessages(not_null<PeerData*> peer, ID topicId) {

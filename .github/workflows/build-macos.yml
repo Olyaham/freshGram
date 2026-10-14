@@ -96,10 +96,18 @@ jobs:
           compression-level: 0
 
   app:
-    name: macOS
+    name: macOS ${{ matrix.suffix }}
     needs: libraries
     runs-on: macos-15
     timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            suffix: arm64
+          - arch: x86_64
+            suffix: x64
 
     steps:
       - name: Check API credentials
@@ -155,10 +163,12 @@ jobs:
           API_HASH: ${{ secrets.API_HASH }}
         run: |
           cd freshGram/Telegram
+          # std::filesystem in whisper.cpp, Tesseract and the settings needs 10.15.
           ./configure.sh \
             -D TDESKTOP_API_ID="$API_ID" \
             -D TDESKTOP_API_HASH="$API_HASH" \
-            -D CMAKE_OSX_ARCHITECTURES=arm64 \
+            -D CMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
+            -D CMAKE_OSX_DEPLOYMENT_TARGET=10.15 \
             -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
             -D DESKTOP_APP_DISABLE_CRASH_REPORTS=ON
 
@@ -172,26 +182,6 @@ jobs:
             echo "::warning::Build attempt $attempt failed, trying again"
           done
           exit 1
-
-      - name: Package
-        run: |
-          set -e
-          app=$(find freshGram/out/Release -maxdepth 1 -name '*.app' | head -1)
-          test -n "$app"
-          mkdir -p dist dmg
-          rm -rf dmg/freshGram.app
-          cp -R "$app" dmg/freshGram.app
-          codesign --force --deep --sign - dmg/freshGram.app
-          ln -s /Applications dmg/Applications
-          hdiutil create -volname freshGram -srcfolder dmg -ov -format UDZO dist/freshGram.dmg
-          (cd dist && shasum -a 256 freshGram.dmg > SHA256SUMS-macos)
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: freshGram-macos
-          path: dist/
-          retention-days: 7
 
       - name: Resolve release tag
         id: release
@@ -209,6 +199,44 @@ jobs:
           fi
           echo "prerelease=$pre" >> "$GITHUB_OUTPUT"
 
+      - name: Package
+        run: |
+          set -e
+          app=$(find freshGram/out/Release -maxdepth 1 -name '*.app' | head -1)
+          test -n "$app"
+          mkdir -p dist dmg
+          if [ -n "${{ steps.release.outputs.tag }}" ]; then
+            mkdir -p debug-input
+            echo "${{ steps.release.outputs.tag }}" > debug-input/release-tag.txt
+            ditto -c -k --sequesterRsrc --keepParent "$app" "debug-input/freshGram-${{ matrix.suffix }}.app.zip"
+          fi
+          rm -rf dmg/freshGram.app
+          cp -R "$app" dmg/freshGram.app
+          binary=$(find dmg/freshGram.app/Contents/MacOS -type f | head -1)
+          before=$(stat -f %z "$binary")
+          strip -x "$binary" || echo "::warning::strip failed, packing the binary as it is"
+          echo "Stripped $binary: $before -> $(stat -f %z "$binary") bytes"
+          codesign --force --deep --sign - dmg/freshGram.app
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname freshGram -srcfolder dmg -ov -format UDZO dist/freshGram-${{ matrix.suffix }}.dmg
+          (cd dist && shasum -a 256 freshGram-${{ matrix.suffix }}.dmg > SHA256SUMS-macos-${{ matrix.suffix }})
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: freshGram-macos-${{ matrix.suffix }}
+          path: dist/
+          retention-days: 7
+
+      - name: Upload the debug input
+        if: steps.release.outputs.tag != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-debug-input-${{ matrix.suffix }}
+          path: debug-input/
+          retention-days: 14
+          compression-level: 0
+
       - name: Publish release
         if: steps.release.outputs.tag != ''
         uses: softprops/action-gh-release@v2
@@ -218,5 +246,5 @@ jobs:
           prerelease: ${{ steps.release.outputs.prerelease }}
           generate_release_notes: true
           files: |
-            dist/freshGram.dmg
-            dist/SHA256SUMS-macos
+            dist/freshGram-${{ matrix.suffix }}.dmg
+            dist/SHA256SUMS-macos-${{ matrix.suffix }}

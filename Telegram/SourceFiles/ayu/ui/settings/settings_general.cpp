@@ -8,6 +8,9 @@
 
 #include "lang_auto.h"
 #include "ayu/ayu_settings.h"
+#include "ayu/features/recognition/speech_recognition.h"
+#include "ayu/features/recognition/text_recognition.h"
+#include "ayu/ui/boxes/recognition_models_box.h"
 #include "ayu/ui/settings/ayu_builder.h"
 #include "ayu/ui/settings/settings_ayu_utils.h"
 #include "ayu/ui/settings/settings_main.h"
@@ -25,6 +28,8 @@
 #include "ui/wrap/vertical_layout.h"
 #include "window/window_controller.h"
 #include "window/window_session_controller.h"
+
+#include <QtCore/QRegularExpression>
 
 namespace Settings {
 
@@ -115,6 +120,103 @@ void BuildTranslator(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	}
 }
 
+void BuildTranscription(SectionBuilder &builder, AyuSectionBuilder &ayu) {
+	const auto controller = builder.controller();
+	auto *settings = &AyuSettings::getInstance();
+	const auto whisper = AyuRecognition::SpeechRecognitionAvailable();
+
+	auto options = std::vector<QString>{ u"Telegram"_q };
+	if (whisper) {
+		options.push_back(tr::ayu_TranscriptionWhisper(tr::now));
+	}
+
+	builder.addSubsectionTitle(tr::ayu_TranscriptionSubtitle());
+	builder.addButton({
+		.id = u"ayu/transcriptionProvider"_q,
+		.altIds = { u"ayu/whisperProvider"_q, u"ayu/voiceToText"_q },
+		.title = tr::ayu_TranscriptionProvider(),
+		.st = &st::settingsButtonNoIcon,
+		.label = settings->transcriptionProviderValue()
+			| rpl::map([=](TranscriptionProvider value) {
+				const auto index = std::min(
+					int(value),
+					int(options.size()) - 1);
+				return options[index];
+			}),
+		.onClick = [=] {
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				SingleChoiceBox(box, {
+					.title = tr::ayu_TranscriptionProvider(),
+					.options = options,
+					.initialSelection = std::min(
+						int(AyuSettings::getInstance().transcriptionProvider()),
+						int(options.size()) - 1),
+					.callback = [=](int index) {
+						AyuSettings::getInstance().setTranscriptionProvider(
+							static_cast<TranscriptionProvider>(index));
+					},
+				});
+			}));
+		},
+	});
+	if (!whisper) {
+		return;
+	}
+	builder.addButton({
+		.id = u"ayu/whisperModel"_q,
+		.altIds = { u"ayu/whisperModels"_q, u"ayu/speechModel"_q },
+		.title = tr::ayu_WhisperModel(),
+		.st = &st::settingsButtonNoIcon,
+		.label = settings->whisperModelValue()
+			| rpl::map([](QString file) {
+				if (file.isEmpty()) {
+					return tr::ayu_RecognitionOff(tr::now);
+				}
+				file.remove(QRegularExpression(u"^ggml-|-q\\d+_\\d+\\.bin$"_q));
+				return file;
+			}),
+		.onClick = [=] {
+			controller->show(Box<AyuUi::RecognitionModelsBox>(
+				&controller->session(),
+				AyuRecognition::ModelKind::Whisper));
+		},
+		.shown = settings->transcriptionProviderValue()
+			| rpl::map([](TranscriptionProvider value) {
+				return value == TranscriptionProvider::WhisperLocal;
+			}),
+	});
+}
+
+void BuildTextRecognition(SectionBuilder &builder) {
+	if (!AyuRecognition::TextRecognitionAvailable()) {
+		return;
+	}
+	const auto controller = builder.controller();
+	auto *settings = &AyuSettings::getInstance();
+
+	builder.addSubsectionTitle(tr::ayu_TextRecognitionSubtitle());
+	builder.addButton({
+		.id = u"ayu/ocrLanguages"_q,
+		.altIds = { u"ayu/ocr"_q, u"ayu/tesseract"_q, u"ayu/textRecognition"_q },
+		.title = tr::ayu_ManageOcrLanguages(),
+		.st = &st::settingsButtonNoIcon,
+		.label = settings->ocrLanguagesValue()
+			| rpl::map([](QString codes) {
+				if (codes.isEmpty()) {
+					return tr::ayu_RecognitionOff(tr::now);
+				} else if (codes == AyuRecognition::kAutoOcrLanguages.utf16()) {
+					return tr::ayu_OcrAutoShort(tr::now);
+				}
+				return codes.replace('+', u", "_q);
+			}),
+		.onClick = [=] {
+			controller->show(Box<AyuUi::RecognitionModelsBox>(
+				&controller->session(),
+				AyuRecognition::ModelKind::Tesseract));
+		},
+	});
+}
+
 void BuildShowPeerId(SectionBuilder &builder) {
 	auto *settings = &AyuSettings::getInstance();
 
@@ -160,9 +262,23 @@ void BuildQoLToggles(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	BuildTranslator(builder, ayu);
 	ayu.addSectionDivider();
 
+	BuildTranscription(builder, ayu);
+	ayu.addSectionDivider();
+
+	if (AyuRecognition::TextRecognitionAvailable()) {
+		BuildTextRecognition(builder);
+		ayu.addSectionDivider();
+	}
+
 	builder.addSubsectionTitle(tr::ayu_CategoryGeneral());
 
 	const auto controller = builder.controller();
+	ayu.addSettingToggle({
+		.id = u"ayu/localPinnedChats"_q,
+		.title = tr::ayu_LocalPinnedChats(),
+		.getter = &AyuSettings::localPinnedChats,
+		.setter = &AyuSettings::setLocalPinnedChats,
+	});
 	ayu.addToggle({
 		.id = u"ayu/disableStories"_q,
 		.altIds = { u"ayu/hideStories"_q },
@@ -307,6 +423,37 @@ void BuildQoLToggles(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		},
 		.toggledWhenAll = false,
 	});
+	ayu.addSectionDivider();
+
+	builder.addSubsectionTitle(tr::lng_settings_privacy_title());
+
+	ayu.addSettingToggle({
+		.id = u"ayu/keepDraftsLocal"_q,
+		.altIds = { u"ayu/draftsSync"_q },
+		.title = tr::ayu_KeepDraftsLocal(),
+		.getter = &AyuSettings::keepDraftsLocal,
+		.setter = &AyuSettings::setKeepDraftsLocal,
+	});
+	ayu.addSettingToggle({
+		.id = u"ayu/reduceNetworkTracking"_q,
+		.altIds = { u"ayu/temporaryKeyLifetime"_q },
+		.title = tr::ayu_ReduceNetworkTracking(),
+		.getter = &AyuSettings::reduceNetworkTracking,
+		.setter = &AyuSettings::setReduceNetworkTracking,
+	});
+
+	builder.addSkip();
+	builder.addDividerText(tr::ayu_NetworkPrivacyDescription());
+
+	ayu.addSettingToggle({
+		.id = u"ayu/enableDebugLogging"_q,
+		.title = tr::ayu_EnableDebugLogging(),
+		.getter = &AyuSettings::enableDebugLogging,
+		.setter = &AyuSettings::setEnableDebugLogging,
+	});
+
+	builder.addSkip();
+	builder.addDividerText(tr::ayu_DebugLoggingDescription());
 }
 
 const auto kMeta = BuildHelper({

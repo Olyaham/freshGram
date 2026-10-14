@@ -376,6 +376,48 @@ struct BoldFace {
 	int weight = 0;
 };
 
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+[[nodiscard]] QStringList DatabaseStyles(const QString &family) {
+	return QFontDatabase().styles(family);
+}
+
+[[nodiscard]] bool DatabaseItalic(
+		const QString &family,
+		const QString &style) {
+	return QFontDatabase().italic(family, style);
+}
+
+[[nodiscard]] int DatabaseWeight(
+		const QString &family,
+		const QString &style) {
+	return QFontDatabase().weight(family, style);
+}
+
+[[nodiscard]] QStringList DatabaseFamilies() {
+	return QFontDatabase().families();
+}
+#else // Qt < 6
+[[nodiscard]] QStringList DatabaseStyles(const QString &family) {
+	return QFontDatabase::styles(family);
+}
+
+[[nodiscard]] bool DatabaseItalic(
+		const QString &family,
+		const QString &style) {
+	return QFontDatabase::italic(family, style);
+}
+
+[[nodiscard]] int DatabaseWeight(
+		const QString &family,
+		const QString &style) {
+	return QFontDatabase::weight(family, style);
+}
+
+[[nodiscard]] QStringList DatabaseFamilies() {
+	return QFontDatabase::families();
+}
+#endif // Qt < 6
+
 [[nodiscard]] std::optional<BoldFace> FindBoldFace(const QFont &font) {
 	static auto Cache = base::flat_map<QString, std::optional<BoldFace>>();
 
@@ -383,11 +425,11 @@ struct BoldFace {
 	const auto regular = [&] {
 		auto result = int(QFont::Normal);
 		auto distance = 10000;
-		for (const auto &style : QFontDatabase::styles(family)) {
-			if (QFontDatabase::italic(family, style)) {
+		for (const auto &style : DatabaseStyles(family)) {
+			if (DatabaseItalic(family, style)) {
 				continue;
 			}
-			const auto weight = QFontDatabase::weight(family, style);
+			const auto weight = DatabaseWeight(family, style);
 			const auto delta = std::abs(weight - int(QFont::Normal));
 			if (delta < distance) {
 				distance = delta;
@@ -412,11 +454,11 @@ struct BoldFace {
 	auto result = std::optional<BoldFace>();
 	auto bestRank = rank(regular);
 	const auto consider = [&](const QString &candidate) {
-		for (const auto &style : QFontDatabase::styles(candidate)) {
-			if (QFontDatabase::italic(candidate, style)) {
+		for (const auto &style : DatabaseStyles(candidate)) {
+			if (DatabaseItalic(candidate, style)) {
 				continue;
 			}
-			const auto weight = QFontDatabase::weight(candidate, style);
+			const auto weight = DatabaseWeight(candidate, style);
 			if (weight <= regular) {
 				continue;
 			}
@@ -429,7 +471,7 @@ struct BoldFace {
 	consider(base);
 	consider(family);
 	const auto prefix = base + ' ';
-	for (const auto &candidate : QFontDatabase::families()) {
+	for (const auto &candidate : DatabaseFamilies()) {
 		if (candidate.startsWith(prefix, Qt::CaseInsensitive)
 			&& StripWeightWord(candidate).compare(
 				base,
@@ -478,6 +520,12 @@ struct BoldFace {
 			if (face) {
 				font.setFamily(face->family);
 				font.setWeight(QFont::Weight(face->weight));
+			} else if (!overriden && !system) {
+				if (DatabaseFamilies().contains(u"Google Sans Medium"_q)) {
+					font.setFamily(u"Google Sans Medium"_q);
+				} else {
+					font.setWeight(QFont::DemiBold);
+				}
 			} else {
 				font.setWeight(QFont::Bold);
 			}
@@ -534,24 +582,26 @@ void StartFonts() {
 #endif //  __has_include(<glib.h>)
 	}
 
-	QFont::insertSubstitution(name, u"Vazirmatn UI NL"_q);
+	for (const auto &family : { name, name + u" Medium"_q }) {
+		QFont::insertSubstitution(family, u"Vazirmatn UI NL"_q);
 
 #ifdef Q_OS_WIN
-	QFont::insertSubstitutions(name, {
-		// https://qt-project.atlassian.net/browse/QTBUG-134052
-		u"Ebrima"_q,
-		// https://qt-project.atlassian.net/browse/QTBUG-94756
-		u"Nirmala UI"_q,
-	});
+		QFont::insertSubstitutions(family, {
+			// https://qt-project.atlassian.net/browse/QTBUG-134052
+			u"Ebrima"_q,
+			// https://qt-project.atlassian.net/browse/QTBUG-94756
+			u"Nirmala UI"_q,
+		});
 #elif defined Q_OS_MAC // Q_OS_WIN
-	const auto list = QStringList{
-		u"STIXGeneral"_q,
-		u".SF NS Text"_q,
-		u"Helvetica Neue"_q,
-		u"Lucida Grande"_q,
-	};
-	QFont::insertSubstitutions(name, list);
+		const auto list = QStringList{
+			u"STIXGeneral"_q,
+			u".SF NS Text"_q,
+			u"Helvetica Neue"_q,
+			u"Lucida Grande"_q,
+		};
+		QFont::insertSubstitutions(family, list);
 #endif // Q_OS_MAC
+	}
 }
 
 void DestroyFonts() {

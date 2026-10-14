@@ -58,6 +58,61 @@ class EditedMessage : public AyuMessageBase
 {
 };
 
+// Reactions and comments of a deleted message, they are kept apart from
+// the main row, so that the table of deleted messages stays compatible.
+class DeletedExtra
+{
+public:
+	ID fakeId;
+	ID userId;
+	ID dialogId;
+	int messageId;
+	std::vector<char> reactions;
+	int repliesCount;
+	ID commentsChannelId;
+	int commentsRootId;
+	int commentsReadTill;
+	int commentsMaxId;
+	std::string repliers;
+	int entityCreateDate;
+};
+
+// Inline buttons of a deleted message, kept in their own table.
+class DeletedMarkup
+{
+public:
+	ID fakeId;
+	ID userId;
+	ID dialogId;
+	int messageId;
+	std::vector<char> markup;
+	int entityCreateDate;
+};
+
+// The tag of the author of a deleted message, kept in its own table.
+class DeletedRank
+{
+public:
+	ID fakeId;
+	ID userId;
+	ID dialogId;
+	int messageId;
+	std::string rank;
+	int entityCreateDate;
+};
+
+class ComposeStashRow
+{
+public:
+	ID fakeId;
+	ID userId;
+	ID dialogId;
+	ID topicRootId;
+	ID monoforumPeerId;
+	std::vector<char> payload;
+	int entityCreateDate;
+};
+
 class DeletedDialog
 {
 public:
@@ -100,6 +155,15 @@ public:
 	ID creatorId;
 	int date;
 	int flags;
+};
+
+class LocalPin
+{
+public:
+	ID fakeId;
+	ID userId;
+	ID peerId;
+	int position;
 };
 
 class KnownUser

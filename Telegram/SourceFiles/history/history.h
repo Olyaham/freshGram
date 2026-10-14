@@ -18,6 +18,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 class History;
 class HistoryBlock;
+class AyuMessageBase;
 class HistoryTranslation;
 class HistoryItem;
 struct HistoryItemCommonFields;
@@ -32,6 +33,7 @@ class State;
 
 namespace Data {
 struct Draft;
+struct ComposeStash;
 class CommunityInfo;
 class Forum;
 class Session;
@@ -113,6 +115,9 @@ public:
 	void restoreAyuKept();
 	void ayuRestoreMarkStale();
 	void ayuRestoreThread(MsgId rootId);
+	[[nodiscard]] HistoryItem *ayuDeletedItem(const AyuMessageBase &message);
+	[[nodiscard]] HistoryItem *ayuRestoredByOriginalId(MsgId id);
+	[[nodiscard]] MsgId ayuOriginalId(not_null<const HistoryItem*> item) const;
 	[[nodiscard]] HistoryItem *ayuRestored(
 		MsgId id,
 		not_null<HistoryItem*> holder);
@@ -414,6 +419,14 @@ public:
 		MsgId topicRootId,
 		PeerId monoforumPeerId,
 		Data::ForwardDraft &&draft);
+
+	[[nodiscard]] Data::ComposeStash *composeStash(Data::DraftKey key) const;
+	void setComposeStash(
+		Data::DraftKey key,
+		std::unique_ptr<Data::ComposeStash> stash);
+	[[nodiscard]] std::unique_ptr<Data::ComposeStash> takeComposeStash(
+		Data::DraftKey key);
+	void restoreComposeStash(Data::DraftKey key);
 
 	History *migrateSibling() const;
 	[[nodiscard]] bool useTopPromotion() const;
@@ -726,6 +739,10 @@ private:
 	base::flat_map<Data::DraftKey, TimeId> _acceptCloudDraftsAfter;
 	base::flat_map<Data::DraftKey, int> _savingCloudDraftRequests;
 	base::flat_map<Data::DraftKey, Data::ForwardDraft> _forwardDrafts;
+	base::flat_map<
+		Data::DraftKey,
+		std::unique_ptr<Data::ComposeStash>> _composeStashes;
+	base::flat_set<Data::DraftKey> _composeStashesChecked;
 
 	base::flat_map<MsgId, TimeId> _unknownDeletedMessages;
 

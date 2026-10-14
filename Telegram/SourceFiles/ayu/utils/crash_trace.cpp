@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <atomic>
@@ -29,6 +30,7 @@ constexpr auto kFreezeSeconds = 20;
 constexpr auto kFramesLimit = 80;
 
 int TraceFd = -1;
+bool HandlersInstalled = false;
 pthread_t MainThread;
 std::atomic<long long> Heartbeat = 0;
 alignas(16) char AlternateStack[64 * 1024];
@@ -103,8 +105,16 @@ void Install(const QString &directory) {
 	QDir().mkpath(directory);
 	const auto path = QFile::encodeName(directory + QStringLiteral("/crash_trace.txt"));
 	const auto flags = O_WRONLY | O_CREAT | O_TRUNC | O_APPEND;
-	TraceFd = ::open(path.constData(), flags, 0644);
+	TraceFd = ::open(path.constData(), flags, 0600);
 	if (TraceFd < 0) {
+		return;
+	}
+	// open() does not change the mode of an already existing file, so
+	// traces left by older versions are tightened explicitly. If even
+	// that fails, give up tracing rather than writing world-readable.
+	if (::fchmod(TraceFd, 0600) != 0) {
+		::close(TraceFd);
+		TraceFd = -1;
 		return;
 	}
 	const auto header = QByteArray("\n=== started, version ")
@@ -114,6 +124,10 @@ void Install(const QString &directory) {
 		TraceFd,
 		header.constData(),
 		header.size());
+	if (HandlersInstalled) {
+		return;
+	}
+	HandlersInstalled = true;
 
 	MainThread = ::pthread_self();
 
@@ -137,6 +151,15 @@ void Install(const QString &directory) {
 	std::thread(WatchMainThread).detach();
 }
 
+void Remove(const QString &directory) {
+	if (TraceFd >= 0) {
+		const auto fd = TraceFd;
+		TraceFd = -1;
+		::close(fd);
+	}
+	QFile::remove(directory + QStringLiteral("/crash_trace.txt"));
+}
+
 } // namespace AyuCrashTrace
 
 #elif defined Q_OS_WIN
@@ -146,6 +169,7 @@ void Install(const QString &directory) {
 #include <QtCore/QByteArray>
 #include <QtCore/QCoreApplication>
 #include <QtCore/QDir>
+#include <QtCore/QFile>
 #include <QtCore/QTimer>
 
 #include <windows.h>
@@ -166,6 +190,7 @@ constexpr auto kFramesLimit = 80;
 constexpr auto kLineLimit = 520;
 
 HANDLE TraceFile = INVALID_HANDLE_VALUE;
+bool HandlersInstalled = false;
 HANDLE MainThread = nullptr;
 std::atomic<long long> Heartbeat = 0;
 std::atomic<bool> Fatal = false;
@@ -441,6 +466,10 @@ void Install(const QString &directory) {
 		+ AppVersionStr
 		+ " ===\n";
 	WriteRaw(header.constData(), int(header.size()));
+	if (HandlersInstalled) {
+		return;
+	}
+	HandlersInstalled = true;
 
 	::DuplicateHandle(
 		::GetCurrentProcess(),
@@ -468,6 +497,15 @@ void Install(const QString &directory) {
 	}
 }
 
+void Remove(const QString &directory) {
+	if (TraceFile != INVALID_HANDLE_VALUE) {
+		const auto handle = TraceFile;
+		TraceFile = INVALID_HANDLE_VALUE;
+		::CloseHandle(handle);
+	}
+	QFile::remove(directory + QStringLiteral("/crash_trace.txt"));
+}
+
 } // namespace AyuCrashTrace
 
 #else // Q_OS_LINUX || Q_OS_WIN
@@ -475,6 +513,9 @@ void Install(const QString &directory) {
 namespace AyuCrashTrace {
 
 void Install(const QString &directory) {
+}
+
+void Remove(const QString &directory) {
 }
 
 } // namespace AyuCrashTrace

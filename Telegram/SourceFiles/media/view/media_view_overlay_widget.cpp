@@ -137,6 +137,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <kurlmimedata.h>
 
 #include "ayu/ayu_settings.h"
+#include "ayu/features/recognition/recognition_models.h"
+#include "ayu/features/recognition/text_recognition.h"
+#include "ayu/ui/boxes/recognition_models_box.h"
+#include "ayu/ui/components/recognition_picker.h"
 #include "ayu/ayu_state.h"
 #include "ayu/features/streamer_mode/streamer_mode.h"
 
@@ -1395,7 +1399,7 @@ void OverlayWidget::markTimedMediaRead() {
 
 void OverlayWidget::checkSingleViewMediaBurn() {
 	const auto item = _message;
-	if (!item || item->out()) {
+	if (!item || item->out() || item->keepsUnburnt()) {
 		return;
 	}
 	const auto media = item->media();
@@ -2338,6 +2342,19 @@ void OverlayWidget::fillContextMenuActions(
 				&st::mediaMenuIconCopy);
 		}
 	}
+	if (!hasRecognitionSelection
+		&& !_stories
+		&& !streamerHidden()
+		&& AyuRecognition::TextRecognitionAvailable()
+		&& ((_photo && _photoMedia && _photoMedia->loaded())
+			|| (_document
+				&& _document->isImage()
+				&& !_staticContent.isNull()))) {
+		addAction(
+			tr::ayu_RecognizeText(tr::now),
+			[=] { startTextRecognition(); },
+			&st::mediaMenuIconFont);
+	}
 	if ((_photo && _photo->hasAttachedStickers())
 		|| (_document && _document->hasAttachedStickers())) {
 		addAction(
@@ -2851,6 +2868,9 @@ void OverlayWidget::resizeContentByScreenSize() {
 		? (_minUsedTop + (_maxUsedHeight - _h) / 2)
 		: (_skipTop + (useh - _h) / 2);
 	_geometryAnimation.stop();
+	if (_recognitionPicker) {
+		_recognitionPicker->refreshLayout();
+	}
 }
 
 float64 OverlayWidget::radialProgress() const {
@@ -4677,6 +4697,7 @@ void OverlayWidget::displayPhoto(
 	_rotation = _photo->owner().mediaRotation().get(_photo);
 	_radial.stop();
 	if (photoChanged) {
+		closeRecognitionPicker();
 		_showRecognitionResults = false;
 		_recognitionResult = {};
 		_recognitionPendingSessionUniqueId = 0;
@@ -4773,6 +4794,7 @@ void OverlayWidget::displayDocument(
 	_themeCloudData = cloud;
 	_radial.stop();
 	if (documentChanged) {
+		closeRecognitionPicker();
 		_showRecognitionResults = false;
 		_recognitionResult = {};
 		_recognitionPendingSessionUniqueId = 0;
@@ -6303,6 +6325,75 @@ void OverlayWidget::validatePhotoCurrentImage() {
 	}
 }
 
+void OverlayWidget::startTextRecognition() {
+	if (_stories || !_session || _recognitionPicker || streamerHidden()) {
+		return;
+	}
+	auto image = QImage();
+	if (_photo && _photoMedia) {
+		_photoMedia->wanted(Data::PhotoSize::Large, fileOrigin());
+		if (const auto large = _photoMedia->image(Data::PhotoSize::Large)) {
+			image = large->original();
+		} else if (const auto small = _photoMedia->image(
+				Data::PhotoSize::Small)) {
+			image = small->original();
+		}
+		if (!image.isNull() && _flip) {
+			image = image.mirrored(
+				_flip & Qt::Horizontal,
+				_flip & Qt::Vertical);
+		}
+	} else if (_document && _document->isImage()) {
+		image = _staticContent;
+	}
+	if (image.isNull()) {
+		Ui::Toast::Show(_body, tr::ayu_RecognizeNotLoaded(tr::now));
+		return;
+	}
+	image.setDevicePixelRatio(1.);
+	const auto languages = AyuRecognition::EnabledOcrLanguages();
+	if (languages.isEmpty()) {
+		Ui::Toast::Show(_body, tr::ayu_RecognizeNoLanguages(tr::now));
+		uiShow()->showBox(Box<AyuUi::RecognitionModelsBox>(
+			_session,
+			AyuRecognition::ModelKind::Tesseract));
+		return;
+	}
+	if (_rotation) {
+		image = image.transformed(
+			QTransform().rotate(_rotation),
+			Qt::SmoothTransformation);
+	}
+	_recognitionPicker = base::make_unique_q<AyuUi::RecognitionPicker>(
+		_body,
+		std::move(image),
+		[=] {
+			const auto rect = finalContentRect();
+			return QRect(
+				_widget->mapTo(_body, rect.topLeft()),
+				rect.size());
+		},
+		languages,
+		[=] {
+			if (_recognitionPicker) {
+				_recognitionPicker->hide();
+			}
+			crl::on_main(base::make_weak(_widget), [=] {
+				closeRecognitionPicker();
+			});
+		});
+}
+
+void OverlayWidget::closeRecognitionPicker() {
+	if (!_recognitionPicker) {
+		return;
+	}
+	_recognitionPicker = nullptr;
+	if (!isHidden()) {
+		setFocus();
+	}
+}
+
 void OverlayWidget::tryStartTextRecognition() {
 	if (_stories
 		|| !_session
@@ -7342,6 +7433,12 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
 	const auto key = LayoutIndependentKey(e);
 	const auto modifiers = e->modifiers();
 	const auto ctrl = modifiers.testFlag(Qt::ControlModifier);
+	if (_recognitionPicker) {
+		if (key == Qt::Key_Escape) {
+			_recognitionPicker->cancelOrClose();
+		}
+		return;
+	}
 	if (_stories) {
 		if (key == Qt::Key_Space && _down != Over::Video) {
 			_stories->togglePaused(!_stories->paused());
@@ -7435,6 +7532,7 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
 		} else {
 			close();
 		}
+	// Ctrl + S is claimed against other shortcuts in eventFilter().
 	} else if (e == QKeySequence::Save || e == QKeySequence::SaveAs) {
 		saveAs();
 	} else if (key == Qt::Key_Copy || (key == Qt::Key_C && ctrl)) {
@@ -8779,6 +8877,9 @@ bool OverlayWidget::filterApplicationEvent(
 		} else if (key == Qt::Key_0 && ctrl) {
 			zoomReset();
 			return true;
+		} else if (event == QKeySequence::SaveAs
+			|| event == QKeySequence::Save) {
+			return true;
 		}
 		return false;
 	} else if (type == QEvent::MouseMove
@@ -8880,6 +8981,7 @@ Window::SessionController *OverlayWidget::findWindow(bool switchTo) const {
 
 // #TODO unite and check
 void OverlayWidget::clearBeforeHide() {
+	closeRecognitionPicker();
 	AyuState::disableGhostModeOnStoryClose(_storiesSession);
 	checkSingleViewMediaBurn();
 	_message = nullptr;
@@ -8925,6 +9027,7 @@ void OverlayWidget::clearBeforeHide() {
 }
 
 void OverlayWidget::clearAfterHide() {
+	closeRecognitionPicker();
 	_recognitionResult = {};
 	_recognitionPendingSessionUniqueId = 0;
 	_recognitionPendingPhotoId = 0;

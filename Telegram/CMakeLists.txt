@@ -30,6 +30,8 @@ include(cmake/telegram_options.cmake)
 include(cmake/lib_ffmpeg.cmake)
 include(cmake/lib_stripe.cmake)
 include(cmake/lib_tgcalls.cmake)
+include(cmake/lib_whisper.cmake)
+include(cmake/lib_tesseract.cmake)
 include(cmake/lib_prisma.cmake)
 include(cmake/lib_fido2.cmake)
 include(cmake/td_export.cmake)
@@ -71,6 +73,8 @@ target_link_libraries(Telegram
 PRIVATE
     tdesktop::lib_fido2
     tdesktop::lib_tgcalls
+    tdesktop::lib_whisper
+    tdesktop::lib_tesseract
     tdesktop::td_export
     tdesktop::td_iv
     tdesktop::td_lang
@@ -125,7 +129,49 @@ set(ayugram_files
         ayu/utils/builtin_lang.cpp
         ayu/utils/builtin_lang.h
         ayu/utils/crash_trace.cpp
+        ayu/features/fake_passcode/fake_passcode.cpp
+        ayu/features/compose_stash/compose_stash.h
+        ayu/features/compose_stash/compose_stash_hint.cpp
+        ayu/features/compose_stash/compose_stash_hint.h
+        ayu/features/compose_stash/compose_stash_manager.cpp
+        ayu/features/compose_stash/compose_stash_manager.h
+        ayu/features/compose_stash/compose_stash_storage.cpp
+        ayu/features/compose_stash/compose_stash_storage.h
+        ayu/features/fake_passcode/fake_passcode.h
+        ayu/features/recognition/local_transcribe.cpp
+        ayu/features/recognition/local_transcribe.h
+        ayu/features/recognition/recognition_audio.cpp
+        ayu/features/recognition/recognition_audio.h
+        ayu/features/recognition/recognition_models.cpp
+        ayu/features/recognition/recognition_models.h
+        ayu/features/recognition/speech_recognition.cpp
+        ayu/features/recognition/text_recognition.cpp
+        ayu/features/recognition/text_recognition.h
+        ayu/features/recognition/speech_recognition.h
+        ayu/ui/boxes/delete_own_messages_box.cpp
+        ayu/ui/boxes/delete_own_messages_box.h
+        ayu/ui/boxes/delete_own_topics_box.cpp
+        ayu/ui/boxes/delete_own_topics_box.h
+        ayu/ui/boxes/fake_passcode_box.cpp
+        ayu/ui/boxes/fake_passcode_box.h
+        ayu/ui/boxes/recognition_models_box.cpp
+        ayu/ui/components/recognition_picker.cpp
+        ayu/ui/components/recognition_picker.h
+        ayu/ui/components/stash_button.cpp
+        ayu/ui/components/stash_button.h
+        ayu/ui/boxes/recognition_models_box.h
+        ayu/ui/fagram/fagram_nav_drawer.cpp
+        ayu/ui/fagram/fagram_nav_drawer.h
+        ayu/ui/fagram/fagram_switch.cpp
+        ayu/ui/fagram/fagram_switch.h
+        ayu/ui/fagram/fagram_design.h
+        ayu/ui/fagram/fagram_top_bar.cpp
+        ayu/ui/fagram/fagram_top_bar.h
+        ayu/utils/debug_logging.cpp
+        ayu/utils/debug_logging.h
         ayu/utils/mtp_retry_log.cpp
+        ayu/utils/network_privacy.cpp
+        ayu/utils/network_privacy.h
         ayu/utils/mtp_retry_log.h
         ayu/utils/crash_trace.h
         ayu/utils/id_search.cpp
@@ -264,6 +310,8 @@ set(ayugram_files
         ayu/data/kept_dialogs.h
         ayu/data/known_users.cpp
         ayu/data/known_users.h
+        ayu/data/local_pins.cpp
+        ayu/data/local_pins.h
         ayu/secret/secret_bridge.cpp
         ayu/secret/secret_bridge.h
         ayu/secret/secret_crypto.cpp
@@ -290,6 +338,8 @@ set(ayugram_files
         ayu/data/ayu_database.cpp
         ayu/data/ayu_database.h
         ayu/data/ayu_database_backup.cpp
+        ayu/data/ayu_vault.cpp
+        ayu/data/ayu_vault.h
         ayu/data/ayu_database_backup.h
 
         info/profile/info_profile_music_button.cpp

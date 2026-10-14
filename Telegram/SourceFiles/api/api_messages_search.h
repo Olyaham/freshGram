@@ -70,6 +70,7 @@ private:
 
 	Request _request;
 	MsgId _offsetId;
+	bool _listAllFallback = false;
 
 	int _searchInHistoryRequest = 0; // Not real mtpRequestId.
 	mtpRequestId _requestId = 0;

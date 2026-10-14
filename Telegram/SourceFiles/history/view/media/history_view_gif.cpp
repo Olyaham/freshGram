@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "apiwrap.h"
 #include "api/api_transcribes.h"
+#include "ayu/features/recognition/local_transcribe.h"
 #include "lang/lang_keys.h"
 #include "mainwindow.h"
 #include "main/main_session.h"
@@ -223,7 +224,8 @@ Gif::Gif(
 					base::take(lifetime)->destroy();
 				}
 				if (!isOut) {
-					if (const auto item = data->message(fullId)) {
+					if (const auto item = data->message(fullId);
+						item && !item->keepsUnburnt()) {
 						// Destroys this.
 						item->clearMediaAsExpired();
 					}
@@ -1102,7 +1104,10 @@ void Gif::draw(Painter &p, const PaintContext &context) const {
 			auto fastShareTop = fullBottom
 				- st::historyFastShareBottom
 				- (size ? size->height() : 0);
-			if (fastShareLeft + rightActionWidth > maxRight) {
+			const auto fitRight = _parent->hasFromPhoto()
+				? maxRight
+				: _parent->width();
+			if (fastShareLeft + rightActionWidth > fitRight) {
 				const auto hidesBottomInfo = _parent->hidesBottomInfo();
 				fastShareLeft = fullRight
 					- rightActionWidth
@@ -1594,7 +1599,10 @@ TextState Gif::textState(QPoint point, StateRequest request) const {
 			auto fastShareTop = fullBottom
 				- st::historyFastShareBottom
 				- size->height();
-			if (fastShareLeft + rightActionWidth > maxRight) {
+			const auto fitRight = _parent->hasFromPhoto()
+				? maxRight
+				: _parent->width();
+			if (fastShareLeft + rightActionWidth > fitRight) {
 				const auto hidesBottomInfo = _parent->hidesBottomInfo();
 				fastShareLeft = fullRight
 					- rightActionWidth
@@ -2745,6 +2753,7 @@ void Gif::ensureTranscribeButton() const {
 		&& !_parent->data()->isScheduled()
 		&& !_parent->data()->isAdminLogEntry()
 		&& (_data->session().premium()
+			|| AyuRecognition::LocalTranscriptionEnabled()
 			|| _data->session().api().transcribes().trialsSupport())) {
 		if (!_transcribe) {
 			_transcribe = std::make_unique<TranscribeButton>(

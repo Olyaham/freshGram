@@ -78,8 +78,8 @@ jobs:
             Libraries
             win64
             ThirdParty
-          key: windows-libraries-v3-${{ hashFiles('freshGram/Telegram/build/prepare/**', 'freshGram/Telegram/build/qt_version.py') }}-${{ github.run_id }}
-          restore-keys: windows-libraries-v3-${{ hashFiles('freshGram/Telegram/build/prepare/**', 'freshGram/Telegram/build/qt_version.py') }}-
+          key: windows-libraries-qt5-v1-${{ hashFiles('freshGram/Telegram/build/prepare/**', 'freshGram/Telegram/build/qt_version.py') }}-${{ github.run_id }}
+          restore-keys: windows-libraries-qt5-v1-${{ hashFiles('freshGram/Telegram/build/prepare/**', 'freshGram/Telegram/build/qt_version.py') }}-
 
       - name: Install ATL and MFC for the toolset
         shell: pwsh
@@ -117,7 +117,7 @@ jobs:
         continue-on-error: true
         timeout-minutes: 300
         shell: cmd
-        run: freshGram\Telegram\build\prepare\win.bat silent qt6
+        run: freshGram\Telegram\build\prepare\win.bat silent
 
       - name: Save libraries
         if: always() && steps.libraries.outcome == 'success'
@@ -127,7 +127,7 @@ jobs:
             Libraries
             win64
             ThirdParty
-          key: windows-libraries-v3-${{ hashFiles('freshGram/Telegram/build/prepare/**', 'freshGram/Telegram/build/qt_version.py') }}-${{ github.run_id }}
+          key: windows-libraries-qt5-v1-${{ hashFiles('freshGram/Telegram/build/prepare/**', 'freshGram/Telegram/build/qt_version.py') }}-${{ github.run_id }}
 
       - name: Stop when libraries are not ready
         if: steps.prepare.outcome != 'success'
@@ -143,7 +143,7 @@ jobs:
           API_HASH: ${{ secrets.API_HASH }}
         run: |
           cd freshGram\Telegram
-          call configure.bat x64 qt6 -D TDESKTOP_API_ID=%API_ID% -D TDESKTOP_API_HASH=%API_HASH% -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON -D DESKTOP_APP_DISABLE_CRASH_REPORTS=ON
+          call configure.bat x64 -D TDESKTOP_API_ID=%API_ID% -D TDESKTOP_API_HASH=%API_HASH% -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON -D DESKTOP_APP_DISABLE_CRASH_REPORTS=ON
 
       - name: Build
         id: build
@@ -204,6 +204,27 @@ jobs:
           path: dist/
           retention-days: 7
 
+      - name: Collect symbols
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $pdb = Get-ChildItem freshGram/out/Release -Filter *.pdb -ErrorAction SilentlyContinue
+          if ($pdb) {
+            New-Item -ItemType Directory -Force symbols | Out-Null
+            7z a -mx=3 symbols/freshGram-pdb.7z ($pdb | ForEach-Object { $_.FullName })
+          } else {
+            Write-Host "No .pdb files were found in freshGram/out/Release."
+          }
+
+      - name: Upload symbols
+        if: hashFiles('symbols/*.7z') != ''
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: freshGram-windows-x64-symbols
+          path: symbols/
+          retention-days: 30
+
       - name: Resolve release tag
         id: release
         shell: bash
@@ -220,6 +241,26 @@ jobs:
             pre=true
           fi
           echo "prerelease=$pre" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare the debug input
+        if: steps.release.outputs.tag != ''
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force debug-input | Out-Null
+          Copy-Item dist/freshGram.exe debug-input/freshGram.exe
+          if (Test-Path symbols/freshGram-pdb.7z) {
+            Copy-Item symbols/freshGram-pdb.7z debug-input/freshGram-pdb.7z
+          }
+          Set-Content debug-input/release-tag.txt "${{ steps.release.outputs.tag }}"
+
+      - name: Upload the debug input
+        if: steps.release.outputs.tag != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-debug-input
+          path: debug-input/
+          retention-days: 14
+          compression-level: 0
 
       - name: Publish release
         if: steps.release.outputs.tag != ''

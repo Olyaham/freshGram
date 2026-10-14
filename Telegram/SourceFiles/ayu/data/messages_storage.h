@@ -8,6 +8,7 @@
 
 #include "ayu/data/entities.h"
 
+class DocumentData;
 class History;
 
 namespace AyuMessages {
@@ -28,10 +29,23 @@ void saveTtlMedia(not_null<HistoryItem*> item);
 std::optional<MTPMessageMedia> savedTtlMedia(not_null<History*> history, MsgId id);
 void restoreTtlBytes(not_null<HistoryItem*> item);
 MTPMessageMedia restoredMedia(const AyuMessageBase &message);
+std::vector<AyuMessageBase> searchDeletedMessages(ID userId, ID dialogId, ID topicId, ID fromId, const std::string &query, int limit, bool withMedia = false);
+std::vector<DeletedExtra> loadDeletedExtras(ID userId, ID dialogId);
+std::vector<DeletedMarkup> loadDeletedMarkups(ID userId, ID dialogId);
+std::vector<DeletedRank> loadDeletedRanks(ID userId, ID dialogId);
+void restoreExtra(not_null<HistoryItem*> item, const DeletedExtra &extra);
 std::vector<AyuMessageBase> loadDeletedMessages(ID userId, ID dialogId, ID topicId, ID minId, ID maxId, int totalLimit, const std::string &searchQuery);
 bool hasDeletedMessages(not_null<PeerData*> peer, ID topicId);
 void flushPending();
 void removeDeletedMessage(not_null<HistoryItem*> item);
 void clearDeletedMessages(not_null<PeerData*> peer, ID topicId);
+void clearAllDeleted();
+void clearDeletedDatabase();
+void clearSavedMedia();
+void clearUserDatabase(ID userId);
+void clearUserMedia(ID userId);
+void clearOpenedMedia();
+bool prepareLargeMedia(not_null<DocumentData*> document);
+void clearEverything();
 
 }

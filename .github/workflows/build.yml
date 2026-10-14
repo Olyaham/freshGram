@@ -298,39 +298,54 @@ jobs:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-linux-${{ github.run_id }}
 
+      - name: Keep the unstripped build and strip the packages
+        id: keep
+        run: |
+          set -e
+          binary=$(find out/install/usr/bin -maxdepth 1 -type f -perm -u+x | head -1)
+          test -n "$binary"
+          tag=""
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            tag="${{ github.ref_name }}"
+          elif [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            tag="${{ github.event.inputs.release_tag }}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          mkdir -p debug-input
+          if [ -n "$tag" ]; then
+            printf '%s\n' "$tag" > debug-input/release-tag.txt
+            tar -C out/install -cf - usr | zstd -T0 -3 -o debug-input/linux-install.tar.zst
+          fi
+          before=$(stat -c %s "$binary")
+          strip --strip-unneeded "$binary"
+          echo "Stripped $binary: $before -> $(stat -c %s "$binary") bytes"
+          ls -la debug-input
+
+      - name: Upload the unstripped build
+        if: steps.keep.outputs.tag != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-debug-input
+          path: debug-input/
+          retention-days: 14
+          compression-level: 0
+
       - name: Package
         run: |
           set -e
           binary=$(find out/Release -maxdepth 1 -type f -perm -u+x \( -iname 'freshgram' -o -iname 'telegram' \) | head -1)
           test -n "$binary"
           echo "Built $binary ($(stat -c %s "$binary") bytes)"
-          mkdir -p dist
-          tar -C out/install -czf dist/freshGram-linux-x86_64.tar.gz usr
-          (cd dist && sha256sum freshGram-linux-x86_64.tar.gz > SHA256SUMS)
-
-      - name: Arch Linux package
-        run: |
-          set -e
           version=$(awk '/^AppVersionStr /{print $2}' Telegram/build/version)
-          rm -rf arch
-          mkdir -p arch
-          cp Telegram/build/arch/PKGBUILD arch/PKGBUILD
-          tar -C out/install -cf arch/freshgram-root.tar usr
-          docker run --rm -e FRESHGRAM_VERSION="$version" -v "$PWD/arch:/pkg" archlinux:base-devel bash -c '
-            set -e
-            useradd -m builder
-            chown -R builder /pkg
-            su builder -c "cd /pkg && FRESHGRAM_VERSION=$FRESHGRAM_VERSION makepkg -f --nodeps"
-          '
-          cp arch/freshgram-*.pkg.tar.zst dist/freshGram.pacman
-          (cd dist && sha256sum freshGram-linux-x86_64.tar.gz freshGram.pacman > SHA256SUMS)
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          Telegram/build/package_linux.sh out/install/usr dist "" "$version"
 
-      - name: Flatpak bundle
-        continue-on-error: true
+      - name: Checksums
         run: |
-          set -e
-          Telegram/build/flatpak/build.sh out/install/usr dist/freshGram.flatpak
-          (cd dist && sha256sum freshGram-linux-x86_64.tar.gz freshGram.pacman freshGram.flatpak > SHA256SUMS)
+          cd dist
+          sha256sum $(ls | grep -v '^SHA256SUMS$') > SHA256SUMS
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -367,4 +382,7 @@ jobs:
             dist/freshGram-linux-x86_64.tar.gz
             dist/freshGram.pacman
             dist/freshGram.flatpak
+            dist/freshGram.AppImage
+            dist/freshGram.deb
+            dist/freshGram.rpm
             dist/SHA256SUMS

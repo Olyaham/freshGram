@@ -101,6 +101,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/cached_webview_availability.h"
 #include "test/test_agent.h"
 
+#include <QtCore/QFile>
 #include <QtCore/QStandardPaths>
 #include <QtCore/QMimeDatabase>
 #include <QtGui/QGuiApplication>
@@ -110,8 +111,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "ayu/ayu_infra.h"
 #include "ayu/ayu_settings.h"
+#include "ayu/data/ayu_database.h"
+#include "ayu/data/messages_storage.h"
+#include "ayu/features/fake_passcode/fake_passcode.h"
 #include "ayu/secret/secret_policy.h"
 #include "ayu/utils/crash_trace.h"
+#include "ayu/utils/debug_logging.h"
 #include "ayu/features/streamer_mode/streamer_mode.h"
 
 
@@ -247,7 +252,7 @@ Application::Application()
 			},
 			.confirmText = tr::lng_proxy_web_open(tr::now),
 			.cancelText = tr::lng_cancel(tr::now),
-		}));
+		}), Ui::LayerOption::KeepOther);
 	}, _lifetime);
 }
 
@@ -288,6 +293,8 @@ Application::~Application() {
 
 	_private->proxyRotation = nullptr;
 	_domain->finish();
+	AyuDatabase::finish();
+	AyuMessages::clearOpenedMedia();
 	MTP::WebProxy::Transport::Shutdown();
 
 	Local::finish();
@@ -317,7 +324,13 @@ void Application::run() {
 
 	startLocalStorage();
 
-	AyuCrashTrace::Install(cWorkingDir() + u"tdata"_q);
+	const auto traceDirectory = cWorkingDir() + u"tdata"_q;
+	if (AyuDebugLogging::Enabled()) {
+		AyuCrashTrace::Install(traceDirectory);
+	} else {
+		Logs::removeFiles();
+		AyuCrashTrace::Remove(traceDirectory);
+	}
 
 	style::SetCustomFont(settings().customFontFamily());
 	style::internal::StartFonts();
@@ -1336,6 +1349,7 @@ void Application::updateWindowTitles() {
 }
 
 void Application::lockByPasscode() {
+	AyuFakePasscode::OnLock();
 	_passcodeLock = true;
 	enumerateWindows([&](not_null<Window::Controller*> w) {
 		w->setupPasscodeLock();
@@ -1357,6 +1371,7 @@ void Application::unlockPasscode() {
 	enumerateWindows([&](not_null<Window::Controller*> w) {
 		w->clearPasscodeLock();
 	});
+	AyuFakePasscode::RunPending();
 }
 
 void Application::clearPasscodeLock() {
