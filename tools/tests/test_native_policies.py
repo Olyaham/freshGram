@@ -423,7 +423,8 @@ using namespace AyuSecret;
 using Bytes = std::vector<unsigned char>;
 enum class ChatState { Ready = 2 };
 constexpr auto kKeySize = 256;
-constexpr auto kRekeyAfterUses = 100;
+constexpr auto kRekeyAfterUsesOut = 100;
+constexpr auto kRekeyAfterUsesIn = 120;
 constexpr auto kRekeyAfterTime = 500;
 namespace base::unixtime { int now() { return 1000; } }
 struct DhConfig { int g = 3; Bytes p{1}, random{2}; };
