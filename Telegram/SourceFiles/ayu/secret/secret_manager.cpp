@@ -185,6 +185,7 @@ struct ReadyPacket {
 struct Chat {
 	SecretChatRow row;
 	Bytes key;
+	Bytes keyHash;
 	Bytes otherKey;
 	int ttl = 0;
 	int64_t pfsExchange = 0;
@@ -232,6 +233,7 @@ struct Chat {
 	writer.writeInt(chat.keyInstalledAt);
 	writer.writeInt(chat.keyUsesOut);
 	writer.writeInt(chat.keyUsesIn);
+	writer.writeBytes(chat.keyHash.data(), chat.keyHash.size());
 	return ToChars(writer.data());
 }
 
@@ -426,15 +428,16 @@ enum class RowState {
 	return RowState::Legacy;
 }
 
-void DecodeExtras(Chat &chat) {
+[[nodiscard]] bool DecodeExtras(Chat &chat) {
 	const auto raw = FromChars(chat.row.keyData);
 	if (raw.size() == kKeySize) {
 		chat.key = raw;
-		return;
+		UpdateKeyVisualHash(chat.keyHash, chat.key, kLayer);
+		return !chat.keyHash.empty();
 	}
 	auto reader = Reader(raw.data(), raw.size());
 	if (reader.readUInt() != kExtrasMagic) {
-		return;
+		return false;
 	}
 	const auto key = reader.readBytes();
 	const auto other = reader.readBytes();
@@ -446,7 +449,7 @@ void DecodeExtras(Chat &chat) {
 		// pfsExchange without pfsPending would block rotation forever.
 		chat.pfsExchange = 0;
 		chat.pfsPending.clear();
-		return;
+		return false;
 	}
 	chat.ttl = ttl;
 	chat.pfsExchange = exchange;
@@ -467,6 +470,16 @@ void DecodeExtras(Chat &chat) {
 		chat.keyUsesOut = usesOut;
 		chat.keyUsesIn = usesIn;
 	}
+	if (reader.failed() || !reader.left()) {
+		// Legacy rows lack the original hash; freeze the previously shown value.
+		UpdateKeyVisualHash(chat.keyHash, chat.key, kLayer);
+		return !chat.keyHash.empty();
+	}
+	const auto hash = reader.readBytes();
+	if (!reader.failed() && (hash.size() == 16 || hash.size() == 36)) {
+		chat.keyHash.assign(hash.begin(), hash.end());
+	}
+	return false;
 }
 
 [[nodiscard]] int EntityTypeFromText(::EntityType type) {
@@ -554,10 +567,11 @@ struct Manager::Impl {
 				chat.row.keyData.clear();
 				chat.row.state = int(ChatState::Discarded);
 			} else {
+				auto needsResave = (result == RowState::Legacy);
 				if (chat.row.state == int(ChatState::Ready)) {
-					DecodeExtras(chat);
+					needsResave = DecodeExtras(chat) || needsResave;
 				}
-				if (result == RowState::Legacy) {
+				if (needsResave) {
 					resave.push_back(chat.row.chatId);
 				}
 			}
@@ -963,6 +977,7 @@ void Manager::Impl::onDiscarded(int chatId, bool historyDeleted) {
 
 void Manager::Impl::becomeReady(Chat &chat, const Bytes &key) {
 	chat.key = key;
+	UpdateKeyVisualHash(chat.keyHash, chat.key, kLayer);
 	chat.row.fingerprint = KeyFingerprint(key);
 	chat.row.state = int(ChatState::Ready);
 	chat.row.myIn = 0;
@@ -1403,6 +1418,9 @@ void Manager::Impl::process(
 	chat.row.myIn = inbound.outSeqNo / 2 + 1;
 	chat.row.hisIn = std::max(chat.row.hisIn, inbound.inSeqNo / 2);
 	chat.row.hisLayer = std::max(chat.row.hisLayer, inbound.layer);
+	if (chat.keyHash.size() == 16) {
+		UpdateKeyVisualHash(chat.keyHash, chat.key, chat.row.hisLayer);
+	}
 	const auto chatId = chat.row.chatId;
 	if (inbound.service) {
 		processService(chat, inbound, date);
@@ -1462,6 +1480,9 @@ void Manager::Impl::processService(
 	switch (inbound.action) {
 	case ActionKind::NotifyLayer:
 		chat.row.hisLayer = std::max(chat.row.hisLayer, inbound.actionValue);
+		if (chat.keyHash.size() == 16) {
+			UpdateKeyVisualHash(chat.keyHash, chat.key, chat.row.hisLayer);
+		}
 		break;
 	case ActionKind::Resend:
 		answerResend(chat, inbound.resendStart, inbound.resendEnd);
@@ -2948,7 +2969,7 @@ ChatInfo Manager::Impl::makeInfo(const Chat &chat, bool withKey) const {
 	info.typing = (chat.typingUntil > crl::now());
 	info.fingerprint = chat.row.fingerprint;
 	if (withKey && !chat.key.empty()) {
-		info.keyHash = KeyVisualHash(chat.key);
+		info.keyHash = chat.keyHash;
 	}
 	info.title = title(chat);
 	return info;
