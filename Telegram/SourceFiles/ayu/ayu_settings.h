@@ -840,7 +840,7 @@ private:
 	rpl::variable<bool> _showChannelReactions = true;
 	rpl::variable<bool> _showGroupReactions = true;
 	rpl::variable<bool> _showPrivateChatReactions = true;
-	rpl::variable<bool> _showChosenReactionMark = true;
+	rpl::variable<bool> _showChosenReactionMark = false;
 	rpl::variable<bool> _showServiceTimeBadge = true;
 	rpl::variable<QString> _appIcon;
 	rpl::variable<bool> _simpleQuotesAndReplies = false;

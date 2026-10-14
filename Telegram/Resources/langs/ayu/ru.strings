@@ -119,7 +119,7 @@
 "ayu_SettingsUnlimitedRecentStickers" = "Неограниченные недавние стикеры";
 "ayu_SettingsCustomizationHint" = "После изменений в разделе «Кастомизация» нужно перезапустить приложение.";
 "ayu_MaterialSwitches" = "Стиль переключателей MD3";
-"ayu_MaterialBubbles" = "Скругление и хвостик сообщений";
+"ayu_MaterialBubbles" = "Скругление и хвостик";
 "ayu_StyleTelegram" = "Стандартный Telegram";
 "ayu_StyleMaterialgram" = "Materialgram";
 "ayu_StyleFagram" = "FagramDesktop";

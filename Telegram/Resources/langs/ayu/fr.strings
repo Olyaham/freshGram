@@ -119,7 +119,7 @@
 "ayu_SettingsUnlimitedRecentStickers" = "Stickers récents illimités";
 "ayu_SettingsCustomizationHint" = "Vous devez redémarrer l'application après avoir modifié la section « Personnalisation ».";
 "ayu_MaterialSwitches" = "Style d'interrupteur MD3";
-"ayu_MaterialBubbles" = "Arrondi et queue des bulles";
+"ayu_MaterialBubbles" = "Arrondi et queue";
 "ayu_StyleTelegram" = "Telegram par défaut";
 "ayu_StyleMaterialgram" = "Materialgram";
 "ayu_StyleFagram" = "FagramDesktop";

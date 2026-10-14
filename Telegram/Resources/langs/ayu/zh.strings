@@ -119,7 +119,7 @@
 "ayu_SettingsUnlimitedRecentStickers" = "不限数量的最近使用贴纸";
 "ayu_SettingsCustomizationHint" = "更改“自定义”部分的设置后，必须重启应用。";
 "ayu_MaterialSwitches" = "MD3 开关样式";
-"ayu_MaterialBubbles" = "消息圆角和气泡尾巴";
+"ayu_MaterialBubbles" = "圆角和尾巴";
 "ayu_StyleTelegram" = "Telegram 默认";
 "ayu_StyleMaterialgram" = "Materialgram";
 "ayu_StyleFagram" = "FagramDesktop";

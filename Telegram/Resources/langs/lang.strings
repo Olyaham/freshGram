@@ -9310,7 +9310,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_SettingsUnlimitedRecentStickers" = "Unlimited Recent Stickers";
 "ayu_SettingsCustomizationHint" = "You must restart the application after making changes in the \"Customization\" section.";
 "ayu_MaterialSwitches" = "MD3 Switch Style";
-"ayu_MaterialBubbles" = "Message Rounding and Tail";
+"ayu_MaterialBubbles" = "Rounding and Tail";
 "ayu_StyleTelegram" = "Default Telegram";
 "ayu_StyleMaterialgram" = "Materialgram";
 "ayu_StyleFagram" = "FagramDesktop";
