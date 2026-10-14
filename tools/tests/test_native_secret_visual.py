@@ -40,7 +40,7 @@ class SecretVisualHashTest(unittest.TestCase):
             "CHAT": manager.read_text().split("struct Chat {", 1)[1].split("\tbool loaded", 1)[0],
             "CHAT_INFO": re.search(r"struct ChatInfo \{.*?\n\};", (SOURCES / "ayu/secret/secret_manager.h").read_text(), re.S).group(),
             "ROW_STATE": re.search(r"enum class RowState \{.*?\n\};", manager.read_text(), re.S).group(),
-            "VAULT_CONSTANTS": vault.read_text().split("constexpr uint8_t kMagic[4]", 1)[1].split("std::atomic<bool>", 1)[0],
+            "VAULT_CONSTANTS": vault.read_text().split("constexpr uint8_t kMagic[4]", 1)[1].split("[[nodiscard]] bool DeriveKey(", 1)[0].split("std::atomic<bool>", 1)[0],
             "LOAD_CHATS": manager.read_text().split("\t\tauto resave =", 1)[1].split("\t\tQDir(tempDir())", 1)[0],
         }
         replacements["CHAT"] = "struct Chat {" + replacements["CHAT"]
@@ -60,6 +60,10 @@ class SecretVisualHashTest(unittest.TestCase):
             "CLEAR_OUR_EXCHANGE": "void Manager::Impl::clearOurExchange(",
             "COMMIT_KEY": "void Manager::Impl::handleCommitKey(",
             "ACCEPT_KEY": "void Manager::Impl::handleAcceptKey(",
+            "REQUEST_KEY": "void Manager::Impl::handleRequestKey(",
+            "ABORT_KEY": "void Manager::Impl::handleAbortKey(",
+            "START_REKEY": "void Manager::Impl::startRekey(",
+            "MAYBE_REKEY": "void Manager::Impl::maybeStartRekey(",
             "MAKE_INFO": "ChatInfo Manager::Impl::makeInfo(",
         }.items():
             if name == "SAVE_CHAT":
@@ -78,10 +82,14 @@ class SecretVisualHashTest(unittest.TestCase):
             replacements[name] = method(vault, signature)
         for name, signature in {
             "IDENTICON": "[[nodiscard]] QImage MakeIdenticon(",
-            "HEX_TEXT": "QString SecretKeyHexText(",
-            "EMOJI_TEXT": "QString SecretKeyEmojiText(",
         }.items():
             replacements[name] = method(box, signature)
+        if "QString SecretKeyHexText(" in box.read_text():
+            replacements["HEX_TEXT"] = method(box, "QString SecretKeyHexText(")
+            replacements["EMOJI_TEXT"] = method(box, "QString SecretKeyEmojiText(")
+        else:
+            replacements["HEX_TEXT"] = method(box, "[[nodiscard]] QString HexText(").replace("HexText(", "SecretKeyHexText(", 1)
+            replacements["EMOJI_TEXT"] = "QString SecretKeyEmojiText(const Bytes &) { return {}; }"
         replacements["IDENTICON"] = "constexpr auto kGrid = 12;\n" + replacements["IDENTICON"]
         for name, text in replacements.items():
             source = source.replace("@" + name + "@", text)
@@ -92,7 +100,7 @@ class SecretVisualHashTest(unittest.TestCase):
         libraries = shlex.split(subprocess.check_output(
             ["pkg-config", "--cflags", "--libs", "Qt6Core", "Qt6Gui", "openssl"], text=True))
         command = shlex.split(os.environ.get("CXX", "c++")) + [
-            "-std=c++20", "-Wall", "-Wextra", "-Werror", "-Wno-deprecated-declarations",
+            "-std=c++20", "-Wall", "-Wextra", "-Werror", "-Wno-deprecated", "-Wno-deprecated-declarations",
             "-fPIC", "-I" + str(SOURCES), str(probe), *libraries, "-o", str(cls.executable)]
         compiled = subprocess.run(command, capture_output=True, text=True)
         if compiled.returncode:
@@ -112,7 +120,8 @@ class SecretVisualHashTest(unittest.TestCase):
         key = bytes((i + rotation * 17) % 256 for i in range(256))
         self.assertEqual(snapshot["hash"], (hashlib.sha1(key).digest()[:16]
                          + hashlib.sha256(key).digest()[:20]).hex())
-        self.assertEqual(len(snapshot["emoji"].split()), 5)
+        if (SOURCES / "ayu/ui/boxes/secret_key_emoji.h").exists():
+            self.assertEqual(len(snapshot["emoji"].split()), 5)
 
     def test_establish_rekey_restart_preserves_both_sides_and_rendering(self):
         for role in ("initiator", "responder"):
@@ -138,6 +147,25 @@ class SecretVisualHashTest(unittest.TestCase):
         path = self.directory / "corrupt.sealed"
         self.probe("create", path)
         self.probe("corrupt", path)
+
+    def test_failed_dh_releases_only_its_empty_reservation_and_saves(self):
+        self.probe("failure", self.directory / "unused")
+
+    def test_peer_layer_gates_trigger_start_and_async_callback(self):
+        self.probe("gates", self.directory / "unused")
+
+    def test_fresh_request_supersedes_abandoned_exchange_without_stale_callbacks(self):
+        self.probe("supersede", self.directory / "unused")
+
+    def test_only_an_uncommitted_initiator_exchange_can_expire(self):
+        self.probe("timeout", self.directory / "unused")
+
+    def test_fresh_process_restart_continues_both_exchange_roles(self):
+        for role in ("initiator", "responder", "orphan"):
+            with self.subTest(role=role):
+                path = self.directory / ("pending-" + role + ".sealed")
+                self.probe("pending-" + role, path)
+                self.probe("resume-" + role, path)
 
 
 if __name__ == "__main__":

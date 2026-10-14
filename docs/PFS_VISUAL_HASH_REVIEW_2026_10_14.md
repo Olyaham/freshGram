@@ -4,7 +4,7 @@
 
 `Manager::Impl::makeInfo()` computed `KeyVisualHash(chat.key)` on every request.
 Both `handleAcceptKey()` and `handleCommitKey()` replace `chat.key`, so PFS
-rotated the identicon, hexadecimal verification text and emoji verification text.
+rotated the identicon and hexadecimal verification text.
 
 Telegram's [PFS key visualization specification](https://core.telegram.org/api/end-to-end/pfs#key-visualization)
 requires the first 16 bytes of SHA-1 of the original key, followed by the first
@@ -45,7 +45,7 @@ would show at upgrade time; it does not recover the initial exchange's hash or
 guarantee a match with a mobile peer that retained that hash. A newly established
 chat captures the correct original value.
 
-The protocol's current `key_fingerprint`, also shown as a key ID, remains a
+The protocol's current `key_fingerprint` remains a
 maintenance identifier and changes with PFS. Telegram explicitly distinguishes
 it from the visual authentication hash.
 
@@ -53,10 +53,9 @@ it from the visual authentication hash.
 
 ```sh
 python3 -m unittest discover -s tools/tests -p test_native_secret_visual.py -v
-python3 -m unittest discover -s tools/tests -v
 ```
 
-The four new regression tests and all 21 Python/native tests pass. The new probe
+The component regression suite passes. The probe
 executes production establishment, startup migration, persistence, both PFS
 commit paths, packet crypto, context-bound vault operations, `makeInfo()` and
 key-image/text rendering. Session/database callbacks, vault-key derivation and
@@ -67,7 +66,8 @@ Acceptance cases:
 
 1. Establish, capture, rotate twice, persist ciphertext and restart in a fresh
    process. Exercise both initiator-first and responder-first orders. Compare
-   all 36 hash bytes, HEX, emoji and identicon pixel digest at every step.
+   all 36 hash bytes, HEX and identicon pixel digest at every step. Emoji rendering
+   is also checked when the downstream emoji formatter is present.
 2. Ensure the working key and its packet fingerprint actually change and that
    packets encrypted with the new key decrypt successfully. After two rotations,
    neither retained working key is the establishment key.
@@ -85,4 +85,4 @@ snapshot for both roles. This demonstrates sensitivity to the reported defect.
 
 These are native component/fresh-process checks. They do not constitute an
 authenticated full-client PFS exchange or a rebuilt application launch. The
-regressions are included in the AiApi adapter workflow's native test job.
+regressions are included in the independent `Secret chat checks` workflow.
