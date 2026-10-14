@@ -442,8 +442,8 @@
 "ayu_SecretKeyIntro" = "Comparez cette image et le texte hexadécimal avec ceux de l'appareil de votre contact. S'ils correspondent, la discussion est chiffrée de bout en bout entre vous deux.";
 "ayu_SecretChatsHeader" = "Discussions secrètes";
 "ayu_SecretChatsSwitch" = "Activer les discussions secrètes";
-"ayu_SecretChatsSwitchDescription" = "Fonctionne uniquement avec un code d'accès local. Les clés, messages et pièces jointes des discussions secrètes sont chiffrés avec lui. Si vous désactivez le code d'accès, cette option se désactive.";
-"ayu_SecretChatsNeedPasscode" = "Définissez d'abord un code d'accès local : Réglages - Confidentialité et sécurité - Code d'accès local.";
+"ayu_SecretChatsSwitchDescription" = "Les clés, messages et pièces jointes des discussions secrètes sont chiffrés avec la clé locale de ce profil. Le code d'accès local est facultatif ; le modifier ou le supprimer conserve les discussions secrètes.";
+"ayu_SecretChatsDisabled" = "Activez les discussions secrètes dans Réglages - freshGram.";
 "ayu_MessageShotPreferences" = "Préférences";
 "ayu_MessageShotCopy" = "Copier";
 "ayu_MessageShotSave" = "Enregistrer";
@@ -586,7 +586,6 @@
 "ayu_SecretNoteTtlSet" = "{name} a réglé le minuteur d'autodestruction : {time}";
 "ayu_SecretNoteTtlSetByYou" = "Vous avez réglé le minuteur d'autodestruction : {time}";
 "ayu_SecretNoteScreenshot" = "{name} a fait une capture d'écran";
-"ayu_SecretToastPasscodeRemoved" = "Les discussions secrètes ont été supprimées car le code d'accès local a été retiré.";
 "ayu_SecretToastAcceptedElsewhere" = "La discussion secrète a été acceptée sur un autre appareil.";
 "ayu_SecretToastKeyFailed" = "L'échange de clés de la discussion secrète a échoué.";
 "ayu_SecretToastFingerprint" = "L'empreinte de la clé de la discussion secrète ne correspond pas.";

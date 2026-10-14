@@ -434,8 +434,8 @@
 "ayu_SecretKeyIntro" = "Vergleiche dieses Bild und den Hexadezimaltext mit denen auf dem Gerät deines Kontakts. Stimmen sie überein, ist der Chat zwischen euch beiden Ende-zu-Ende-verschlüsselt.";
 "ayu_SecretChatsHeader" = "Geheime Chats";
 "ayu_SecretChatsSwitch" = "Geheime Chats aktivieren";
-"ayu_SecretChatsSwitchDescription" = "Funktioniert nur mit einem lokalen Passcode. Schlüssel, Nachrichten und Anhänge geheimer Chats werden damit verschlüsselt. Wird der Passcode ausgeschaltet, schaltet sich diese Option ebenfalls aus.";
-"ayu_SecretChatsNeedPasscode" = "Lege zuerst einen lokalen Passcode fest: Einstellungen – Privatsphäre und Sicherheit – Lokaler Passcode.";
+"ayu_SecretChatsSwitchDescription" = "Schlüssel, Nachrichten und Anhänge geheimer Chats werden mit dem lokalen Schlüssel dieses Profils verschlüsselt. Ein lokaler Passcode ist optional; beim Ändern oder Entfernen bleiben die geheimen Chats erhalten.";
+"ayu_SecretChatsDisabled" = "Aktiviere geheime Chats unter Einstellungen – freshGram.";
 "ayu_MessageShotPreferences" = "Einstellungen";
 "ayu_MessageShotCopy" = "Kopieren";
 "ayu_MessageShotSave" = "Speichern";
@@ -578,7 +578,6 @@
 "ayu_SecretNoteTtlSet" = "{name} hat den Selbstzerstörungs-Timer eingestellt: {time}";
 "ayu_SecretNoteTtlSetByYou" = "Du hast den Selbstzerstörungs-Timer eingestellt: {time}";
 "ayu_SecretNoteScreenshot" = "{name} hat einen Screenshot gemacht";
-"ayu_SecretToastPasscodeRemoved" = "Geheime Chats wurden gelöscht, weil der lokale Passcode entfernt wurde.";
 "ayu_SecretToastAcceptedElsewhere" = "Der geheime Chat wurde auf einem anderen Gerät angenommen.";
 "ayu_SecretToastKeyFailed" = "Der Schlüsselaustausch für den geheimen Chat ist fehlgeschlagen.";
 "ayu_SecretToastFingerprint" = "Der Schlüssel-Fingerabdruck des geheimen Chats stimmt nicht überein.";

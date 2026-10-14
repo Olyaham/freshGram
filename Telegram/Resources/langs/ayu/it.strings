@@ -442,8 +442,8 @@
 "ayu_SecretKeyIntro" = "Confronta questa immagine e il testo esadecimale con quelli sul dispositivo del tuo contatto. Se corrispondono, la chat è crittografata end-to-end tra voi due.";
 "ayu_SecretChatsHeader" = "Chat segrete";
 "ayu_SecretChatsSwitch" = "Attiva le chat segrete";
-"ayu_SecretChatsSwitchDescription" = "Funziona solo con un codice di accesso locale. Chiavi, messaggi e allegati delle chat segrete sono crittografati con esso. Se disattivi il codice di accesso, questa opzione si disattiva.";
-"ayu_SecretChatsNeedPasscode" = "Imposta prima un codice di accesso locale: Impostazioni - Privacy e sicurezza - Codice di accesso locale.";
+"ayu_SecretChatsSwitchDescription" = "Chiavi, messaggi e allegati delle chat segrete sono crittografati con la chiave locale di questo profilo. Il codice di accesso locale è facoltativo; modificarlo o rimuoverlo conserva le chat segrete.";
+"ayu_SecretChatsDisabled" = "Abilita le chat segrete in Impostazioni - freshGram.";
 "ayu_MessageShotPreferences" = "Preferenze";
 "ayu_MessageShotCopy" = "Copia";
 "ayu_MessageShotSave" = "Salva";
@@ -586,7 +586,6 @@
 "ayu_SecretNoteTtlSet" = "{name} ha impostato il timer di autodistruzione: {time}";
 "ayu_SecretNoteTtlSetByYou" = "Hai impostato il timer di autodistruzione: {time}";
 "ayu_SecretNoteScreenshot" = "{name} ha fatto uno screenshot";
-"ayu_SecretToastPasscodeRemoved" = "Le chat segrete sono state eliminate perché il codice di accesso locale è stato rimosso.";
 "ayu_SecretToastAcceptedElsewhere" = "La chat segreta è stata accettata su un altro dispositivo.";
 "ayu_SecretToastKeyFailed" = "Lo scambio delle chiavi della chat segreta non è riuscito.";
 "ayu_SecretToastFingerprint" = "L'impronta della chiave della chat segreta non corrisponde.";

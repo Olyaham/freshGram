@@ -115,7 +115,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ayu/data/ayu_database.h"
 #include "ayu/features/fake_passcode/fake_passcode.h"
 #include "ayu/features/recognition/transcription_config.h"
-#include "ayu/secret/secret_policy.h"
 #include "ayu/utils/crash_trace.h"
 #include "ayu/utils/debug_logging.h"
 #include "ayu/features/streamer_mode/streamer_mode.h"
@@ -1497,7 +1496,6 @@ void Application::checkAutoLockIn(crl::time time) {
 }
 
 void Application::localPasscodeChanged() {
-	AyuSecret::HandlePasscodeChange();
 	_shouldLockAt = 0;
 	_autoLockTimer.cancel();
 	checkAutoLock(crl::now());

@@ -9,7 +9,6 @@
 #include "lang_auto.h"
 #include "ayu/ayu_settings.h"
 #include "ayu/data/messages_storage.h"
-#include "ayu/secret/secret_policy.h"
 #include "ayu/ui/ayu_userpic.h"
 #include "ayu/ui/settings/ayu_builder.h"
 #include "ayu/ui/settings/settings_ayu_utils.h"
@@ -890,7 +889,6 @@ void BuildSecretChats(SectionBuilder &builder) {
 	builder.add([](const BuildContext &ctx) {
 		v::match(ctx, [&](const WidgetContext &wctx) {
 			const auto container = wctx.container;
-			AyuSecret::SyncPolicy();
 			const auto button = AddButtonWithIcon(
 				container,
 				tr::ayu_SecretChatsSwitch(),
@@ -905,13 +903,7 @@ void BuildSecretChats(SectionBuilder &builder) {
 				true);
 			button->addClickHandler([=] {
 				auto &settings = AyuSettings::getInstance();
-				if (settings.secretChatsEnabled()) {
-					settings.setSecretChatsEnabled(false);
-				} else if (!AyuSecret::PasscodeSet()) {
-					Ui::Toast::Show(tr::ayu_SecretChatsNeedPasscode(tr::now));
-				} else {
-					settings.setSecretChatsEnabled(true);
-				}
+				settings.setSecretChatsEnabled(!settings.secretChatsEnabled());
 			});
 			AddSkip(container);
 			AddDividerText(container, tr::ayu_SecretChatsSwitchDescription());

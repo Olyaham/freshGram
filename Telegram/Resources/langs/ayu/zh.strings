@@ -426,8 +426,8 @@
 "ayu_SecretKeyIntro" = "请将此图片和十六进制文本与联系人设备上的进行比对。如果一致，说明你们之间的聊天已端到端加密。";
 "ayu_SecretChatsHeader" = "私密聊天";
 "ayu_SecretChatsSwitch" = "启用私密聊天";
-"ayu_SecretChatsSwitchDescription" = "仅在设置了本地密码时可用。私密聊天的密钥、消息和附件都用它加密。关闭本地密码时，此选项也会关闭。";
-"ayu_SecretChatsNeedPasscode" = "请先设置本地密码：设置 - 隐私与安全 - 本地密码。";
+"ayu_SecretChatsSwitchDescription" = "私密聊天的密钥、消息和附件使用此配置的本地密钥加密。本地密码为可选项；更改或移除密码后，私密聊天仍会保留。";
+"ayu_SecretChatsDisabled" = "请在设置 - freshGram 中启用私密聊天。";
 "ayu_MessageShotPreferences" = "偏好设置";
 "ayu_MessageShotCopy" = "复制";
 "ayu_MessageShotSave" = "保存";
@@ -565,7 +565,6 @@
 "ayu_SecretNoteTtlSet" = "{name} 将自毁计时器设为 {time}";
 "ayu_SecretNoteTtlSetByYou" = "你将自毁计时器设为 {time}";
 "ayu_SecretNoteScreenshot" = "{name} 进行了截图";
-"ayu_SecretToastPasscodeRemoved" = "由于本地密码已被移除，私密聊天已被删除。";
 "ayu_SecretToastAcceptedElsewhere" = "该私密聊天已在另一台设备上被接受。";
 "ayu_SecretToastKeyFailed" = "私密聊天密钥交换失败。";
 "ayu_SecretToastFingerprint" = "私密聊天密钥指纹不匹配。";

@@ -50,7 +50,7 @@ struct Target {
 
 [[nodiscard]] bool Ready(const Target &target) {
 	if (!Enabled()) {
-		Ui::Toast::Show(tr::ayu_SecretChatsNeedPasscode(tr::now));
+		Ui::Toast::Show(tr::ayu_SecretChatsDisabled(tr::now));
 		return false;
 	}
 	const auto info = Get(target.session).chat(target.chatId);
