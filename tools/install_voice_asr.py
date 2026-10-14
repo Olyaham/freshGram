@@ -4,10 +4,20 @@
 import argparse
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
+
+
+def cargo_environment():
+    environment = os.environ.copy()
+    optimization = r"(?<!\S)(?:-O(?:[0-9]+|g|s|z|fast)?|/O(?:[12dxts]|b[012]))(?!\S)"
+    for name, value in environment.items():
+        if name in ("CFLAGS", "CXXFLAGS", "HOST_CFLAGS", "HOST_CXXFLAGS", "TARGET_CFLAGS", "TARGET_CXXFLAGS") or name.startswith(("CFLAGS_", "CXXFLAGS_")):
+            environment[name] = re.sub(optimization, "", value).strip()
+    return environment
 
 
 def main():
@@ -34,7 +44,7 @@ def main():
             command += ["--target", target]
         if args.flavor != "cloud":
             command += ["--features", feature]
-        subprocess.run(command, check=True)
+        subprocess.run(command, check=True, env=cargo_environment())
         artifacts.append(args.build_dir / (target or "") / ("debug" if args.profile == "dev" else "release") / name)
     args.destination.mkdir(parents=True, exist_ok=True)
     output = args.destination / name

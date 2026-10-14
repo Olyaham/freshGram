@@ -83,6 +83,16 @@ jobs:
           cargo clippy --all-targets --no-default-features --locked -- -D warnings
           python3 tests/abi_smoke.py target/debug/deps/libvoice_asr.so
           cargo check --all-targets --features local --locked
+      - name: Install module with inherited native flags
+        env:
+          CFLAGS: -O3 -pipe -fPIC -fno-omit-frame-pointer
+          CXXFLAGS: -O3 -pipe -fPIC -fno-omit-frame-pointer
+        run: |
+          python3 tools/install_voice_asr.py --flavor cloud --profile dev \
+            --build-dir "$GITHUB_WORKSPACE/Telegram/ThirdParty/voice-asr/target" \
+            --destination "$RUNNER_TEMP/voice-asr-inherited-flags"
+          python3 Telegram/ThirdParty/voice-asr/tests/abi_smoke.py \
+            "$RUNNER_TEMP/voice-asr-inherited-flags/libvoice_asr.so"
       - name: Qt loader integration
         run: |
           cmake -S Telegram/SourceFiles/test/recognition -B "$RUNNER_TEMP/recognition-checks" \
