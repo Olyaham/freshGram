@@ -21,7 +21,8 @@ namespace Ui {
 [[nodiscard]] std::unique_ptr<TranslateProvider> CreateTranslateProvider(
 	not_null<Main::Session*> session);
 
-[[nodiscard]] QString TranslateProviderName(not_null<Main::Session*> session);
+[[nodiscard]] QString TranslateProviderName();
+[[nodiscard]] QString TranslateProviderIdentity();
 
 [[nodiscard]] TranslateProviderRequest PrepareTranslateProviderRequest(
 	not_null<TranslateProvider*> provider,

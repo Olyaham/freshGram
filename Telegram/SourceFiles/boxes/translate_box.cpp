@@ -519,22 +519,32 @@ void ShowTranslateBox(
 	}
 	// Secret chats: translating sends the text to the provider's
 	// server, so ask before even opening the translate box.
-	const auto providerName = TranslateProviderName(&peer->session());
+	const auto providerName = TranslateProviderName();
+	const auto providerIdentity = TranslateProviderIdentity();
 	controller->show(Ui::MakeConfirmBox({
 		.text = tr::ayu_SecretTranslateWarning(
 			tr::now,
 			lt_provider,
 			providerName),
-		.confirmed = [=, text = std::move(text)](
+		.confirmed = crl::guard(controller, [=, text = std::move(text)](
 				Fn<void()> close) mutable {
 			close();
+			if (TranslateProviderIdentity() != providerIdentity) {
+				ShowTranslateBox(
+					controller,
+					peer,
+					msgId,
+					std::move(text),
+					hasCopyRestriction);
+				return;
+			}
 			controller->show(Box(
 				Ui::TranslateBox,
 				peer,
 				msgId,
 				std::move(text),
 				hasCopyRestriction));
-		},
+		}),
 		.confirmText = tr::lng_context_translate(tr::now),
 	}));
 }

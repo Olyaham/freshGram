@@ -67,7 +67,14 @@ std::unique_ptr<TranslateProvider> CreateTranslateProvider(
 	return CreateMTProtoTranslateProvider(session);
 }
 
-QString TranslateProviderName(not_null<Main::Session*> session) {
+QString TranslateProviderIdentity() {
+	const auto urlTemplate = OptionTranslateUrlTemplate.value();
+	return (!urlTemplate.isEmpty() && urlTemplate.contains(u"%q"_q))
+		? (u"url:"_q + urlTemplate)
+		: (u"provider:"_q + QString::number(int(ResolveTranslateProvider())));
+}
+
+QString TranslateProviderName() {
 	const auto urlTemplate = OptionTranslateUrlTemplate.value();
 	if (!urlTemplate.isEmpty() && urlTemplate.contains(u"%q"_q)) {
 		return u"custom server"_q;
