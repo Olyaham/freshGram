@@ -125,9 +125,9 @@
 "ayu_StyleFagram" = "FagramDesktop";
 "ayu_IconSet" = "Symbole";
 "ayu_DesignStyle" = "Designstil";
-"ayu_DesignStyleTelegram" = "Standard-Telegram-Design";
-"ayu_DesignStyleMaterialgram" = "Materialgram-Design";
-"ayu_DesignStyleFagram" = "FagramDesktop-Design";
+"ayu_DesignStyleTelegram" = "Standard-Telegram";
+"ayu_DesignStyleMaterialgram" = "Materialgram";
+"ayu_DesignStyleFagram" = "FagramDesktop";
 "ayu_DesignStyleDescription" = "Der Designstil legt Abstände, Größen und das Aussehen der Oberflächenelemente fest. Stil und Symbole werden nach einem Neustart wirksam. Das Fagram-Design fügt vorerst die Pillen-Kopfleiste und das Navigationsmenü hinzu, der Rest nutzt Telegram-Größen und ist noch nicht übernommen.";
 "ayu_ManageWhisperModels" = "Modelle zur Spracherkennung";
 "ayu_ManageOcrLanguages" = "Sprachen der Texterkennung";

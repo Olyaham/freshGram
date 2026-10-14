@@ -125,9 +125,9 @@
 "ayu_StyleFagram" = "FagramDesktop";
 "ayu_IconSet" = "图标";
 "ayu_DesignStyle" = "设计风格";
-"ayu_DesignStyleTelegram" = "Telegram 默认设计";
-"ayu_DesignStyleMaterialgram" = "Materialgram 设计";
-"ayu_DesignStyleFagram" = "FagramDesktop 设计";
+"ayu_DesignStyleTelegram" = "Telegram 默认";
+"ayu_DesignStyleMaterialgram" = "Materialgram";
+"ayu_DesignStyleFagram" = "FagramDesktop";
 "ayu_DesignStyleDescription" = "设计风格设置间距、尺寸和界面元素的外观。设计风格和图标在重启后生效。Fagram 设计目前添加了胶囊式顶栏和导航抽屉菜单，其余使用 Telegram 的尺寸，尚未移植。";
 "ayu_ManageWhisperModels" = "语音识别模型";
 "ayu_ManageOcrLanguages" = "文字识别语言";

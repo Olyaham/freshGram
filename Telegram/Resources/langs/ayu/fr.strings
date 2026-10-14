@@ -125,9 +125,9 @@
 "ayu_StyleFagram" = "FagramDesktop";
 "ayu_IconSet" = "Icônes";
 "ayu_DesignStyle" = "Style de conception";
-"ayu_DesignStyleTelegram" = "Design Telegram par défaut";
-"ayu_DesignStyleMaterialgram" = "Design Materialgram";
-"ayu_DesignStyleFagram" = "Design FagramDesktop";
+"ayu_DesignStyleTelegram" = "Telegram par défaut";
+"ayu_DesignStyleMaterialgram" = "Materialgram";
+"ayu_DesignStyleFagram" = "FagramDesktop";
 "ayu_DesignStyleDescription" = "Le style de conception définit les marges, les tailles et l'aspect des éléments de l'interface. Le style et les icônes s'appliquent après un redémarrage. Le design Fagram ajoute pour l'instant la barre supérieure en pilule et le menu de navigation, le reste utilise les tailles de Telegram et n'est pas encore porté.";
 "ayu_ManageWhisperModels" = "Modèles de reconnaissance vocale";
 "ayu_ManageOcrLanguages" = "Langues de reconnaissance de texte";
