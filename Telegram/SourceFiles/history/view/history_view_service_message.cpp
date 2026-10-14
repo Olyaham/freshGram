@@ -213,7 +213,8 @@ struct ServiceTimeMetrics {
 
 [[nodiscard]] ServiceTimeMetrics ComputeServiceTimeMetrics(const QString &text) {
 	auto result = ServiceTimeMetrics();
-	if (text.isEmpty()) {
+	if (text.isEmpty()
+		|| !AyuSettings::getInstance().showServiceTimeBadge()) {
 		return result;
 	}
 	const auto &font = st::ayuServiceTimeBadgeFont;

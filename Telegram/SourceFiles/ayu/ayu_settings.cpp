@@ -1032,6 +1032,18 @@ void AyuSettings::setShowPrivateChatReactions(bool val) {
 	save();
 }
 
+void AyuSettings::setShowChosenReactionMark(bool val) {
+	if (_showChosenReactionMark.current() == val) return;
+	_showChosenReactionMark = val;
+	save();
+}
+
+void AyuSettings::setShowServiceTimeBadge(bool val) {
+	if (_showServiceTimeBadge.current() == val) return;
+	_showServiceTimeBadge = val;
+	save();
+}
+
 void AyuSettings::setAppIcon(const QString &val) {
 	if (_appIcon.current() == val) return;
 	_appIcon = val;
@@ -1609,6 +1621,8 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"showChannelReactions", s._showChannelReactions.current()},
 		{"showGroupReactions", s._showGroupReactions.current()},
 		{"showPrivateChatReactions", s._showPrivateChatReactions.current()},
+		{"showChosenReactionMark", s._showChosenReactionMark.current()},
+		{"showServiceTimeBadge", s._showServiceTimeBadge.current()},
 		{"appIcon", s._appIcon.current()},
 		{"simpleQuotesAndReplies", s._simpleQuotesAndReplies.current()},
 		{"hideFastShare", s._hideFastShare.current()},
@@ -1776,6 +1790,8 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._showChannelReactions = j.value("showChannelReactions", defaults._showChannelReactions.current());
 	s._showGroupReactions = j.value("showGroupReactions", defaults._showGroupReactions.current());
 	s._showPrivateChatReactions = j.value("showPrivateChatReactions", defaults._showPrivateChatReactions.current());
+	s._showChosenReactionMark = j.value("showChosenReactionMark", defaults._showChosenReactionMark.current());
+	s._showServiceTimeBadge = j.value("showServiceTimeBadge", defaults._showServiceTimeBadge.current());
 	s._appIcon = j.value("appIcon", defaults._appIcon.current());
 	s._simpleQuotesAndReplies = j.value("simpleQuotesAndReplies", defaults._simpleQuotesAndReplies.current());
 	s._hideFastShare = j.value("hideFastShare", defaults._hideFastShare.current());

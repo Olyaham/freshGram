@@ -179,6 +179,8 @@
 "ayu_MaterialIcons" = "Material 图标";
 "ayu_ReplyBackgroundOpacity" = "彩色回复背景";
 "ayu_ReactionBackgroundOpacity" = "彩色回应背景";
+"ayu_ShowChosenReactionMark" = "已选反应上的对勾";
+"ayu_ShowServiceTimeBadge" = "服务消息中的时间徽章";
 "ayu_HideShareButton" = "隐藏侧边“分享”按钮";
 "ayu_ChatFoldersHeader" = "聊天文件夹";
 "ayu_SettingsContextMenuTitle" = "选择何时显示该项";

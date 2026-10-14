@@ -261,6 +261,20 @@ void BuildMarks(
 		.setter = &AyuSettings::setSemiTransparentDeletedMessages,
 	});
 
+	ayu.addSettingToggle({
+		.id = u"ayu/showChosenReactionMark"_q,
+		.title = tr::ayu_ShowChosenReactionMark(),
+		.getter = &AyuSettings::showChosenReactionMark,
+		.setter = &AyuSettings::setShowChosenReactionMark,
+	});
+
+	ayu.addSettingToggle({
+		.id = u"ayu/showServiceTimeBadge"_q,
+		.title = tr::ayu_ShowServiceTimeBadge(),
+		.getter = &AyuSettings::showServiceTimeBadge,
+		.setter = &AyuSettings::setShowServiceTimeBadge,
+	});
+
 	ayu.addSectionDivider();
 }
 

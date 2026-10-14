@@ -198,6 +198,8 @@
 "ayu_MaterialIcons" = "Значки Material";
 "ayu_ReplyBackgroundOpacity" = "Цветной фон ответов";
 "ayu_ReactionBackgroundOpacity" = "Цветной фон реакций";
+"ayu_ShowChosenReactionMark" = "Галочка на выбранных реакциях";
+"ayu_ShowServiceTimeBadge" = "Плашка времени в сервисных сообщениях";
 "ayu_HideShareButton" = "Скрыть боковую кнопку «Поделиться»";
 "ayu_ChatFoldersHeader" = "Папки с чатами";
 "ayu_SettingsContextMenuTitle" = "Выберите, когда показывать пункт";

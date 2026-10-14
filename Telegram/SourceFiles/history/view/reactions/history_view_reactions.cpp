@@ -364,7 +364,10 @@ QSize InlineList::countOptimalSize() {
 	};
 	const auto height = padding.top() + size + padding.bottom();
 	for (auto &button : _buttons) {
-		const auto markWidth = (button.chosen && !button.tag && !button.paid)
+		const auto markWidth = (AyuSettings::getInstance().showChosenReactionMark()
+			&& button.chosen
+			&& !button.tag
+			&& !button.paid)
 			? st::reactionInlineChosenMarkSize + st::reactionInlineSkip
 			: 0;
 		const auto width = markWidth + (button.tag
@@ -554,7 +557,10 @@ void InlineList::paint(
 				0,
 			});
 			paintSingleBg(p, fill, color, opacity);
-			if (mine && !tags && !button.paid) {
+			if (AyuSettings::getInstance().showChosenReactionMark()
+				&& mine
+				&& !tags
+				&& !button.paid) {
 				p.setOpacity(bubbleProgress);
 				auto pen = QPen(inbubble
 					? stm->msgServiceFg->c
@@ -639,7 +645,10 @@ void InlineList::paint(
 		}
 		resolveUserpicsImage(button);
 		const auto left = inner.x() + (flipped ? 0 : bubbleSkip);
-		const auto markWidth = (mine && !tags && !button.paid)
+		const auto markWidth = (AyuSettings::getInstance().showChosenReactionMark()
+			&& mine
+			&& !tags
+			&& !button.paid)
 			? st::reactionInlineChosenMarkSize + st::reactionInlineSkip
 			: 0;
 		if (markWidth && bubbleProgress > 0.) {

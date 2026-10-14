@@ -179,6 +179,8 @@
 "ayu_MaterialIcons" = "Icone Material";
 "ayu_ReplyBackgroundOpacity" = "Sfondo colorato delle risposte";
 "ayu_ReactionBackgroundOpacity" = "Sfondo colorato delle reazioni";
+"ayu_ShowChosenReactionMark" = "Spunta sulle reazioni scelte";
+"ayu_ShowServiceTimeBadge" = "Badge orario nei messaggi di servizio";
 "ayu_HideShareButton" = "Nascondi il pulsante «Condividi» laterale";
 "ayu_ChatFoldersHeader" = "Cartelle di chat";
 "ayu_SettingsContextMenuTitle" = "Scegli quando mostrare la voce";

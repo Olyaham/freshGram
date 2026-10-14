@@ -359,6 +359,8 @@ public:
 	[[nodiscard]] bool showChannelReactions() const { return _showChannelReactions.current(); }
 	[[nodiscard]] bool showGroupReactions() const { return _showGroupReactions.current(); }
 	[[nodiscard]] bool showPrivateChatReactions() const { return _showPrivateChatReactions.current(); }
+	[[nodiscard]] bool showChosenReactionMark() const { return _showChosenReactionMark.current(); }
+	[[nodiscard]] bool showServiceTimeBadge() const { return _showServiceTimeBadge.current(); }
 	[[nodiscard]] const QString &appIcon() const { return _appIcon.current(); }
 	[[nodiscard]] bool simpleQuotesAndReplies() const { return _simpleQuotesAndReplies.current(); }
 	[[nodiscard]] bool hideFastShare() const { return _hideFastShare.current(); }
@@ -510,6 +512,8 @@ public:
 	void setShowChannelReactions(bool val);
 	void setShowGroupReactions(bool val);
 	void setShowPrivateChatReactions(bool val);
+	void setShowChosenReactionMark(bool val);
+	void setShowServiceTimeBadge(bool val);
 	void setAppIcon(const QString &val);
 	void setSimpleQuotesAndReplies(bool val);
 	void setHideFastShare(bool val);
@@ -836,6 +840,8 @@ private:
 	rpl::variable<bool> _showChannelReactions = true;
 	rpl::variable<bool> _showGroupReactions = true;
 	rpl::variable<bool> _showPrivateChatReactions = true;
+	rpl::variable<bool> _showChosenReactionMark = true;
+	rpl::variable<bool> _showServiceTimeBadge = true;
 	rpl::variable<QString> _appIcon;
 	rpl::variable<bool> _simpleQuotesAndReplies = false;
 	rpl::variable<bool> _hideFastShare = false;
