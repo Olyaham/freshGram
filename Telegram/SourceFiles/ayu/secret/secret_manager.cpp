@@ -66,6 +66,8 @@ constexpr auto kMaxEarly = 500;
 constexpr auto kRekeyAfterUsesOut = 100;
 constexpr auto kRekeyAfterUsesIn = 120;
 constexpr auto kRekeyAfterTime = 7 * 86400;
+constexpr auto kPfsOurTimeout = 3600;
+constexpr auto kPfsStateMagic = 0x31534650U;
 constexpr auto kSpecialNote = 1;
 constexpr auto kSpecialHidden = 2;
 constexpr auto kKindHidden = 100;
@@ -194,13 +196,11 @@ struct Chat {
 	// to retransmit it when the peer's RequestKey is duplicated.
 	Bytes pfsAnswerGB;
 	// Exchange initiated by us: id, our secret power, prime in use.
-	// Kept in memory only: after a restart an uncompleted outgoing
-	// exchange is treated as aborted (the spec allows aborting any
-	// uncompleted instance by a party that sent neither AcceptKey nor
-	// CommitKey for it).
+	// Sealed with extras so a restart can continue the exchange.
 	int64_t pfsOurExchange = 0;
 	Bytes pfsOurSecret;
 	Bytes pfsOurP;
+	int64_t pfsOurStartedAt = 0;
 	// Key usage accounting for rotation triggers.
 	int keyInstalledAt = 0;
 	int keyUsesOut = 0;
@@ -234,6 +234,12 @@ struct Chat {
 	writer.writeInt(chat.keyUsesOut);
 	writer.writeInt(chat.keyUsesIn);
 	writer.writeBytes(chat.keyHash.data(), chat.keyHash.size());
+	writer.writeUInt(kPfsStateMagic);
+	writer.writeLong(chat.pfsOurExchange);
+	writer.writeBytes(chat.pfsOurSecret.data(), chat.pfsOurSecret.size());
+	writer.writeBytes(chat.pfsOurP.data(), chat.pfsOurP.size());
+	writer.writeLong(chat.pfsOurStartedAt);
+	writer.writeBytes(chat.pfsAnswerGB.data(), chat.pfsAnswerGB.size());
 	return ToChars(writer.data());
 }
 
@@ -429,6 +435,9 @@ enum class RowState {
 }
 
 [[nodiscard]] bool DecodeExtras(Chat &chat) {
+	chat.keyInstalledAt = base::unixtime::now();
+	chat.keyUsesOut = 0;
+	chat.keyUsesIn = 0;
 	const auto raw = FromChars(chat.row.keyData);
 	if (raw.size() == kKeySize) {
 		chat.key = raw;
@@ -456,12 +465,11 @@ enum class RowState {
 	chat.key = Bytes(key.begin(), key.end());
 	chat.otherKey = Bytes(other.begin(), other.end());
 	chat.pfsPending = Bytes(pending.begin(), pending.end());
+	const auto orphaned = (chat.pfsExchange != 0 && chat.pfsPending.empty());
+	if (orphaned) {
+		chat.pfsExchange = 0;
+	}
 	// Rotation accounting, absent in rows written by older versions.
-	// Assume a legacy key is both used and ancient, so that it gets
-	// replaced once shortly after the upgrade.
-	chat.keyInstalledAt = 0;
-	chat.keyUsesOut = 1;
-	chat.keyUsesIn = 0;
 	const auto installedAt = reader.readInt();
 	const auto usesOut = reader.readInt();
 	const auto usesIn = reader.readInt();
@@ -478,8 +486,35 @@ enum class RowState {
 	const auto hash = reader.readBytes();
 	if (!reader.failed() && (hash.size() == 16 || hash.size() == 36)) {
 		chat.keyHash.assign(hash.begin(), hash.end());
+	} else {
+		return false;
 	}
-	return false;
+	if (!reader.left()) {
+		return orphaned;
+	}
+	if (reader.readUInt() != kPfsStateMagic) {
+		return false;
+	}
+	const auto ourExchange = reader.readLong();
+	const auto ourSecret = reader.readBytes();
+	const auto ourP = reader.readBytes();
+	const auto ourStartedAt = reader.readLong();
+	const auto answer = reader.readBytes();
+	if (reader.failed()) {
+		return false;
+	}
+	if (ourExchange && !ourSecret.empty() && !ourP.empty()) {
+		chat.pfsOurExchange = ourExchange;
+		chat.pfsOurSecret = ourSecret;
+		chat.pfsOurP = ourP;
+		chat.pfsOurStartedAt = ourStartedAt
+			? ourStartedAt
+			: base::unixtime::now();
+	}
+	if (chat.pfsExchange && !chat.pfsPending.empty()) {
+		chat.pfsAnswerGB = answer;
+	}
+	return orphaned;
 }
 
 [[nodiscard]] int EntityTypeFromText(::EntityType type) {
@@ -1573,6 +1608,7 @@ void Manager::Impl::clearOurExchange(Chat &chat) {
 	chat.pfsOurExchange = 0;
 	chat.pfsOurSecret.clear();
 	chat.pfsOurP.clear();
+	chat.pfsOurStartedAt = 0;
 }
 
 void Manager::Impl::resetKeyUsage(Chat &chat) {
@@ -1603,22 +1639,28 @@ void Manager::Impl::handleRequestKey(Chat &chat, const Inbound &inbound) {
 		}
 	}
 	if (chat.pfsExchange != 0) {
-		// Already answering another instance: keep the first one.
 		// A duplicate of the answered exchange gets our answer again,
 		// so a lost AcceptKey still completes without waiting for the
 		// seqno resend machinery.
-		if (chat.pfsExchange == exchangeId
-			&& !chat.pfsPending.empty()
-			&& !chat.pfsAnswerGB.empty()) {
-			sendService(
-				chat,
-				BuildAcceptKey(
-					RandomId(),
-					exchangeId,
-					chat.pfsAnswerGB,
-					KeyFingerprint(chat.pfsPending)));
+		if (chat.pfsExchange == exchangeId) {
+			if (!chat.pfsPending.empty() && !chat.pfsAnswerGB.empty()) {
+				sendService(
+					chat,
+					BuildAcceptKey(
+						RandomId(),
+						exchangeId,
+						chat.pfsAnswerGB,
+						KeyFingerprint(chat.pfsPending)));
+			}
+			return;
 		}
-		return;
+		// A fresh RequestKey supersedes the peer's abandoned exchange.
+		const auto previous = chat.pfsExchange;
+		chat.pfsExchange = 0;
+		chat.pfsPending.clear();
+		chat.pfsAnswerGB.clear();
+		saveChat(chat);
+		sendService(chat, BuildAbortKey(RandomId(), previous));
 	}
 	// Reserve the exchange synchronously: duplicates arriving while the
 	// DH config is in flight are answered or ignored above instead of
@@ -1689,8 +1731,8 @@ void Manager::Impl::handleRequestKey(Chat &chat, const Inbound &inbound) {
 				KeyFingerprint(key)));
 	}, [=] {
 		const auto chat = find(chatId);
-		if (chat && ReleaseIncomingExchange(chat->pfsExchange, exchangeId)) {
-			chat->pfsPending.clear();
+		if (chat && chat->pfsPending.empty()
+			&& ReleaseIncomingExchange(chat->pfsExchange, exchangeId)) {
 			chat->pfsAnswerGB.clear();
 			saveChat(*chat);
 		}
@@ -1765,6 +1807,7 @@ void Manager::Impl::handleAcceptKey(Chat &chat, const Inbound &inbound) {
 	clearOurExchange(chat);
 	resetKeyUsage(chat);
 	saveChat(chat);
+	sendService(chat, BuildNoop(RandomId()));
 }
 
 void Manager::Impl::handleAbortKey(Chat &chat, const Inbound &inbound) {
@@ -1790,6 +1833,12 @@ void Manager::Impl::maybeStartRekey(Chat &chat) {
 		|| chat.key.empty()
 		|| !SupportsRekey(chat.row.hisLayer)) {
 		return;
+	}
+	if (chat.pfsOurExchange
+		&& chat.pfsOurStartedAt
+		&& (base::unixtime::now() - chat.pfsOurStartedAt) > kPfsOurTimeout) {
+		clearOurExchange(chat);
+		saveChat(chat);
 	}
 	if (chat.pfsExchange != 0
 		|| !chat.pfsPending.empty()
@@ -1847,6 +1896,7 @@ void Manager::Impl::startRekey(Chat &chat) {
 		chat->pfsOurExchange = exchangeId;
 		chat->pfsOurSecret = FromBytesVector(first.randomPower);
 		chat->pfsOurP = config.p;
+		chat->pfsOurStartedAt = base::unixtime::now();
 		sendService(
 			*chat,
 			BuildRequestKey(
