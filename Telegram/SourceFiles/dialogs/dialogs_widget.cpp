@@ -3963,6 +3963,8 @@ void Widget::searchReceived(
 
 	if (type.start && !type.migrated && !type.posts) {
 		searchDeleted();
+	} else {
+		applyDeletedAll();
 	}
 
 	if (clientMedia && !process->full) {
@@ -3976,6 +3978,7 @@ void Widget::searchReceived(
 
 void Widget::searchDeleted() {
 	const auto token = ++_deletedSearchToken;
+	_deletedAll.clear();
 	const auto tab = _searchState.tab;
 	const auto inChat = (tab == ChatSearchTab::ThisPeer)
 		|| (tab == ChatSearchTab::ThisTopic);
@@ -3987,11 +3990,18 @@ void Widget::searchDeleted() {
 	}
 	const auto query = _searchQuery.trimmed();
 	const auto typed = DeletedMediaType(_searchQueryMedia);
-	if (query.isEmpty() && !_searchQueryFrom && !typed) {
+	const auto all = inChat
+		&& !_searchQuery.isEmpty()
+		&& query.isEmpty()
+		&& !_searchQueryFrom
+		&& !typed;
+	if (query.isEmpty() && !_searchQueryFrom && !typed && !all) {
 		return;
 	}
 	const auto withMedia = typed && (*typed != Storage::SharedMediaType::Link);
-	const auto limit = typed ? kSearchDeletedTypedLimit : kSearchPerPage;
+	const auto limit = (typed || all)
+		? kSearchDeletedTypedLimit
+		: kSearchPerPage;
 	const auto peer = inChat ? searchInPeer() : nullptr;
 	if (inChat && !peer) {
 		return;
@@ -4020,7 +4030,7 @@ void Widget::searchDeleted() {
 			auto items = std::vector<not_null<HistoryItem*>>();
 			items.reserve(rows.size());
 			for (const auto &row : rows) {
-				if (int(items.size()) >= kSearchPerPage) {
+				if (!all && int(items.size()) >= kSearchPerPage) {
 					break;
 				}
 				const auto target = peer
@@ -4046,9 +4056,30 @@ void Widget::searchDeleted() {
 					items.push_back(item);
 				}
 			}
-			_inner->addDeletedSearchResults(std::move(items));
+			if (all) {
+				_deletedAll = std::move(items);
+				applyDeletedAll();
+			} else {
+				_inner->addDeletedSearchResults(std::move(items));
+			}
 		});
 	});
+}
+
+void Widget::applyDeletedAll() {
+	const auto bound = currentSearchProcess()->full
+		? TimeId(0)
+		: _inner->oldestSearchDate();
+	auto ready = std::vector<not_null<HistoryItem*>>();
+	auto rest = std::vector<not_null<HistoryItem*>>();
+	ready.reserve(_deletedAll.size());
+	for (const auto item : base::take(_deletedAll)) {
+		((item->date() < bound) ? rest : ready).push_back(item);
+	}
+	_deletedAll = std::move(rest);
+	if (!ready.empty()) {
+		_inner->addDeletedSearchResults(std::move(ready));
+	}
 }
 
 void Widget::peerSearchReceived(Api::PeerSearchResult result) {
