@@ -26,8 +26,8 @@ dialog preserves the request; presentation waits for navigation to finish.
 ## Verification
 
 `Secret chat checks` compiles the production PFS decision and wire-format tests
-directly. They cover thresholds, simultaneous exchanges, service constructors
-and truncated packets; they do not exercise an authenticated client session.
+directly. They cover thresholds, simultaneous exchanges, DH-failure release, layer gates,
+service constructors and truncated packets; they do not exercise an authenticated client session.
 
 Official-client acceptance still requires both rotation directions, a restart
 during exchange, bidirectional delivery and comparison of visual hashes. Passive
