@@ -143,6 +143,7 @@ struct PendingEntry {
 	Inbound inbound;
 	int date = 0;
 	std::optional<MTPEncryptedFile> file;
+	int64_t keyFingerprint = 0;
 };
 
 struct EarlyEntry {
@@ -776,7 +777,12 @@ struct Manager::Impl {
 		int date,
 		const QByteArray &bytes,
 		const MTPEncryptedFile *file);
-	void process(Chat &chat, const Inbound &inbound, int date, const MTPEncryptedFile *file);
+	void process(
+		Chat &chat,
+		const Inbound &inbound,
+		int date,
+		const MTPEncryptedFile *file,
+		int64_t keyFingerprint);
 	void processService(Chat &chat, const Inbound &inbound, int date);
 	void drainPending(Chat &chat);
 	void requestResend(Chat &chat, int fromIndex, int tillIndex);
@@ -1326,14 +1332,6 @@ void Manager::Impl::applyPacket(Chat &chat, ReadyPacket &&packet) {
 	}
 	++chat.keyUsesIn;
 	maybeStartRekey(chat);
-	if (!chat.otherKey.empty() && packet.bytes.size() >= 8) {
-		auto used = int64_t(0);
-		std::memcpy(&used, packet.bytes.constData(), sizeof(used));
-		if (used == chat.row.fingerprint) {
-			chat.otherKey.clear();
-			saveChat(chat);
-		}
-	}
 	if (!packet.parsed) {
 		sendNotifyLayer(chat);
 		return;
@@ -1352,6 +1350,13 @@ void Manager::Impl::applyPacket(Chat &chat, ReadyPacket &&packet) {
 	if (outIndex < chat.row.myIn) {
 		return;
 	}
+	auto keyFingerprint = int64_t(0);
+	if (packet.bytes.size() >= int(sizeof(keyFingerprint))) {
+		std::memcpy(
+			&keyFingerprint,
+			packet.bytes.constData(),
+			sizeof(keyFingerprint));
+	}
 	if (outIndex > chat.row.myIn) {
 		if (outIndex - chat.row.myIn > kMaxPending
 			|| int(chat.pending.size()) >= kMaxPending) {
@@ -1361,11 +1366,12 @@ void Manager::Impl::applyPacket(Chat &chat, ReadyPacket &&packet) {
 			inbound,
 			packet.date,
 			packet.file,
+			keyFingerprint,
 		});
 		requestResend(chat, chat.row.myIn, chat.pending.begin()->first - 1);
 		return;
 	}
-	process(chat, inbound, packet.date, file);
+	process(chat, inbound, packet.date, file, keyFingerprint);
 	drainPending(chat);
 }
 
@@ -1381,7 +1387,8 @@ void Manager::Impl::drainPending(Chat &chat) {
 			chat,
 			entry.inbound,
 			entry.date,
-			entry.file ? &*entry.file : nullptr);
+			entry.file ? &*entry.file : nullptr,
+			entry.keyFingerprint);
 	}
 }
 
@@ -1443,7 +1450,11 @@ void Manager::Impl::process(
 		Chat &chat,
 		const Inbound &inbound,
 		int date,
-		const MTPEncryptedFile *file) {
+		const MTPEncryptedFile *file,
+		int64_t keyFingerprint) {
+	if (!chat.otherKey.empty() && keyFingerprint == chat.row.fingerprint) {
+		chat.otherKey.clear();
+	}
 	chat.row.myIn = inbound.outSeqNo / 2 + 1;
 	chat.row.hisIn = std::max(chat.row.hisIn, inbound.inSeqNo / 2);
 	chat.row.hisLayer = std::max(chat.row.hisLayer, inbound.layer);

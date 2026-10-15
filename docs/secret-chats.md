@@ -12,6 +12,10 @@ cleared. Only an unanswered initiating exchange expires. DH failures and stale
 callbacks may release only their own reservation. Rekeying requires peer layer
 46+, including at asynchronous completion.
 
+The previous transport key is retained across sequence gaps and discarded only
+when a valid current-key packet reaches ordered processing. Deferred packets
+retain their fingerprint so filling a gap applies the same rule.
+
 Legacy records cannot recover an original hash lost by an earlier rotation.
 Migration preserves the value shown before upgrade and initializes absent usage
 accounting to the current time and zero messages.
