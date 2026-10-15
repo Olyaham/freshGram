@@ -427,17 +427,22 @@ void TranslateBoxImpl(
 		not_null<PeerData*> peer,
 		MsgId msgId,
 		TextWithEntities text,
-		bool hasCopyRestriction) {
+		bool hasCopyRestriction,
+		const QString &providerIdentity = {}) {
 	struct State {
-		State(not_null<Main::Session*> session)
-		: provider(CreateTranslateProvider(session)) {
+		State(not_null<Main::Session*> session, const QString &identity)
+		: provider(CreateTranslateProvider(session, identity)) {
 		}
 
 		std::unique_ptr<TranslateProvider> provider;
 		rpl::variable<LanguageId> to;
 	};
-	const auto state = box->lifetime().make_state<State>(&peer->session());
-	if (IsServerMsgId(msgId) && state->provider->supportsMessageId()) {
+	const auto state = box->lifetime().make_state<State>(
+		&peer->session(),
+		providerIdentity);
+	if (state->provider
+		&& IsServerMsgId(msgId)
+		&& state->provider->supportsMessageId()) {
 		if (const auto item = peer->owner().message(peer->id, msgId)) {
 			if (const auto page = item->richPage()) {
 				if (TranslateRichBox(
@@ -454,11 +459,13 @@ void TranslateBoxImpl(
 	}
 	state->to = ChooseTranslateTo(peer->owner().history(peer));
 	const auto request = std::make_shared<TranslateProviderRequest>(
-		PrepareTranslateProviderRequest(
-			state->provider.get(),
-			peer,
-			msgId,
-			std::move(text)));
+		state->provider
+			? PrepareTranslateProviderRequest(
+				state->provider.get(),
+				peer,
+				msgId,
+				std::move(text))
+			: TranslateProviderRequest{ .text = std::move(text) });
 
 	TranslateBoxContent(box, {
 		.text = request->text,
@@ -473,6 +480,12 @@ void TranslateBoxImpl(
 		.request = [=](
 				LanguageId to,
 				Fn<void(TranslateBoxContentResult)> done) {
+			if (!state->provider) {
+				done(TranslateBoxContentResult{
+					.error = TranslateBoxContentError::Unknown,
+				});
+				return;
+			}
 			state->provider->request(
 				*request,
 				to,
@@ -539,11 +552,12 @@ void ShowTranslateBox(
 				return;
 			}
 			controller->show(Box(
-				Ui::TranslateBox,
+				TranslateBoxImpl,
 				peer,
 				msgId,
 				std::move(text),
-				hasCopyRestriction));
+				hasCopyRestriction,
+				providerIdentity));
 		}),
 		.confirmText = tr::lng_context_translate(tr::now),
 	}));

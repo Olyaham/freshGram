@@ -11,6 +11,10 @@ provider or custom URL while confirmation is open requires fresh consent, even
 when two custom servers have the same display name. The callback follows the
 controller lifetime. Secret whole-chat auto-translation remains disabled.
 
+Provider creation checks the confirmed identity again. If it has changed or the
+confirmed system translator cannot be created, translation reports an error
+without falling back to a different provider.
+
 Live acceptance checks should verify the warning, Cancel, dismissal, confirmation
 and provider/URL changes, as well as ordinary-chat translation. One-off request
 spies and private runtime evidence are kept outside Git; screenshots must never
