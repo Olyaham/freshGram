@@ -1,0 +1,34 @@
+name: OCR engine checks
+
+on:
+  push:
+    paths:
+      - 'Telegram/cmake/lib_tesseract.cmake'
+      - 'Telegram/ThirdParty/tesseract'
+      - 'Telegram/ThirdParty/leptonica'
+      - 'tools/tests/native_ocr/**'
+      - '.github/workflows/ocr-checks.yml'
+  pull_request:
+    paths:
+      - 'Telegram/cmake/lib_tesseract.cmake'
+      - 'tools/tests/native_ocr/**'
+      - '.github/workflows/ocr-checks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch OCR sources
+        run: git submodule update --init --depth 1 Telegram/ThirdParty/tesseract Telegram/ThirdParty/leptonica
+      - name: Configure the production OCR libraries
+        run: cmake -S tools/tests/native_ocr -B ocr-check -A x64
+      - name: Compile and link the public engine API
+        run: cmake --build ocr-check --config Debug --parallel 2
+      - name: Run engine lifecycle
+        run: ctest --test-dir ocr-check -C Debug --output-on-failure
