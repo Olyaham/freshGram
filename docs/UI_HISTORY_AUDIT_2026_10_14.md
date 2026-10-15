@@ -93,7 +93,7 @@ precise introducing history and runtime settings coverage still require review.
 
 The 31 new commits through upstream `76f06bcb7e` do not fix the confirmed global
 colorizer, reaction tinting, badge muted-state, floating-button or story-gradient
-differences. See `UPSTREAM_REVIEW_2026_10_14.md` for the patch-level review.
+differences. The patch-level review is retained with the external audit evidence.
 
 The mechanical inventory is broader than the verified table above. Remaining
 candidates need historical attribution and generated/runtime gate checks before

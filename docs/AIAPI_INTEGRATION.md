@@ -82,16 +82,18 @@ discovery, text generation, cleanup, segments, async completion and cancellation
 The CI workflow runs independently of the Telegram Desktop build. C++ checks
 use the configured compilation database with regenerated language headers.
 
-Local verification on 2026-10-13: 52 core tests and 39 adapter tests passed;
-Clippy passed with warnings denied, including the Local Whisper feature gate.
-All eight changed C++ translation units passed syntax checks. An isolated
-source-only copy passed snapshot/lockfile dependency resolution without an
-adjacent AiApi checkout. Installer notice copying was checked using the already
-tested dynamic library as the packaging fixture.
+Run the snapshot, decoder and temporary-audio regressions from the checkout root:
 
-Live authenticated Groq/Gemini transcription and in-client voice/round-video
-checks require real credentials and messages. Native Windows/macOS deployment
-and a full linked client run remain separate runtime verification steps.
+```sh
+python3 tools/sync_aiapi.py --check
+python3 -m unittest discover -s tools/tests -v
+```
 
-The subsequent review fixes and their regression evidence are recorded in
-[the 2026-10-13 follow-up](REVIEW_2026_10_13.md).
+Secret-chat Default/Auto selects local Whisper. Cloud recognition requires an
+explicit secret-scope choice; cloud shadow/cleanup is disabled for secret media.
+HTTP egress follows the selected proxy without direct fallback. The client uses
+a bounded queue, one local worker and two cloud workers. Marked plaintext job
+directories are removed on completion and reaped after a crash at next startup.
+
+Authenticated provider checks and native platform launch are separate from CI.
+Detailed one-off validation logs, profiles and screenshots stay outside Git.

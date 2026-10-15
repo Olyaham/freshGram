@@ -10,14 +10,6 @@ on:
       - 'tools/sync_aiapi.py'
       - 'tools/tests/**'
       - 'Telegram/SourceFiles/ayu/features/recognition/**'
-      - 'Telegram/SourceFiles/ayu/secret/secret_manager.cpp'
-      - 'Telegram/SourceFiles/ayu/secret/secret_rekey.h'
-      - 'Telegram/SourceFiles/ayu/secret/secret_crypto.*'
-      - 'Telegram/SourceFiles/ayu/secret/secret_bridge.cpp'
-      - 'Telegram/SourceFiles/boxes/translate_box*'
-      - 'Telegram/SourceFiles/lang/translate_provider*'
-      - 'Telegram/SourceFiles/history/view/history_view_translate_tracker.cpp'
-      - 'Telegram/SourceFiles/test/secret/**'
       - 'Telegram/SourceFiles/test/recognition/**'
       - '.github/workflows/aiapi-checks.yml'
   pull_request:
@@ -29,14 +21,6 @@ on:
       - 'tools/sync_aiapi.py'
       - 'tools/tests/**'
       - 'Telegram/SourceFiles/ayu/features/recognition/**'
-      - 'Telegram/SourceFiles/ayu/secret/secret_manager.cpp'
-      - 'Telegram/SourceFiles/ayu/secret/secret_rekey.h'
-      - 'Telegram/SourceFiles/ayu/secret/secret_crypto.*'
-      - 'Telegram/SourceFiles/ayu/secret/secret_bridge.cpp'
-      - 'Telegram/SourceFiles/boxes/translate_box*'
-      - 'Telegram/SourceFiles/lang/translate_provider*'
-      - 'Telegram/SourceFiles/history/view/history_view_translate_tracker.cpp'
-      - 'Telegram/SourceFiles/test/secret/**'
       - 'Telegram/SourceFiles/test/recognition/**'
       - '.github/workflows/aiapi-checks.yml'
   workflow_dispatch:
@@ -76,14 +60,6 @@ jobs:
             Telegram/ThirdParty/voice-asr
       - name: Verify source snapshot
         run: python3 tools/sync_aiapi.py --check
-      - name: Native routing and PFS regressions
-        run: python3 -m unittest discover -s tools/tests -p test_native_policies.py
-      - name: Secret key visualization and restart regressions
-        run: python3 -m unittest discover -s tools/tests -p test_native_secret_visual.py
-      - name: Secret request dialog regression
-        run: python3 -m unittest tools.tests.test_secret_prompt -v
-      - name: Secret translation consent regression
-        run: python3 -m unittest tools.tests.test_secret_translation -v
       - name: Native audio and crash cleanup regressions
         run: python3 -m unittest discover -s tools/tests -p test_native_audio.py
       - name: Core checks

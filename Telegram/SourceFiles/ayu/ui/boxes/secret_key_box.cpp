@@ -64,9 +64,7 @@ private:
 
 };
 
-} // namespace
-
-QString SecretKeyHexText(const std::vector<uint8_t> &hash) {
+[[nodiscard]] QString HexText(const std::vector<uint8_t> &hash) {
 	auto result = QString();
 	const auto count = std::min<int>(32, int(hash.size()));
 	for (auto i = 0; i != count; ++i) {
@@ -83,7 +81,7 @@ QString SecretKeyHexText(const std::vector<uint8_t> &hash) {
 	return result.trimmed();
 }
 
-QString SecretKeyEmojiText(const std::vector<uint8_t> &hash) {
+[[nodiscard]] QString EmojiText(const std::vector<uint8_t> &hash) {
 	if (hash.size() < 36) {
 		return QString();
 	}
@@ -102,12 +100,14 @@ QString SecretKeyEmojiText(const std::vector<uint8_t> &hash) {
 	return result;
 }
 
+} // namespace
+
 void FillSecretKeyBox(
 		not_null<Ui::GenericBox*> box,
 		std::vector<uint8_t> keyHash,
 		int64 fingerprint) {
-	const auto hex = SecretKeyHexText(keyHash);
-	const auto emoji = SecretKeyEmojiText(keyHash);
+	const auto hex = HexText(keyHash);
+	const auto emoji = EmojiText(keyHash);
 	box->setTitle(tr::ayu_SecretKey());
 	box->addButton(tr::lng_group_invite_context_copy(), [=] {
 		QGuiApplication::clipboard()->setText(emoji.isEmpty()
