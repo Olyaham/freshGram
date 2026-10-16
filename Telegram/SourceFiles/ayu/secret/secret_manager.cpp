@@ -1461,6 +1461,20 @@ void Manager::Impl::process(
 	if (!chat.otherKey.empty() && keyFingerprint == chat.row.fingerprint) {
 		chat.otherKey.clear();
 	}
+	if (!chat.pfsPending.empty()
+		&& keyFingerprint == KeyFingerprint(chat.pfsPending)) {
+		// Spec step 4: any valid new-key packet completes the exchange,
+		// even with a lost CommitKey. Runs in ordered processing, so the
+		// previous key stays for older packets until gaps are filled.
+		chat.otherKey = chat.key;
+		chat.key = chat.pfsPending;
+		chat.row.fingerprint = KeyFingerprint(chat.key);
+		chat.pfsPending.clear();
+		chat.pfsExchange = 0;
+		chat.pfsAnswerGB.clear();
+		resetKeyUsage(chat);
+		saveChat(chat);
+	}
 	chat.row.myIn = inbound.outSeqNo / 2 + 1;
 	chat.row.hisIn = std::max(chat.row.hisIn, inbound.inSeqNo / 2);
 	chat.row.hisLayer = std::max(chat.row.hisLayer, inbound.layer);
