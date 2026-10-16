@@ -10,7 +10,9 @@ The sealed chat record appends the visual hash and pending exchange state after
 existing fields. Both exchange roles can resume; orphan inbound reservations are
 cleared. Only an unanswered initiating exchange expires. DH failures and stale
 callbacks may release only their own reservation. Rekeying requires peer layer
-46+, including at asynchronous completion.
+46+, including at asynchronous completion. A valid new-key packet also
+completes the exchange when CommitKey is lost; the previous key is kept
+for gaps.
 
 The previous transport key is retained across sequence gaps and discarded only
 when a valid current-key packet reaches ordered processing. Deferred packets
