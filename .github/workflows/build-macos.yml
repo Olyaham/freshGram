@@ -184,6 +184,7 @@ jobs:
               exit 0
             fi
             echo "::warning::Build attempt $attempt failed, trying again"
+            find out -name '*.o' -delete
           done
           exit 1
 
