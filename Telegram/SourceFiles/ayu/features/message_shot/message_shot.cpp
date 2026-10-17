@@ -36,6 +36,9 @@
 #include "ui/layers/box_content.h"
 #include "window/themes/window_theme.h"
 
+#include <algorithm>
+#include <cmath>
+
 namespace AyuFeatures::MessageShot {
 
 ShotConfig *config = nullptr;
@@ -201,6 +204,92 @@ QColor makeDefaultBackgroundColor() {
 	}
 
 	return st::boxBg->c.darker(110);
+}
+
+// WHY: the boxBg approximation breaks the hue on tinted themes; mirror
+// the chat's cache renderer instead (pure color, crop-cover wallpaper,
+// tiled fills) so the shot matches the live chat background.
+void PaintShotBackground(
+		QPainter &painter,
+		not_null<Window::SessionController*> controller,
+		const QSize &logical) {
+	const auto &background = controller->defaultChatTheme()->background();
+	const auto target = QRect(QPoint(), logical);
+	if (background.colorForFill) {
+		painter.fillRect(target, *background.colorForFill);
+		return;
+	}
+	if (!background.prepared.isNull()
+		&& !background.isPattern
+		&& !background.tile) {
+		const auto rects = Ui::ComputeChatBackgroundRects(
+			logical,
+			background.prepared.size());
+		PainterHighQualityEnabler hq(painter);
+		painter.drawImage(rects.to, background.prepared, QRectF(rects.from));
+		return;
+	}
+	if (!background.gradientForFill.isNull()) {
+		painter.drawImage(target, background.gradientForFill);
+	} else if (background.prepared.isNull()) {
+		if (background.patternOpacity < 0.
+			&& background.patternOpacity > -1.) {
+			// Inverted pattern still loading: the chat shows black.
+			painter.fillRect(target, Qt::black);
+		} else {
+			painter.fillRect(target, makeDefaultBackgroundColor());
+		}
+		return;
+	}
+	if (background.prepared.isNull()) {
+		return;
+	}
+	const auto image = background.isPattern
+		? background.prepared.scaled(
+			target.height(),
+			target.height(),
+			Qt::KeepAspectRatio,
+			Qt::SmoothTransformation)
+		: background.preparedForTiled;
+	if (image.isNull()) {
+		return;
+	}
+	const auto w = double(image.width());
+	const auto h = double(image.height());
+	const auto pattern = background.isPattern;
+	const auto cols = pattern
+		? (((int(std::ceil(logical.width() / w)) / 2) * 2) + 1)
+		: int(std::ceil(logical.width() / w));
+	const auto rows = int(std::ceil(logical.height() / h));
+	// Odd column count centers the pattern columns like the chat does.
+	const auto useshift = pattern ? ((logical.width() - cols * w) / 2.) : 0.;
+	painter.save();
+	if (!background.gradientForFill.isNull()) {
+		if (background.patternOpacity >= 0.) {
+			painter.setCompositionMode(
+				QPainter::CompositionMode_SoftLight);
+			painter.setOpacity(
+				std::clamp(background.patternOpacity, 0., 1.));
+		} else {
+			painter.setCompositionMode(
+				QPainter::CompositionMode_DestinationIn);
+		}
+	}
+	for (auto y = 0; y != rows; ++y) {
+		for (auto x = 0; x != cols; ++x) {
+			painter.drawImage(
+				QPointF(useshift + x * w, y * h),
+				image);
+		}
+	}
+	painter.restore();
+	if (!background.gradientForFill.isNull()
+		&& background.patternOpacity < 0.
+		&& background.patternOpacity > -1.) {
+		painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
+		painter.setOpacity(1. + background.patternOpacity);
+		painter.fillRect(target, Qt::black);
+	}
 }
 
 void Make(not_null<QWidget*> box, const ShotConfig &config, const Fn<void(QImage&,bool)>& callback) {
@@ -398,7 +487,15 @@ void Make(not_null<QWidget*> box, const ShotConfig &config, const Fn<void(QImage
 
 		auto newResult = QImage(result.size(), QImage::Format_ARGB32_Premultiplied);
 		newResult.setDevicePixelRatio(style::DevicePixelRatio());
-		newResult.fill(makeDefaultBackgroundColor());
+		{
+			Painter backgroundPainter(&newResult);
+			const auto ratio = double(newResult.devicePixelRatio());
+			const auto logical = (QSizeF(newResult.size()) / ratio).toSize();
+			PaintShotBackground(
+				backgroundPainter,
+				controller,
+				logical);
+		}
 
 		Painter painter(&newResult);
 		painter.drawImage(0, 0, result);
