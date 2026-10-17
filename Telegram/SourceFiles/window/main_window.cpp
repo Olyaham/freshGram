@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/main_window.h"
 
 #include "api/api_updates.h"
+#include "ayu/ayu_settings.h"
 #include "storage/localstorage.h"
 #include "platform/platform_specific.h"
 #include "ui/platform/ui_platform_window.h"
@@ -578,6 +579,11 @@ void MainWindow::init() {
 			recountGeometryConstraints();
 		}, lifetime());
 	}
+	AyuSettings::getInstance().framelessWindowChanges(
+	) | rpl::on_next([=](bool frameless) {
+		refreshTitleWidget();
+		recountGeometryConstraints();
+	}, lifetime());
 	refreshTitleWidget();
 	if constexpr (Core::BuildIsCanary) {
 		setupCanaryTitleLabel();
@@ -589,6 +595,7 @@ void MainWindow::init() {
 
 void MainWindow::handleStateChanged(Qt::WindowState state) {
 	stateChangedHook(state);
+	reassertFramelessHint();
 	updateControlsGeometry();
 	if (state == Qt::WindowMinimized) {
 		controller().updateIsActiveBlur();
@@ -616,6 +623,7 @@ void MainWindow::handleActiveChanged(bool active) {
 
 void MainWindow::handleVisibleChanged(bool visible) {
 	if (visible) {
+		reassertFramelessHint();
 		if (_maximizedBeforeHide) {
 			DEBUG_LOG(("Window Pos: Window was maximized before hidding, setting maximized."));
 			setWindowState(Qt::WindowMaximized);
@@ -690,6 +698,21 @@ int MainWindow::computeMinHeight() const {
 }
 
 void MainWindow::refreshTitleWidget() {
+#if !defined Q_OS_WIN && !defined Q_OS_MAC
+	if (AyuSettings::getInstance().framelessWindow()) {
+		// Tiling mode: no native frame, no title, no server decorations.
+		setNativeFrame(false);
+		_titleShadow.destroy();
+		if (const auto title = titleWidget()) {
+			title->hide();
+		}
+		if (const auto handle = windowHandle()) {
+			handle->setFlag(Qt::FramelessWindowHint, true);
+		}
+		reassertFramelessHint();
+		return;
+	}
+#endif
 	if (Ui::Platform::NativeWindowFrameSupported()
 		&& Core::App().settings().nativeWindowFrame()) {
 		setNativeFrame(true);
@@ -701,6 +724,24 @@ void MainWindow::refreshTitleWidget() {
 		setNativeFrame(false);
 		_titleShadow.destroy();
 	}
+}
+
+void MainWindow::reassertFramelessHint() {
+#if !defined Q_OS_WIN && !defined Q_OS_MAC
+	// WHY: the platform helper re-asserts its own decoration state on
+	// shown or state events, so ours has to win there too, queued.
+	if (!AyuSettings::getInstance().framelessWindow()) {
+		return;
+	}
+	InvokeQueued(this, [=] {
+		if (!AyuSettings::getInstance().framelessWindow()) {
+			return;
+		}
+		if (const auto handle = windowHandle()) {
+			handle->setFlag(Qt::FramelessWindowHint, true);
+		}
+	});
+#endif
 }
 
 void MainWindow::setupCanaryTitleLabel() {

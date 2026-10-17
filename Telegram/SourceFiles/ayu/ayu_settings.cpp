@@ -957,6 +957,12 @@ void AyuSettings::setLocalPremium(bool val) {
 	save();
 }
 
+void AyuSettings::setFramelessWindow(bool val) {
+	if (_framelessWindow.current() == val) return;
+	_framelessWindow = val;
+	save();
+}
+
 void AyuSettings::setShowChannelReactions(bool val) {
 	if (_showChannelReactions.current() == val) return;
 	_showChannelReactions = val;
@@ -1546,6 +1552,7 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"reactionBackgroundOpacity", s._reactionBackgroundOpacity.current()},
 		{"disableNotificationsDelay", s._disableNotificationsDelay.current()},
 		{"localPremium", s._localPremium.current()},
+		{"framelessWindow", s._framelessWindow.current()},
 		{"showChannelReactions", s._showChannelReactions.current()},
 		{"showGroupReactions", s._showGroupReactions.current()},
 		{"showPrivateChatReactions", s._showPrivateChatReactions.current()},
@@ -1699,6 +1706,7 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._reactionBackgroundOpacity = j.value("reactionBackgroundOpacity", defaults._reactionBackgroundOpacity.current());
 	s._disableNotificationsDelay = j.value("disableNotificationsDelay", defaults._disableNotificationsDelay.current());
 	s._localPremium = j.value("localPremium", defaults._localPremium.current());
+	s._framelessWindow = j.value("framelessWindow", defaults._framelessWindow.current());
 	s._showChannelReactions = j.value("showChannelReactions", defaults._showChannelReactions.current());
 	s._showGroupReactions = j.value("showGroupReactions", defaults._showGroupReactions.current());
 	s._showPrivateChatReactions = j.value("showPrivateChatReactions", defaults._showPrivateChatReactions.current());

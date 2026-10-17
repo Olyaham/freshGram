@@ -396,6 +396,7 @@
 "ayu_MessageShotTopBarText" = "Снимок";
 "ayu_MessageShotPreview" = "Предпросмотр";
 "ayu_SecretTranslateWarning" = "Текст этих сообщений будет отправлен на {provider} для перевода. Продолжить?";
+"ayu_FramelessWindow" = "Без рамки (тайловые WM)";
 "ayu_PeekButton" = "Подсмотреть время визита";
 "ayu_PeekLabel" = "Был(а) в сети (подсмотрено)";
 "ayu_PeekChecking" = "Проверяем время последнего визита...";
