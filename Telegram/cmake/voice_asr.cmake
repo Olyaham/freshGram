@@ -6,6 +6,10 @@ if (FRESHGRAM_BUNDLE_CLOUD_ASR)
     find_program(FRESHGRAM_ASR_CARGO cargo REQUIRED)
     set(asr_target_args)
     set(asr_environment)
+    # WHY: the build environment's ccache rejects aws-lc's real compile
+    # flags (probes pass, every real source fails), so run the ASR
+    # C compiles without the cache.
+    list(APPEND asr_environment CCACHE_DISABLE=1)
     if (APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET)
         list(APPEND asr_environment MACOSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET})
     endif()
