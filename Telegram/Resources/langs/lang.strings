@@ -9183,6 +9183,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_TranslateComposeProgress" = "Translating...";
 "ayu_TranslateComposeDone" = "Translation completed.";
 "ayu_TranslateComposeEmpty" = "Cannot translate nothing. Type something in chatbar, then press translate button again.";
+"ayu_FramelessWindow" = "Frameless window (tiling WMs)";
 "ayu_PeekButton" = "Peek last seen";
 "ayu_PeekLabel" = "Last seen (peeked)";
 "ayu_PeekChecking" = "Checking the last seen...";

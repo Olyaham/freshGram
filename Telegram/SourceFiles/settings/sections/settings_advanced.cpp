@@ -11,6 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "api/api_global_privacy.h"
 #include "apiwrap.h"
+#include "ayu/ayu_settings.h"
 #include "base/call_delayed.h"
 #include "base/platform/base_platform_custom_app_icon.h"
 #include "base/platform/base_platform_info.h"
@@ -392,9 +393,47 @@ void BuildWindowTitleSection(SectionBuilder &builder) {
 			}) | rpl::on_next([=](bool checked) {
 				Core::App().settings().setNativeWindowFrame(checked);
 				Core::App().saveSettingsDelayed();
+				if (checked) {
+					AyuSettings::getInstance().setFramelessWindow(false);
+				}
+			}, nativeFrame->lifetime());
+			AyuSettings::getInstance().framelessWindowChanges(
+			) | rpl::on_next([=](bool) {
+				nativeFrame->setChecked(
+					Core::App().settings().nativeWindowFrame(),
+					Ui::Checkbox::NotifyAboutChange::DontNotify);
 			}, nativeFrame->lifetime());
 		}
 	}
+
+#if !defined Q_OS_WIN && !defined Q_OS_MAC
+	{
+		const auto frameless = builder.addCheckbox({
+			.id = u"advanced/frameless_window"_q,
+			.title = tr::ayu_FramelessWindow(),
+			.checked = AyuSettings::getInstance().framelessWindow(),
+			.keywords = { u"frameless"_q, u"tiling"_q, u"window"_q, u"border"_q },
+		});
+		if (frameless) {
+			frameless->checkedChanges(
+			) | rpl::filter([](bool checked) {
+				return (checked != AyuSettings::getInstance().framelessWindow());
+			}) | rpl::on_next([=](bool checked) {
+				AyuSettings::getInstance().setFramelessWindow(checked);
+				if (checked) {
+					Core::App().settings().setNativeWindowFrame(false);
+					Core::App().saveSettingsDelayed();
+				}
+			}, frameless->lifetime());
+			Core::App().settings().nativeWindowFrameChanges(
+			) | rpl::on_next([=](bool) {
+				frameless->setChecked(
+					AyuSettings::getInstance().framelessWindow(),
+					Ui::Checkbox::NotifyAboutChange::DontNotify);
+			}, frameless->lifetime());
+		}
+	}
+#endif
 
 	builder.addSkip();
 }

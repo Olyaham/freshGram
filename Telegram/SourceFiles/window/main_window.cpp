@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/main_window.h"
 
 #include "api/api_updates.h"
+#include "ayu/ayu_settings.h"
 #include "storage/localstorage.h"
 #include "platform/platform_specific.h"
 #include "ui/platform/ui_platform_window.h"
@@ -578,6 +579,11 @@ void MainWindow::init() {
 			recountGeometryConstraints();
 		}, lifetime());
 	}
+	AyuSettings::getInstance().framelessWindowChanges(
+	) | rpl::on_next([=](bool frameless) {
+		refreshTitleWidget();
+		recountGeometryConstraints();
+	}, lifetime());
 	refreshTitleWidget();
 	if constexpr (Core::BuildIsCanary) {
 		setupCanaryTitleLabel();
@@ -590,6 +596,7 @@ void MainWindow::init() {
 void MainWindow::handleStateChanged(Qt::WindowState state) {
 	stateChangedHook(state);
 	updateControlsGeometry();
+	reassertFramelessHint();
 	if (state == Qt::WindowMinimized) {
 		controller().updateIsActiveBlur();
 	} else {
@@ -616,6 +623,7 @@ void MainWindow::handleActiveChanged(bool active) {
 
 void MainWindow::handleVisibleChanged(bool visible) {
 	if (visible) {
+		reassertFramelessHint();
 		if (_maximizedBeforeHide) {
 			DEBUG_LOG(("Window Pos: Window was maximized before hidding, setting maximized."));
 			setWindowState(Qt::WindowMaximized);
@@ -690,6 +698,28 @@ int MainWindow::computeMinHeight() const {
 }
 
 void MainWindow::refreshTitleWidget() {
+	// WHY: the platform helper flips the hint from the title visibility
+	// on its own events; mirror it here so the frameless state stays
+	// deterministic without hide/show dances that race the compositor.
+	const auto syncHint = [&](bool titleShown) {
+#if !defined Q_OS_WIN && !defined Q_OS_MAC
+		if (const auto handle = windowHandle()) {
+			handle->setFlag(Qt::FramelessWindowHint, titleShown);
+		}
+#endif
+	};
+#if !defined Q_OS_WIN && !defined Q_OS_MAC
+	if (AyuSettings::getInstance().framelessWindow()) {
+		// Tiling mode: no native frame, no title, no server decorations.
+		setNativeFrame(false);
+		_titleShadow.destroy();
+		if (const auto title = titleWidget()) {
+			title->hide();
+		}
+		syncHint(true);
+		return;
+	}
+#endif
 	if (Ui::Platform::NativeWindowFrameSupported()
 		&& Core::App().settings().nativeWindowFrame()) {
 		setNativeFrame(true);
@@ -701,6 +731,26 @@ void MainWindow::refreshTitleWidget() {
 		setNativeFrame(false);
 		_titleShadow.destroy();
 	}
+	if (const auto title = titleWidget()) {
+		syncHint(!title->isHidden());
+	}
+}
+
+void MainWindow::reassertFramelessHint() {
+#if !defined Q_OS_WIN && !defined Q_OS_MAC
+	// The helper may re-map the hint on its own events; ours must win.
+	if (!AyuSettings::getInstance().framelessWindow()) {
+		return;
+	}
+	InvokeQueued(this, [=] {
+		if (!AyuSettings::getInstance().framelessWindow()) {
+			return;
+		}
+		if (const auto handle = windowHandle()) {
+			handle->setFlag(Qt::FramelessWindowHint, true);
+		}
+	});
+#endif
 }
 
 void MainWindow::setupCanaryTitleLabel() {
