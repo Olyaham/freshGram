@@ -3371,7 +3371,12 @@ Element *Element::nextDisplayedInBlocks() const {
 	auto result = nextInBlocks();
 	if (result && !isMessageHidden(data())) {
 		while (result && (result->data()->isEmpty() || result->isHidden())) {
-			result = result->nextInBlocks();
+			const auto next = result->nextInBlocks();
+			if (next == result) {
+				// A stale index resolves to the same element — never spin on it.
+				break;
+			}
+			result = next;
 		}
 	}
 	return result == this ? nullptr : result;
