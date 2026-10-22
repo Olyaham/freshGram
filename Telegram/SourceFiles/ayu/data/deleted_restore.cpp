@@ -575,14 +575,14 @@ HistoryItem *State::create(Row &row) {
 		}, std::move(text), AyuMessages::restoredMedia(message));
 	};
 	auto item = build(text);
-	if (item->isEmpty() && !text.entities.empty()) {
+	if (item->isEmptyContent() && !text.entities.empty()) {
 		LOG(("AyuRestore: message %1 is empty, retrying without entities").arg(message.messageId));
 		item->destroy();
 		text.entities.clear();
 		item = build(text);
 	}
 
-	if (item->isEmpty()) {
+	if (item->isEmptyContent()) {
 		LOG(("AyuRestore: message %1 stays empty, text %2 bytes").arg(message.messageId).arg(message.text.size()));
 		row.dead = true;
 		item->destroy();

@@ -632,6 +632,7 @@ public:
 		not_null<const HistoryMessageForwarded*> forwarded) const;
 
 	[[nodiscard]] bool isEmpty() const;
+	[[nodiscard]] bool isEmptyContent() const;
 	[[nodiscard]] MessageGroupId groupId() const;
 	[[nodiscard]] EffectId effectId() const;
 	[[nodiscard]] bool hasPossibleRestrictions() const;

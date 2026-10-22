@@ -5076,7 +5076,10 @@ bool HistoryItem::isEmpty() const {
 	if (isMessageHidden(const_cast<HistoryItem*>(this))) {
 		return true;
 	}
+	return isEmptyContent();
+}
 
+bool HistoryItem::isEmptyContent() const {
 	return _text.empty()
 		&& !_media
 		&& !Has<HistoryMessageRichPageSource>()
